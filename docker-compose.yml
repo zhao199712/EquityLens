@@ -34,48 +34,34 @@ services:
     networks:
       - equitylens
 
-  minio:
-    image: minio/minio:latest
-    container_name: equitylens-minio
-    command: server /data --console-address ":9001"
+  garage:
+    image: dxflrs/garage:v2.2.0
+    container_name: equitylens-garage
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-equitylens}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-equitylens_dev_password}
+      GARAGE_CONFIG_FILE: /etc/garage.toml
+      GARAGE_DEFAULT_ACCESS_KEY: ${S3_ACCESS_KEY_ID:-GK0123456789ABCDEF0123456789ABCDEF}
+      GARAGE_DEFAULT_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      GARAGE_DEFAULT_BUCKET: ${S3_BUCKET:-equitylens}
     ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "${S3_API_PORT:-9000}:3900"
+      - "${GARAGE_WEB_PORT:-3902}:3902"
+      - "${GARAGE_ADMIN_PORT:-3903}:3903"
     volumes:
-      - minio-data:/data
+      - garage-data:/var/lib/garage
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      test: ["CMD", "/garage", "status"]
       interval: 10s
       timeout: 5s
-      retries: 5
-    networks:
-      - equitylens
-
-  minio-init:
-    image: minio/mc:latest
-    container_name: equitylens-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-equitylens}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-equitylens_dev_password}
-      MINIO_BUCKET: ${MINIO_BUCKET:-equitylens}
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
-      mc mb --ignore-existing local/$$MINIO_BUCKET;
-      "
+      retries: 10
     networks:
       - equitylens
 
 volumes:
   postgres-data:
   redis-data:
-  minio-data:
+  garage-data:
 
 networks:
   equitylens:
