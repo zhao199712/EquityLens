@@ -1,4 +1,3 @@
-using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Portfolios;
 using EquityLens.Api.Services.Portfolios;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +6,7 @@ namespace EquityLens.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class PortfoliosController : ControllerBase
+public class PortfoliosController : ApiControllerBase
 {
     private readonly IPortfolioService _portfolioService;
 
@@ -61,24 +60,4 @@ public class PortfoliosController : ControllerBase
         return result.IsSuccess ? NoContent() : ToErrorActionResult(result);
     }
 
-    private ActionResult<T> ToActionResult<T>(Result<T> result)
-    {
-        if (result.IsSuccess)
-        {
-            return Ok(result.Value);
-        }
-
-        var error = new ApiError(result.ErrorCode!, result.ErrorMessage!);
-        return result.ErrorCode!.EndsWith("not_found", StringComparison.Ordinal)
-            ? NotFound(error)
-            : BadRequest(error);
-    }
-
-    private IActionResult ToErrorActionResult<T>(Result<T> result)
-    {
-        var error = new ApiError(result.ErrorCode!, result.ErrorMessage!);
-        return result.ErrorCode!.EndsWith("not_found", StringComparison.Ordinal)
-            ? NotFound(error)
-            : BadRequest(error);
-    }
 }

@@ -7,7 +7,7 @@ namespace EquityLens.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class SecuritiesController : ControllerBase
+public class SecuritiesController : ApiControllerBase
 {
     private readonly ISecurityService _securityService;
 
@@ -48,16 +48,4 @@ public class SecuritiesController : ControllerBase
         return CreatedAtAction(nameof(GetSecurity), new { id = result.Value!.Id }, result.Value);
     }
 
-    private ActionResult<T> ToActionResult<T>(Result<T> result)
-    {
-        if (result.IsSuccess)
-        {
-            return Ok(result.Value);
-        }
-
-        var error = new ApiError(result.ErrorCode!, result.ErrorMessage!);
-        return result.ErrorCode!.EndsWith("not_found", StringComparison.Ordinal)
-            ? NotFound(error)
-            : BadRequest(error);
-    }
 }
