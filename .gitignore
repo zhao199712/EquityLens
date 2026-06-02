@@ -41,6 +41,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Sensitive config (contains credentials)
+appsettings.json
+opencode.jsonc
+
 # IDE / OS
 .vs/
 .vscode/*

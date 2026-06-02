@@ -35,7 +35,7 @@ services:
       - equitylens
 
   garage:
-    image: dxflrs/garage:v2.2.0
+    image: dxflrs/garage:v2.3.0
     container_name: equitylens-garage
     command: ["/garage", "server", "--single-node", "--default-bucket"]
     environment:
