@@ -63,6 +63,19 @@ public sealed class SecurityRepository : ISecurityRepository
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    public Task<Security?> GetEntityAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return _dbContext.Securities
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == id && x.IsActive, cancellationToken);
+    }
+
+    public Task<Security?> GetEntityByTickerExchangeAsync(string ticker, string exchange, CancellationToken cancellationToken)
+    {
+        return _dbContext.Securities
+            .SingleOrDefaultAsync(x => x.Ticker == ticker && x.Exchange == exchange && x.IsActive, cancellationToken);
+    }
+
     public Task<bool> ActiveExistsAsync(Guid id, CancellationToken cancellationToken)
     {
         return _dbContext.Securities.AnyAsync(x => x.Id == id && x.IsActive, cancellationToken);
