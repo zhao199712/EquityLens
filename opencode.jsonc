@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "postgres": {
+      "type": "local",
+      "command": ["uvx", "mcp-server-postgresql"],
+      "env": {
+        "PG_HOST": "localhost",
+        "PG_PORT": "5433",
+        "PG_USER": "equitylens",
+        "PG_PASSWORD": "equitylens",
+        "PG_DATABASE": "equitylens"
+      }
+    }
+  }
+}

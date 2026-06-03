@@ -1,0 +1,5 @@
+資料庫 (PostgreSQL/TimescaleDB): localhost:5433 (帳密皆為 equitylens)
+
+快取 (Redis): localhost:6380
+
+物件儲存 (Garage/S3): localhost:9000
