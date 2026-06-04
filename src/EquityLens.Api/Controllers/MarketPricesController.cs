@@ -35,4 +35,14 @@ public sealed class MarketPricesController : ApiControllerBase
         var result = await _marketPriceService.ImportDailyPricesAsync(securityId, request, cancellationToken);
         return ToActionResult(result);
     }
+
+    [HttpPost("sync")]
+    public async Task<ActionResult<ImportMarketPricesResponse>> SyncPrices(
+        Guid securityId,
+        ImportMarketPricesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _marketPriceService.SyncDailyPricesAsync(securityId, request, cancellationToken);
+        return ToActionResult(result);
+    }
 }

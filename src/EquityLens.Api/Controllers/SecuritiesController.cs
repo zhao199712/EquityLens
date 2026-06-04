@@ -25,10 +25,28 @@ public class SecuritiesController : ApiControllerBase
         return Ok(securities);
     }
 
+    [HttpGet("search")]
+    public async Task<ActionResult<IReadOnlyList<SecuritySearchResult>>> SearchSecurities(
+        [FromQuery] string? query,
+        CancellationToken cancellationToken)
+    {
+        var securities = await _securityService.SearchAvailableAsync(query, cancellationToken);
+        return Ok(securities);
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<SecurityResponse>> GetSecurity(Guid id, CancellationToken cancellationToken)
     {
         var result = await _securityService.GetAsync(id, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    [HttpPost("resolve")]
+    public async Task<ActionResult<ResolveSecurityResponse>> ResolveSecurity(
+        ResolveSecurityRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _securityService.ResolveAsync(request, cancellationToken);
         return ToActionResult(result);
     }
 
