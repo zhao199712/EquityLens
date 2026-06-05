@@ -121,6 +121,14 @@ public sealed class MarketPriceService : IMarketPriceService
             upsertResult.UpdatedCount));
     }
 
+    public Task<Result<ImportMarketPricesResponse>> SyncDailyPricesAsync(
+        Guid securityId,
+        ImportMarketPricesRequest request,
+        CancellationToken cancellationToken)
+    {
+        return ImportDailyPricesAsync(securityId, request, cancellationToken);
+    }
+
     public async Task<Result<ImportMarketPricesByTickerResponse>> ImportDailyPricesByTickerAsync(
         ImportMarketPricesByTickerRequest request,
         CancellationToken cancellationToken)

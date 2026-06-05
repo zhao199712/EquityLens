@@ -6,6 +6,7 @@ using EquityLens.Api.Repositories.PortfolioHoldings;
 using EquityLens.Api.Repositories.Portfolios;
 using EquityLens.Api.Repositories.Securities;
 using EquityLens.Api.Repositories.Users;
+using EquityLens.Api.Services.DemoData;
 using EquityLens.Api.Services.DemoUser;
 using EquityLens.Api.Services.MarketData;
 using EquityLens.Api.Services.MarketPrices;
@@ -31,6 +32,7 @@ builder.Services.AddScoped<IPortfolioHoldingRepository, PortfolioHoldingReposito
 builder.Services.AddScoped<IMarketPriceRepository, MarketPriceRepository>();
 
 builder.Services.AddScoped<IDemoUserContext, DemoUserContext>();
+builder.Services.AddScoped<IDemoDataService, DemoDataService>();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<ISecurityService, SecurityService>();
 builder.Services.AddScoped<IPortfolioHoldingService, PortfolioHoldingService>();

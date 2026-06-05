@@ -8,6 +8,10 @@ public interface IMarketDataProvider
 
     bool Supports(string exchange);
 
+    Task<IReadOnlyList<ExternalSecuritySearchResult>> SearchSecuritiesAsync(
+        string query,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<ImportedMarketPrice>> GetDailyPricesAsync(
         Security security,
         DateOnly from,

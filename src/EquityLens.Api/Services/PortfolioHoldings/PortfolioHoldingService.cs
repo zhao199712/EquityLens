@@ -1,11 +1,12 @@
 using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.PortfolioHoldings;
+using EquityLens.Api.Contracts.Securities;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Repositories.PortfolioHoldings;
 using EquityLens.Api.Repositories.Portfolios;
-using EquityLens.Api.Repositories.Securities;
 using EquityLens.Api.Services.DemoUser;
+using EquityLens.Api.Services.Securities;
 
 namespace EquityLens.Api.Services.PortfolioHoldings;
 
@@ -15,20 +16,20 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
     private readonly IDemoUserContext _demoUserContext;
     private readonly IPortfolioRepository _portfolioRepository;
     private readonly IPortfolioHoldingRepository _holdingRepository;
-    private readonly ISecurityRepository _securityRepository;
+    private readonly ISecurityService _securityService;
 
     public PortfolioHoldingService(
         EquityLensDbContext dbContext,
         IDemoUserContext demoUserContext,
         IPortfolioRepository portfolioRepository,
         IPortfolioHoldingRepository holdingRepository,
-        ISecurityRepository securityRepository)
+        ISecurityService securityService)
     {
         _dbContext = dbContext;
         _demoUserContext = demoUserContext;
         _portfolioRepository = portfolioRepository;
         _holdingRepository = holdingRepository;
-        _securityRepository = securityRepository;
+        _securityService = securityService;
     }
 
     public async Task<Result<IReadOnlyList<PortfolioHoldingResponse>>> ListAsync(
@@ -54,12 +55,24 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
             return Result<PortfolioHoldingResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
         }
 
-        if (!await _securityRepository.ActiveExistsAsync(request.SecurityId, cancellationToken))
+        var securityResult = await _securityService.EnsureAsync(new EnsureSecurityRequest(
+            request.SecurityId,
+            request.Ticker,
+            request.Exchange,
+            request.Name,
+            request.AssetType,
+            request.Currency,
+            request.Isin,
+            request.Sector,
+            request.Industry), cancellationToken);
+        if (!securityResult.IsSuccess)
         {
-            return Result<PortfolioHoldingResponse>.Failure("security.not_found", "Security was not found.");
+            return Result<PortfolioHoldingResponse>.Failure(securityResult.ErrorCode!, securityResult.ErrorMessage!);
         }
 
-        if (await _holdingRepository.SecurityHoldingExistsAsync(portfolioId, request.SecurityId, cancellationToken))
+        var security = securityResult.Value!;
+
+        if (await _holdingRepository.SecurityHoldingExistsAsync(portfolioId, security.Id, cancellationToken))
         {
             return Result<PortfolioHoldingResponse>.Failure("holding.duplicate", "Portfolio already has a holding for this security.");
         }
@@ -67,7 +80,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         var holding = new PortfolioHolding
         {
             PortfolioId = portfolioId,
-            SecurityId = request.SecurityId,
+            SecurityId = security.Id,
             Quantity = request.Quantity,
             AverageCost = request.AverageCost,
             CostCurrency = NormalizeCurrency(request.CostCurrency),

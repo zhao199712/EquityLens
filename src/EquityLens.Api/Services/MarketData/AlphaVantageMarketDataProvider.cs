@@ -29,6 +29,58 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
 
     public bool Supports(string exchange) => SupportedExchanges.Contains(exchange);
 
+    public async Task<IReadOnlyList<ExternalSecuritySearchResult>> SearchSecuritiesAsync(
+        string query,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.ApiKey))
+        {
+            throw new InvalidOperationException("Alpha Vantage API key is not configured.");
+        }
+
+        var url = QueryHelpers.AddQueryString("/query", new Dictionary<string, string?>
+        {
+            ["function"] = "SYMBOL_SEARCH",
+            ["keywords"] = query,
+            ["apikey"] = _options.ApiKey
+        });
+
+        using var response = await _httpClient.GetAsync(url, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        if (!document.RootElement.TryGetProperty("bestMatches", out var matches) || matches.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var results = new List<ExternalSecuritySearchResult>();
+        foreach (var match in matches.EnumerateArray())
+        {
+            var ticker = ReadString(match, "1. symbol")?.Trim().ToUpperInvariant();
+            var name = ReadString(match, "2. name")?.Trim();
+            if (string.IsNullOrWhiteSpace(ticker) || string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            results.Add(new ExternalSecuritySearchResult(
+                ticker,
+                NormalizeExchange(ReadString(match, "4. region")),
+                name,
+                ReadString(match, "3. type"),
+                string.IsNullOrWhiteSpace(ReadString(match, "8. currency")) ? "USD" : ReadString(match, "8. currency")!.Trim().ToUpperInvariant(),
+                null,
+                null,
+                null,
+                SourceName));
+        }
+
+        return results;
+    }
+
     public async Task<IReadOnlyList<ImportedMarketPrice>> GetDailyPricesAsync(
         Security security,
         DateOnly from,
@@ -90,5 +142,17 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
     {
         var value = element.GetProperty(propertyName).GetString();
         return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+    }
+
+    private static string? ReadString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var property) ? property.GetString() : null;
+    }
+
+    private static string NormalizeExchange(string? region)
+    {
+        return string.Equals(region, "United States", StringComparison.OrdinalIgnoreCase)
+            ? "US"
+            : string.IsNullOrWhiteSpace(region) ? "US" : region.Trim().ToUpperInvariant().Replace(" ", "_");
     }
 }

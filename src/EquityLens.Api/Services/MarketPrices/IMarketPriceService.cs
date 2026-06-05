@@ -16,7 +16,13 @@ public interface IMarketPriceService
         ImportMarketPricesRequest request,
         CancellationToken cancellationToken);
 
+    Task<Result<ImportMarketPricesResponse>> SyncDailyPricesAsync(
+        Guid securityId,
+        ImportMarketPricesRequest request,
+        CancellationToken cancellationToken);
+
     Task<Result<ImportMarketPricesByTickerResponse>> ImportDailyPricesByTickerAsync(
         ImportMarketPricesByTickerRequest request,
         CancellationToken cancellationToken);
+
 }
