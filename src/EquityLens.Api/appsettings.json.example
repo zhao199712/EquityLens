@@ -8,5 +8,13 @@
   "AllowedHosts": "*",
   "ConnectionStrings": {
     "PostgreSQL": "Host=localhost:5432;Database=equitylens;Username=your_user;Password=your_password"
+  },
+  "MarketData": {
+    "AlphaVantage": {
+      "BaseUrl": "https://www.alphavantage.co"
+    },
+    "FinMind": {
+      "BaseUrl": "https://api.finmindtrade.com"
+    }
   }
 }
