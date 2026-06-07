@@ -58,6 +58,23 @@ services:
     networks:
       - equitylens
 
+  garage-webui:
+    image: khairul169/garage-webui:latest
+    container_name: equitylens-garage-webui
+    environment:
+      CONFIG_PATH: /etc/garage.toml
+      API_BASE_URL: http://garage:3903
+      S3_ENDPOINT_URL: http://garage:3900
+    ports:
+      - "${GARAGE_WEBUI_PORT:-3909}:3909"
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+    depends_on:
+      garage:
+        condition: service_healthy
+    networks:
+      - equitylens
+
 volumes:
   postgres-data:
   redis-data:
