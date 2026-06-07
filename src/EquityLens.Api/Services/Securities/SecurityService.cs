@@ -8,12 +8,21 @@ using EquityLens.Api.Services.MarketData;
 
 namespace EquityLens.Api.Services.Securities;
 
+/// <summary>
+/// 證券資料服務實現，提供證券查詢、搜尋、建立與解析功能。
+/// </summary>
 public sealed class SecurityService : ISecurityService
 {
     private readonly EquityLensDbContext _dbContext;
     private readonly ISecurityRepository _securityRepository;
     private readonly IEnumerable<IMarketDataProvider> _marketDataProviders;
 
+    /// <summary>
+    /// 初始化證券服務。
+    /// </summary>
+    /// <param name="dbContext">資料庫內容。</param>
+    /// <param name="securityRepository">證券儲存庫。</param>
+    /// <param name="marketDataProviders">市場資料提供者集合。</param>
     public SecurityService(
         EquityLensDbContext dbContext,
         ISecurityRepository securityRepository,
@@ -24,11 +33,13 @@ public sealed class SecurityService : ISecurityService
         _marketDataProviders = marketDataProviders;
     }
 
+    /// <inheritdoc />
     public Task<IReadOnlyList<SecurityResponse>> SearchAsync(string? query, CancellationToken cancellationToken)
     {
         return _securityRepository.SearchAsync(query, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<SecuritySearchResult>> SearchAvailableAsync(
         string? query,
         CancellationToken cancellationToken)
@@ -39,6 +50,8 @@ public sealed class SecurityService : ISecurityService
         }
 
         var normalizedQuery = query.Trim();
+
+        // 先查詢本地資料庫中的證券
         var localResults = (await _securityRepository.SearchAsync(normalizedQuery, cancellationToken))
             .Select(x => new SecuritySearchResult(
                 x.Id,
@@ -54,6 +67,8 @@ public sealed class SecurityService : ISecurityService
             .ToList();
 
         var results = new List<SecuritySearchResult>(localResults);
+
+        // 再依序查詢各外部資料提供者，並合併結果
         foreach (var provider in _marketDataProviders)
         {
             IReadOnlyList<ExternalSecuritySearchResult> externalResults;
@@ -87,6 +102,7 @@ public sealed class SecurityService : ISecurityService
                 x.Source)));
         }
 
+        // 依代號與交易所去重，優先保留本地資料，再排序取前 25 筆
         return results
             .GroupBy(x => new { x.Ticker, x.Exchange })
             .Select(x => x.OrderByDescending(result => result.SecurityId.HasValue).First())
@@ -96,6 +112,7 @@ public sealed class SecurityService : ISecurityService
             .ToList();
     }
 
+    /// <inheritdoc />
     public async Task<Result<SecurityResponse>> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         var security = await _securityRepository.GetAsync(id, cancellationToken);
@@ -104,6 +121,7 @@ public sealed class SecurityService : ISecurityService
             : Result<SecurityResponse>.Success(security);
     }
 
+    /// <inheritdoc />
     public async Task<Result<SecurityResponse>> CreateAsync(
         CreateSecurityRequest request,
         CancellationToken cancellationToken)
@@ -143,6 +161,7 @@ public sealed class SecurityService : ISecurityService
         return Result<SecurityResponse>.Success(response!);
     }
 
+    /// <inheritdoc />
     public async Task<Result<Security>> EnsureAsync(
         EnsureSecurityRequest request,
         CancellationToken cancellationToken)
@@ -153,6 +172,7 @@ public sealed class SecurityService : ISecurityService
             : Result<Security>.Failure(result.ErrorCode!, result.ErrorMessage!);
     }
 
+    /// <inheritdoc />
     public async Task<Result<ResolveSecurityResponse>> ResolveAsync(
         ResolveSecurityRequest request,
         CancellationToken cancellationToken)
@@ -180,6 +200,7 @@ public sealed class SecurityService : ISecurityService
         return Result<ResolveSecurityResponse>.Success(ToResolveResponse(result.Value.Security, result.Value.Created));
     }
 
+    // 確保證券存在的核心邏輯：依 SecurityId 查詢，或依代號/交易所查詢/建立
     private async Task<Result<EnsureSecurityResult>> EnsureCoreAsync(
         EnsureSecurityRequest request,
         CancellationToken cancellationToken)
@@ -223,6 +244,7 @@ public sealed class SecurityService : ISecurityService
         return Result<EnsureSecurityResult>.Success(new EnsureSecurityResult(security, true));
     }
 
+    // 將 Security 實體轉換為 ResolveSecurityResponse
     private static ResolveSecurityResponse ToResolveResponse(Security security, bool created)
     {
         return new ResolveSecurityResponse(
@@ -238,10 +260,12 @@ public sealed class SecurityService : ISecurityService
             security.Industry);
     }
 
+    // 將貨幣代碼標準化：空白時預設為 USD，否則轉為大寫
     private static string NormalizeCurrency(string? currency)
     {
         return string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();
     }
 
+    // 確保證券結果的內部記錄，包含證券實體與是否為新建立
     private sealed record EnsureSecurityResult(Security Security, bool Created);
 }

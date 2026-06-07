@@ -7,6 +7,9 @@ using EquityLens.Api.Services.DemoUser;
 
 namespace EquityLens.Api.Services.PortfolioValuations;
 
+/// <summary>
+/// 投資組合估值服務實現，提供投資組合市場估值計算功能。
+/// </summary>
 public sealed class PortfolioValuationService : IPortfolioValuationService
 {
     private const string DailyInterval = "1d";
@@ -15,6 +18,12 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
     private readonly IPortfolioRepository _portfolioRepository;
     private readonly IMarketPriceRepository _marketPriceRepository;
 
+    /// <summary>
+    /// 初始化投資組合估值服務。
+    /// </summary>
+    /// <param name="demoUserContext">演示使用者內容。</param>
+    /// <param name="portfolioRepository">投資組合儲存庫。</param>
+    /// <param name="marketPriceRepository">市場價格儲存庫。</param>
     public PortfolioValuationService(
         IDemoUserContext demoUserContext,
         IPortfolioRepository portfolioRepository,
@@ -25,6 +34,7 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
         _marketPriceRepository = marketPriceRepository;
     }
 
+    /// <inheritdoc />
     public async Task<Result<PortfolioValuationResponse>> GetValuationAsync(
         Guid portfolioId,
         CancellationToken cancellationToken)
@@ -44,11 +54,13 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
             .Distinct()
             .ToList();
 
+        // 取得各證券最新收盤價
         var latestPrices = await _marketPriceRepository.GetLatestPricesAsync(
             securityIds,
             DailyInterval,
             cancellationToken);
 
+        // 逐筆計算持倉的市值、損益與估值狀態
         var holdingDrafts = portfolio.Holdings
             .Select(holding =>
             {
@@ -96,12 +108,14 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
             })
             .ToList();
 
+        // 彙總投資組合層級的數據
         var totalCostValue = holdingDrafts.Sum(x => x.CostValue);
         var totalMarketValue = holdingDrafts.Sum(x => x.MarketValue ?? 0);
         var pricedCostValue = holdingDrafts.Where(x => x.MarketValue.HasValue).Sum(x => x.CostValue);
         var totalUnrealizedPnl = holdingDrafts.Sum(x => x.UnrealizedPnl ?? 0);
         var totalUnrealizedPnlPercent = PortfolioMath.CalculateUnrealizedPnlPercent(totalUnrealizedPnl, pricedCostValue);
 
+        // 計算各持倉權重並轉換為回應物件
         var holdings = holdingDrafts
             .Select(x => new HoldingValuationResponse(
                 x.HoldingId,
@@ -135,6 +149,7 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
         return Result<PortfolioValuationResponse>.Success(response);
     }
 
+    // 持倉估值計算的中間草稿記錄，用於彙總前暫存各持倉計算結果
     private sealed record HoldingValuationDraft(
         Guid HoldingId,
         Guid SecurityId,

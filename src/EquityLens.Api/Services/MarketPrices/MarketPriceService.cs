@@ -9,6 +9,9 @@ using EquityLens.Api.Services.MarketData;
 
 namespace EquityLens.Api.Services.MarketPrices;
 
+/// <summary>
+/// 市場價格服務實現，提供證券價格查詢與每日價格導入功能。
+/// </summary>
 public sealed class MarketPriceService : IMarketPriceService
 {
     private const string DailyInterval = "1d";
@@ -18,6 +21,13 @@ public sealed class MarketPriceService : IMarketPriceService
     private readonly IMarketPriceRepository _marketPriceRepository;
     private readonly IEnumerable<IMarketDataProvider> _marketDataProviders;
 
+    /// <summary>
+    /// 初始化市場價格服務。
+    /// </summary>
+    /// <param name="dbContext">資料庫內容。</param>
+    /// <param name="securityRepository">證券儲存庫。</param>
+    /// <param name="marketPriceRepository">市場價格儲存庫。</param>
+    /// <param name="marketDataProviders">市場資料提供者集合。</param>
     public MarketPriceService(
         EquityLensDbContext dbContext,
         ISecurityRepository securityRepository,
@@ -30,6 +40,7 @@ public sealed class MarketPriceService : IMarketPriceService
         _marketDataProviders = marketDataProviders;
     }
 
+    /// <inheritdoc />
     public async Task<Result<IReadOnlyList<MarketPriceResponse>>> GetPricesAsync(
         Guid securityId,
         DateOnly? from,
@@ -50,6 +61,7 @@ public sealed class MarketPriceService : IMarketPriceService
         return Result<IReadOnlyList<MarketPriceResponse>>.Success(prices);
     }
 
+    /// <inheritdoc />
     public async Task<Result<ImportMarketPricesResponse>> ImportDailyPricesAsync(
         Guid securityId,
         ImportMarketPricesRequest request,
@@ -121,6 +133,7 @@ public sealed class MarketPriceService : IMarketPriceService
             upsertResult.UpdatedCount));
     }
 
+    /// <inheritdoc />
     public Task<Result<ImportMarketPricesResponse>> SyncDailyPricesAsync(
         Guid securityId,
         ImportMarketPricesRequest request,
@@ -129,6 +142,7 @@ public sealed class MarketPriceService : IMarketPriceService
         return ImportDailyPricesAsync(securityId, request, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<Result<ImportMarketPricesByTickerResponse>> ImportDailyPricesByTickerAsync(
         ImportMarketPricesByTickerRequest request,
         CancellationToken cancellationToken)
@@ -226,6 +240,7 @@ public sealed class MarketPriceService : IMarketPriceService
             upsertResult.UpdatedCount));
     }
 
+    // 依據交易所推斷預設貨幣：TWSE/TPEX 為 TWD，其餘為 USD
     private static string DefaultCurrency(string exchange)
     {
         return exchange is "TWSE" or "TPEX" ? "TWD" : "USD";

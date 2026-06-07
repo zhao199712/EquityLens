@@ -7,6 +7,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Services.DemoData;
 
+/// <summary>
+/// 演示資料服務實現，提供演示資料的狀態查詢、種子資料建立與清除功能。
+/// </summary>
 public sealed class DemoDataService : IDemoDataService
 {
     private const string DemoPriceDataSource = "DemoCsv";
@@ -38,12 +41,18 @@ public sealed class DemoDataService : IDemoDataService
     private readonly EquityLensDbContext _dbContext;
     private readonly IDemoUserContext _demoUserContext;
 
+    /// <summary>
+    /// 初始化演示資料服務。
+    /// </summary>
+    /// <param name="dbContext">資料庫內容。</param>
+    /// <param name="demoUserContext">演示使用者內容。</param>
     public DemoDataService(EquityLensDbContext dbContext, IDemoUserContext demoUserContext)
     {
         _dbContext = dbContext;
         _demoUserContext = demoUserContext;
     }
 
+    /// <inheritdoc />
     public async Task<DemoDataStatusResponse> GetStatusAsync(CancellationToken cancellationToken)
     {
         var demoPortfolioNames = DemoPortfolios.Select(x => x.Name).ToArray();
@@ -81,6 +90,7 @@ public sealed class DemoDataService : IDemoDataService
             marketPriceCount);
     }
 
+    /// <inheritdoc />
     public async Task<SeedDemoDataResponse> SeedAsync(CancellationToken cancellationToken)
     {
         await _demoUserContext.EnsureUserAsync(cancellationToken);
@@ -100,6 +110,7 @@ public sealed class DemoDataService : IDemoDataService
             priceResults.Updated);
     }
 
+    /// <inheritdoc />
     public async Task<ClearDemoDataResponse> ClearAsync(CancellationToken cancellationToken)
     {
         var demoPortfolioNames = DemoPortfolios.Select(x => x.Name).ToArray();
@@ -117,6 +128,7 @@ public sealed class DemoDataService : IDemoDataService
         return new ClearDemoDataResponse(portfoliosRemoved, holdingsRemoved);
     }
 
+    // 確保 CSV 中所有證券已存在於資料庫中，不存在則建立；返回證券對照表與建立數量
     private async Task<SecuritySeedResult> EnsureSecuritiesAsync(
         IReadOnlyList<DemoPriceCsvRow> csvRows,
         CancellationToken cancellationToken)
@@ -156,6 +168,7 @@ public sealed class DemoDataService : IDemoDataService
         return new SecuritySeedResult(securityByTickerExchange, securitiesCreated);
     }
 
+    // 確保演示投資組合與持倉已存在，不存在則建立；返回建立數量統計
     private async Task<PortfolioSeedResult> EnsurePortfoliosAndHoldingsAsync(
         IReadOnlyDictionary<string, Security> securityByTickerExchange,
         CancellationToken cancellationToken)
@@ -224,6 +237,7 @@ public sealed class DemoDataService : IDemoDataService
         return new PortfolioSeedResult(portfoliosCreated, holdingsCreated);
     }
 
+    // 將 CSV 中的市場價格資料寫入資料庫，已存在則更新；返回新增與更新數量
     private async Task<MarketPriceSeedResult> UpsertMarketPricesAsync(
         IReadOnlyList<DemoPriceCsvRow> csvRows,
         IReadOnlyDictionary<string, Security> securityByTickerExchange,
@@ -284,6 +298,7 @@ public sealed class DemoDataService : IDemoDataService
         return new MarketPriceSeedResult(inserted, updated);
     }
 
+    // 從應用程式目錄向上遞迴搜尋並讀取演示價格 CSV 檔案
     private static async Task<IReadOnlyList<DemoPriceCsvRow>> ReadDemoPriceCsvAsync(CancellationToken cancellationToken)
     {
         var csvPath = ResolveDemoPriceCsvPath();
@@ -316,6 +331,7 @@ public sealed class DemoDataService : IDemoDataService
         return rows;
     }
 
+    // 從應用程式基底目錄向上遞迴搜尋演示價格 CSV 檔案路徑
     private static string ResolveDemoPriceCsvPath()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -333,11 +349,13 @@ public sealed class DemoDataService : IDemoDataService
         throw new FileNotFoundException($"Demo market price CSV was not found at '{DemoPriceCsvPath}'.");
     }
 
+    // 將股票代號與交易所組合為唯一鍵字串
     private static string SecurityKey(string ticker, string exchange)
     {
         return $"{ticker.ToUpperInvariant()}|{exchange.ToUpperInvariant()}";
     }
 
+    // 依據股票代號與名稱推斷資產類型：特定 ETF 代號或名稱含 "ETF" 則為 ETF，其餘為 Equity
     private static string InferAssetType(string ticker, string name)
     {
         return ticker is "SPY" or "QQQ" or "GLD" or "TLT" or "IBIT" or "0050" || name.Contains("ETF", StringComparison.OrdinalIgnoreCase)

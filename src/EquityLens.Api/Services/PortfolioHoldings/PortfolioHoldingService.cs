@@ -10,6 +10,9 @@ using EquityLens.Api.Services.Securities;
 
 namespace EquityLens.Api.Services.PortfolioHoldings;
 
+/// <summary>
+/// 投資組合持倉服務實現，提供持倉的查詢、建立、更新與刪除功能。
+/// </summary>
 public sealed class PortfolioHoldingService : IPortfolioHoldingService
 {
     private readonly EquityLensDbContext _dbContext;
@@ -18,6 +21,14 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
     private readonly IPortfolioHoldingRepository _holdingRepository;
     private readonly ISecurityService _securityService;
 
+    /// <summary>
+    /// 初始化投資組合持倉服務。
+    /// </summary>
+    /// <param name="dbContext">資料庫內容。</param>
+    /// <param name="demoUserContext">演示使用者內容。</param>
+    /// <param name="portfolioRepository">投資組合儲存庫。</param>
+    /// <param name="holdingRepository">持倉儲存庫。</param>
+    /// <param name="securityService">證券服務。</param>
     public PortfolioHoldingService(
         EquityLensDbContext dbContext,
         IDemoUserContext demoUserContext,
@@ -32,6 +43,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         _securityService = securityService;
     }
 
+    /// <inheritdoc />
     public async Task<Result<IReadOnlyList<PortfolioHoldingResponse>>> ListAsync(
         Guid portfolioId,
         CancellationToken cancellationToken)
@@ -45,6 +57,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         return Result<IReadOnlyList<PortfolioHoldingResponse>>.Success(holdings);
     }
 
+    /// <inheritdoc />
     public async Task<Result<PortfolioHoldingResponse>> CreateAsync(
         Guid portfolioId,
         CreatePortfolioHoldingRequest request,
@@ -95,6 +108,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         return Result<PortfolioHoldingResponse>.Success(response!);
     }
 
+    /// <inheritdoc />
     public async Task<Result<bool>> UpdateAsync(
         Guid portfolioId,
         Guid holdingId,
@@ -122,6 +136,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         return Result<bool>.Success(true);
     }
 
+    /// <inheritdoc />
     public async Task<Result<bool>> DeleteAsync(Guid portfolioId, Guid holdingId, CancellationToken cancellationToken)
     {
         if (!await PortfolioExistsAsync(portfolioId, cancellationToken))
@@ -141,11 +156,13 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         return Result<bool>.Success(true);
     }
 
+    // 驗證投資組合是否存在且屬於當前使用者
     private Task<bool> PortfolioExistsAsync(Guid portfolioId, CancellationToken cancellationToken)
     {
         return _portfolioRepository.ActiveExistsAsync(portfolioId, _demoUserContext.UserId, cancellationToken);
     }
 
+    // 將貨幣代碼標準化：空白時預設為 USD，否則轉為大寫
     private static string NormalizeCurrency(string? currency)
     {
         return string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();

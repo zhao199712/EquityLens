@@ -7,12 +7,21 @@ using EquityLens.Api.Services.DemoUser;
 
 namespace EquityLens.Api.Services.Portfolios;
 
+/// <summary>
+/// 投資組合服務實現，提供投資組合的查詢、建立、更新與刪除功能。
+/// </summary>
 public sealed class PortfolioService : IPortfolioService
 {
     private readonly EquityLensDbContext _dbContext;
     private readonly IDemoUserContext _demoUserContext;
     private readonly IPortfolioRepository _portfolioRepository;
 
+    /// <summary>
+    /// 初始化投資組合服務。
+    /// </summary>
+    /// <param name="dbContext">資料庫內容。</param>
+    /// <param name="demoUserContext">演示使用者內容。</param>
+    /// <param name="portfolioRepository">投資組合儲存庫。</param>
     public PortfolioService(
         EquityLensDbContext dbContext,
         IDemoUserContext demoUserContext,
@@ -23,12 +32,14 @@ public sealed class PortfolioService : IPortfolioService
         _portfolioRepository = portfolioRepository;
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<PortfolioListItemResponse>> ListAsync(CancellationToken cancellationToken)
     {
         await _demoUserContext.EnsureUserAsync(cancellationToken);
         return await _portfolioRepository.ListActiveAsync(_demoUserContext.UserId, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<Result<PortfolioDetailResponse>> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         var portfolio = await _portfolioRepository.GetDetailAsync(id, _demoUserContext.UserId, cancellationToken);
@@ -37,6 +48,7 @@ public sealed class PortfolioService : IPortfolioService
             : Result<PortfolioDetailResponse>.Success(portfolio);
     }
 
+    /// <inheritdoc />
     public async Task<Result<PortfolioDetailResponse>> CreateAsync(
         CreatePortfolioRequest request,
         CancellationToken cancellationToken)
@@ -67,6 +79,7 @@ public sealed class PortfolioService : IPortfolioService
         return Result<PortfolioDetailResponse>.Success(response!);
     }
 
+    /// <inheritdoc />
     public async Task<Result<bool>> UpdateAsync(
         Guid id,
         UpdatePortfolioRequest request,
@@ -92,6 +105,7 @@ public sealed class PortfolioService : IPortfolioService
         return Result<bool>.Success(true);
     }
 
+    /// <inheritdoc />
     public async Task<Result<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var portfolio = await _portfolioRepository.GetActiveAsync(id, _demoUserContext.UserId, cancellationToken);
@@ -107,6 +121,7 @@ public sealed class PortfolioService : IPortfolioService
         return Result<bool>.Success(true);
     }
 
+    // 將貨幣代碼標準化：空白時預設為 USD，否則轉為大寫
     private static string NormalizeCurrency(string? currency)
     {
         return string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();
