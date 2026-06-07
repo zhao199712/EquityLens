@@ -1,495 +1,343 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
+import LineChart from '../../components/kimi/LineChart.vue'
+import DonutChart from '../../components/kimi/DonutChart.vue'
+import BarChart from '../../components/kimi/BarChart.vue'
+import DataTable from '../../components/kimi/DataTable.vue'
+import ScatterPlot from '../../components/kimi/ScatterPlot.vue'
+import Footer from '../../components/kimi/Footer.vue'
 import {
-  NButton,
-  NTag,
-  NTabs,
-  NTabPane,
-  NProgress,
-  NIcon,
-  NSpace,
-  NModal,
-  NForm,
-  NFormItem,
-  NInput,
-  NInputNumber,
-  NPopconfirm,
-} from 'naive-ui'
-import {
-  ArrowBackOutline,
-  AddOutline,
-  TrashOutline,
-  ShieldCheckmarkOutline,
-  FlashOutline,
-  WarningOutline,
-} from '@vicons/ionicons5'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart, BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
+  kpiData,
+  portfolioValueData,
+  allocationData,
+  performanceAttribution,
+  riskData,
+  scenarioData,
+} from '../../data/portfolioKimiData'
 
-use([CanvasRenderer, PieChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
-
-const route = useRoute()
 const router = useRouter()
-const portfolioId = route.params.id as string
-
-// Mock portfolio data
-const portfolio = ref({
-  id: portfolioId,
-  name: '科技成長型投資組合',
-  description: '聚焦科技與創新產業的高成長股票',
-  strategy: 'growth',
-  marketValue: 2450000,
-  unrealizedPL: 185000,
-  plPercent: 8.2,
-  totalReturn: 12.5,
-  volatility: 18.3,
-  sharpeRatio: 1.42,
-  maxDrawdown: -15.2,
-  lastUpdated: '2026-06-03',
-})
-
-// Holdings
-const holdings = ref([
-  { symbol: 'AAPL', name: 'Apple Inc.', shares: 150, price: 195.50, value: 293250, weight: 12.0, pl: 25250, plPercent: 9.4 },
-  { symbol: 'MSFT', name: 'Microsoft Corp.', shares: 100, price: 420.30, value: 420300, weight: 17.1, pl: 45300, plPercent: 12.1 },
-  { symbol: 'NVDA', name: 'NVIDIA Corp.', shares: 80, price: 1250.00, value: 1000000, weight: 40.8, pl: 180000, plPercent: 22.0 },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', shares: 200, price: 175.80, value: 351600, weight: 14.3, pl: -8400, plPercent: -2.3 },
-  { symbol: 'TSLA', name: 'Tesla Inc.', shares: 120, price: 245.60, value: 294720, weight: 12.0, pl: -17280, plPercent: -5.5 },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.', shares: 50, price: 185.40, value: 92700, weight: 3.8, pl: -3900, plPercent: -4.0 },
-])
-
-// Allocation data for pie chart
-const allocationData = computed(() =>
-  holdings.value.map(h => ({
-    name: h.symbol,
-    value: h.weight,
-  }))
-)
-
-const pieChartOption = computed(() => ({
-  backgroundColor: 'transparent',
-  tooltip: {
-    trigger: 'item',
-    backgroundColor: 'rgba(17, 24, 39, 0.9)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    textStyle: { color: '#f0f4f8' },
-    formatter: '{b}: {c}%',
-  },
-  legend: {
-    orient: 'vertical',
-    right: '5%',
-    top: 'center',
-    textStyle: { color: '#94a3b8' },
-  },
-  series: [
-    {
-      type: 'pie',
-      radius: ['45%', '75%'],
-      center: ['35%', '50%'],
-      avoidLabelOverlap: false,
-      itemStyle: {
-        borderRadius: 8,
-        borderColor: '#0a0e1a',
-        borderWidth: 2,
-      },
-      label: { show: false },
-      emphasis: {
-        label: {
-          show: true,
-          fontSize: 14,
-          fontWeight: 'bold',
-          color: '#f0f4f8',
-        },
-      },
-      data: allocationData.value,
-      color: ['#60a5fa', '#34d399', '#fbbf24', '#c084fc', '#f87171', '#fb923c'],
-    },
-  ],
-}))
-
-// Risk metrics bar chart
-const riskChartOption = computed(() => ({
-  backgroundColor: 'transparent',
-  grid: {
-    left: '3%',
-    right: '8%',
-    bottom: '3%',
-    top: '5%',
-    containLabel: true,
-  },
-  tooltip: {
-    trigger: 'axis',
-    backgroundColor: 'rgba(17, 24, 39, 0.9)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    textStyle: { color: '#f0f4f8' },
-  },
-  xAxis: {
-    type: 'value',
-    axisLine: { show: false },
-    splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } },
-    axisLabel: { color: '#64748b', formatter: '{value}%' },
-  },
-  yAxis: {
-    type: 'category',
-    data: ['Max Drawdown', 'Volatility', 'Total Return'],
-    axisLine: { show: false },
-    axisTick: { show: false },
-    axisLabel: { color: '#94a3b8' },
-  },
-  series: [
-    {
-      type: 'bar',
-      data: [
-        { value: Math.abs(portfolio.value.maxDrawdown), itemStyle: { color: '#f87171' } },
-        { value: portfolio.value.volatility, itemStyle: { color: '#fbbf24' } },
-        { value: portfolio.value.totalReturn, itemStyle: { color: '#34d399' } },
-      ],
-      barWidth: '50%',
-      itemStyle: { borderRadius: [0, 4, 4, 0] },
-      label: {
-        show: true,
-        position: 'right',
-        color: '#f0f4f8',
-        formatter: (params: any) => {
-          const val = params.dataIndex === 0 ? -params.value : params.value
-          return `${val}%`
-        },
-      },
-    },
-  ],
-}))
-
-// Scenarios
-const scenarios = ref([
-  { id: '1', name: '市場下跌 10%', type: 'market', impact: -8.5, affectedHoldings: 4 },
-  { id: '2', name: '科技板塊回調', type: 'sector', impact: -12.3, affectedHoldings: 3 },
-  { id: '3', name: '單一股票衝擊 (NVDA)', type: 'single', impact: -8.2, affectedHoldings: 1 },
-])
-
-// Add holding modal
-const showAddHoldingModal = ref(false)
-const newHolding = ref({
-  symbol: '',
-  shares: 0,
-  price: 0,
-})
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('zh-TW', {
-    style: 'currency',
-    currency: 'TWD',
-    minimumFractionDigits: 0,
-  }).format(value)
-}
-
-function getStrategyLabel(strategy: string): string {
-  const map: Record<string, string> = {
-    growth: '成長型',
-    value: '價值型',
-    balanced: '平衡型',
-    income: '收益型',
-  }
-  return map[strategy] || strategy
-}
-
-function handleAddHolding() {
-  const value = newHolding.value.shares * newHolding.value.price
-  const totalValue = holdings.value.reduce((sum, h) => sum + h.value, 0) + value
-  holdings.value.push({
-    symbol: newHolding.value.symbol,
-    name: newHolding.value.symbol,
-    shares: newHolding.value.shares,
-    price: newHolding.value.price,
-    value,
-    weight: Number(((value / totalValue) * 100).toFixed(1)),
-    pl: 0,
-    plPercent: 0,
-  })
-  showAddHoldingModal.value = false
-  newHolding.value = { symbol: '', shares: 0, price: 0 }
-}
-
-function handleDeleteHolding(symbol: string) {
-  holdings.value = holdings.value.filter(h => h.symbol !== symbol)
-}
-
-function goBack() {
-  router.push({ name: 'portfolios' })
-}
+const timeRange = ref('1Y')
+const hoveredSegment = ref<number | null>(null)
+const timeRanges = ['1Y', '6M', '3M', '1M', 'YTD']
 </script>
 
 <template>
-  <main class="page animate-fade-in">
-    <!-- Back Button -->
-    <div style="margin-bottom: 16px;">
-      <NButton text type="primary" size="small" @click="goBack">
-        <template #icon>
-          <NIcon><ArrowBackOutline /></NIcon>
-        </template>
-        返回投資組合列表
-      </NButton>
-    </div>
+  <div class="kimi-page-light" style="padding-top: 40px">
+    <!-- Back + Header -->
+    <div class="kimi-content" style="margin-top: 0; padding-top: 20px">
+      <button class="kimi-btn" style="margin-bottom: 24px" @click="router.push({ name: 'portfolios' })">
+        ← BACK TO PORTFOLIOS
+      </button>
 
-    <!-- Header -->
-    <section class="page-heading">
-      <div>
-        <p class="eyebrow">Portfolio Detail</p>
-        <h1>{{ portfolio.name }}</h1>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
+        <div>
+          <h1 style="font-size: 28px; font-weight: 700; margin: 0">科技成長型投資組合</h1>
+          <span class="kimi-caption" style="margin-top: 4px; display: block">US GROWTH PORTFOLIO</span>
+        </div>
+        <div style="display: flex; gap: 8px">
+          <span class="kimi-tag kimi-tag-accent">Growth</span>
+          <span class="kimi-caption" style="align-self: center">Last updated: 2026-06-03</span>
+        </div>
       </div>
-      <NSpace>
-        <NTag type="info" round>{{ getStrategyLabel(portfolio.strategy) }}</NTag>
-        <NButton type="primary" class="btn-primary" size="small">
-          <template #icon>
-            <NIcon><FlashOutline /></NIcon>
-          </template>
-          執行風險分析
-        </NButton>
-      </NSpace>
-    </section>
 
-    <!-- Overview Cards -->
-    <NGrid :cols="4" :x-gap="16" :y-gap="16" responsive="screen">
-      <NGridItem>
-        <div class="metric-card">
-          <div class="metric-label">總市值</div>
-          <div class="metric-value">{{ formatCurrency(portfolio.marketValue) }}</div>
-        </div>
-      </NGridItem>
-      <NGridItem>
-        <div class="metric-card">
-          <div class="metric-label">未實現損益</div>
-          <div class="metric-value" :style="{ color: portfolio.plPercent >= 0 ? 'var(--success)' : 'var(--danger)' }">
-            {{ portfolio.plPercent > 0 ? '+' : '' }}{{ portfolio.plPercent }}%
-          </div>
-          <div class="metric-change" :class="portfolio.plPercent >= 0 ? 'positive' : 'negative'">
-            {{ formatCurrency(portfolio.unrealizedPL) }}
-          </div>
-        </div>
-      </NGridItem>
-      <NGridItem>
-        <div class="metric-card">
-          <div class="metric-label">波動率</div>
-          <div class="metric-value">{{ portfolio.volatility }}%</div>
-          <div class="metric-change" style="color: var(--text-tertiary);">年化標準差</div>
-        </div>
-      </NGridItem>
-      <NGridItem>
-        <div class="metric-card">
-          <div class="metric-label">夏普比率</div>
-          <div class="metric-value" :style="{ color: portfolio.sharpeRatio >= 1 ? 'var(--success)' : 'var(--warning)' }">
-            {{ portfolio.sharpeRatio }}
-          </div>
-          <div class="metric-change" :class="portfolio.sharpeRatio >= 1 ? 'positive' : 'negative'">
-            {{ portfolio.sharpeRatio >= 1 ? '優秀' : '一般' }}
-          </div>
-        </div>
-      </NGridItem>
-    </NGrid>
-
-    <!-- Tabs -->
-    <div class="glass-panel" style="margin-top: 24px; padding: 0;">
-      <NTabs type="line" class="glass-tabs" style="padding: 20px 24px 0;">
-        <NTabPane name="overview" tab="總覽">
-          <div style="padding: 24px;">
-            <NGrid :cols="2" :x-gap="24" responsive="screen">
-              <NGridItem>
-                <h3 style="margin-bottom: 16px;">資產配置</h3>
-                <VChart :option="pieChartOption" style="height: 300px;" autoresize />
-              </NGridItem>
-              <NGridItem>
-                <h3 style="margin-bottom: 16px;">風險指標</h3>
-                <VChart :option="riskChartOption" style="height: 300px;" autoresize />
-              </NGridItem>
-            </NGrid>
-          </div>
-        </NTabPane>
-
-        <NTabPane name="holdings" tab="持股明細">
-          <div style="padding: 0 24px 24px;">
-            <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
-              <NButton type="primary" class="btn-primary" size="small" @click="showAddHoldingModal = true">
-                <template #icon>
-                  <NIcon><AddOutline /></NIcon>
-                </template>
-                新增持股
-              </NButton>
+      <!-- KPI Cards -->
+      <ScrollReveal>
+        <div class="kimi-section">
+          <div class="kimi-kpi-grid">
+            <div v-for="(kpi, i) in kpiData" :key="i" class="kimi-kpi-cell">
+              <span class="kimi-caption" style="margin-bottom: 8px">{{ kpi.label }}</span>
+              <span class="kimi-data">{{ kpi.value }}</span>
+              <span style="font-size: 12px; color: var(--kimi-muted); margin-top: 4px">{{ kpi.sub }}</span>
+              <div class="accent-bar" style="background-color: var(--kimi-accent-orange)" />
             </div>
-            <div class="glass-table">
-              <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                  <tr style="border-bottom: 1px solid var(--border-subtle);">
-                    <th style="text-align: left; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">代號</th>
-                    <th style="text-align: left; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">名稱</th>
-                    <th style="text-align: right; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">股數</th>
-                    <th style="text-align: right; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">價格</th>
-                    <th style="text-align: right; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">市值</th>
-                    <th style="text-align: right; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">權重</th>
-                    <th style="text-align: right; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">損益</th>
-                    <th style="text-align: center; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="holding in holdings"
-                    :key="holding.symbol"
-                    style="border-bottom: 1px solid var(--border-subtle);"
-                    class="table-row-hover"
+          </div>
+        </div>
+      </ScrollReveal>
+
+      <!-- Portfolio Value Trend -->
+      <ScrollReveal :delay="0.1" style="margin-top: 60px">
+        <div class="kimi-section">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
+            <div>
+              <h2 style="margin: 0; font-size: 20px; font-weight: 600">投資組合價值走勢</h2>
+              <span class="kimi-caption" style="margin-top: 4px; display: block">PORTFOLIO VALUE TREND</span>
+              <span class="kimi-caption" style="display: block">2024.01 — 2025.12</span>
+            </div>
+            <div class="kimi-time-range">
+              <button
+                v-for="r in timeRanges"
+                :key="r"
+                :class="['kimi-time-btn', timeRange === r && 'active']"
+                @click="timeRange = r"
+              >
+                {{ r }}
+              </button>
+            </div>
+          </div>
+          <div style="padding: 20px">
+            <LineChart
+              :data="portfolioValueData.values"
+              :labels="portfolioValueData.labels"
+              :y-axis-labels="portfolioValueData.yAxisLabels"
+              :height="400"
+              line-color="#000000"
+              :show-area="true"
+            />
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 20px; border-top: 1px solid var(--kimi-border-light)">
+            <span style="font-size: 13px; color: var(--kimi-muted)">年初資產 {{ portfolioValueData.summary.start }}</span>
+            <span style="font-size: 13px; color: var(--kimi-muted)">最高資產 {{ portfolioValueData.summary.high }}</span>
+            <span style="font-size: 13px; color: var(--kimi-muted)">最低資產 {{ portfolioValueData.summary.low }}</span>
+          </div>
+        </div>
+      </ScrollReveal>
+
+      <!-- Asset Allocation -->
+      <ScrollReveal :delay="0.15" style="margin-top: 60px">
+        <div class="kimi-section" style="display: grid; grid-template-columns: 2fr 3fr">
+          <!-- Donut -->
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; border-right: 1px solid var(--kimi-border-light)">
+            <DonutChart
+              :segments="allocationData.segments"
+              center-label="NT$12.58M"
+              center-sub-label="4 類資產"
+              :active-index="hoveredSegment"
+              @segment-hover="(i) => hoveredSegment = i"
+            />
+          </div>
+          <!-- Holdings -->
+          <div style="padding: 20px">
+            <div style="margin-bottom: 16px">
+              <h2 style="margin: 0; font-size: 20px; font-weight: 600">持倉明細</h2>
+              <span class="kimi-caption">HOLDINGS</span>
+            </div>
+            <DataTable
+              :headers="['代碼', '名稱', '類別', '持有股數', '現價', '市值', '占比', '損益']"
+              :rows="allocationData.holdings.map((h) => [h.code, h.name, h.category, h.shares, h.price, h.value, h.ratio, h.pnl])"
+              :highlight-row="hoveredSegment"
+              @row-hover="(i) => hoveredSegment = i"
+            />
+          </div>
+        </div>
+      </ScrollReveal>
+
+      <!-- Performance Attribution -->
+      <div style="margin-top: 60px">
+        <div style="margin-bottom: 24px">
+          <h2 style="margin: 0; font-size: 20px; font-weight: 600">績效歸因分析</h2>
+          <span class="kimi-caption">PERFORMANCE ATTRIBUTION</span>
+        </div>
+        <div class="kimi-grid-4">
+          <!-- Sector Contribution -->
+          <ScrollReveal :delay="0">
+            <div class="kimi-panel">
+              <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600">產業別貢獻</h3>
+              <BarChart
+                :data="performanceAttribution.sector.map((s) => ({ label: s.label, value: s.value }))"
+                :width="280"
+              />
+            </div>
+          </ScrollReveal>
+
+          <!-- Stock Alpha -->
+          <ScrollReveal :delay="0.1">
+            <div class="kimi-panel">
+              <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600">選股 Alpha</h3>
+              <div>
+                <div
+                  v-for="(a, i) in performanceAttribution.alpha"
+                  :key="i"
+                  style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--kimi-border-light)"
+                >
+                  <span style="font-size: 14px">{{ a.name }}</span>
+                  <span
+                    style="font-size: 14px; font-weight: 500"
+                    :style="{ color: a.value > 0 ? '#000000' : '#666666' }"
                   >
-                    <td style="padding: 14px 16px; color: var(--accent-primary); font-weight: 600;">{{ holding.symbol }}</td>
-                    <td style="padding: 14px 16px; color: var(--text-primary);">{{ holding.name }}</td>
-                    <td style="padding: 14px 16px; color: var(--text-secondary); text-align: right;">{{ holding.shares }}</td>
-                    <td style="padding: 14px 16px; color: var(--text-secondary); text-align: right;">{{ holding.price }}</td>
-                    <td style="padding: 14px 16px; color: var(--text-primary); text-align: right; font-weight: 500;">{{ formatCurrency(holding.value) }}</td>
-                    <td style="padding: 14px 16px; text-align: right;">
-                      <NProgress
-                        type="line"
-                        :percentage="holding.weight"
-                        :show-indicator="false"
-                        :height="6"
-                        :color="holding.weight > 20 ? '#f87171' : '#60a5fa'"
-                        style="width: 80px; display: inline-block;"
-                      />
-                      <span style="color: var(--text-secondary); font-size: 12px; margin-left: 8px;">{{ holding.weight }}%</span>
-                    </td>
-                    <td style="padding: 14px 16px; text-align: right;">
-                      <span :style="{ color: holding.plPercent >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }">
-                        {{ holding.plPercent > 0 ? '+' : '' }}{{ holding.plPercent }}%
-                      </span>
-                    </td>
-                    <td style="padding: 14px 16px; text-align: center;">
-                      <NPopconfirm @positive-click="handleDeleteHolding(holding.symbol)">
-                        <template #trigger>
-                          <NButton text type="error" size="small">
-                            <template #icon>
-                              <NIcon><TrashOutline /></NIcon>
-                            </template>
-                          </NButton>
-                        </template>
-                        確定要刪除此持股嗎？
-                      </NPopconfirm>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    {{ a.value > 0 ? '+' : '' }}{{ a.value }}%
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-        </NTabPane>
+          </ScrollReveal>
 
-        <NTabPane name="risk" tab="風險分析">
-          <div style="padding: 24px;">
-            <NGrid :cols="2" :x-gap="24" responsive="screen">
-              <NGridItem>
-                <div class="glass-card" style="padding: 24px;">
-                  <h3 style="margin-bottom: 20px;">風險值 (VaR)</h3>
-                  <div style="display: grid; gap: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
-                      <div>
-                        <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 4px;">VaR 95%</div>
-                        <div style="color: var(--danger); font-size: 24px; font-weight: 700;">-2.3%</div>
-                      </div>
-                      <NIcon :size="32" color="#f87171"><WarningOutline /></NIcon>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
-                      <div>
-                        <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 4px;">VaR 99%</div>
-                        <div style="color: var(--danger); font-size: 24px; font-weight: 700;">-3.8%</div>
-                      </div>
-                      <NIcon :size="32" color="#f87171"><WarningOutline /></NIcon>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
-                      <div>
-                        <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 4px;">預期短缺 (ES 95%)</div>
-                        <div style="color: var(--warning); font-size: 24px; font-weight: 700;">-3.1%</div>
-                      </div>
-                      <NIcon :size="32" color="#fbbf24"><ShieldCheckmarkOutline /></NIcon>
-                    </div>
-                  </div>
-                </div>
-              </NGridItem>
-              <NGridItem>
-                <div class="glass-card" style="padding: 24px;">
-                  <h3 style="margin-bottom: 20px;">情境分析</h3>
-                  <div style="display: grid; gap: 12px;">
-                    <div
-                      v-for="scenario in scenarios"
-                      :key="scenario.id"
-                      style="padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px; border-left: 3px solid var(--danger);"
-                    >
-                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="color: var(--text-primary); font-weight: 600;">{{ scenario.name }}</span>
-                        <NTag size="small" type="error" round>{{ scenario.impact }}%</NTag>
-                      </div>
-                      <div style="color: var(--text-secondary); font-size: 13px;">
-                        影響 {{ scenario.affectedHoldings }} 檔持股
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </NGridItem>
-            </NGrid>
-          </div>
-        </NTabPane>
-
-        <NTabPane name="scenarios" tab="情境模擬">
-          <div style="padding: 24px;">
-            <div class="empty-state" style="min-height: 200px;">
-              <NIcon :size="48" color="var(--text-muted)"><FlashOutline /></NIcon>
-              <p style="color: var(--text-secondary); margin-top: 12px;">建立情境模擬以預測市場變化對投資組合的影響</p>
-              <NButton type="primary" class="btn-primary" style="margin-top: 16px;">
-                <template #icon>
-                  <NIcon><AddOutline /></NIcon>
+          <!-- Time-weighted return -->
+          <ScrollReveal :delay="0.2">
+            <div class="kimi-panel">
+              <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600">時間加權報酬</h3>
+              <svg width="100%" height="120" viewBox="0 0 280 120">
+                <line x1="10" y1="60" x2="270" y2="60" stroke="#E0E0E0" stroke-width="1" />
+                <template v-for="(v, i) in performanceAttribution.monthlyReturns" :key="i">
+                  <line
+                    v-if="i > 0"
+                    :x1="((i - 1) / 11) * 260 + 10"
+                    :y1="60 - performanceAttribution.monthlyReturns[i - 1] * 8"
+                    :x2="(i / 11) * 260 + 10"
+                    :y2="60 - v * 8"
+                    :stroke="v >= 0 ? '#000000' : '#999999'"
+                    stroke-width="1.5"
+                  />
+                  <circle :cx="(i / 11) * 260 + 10" :cy="60 - v * 8" r="3" :fill="v >= 0 ? '#000000' : '#999999'" />
                 </template>
-                建立情境
-              </NButton>
+              </svg>
             </div>
+          </ScrollReveal>
+
+          <!-- Risk Metrics -->
+          <ScrollReveal :delay="0.3">
+            <div class="kimi-panel">
+              <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600">風險指標</h3>
+              <div>
+                <div
+                  v-for="(r, i) in [
+                    { label: '波動率', value: performanceAttribution.risk.volatility },
+                    { label: '最大回撤', value: performanceAttribution.risk.maxDrawdown },
+                    { label: '索提諾比率', value: performanceAttribution.risk.sortino },
+                    { label: '資訊比率', value: performanceAttribution.risk.infoRatio },
+                  ]"
+                  :key="i"
+                  style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0"
+                >
+                  <span class="kimi-caption">{{ r.label }}</span>
+                  <span class="kimi-data-sm" style="font-size: 20px">{{ r.value }}</span>
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
+        </div>
+      </div>
+
+      <!-- Risk Analysis -->
+      <div class="kimi-grid-2" style="margin-top: 60px; border: 1px solid var(--kimi-border-light)">
+        <ScrollReveal style="padding: 20px; border-right: 1px solid var(--kimi-border-light)">
+          <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600">風險矩陣</h2>
+          <ScatterPlot
+            :data="riskData.scatter"
+            x-axis-label="波動率（標準差）"
+            y-axis-label="預期報酬率"
+            :x-range="[0, 30]"
+            :y-range="[-5, 25]"
+            :frontier-curve="[[5, 2], [8, 5], [10, 7], [12, 9], [15, 11], [18, 13], [22, 15], [25, 16]]"
+          />
+        </ScrollReveal>
+
+        <ScrollReveal :delay="0.1" style="padding: 20px">
+          <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600">歷史回撤</h2>
+          <svg width="100%" height="250" viewBox="0 0 500 250">
+            <!-- Area -->
+            <polygon
+              :points="`60,${20 + (1 - (-8.2) / 15) * 200} ${riskData.drawdown.values.map((v, i) => {
+                const x = 60 + (i / 11) * 420
+                const y = 20 + (1 - v / 15) * 200
+                return `${x},${y}`
+              }).join(' ')} 480,${20 + 200}`"
+              fill="rgba(0,0,0,0.06)"
+            />
+            <!-- Line -->
+            <polyline
+              :points="riskData.drawdown.values.map((v, i) => {
+                const x = 60 + (i / 11) * 420
+                const y = 20 + (1 - v / 15) * 200
+                return `${x},${y}`
+              }).join(' ')"
+              fill="none"
+              stroke="#000000"
+              stroke-width="1.5"
+            />
+            <!-- Max drawdown line -->
+            <line
+              :x1="60 + (2 / 11) * 420"
+              :y1="20 + (1 - (-8.2) / 15) * 200"
+              :x2="60 + (2 / 11) * 420"
+              :y2="220"
+              stroke="#000000"
+              stroke-width="1"
+              stroke-dasharray="4 4"
+            />
+            <text
+              :x="60 + (2 / 11) * 420 + 5"
+              :y="20 + (1 - (-8.2) / 15) * 200 - 5"
+              fill="#000000"
+              font-size="11"
+              font-weight="600"
+            >
+              -8.2%
+            </text>
+            <!-- Y labels -->
+            <text v-for="(v, i) in [0, -5, -10, -15]" :key="'y-' + i"
+              x="55"
+              :y="20 + (1 - v / 15) * 200 + 4"
+              text-anchor="end"
+              fill="#666666"
+              font-size="10"
+            >
+              {{ v }}%
+            </text>
+            <!-- X labels -->
+            <text v-for="(l, i) in riskData.drawdown.labels" :key="'x-' + i"
+              :x="60 + (i / 11) * 420"
+              y="240"
+              text-anchor="middle"
+              fill="#666666"
+              font-size="9"
+            >
+              {{ l }}
+            </text>
+          </svg>
+        </ScrollReveal>
+      </div>
+
+      <!-- Scenario Simulation -->
+      <ScrollReveal :delay="0.1" style="margin-top: 60px">
+        <div class="kimi-section">
+          <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600">情境模擬</h2>
+            <span class="kimi-caption" style="margin-top: 4px; display: block">SCENARIO SIMULATION</span>
           </div>
-        </NTabPane>
-      </NTabs>
+          <div style="overflow-x: auto">
+            <table class="kimi-table kimi-table-light">
+              <thead>
+                <tr>
+                  <th>情境名稱</th>
+                  <th>預估影響</th>
+                  <th>發生機率</th>
+                  <th>說明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="s in scenarioData" :key="s.name">
+                  <td style="font-weight: 600">{{ s.name }}</td>
+                  <td style="font-weight: 600; color: #f87171">{{ s.impact }}</td>
+                  <td>
+                    <span class="kimi-tag">{{ s.probability }}</span>
+                  </td>
+                  <td style="color: var(--kimi-muted)">{{ s.description }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </ScrollReveal>
+
+      <div style="height: 80px" />
     </div>
 
-    <!-- Add Holding Modal -->
-    <NModal
-      v-model:show="showAddHoldingModal"
-      title="新增持股"
-      preset="card"
-      style="width: 420px;"
-      :bordered="false"
-    >
-      <NForm :model="newHolding" label-placement="top">
-        <NFormItem label="股票代號" required>
-          <NInput v-model:value="newHolding.symbol" placeholder="例如: AAPL" />
-        </NFormItem>
-        <NFormItem label="股數" required>
-          <NInputNumber v-model:value="newHolding.shares" placeholder="輸入股數" :min="1" />
-        </NFormItem>
-        <NFormItem label="成本價" required>
-          <NInputNumber v-model:value="newHolding.price" placeholder="輸入成本價" :min="0" :precision="2" />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showAddHoldingModal = false">取消</NButton>
-          <NButton type="primary" class="btn-primary" @click="handleAddHolding">新增</NButton>
-        </NSpace>
-      </template>
-    </NModal>
-  </main>
+    <Footer label="PORTFOLIO" />
+  </div>
 </template>
 
 <style scoped>
-.table-row-hover:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-:deep(.n-tabs-tab) {
-  font-weight: 500;
-}
-
-:deep(.n-tabs-tab--active) {
-  font-weight: 600;
+@media (max-width: 1024px) {
+  .kimi-grid-2 > * {
+    border-right: none !important;
+  }
+  .kimi-grid-2 {
+    display: block;
+  }
+  .kimi-section > div[style*="grid-template-columns: 2fr 3fr"] {
+    display: block;
+  }
 }
 </style>
