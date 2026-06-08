@@ -123,6 +123,10 @@ public sealed class MarketPriceService : IMarketPriceService
             .ToList();
 
         var upsertResult = await _marketPriceRepository.UpsertDailyPricesAsync(marketPrices, cancellationToken);
+
+        security.PricesSyncedAtUtc = DateTime.UtcNow;
+        security.PricesSource = provider.SourceName;
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return Result<ImportMarketPricesResponse>.Success(new ImportMarketPricesResponse(
@@ -227,6 +231,10 @@ public sealed class MarketPriceService : IMarketPriceService
             .ToList();
 
         var upsertResult = await _marketPriceRepository.UpsertDailyPricesAsync(marketPrices, cancellationToken);
+
+        security.PricesSyncedAtUtc = DateTime.UtcNow;
+        security.PricesSource = provider.SourceName;
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return Result<ImportMarketPricesByTickerResponse>.Success(new ImportMarketPricesByTickerResponse(

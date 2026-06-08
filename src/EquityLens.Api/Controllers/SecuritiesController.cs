@@ -67,11 +67,15 @@ public class SecuritiesController : ApiControllerBase
     }
 
     /// <summary>
-    /// 解析證券資料：若已存在則返回現有資料，否則自動建立新證券。
+    /// 解析證券資料：若本地已存在則返回現有資料（metadata 過期時自動刷新），否則查詢外部 API 並建立新證券。
     /// </summary>
     /// <param name="request">解析證券的請求資料。</param>
     /// <param name="cancellationToken">取消權杖。</param>
-    /// <returns>解析結果；若必填欄位缺失則返回 400。</returns>
+    /// <returns>
+    /// 成功時返回解析結果（包含是否為新建立）；
+    /// 若必填欄位缺失則返回錯誤碼 <c>security.required_fields</c>；
+    /// 若證券不存在於本地與外部則返回錯誤碼 <c>security.not_found</c>。
+    /// </returns>
     [HttpPost("resolve")]
     public async Task<ActionResult<ResolveSecurityResponse>> ResolveSecurity(
         ResolveSecurityRequest request,
