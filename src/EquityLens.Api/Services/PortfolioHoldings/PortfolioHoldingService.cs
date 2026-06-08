@@ -71,13 +71,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         var securityResult = await _securityService.EnsureAsync(new EnsureSecurityRequest(
             request.SecurityId,
             request.Ticker,
-            request.Exchange,
-            request.Name,
-            request.AssetType,
-            request.Currency,
-            request.Isin,
-            request.Sector,
-            request.Industry), cancellationToken);
+            request.Exchange), cancellationToken);
         if (!securityResult.IsSuccess)
         {
             return Result<PortfolioHoldingResponse>.Failure(securityResult.ErrorCode!, securityResult.ErrorMessage!);

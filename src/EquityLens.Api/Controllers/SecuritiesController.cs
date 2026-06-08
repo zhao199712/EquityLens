@@ -1,26 +1,31 @@
 using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Securities;
+using EquityLens.Api.Services.MarketPrices;
 using EquityLens.Api.Services.Securities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EquityLens.Api.Controllers;
 
 /// <summary>
-/// 證券控制器，提供證券查詢、搜尋、建立與解析功能。
+/// 證券控制器，提供證券查詢、搜尋、解析、刷新與批次刷新價格功能。
+/// 所有證券資料以外部 API 為唯一事實來源。
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class SecuritiesController : ApiControllerBase
 {
     private readonly ISecurityService _securityService;
+    private readonly IMarketPriceService _marketPriceService;
 
     /// <summary>
     /// 初始化證券控制器。
     /// </summary>
     /// <param name="securityService">證券服務。</param>
-    public SecuritiesController(ISecurityService securityService)
+    /// <param name="marketPriceService">市場價格服務。</param>
+    public SecuritiesController(ISecurityService securityService, IMarketPriceService marketPriceService)
     {
         _securityService = securityService;
+        _marketPriceService = marketPriceService;
     }
 
     /// <summary>
@@ -67,9 +72,10 @@ public class SecuritiesController : ApiControllerBase
     }
 
     /// <summary>
-    /// 解析證券資料：若本地已存在則返回現有資料（metadata 過期時自動刷新），否則查詢外部 API 並建立新證券。
+    /// 解析證券資料：若本地已存在則返回現有資料（metadata 過期時自動刷新），
+    /// 否則查詢外部 API 並建立新證券。
     /// </summary>
-    /// <param name="request">解析證券的請求資料。</param>
+    /// <param name="request">解析證券的請求資料，只需提供 SecurityId 或 Ticker+Exchange。</param>
     /// <param name="cancellationToken">取消權杖。</param>
     /// <returns>
     /// 成功時返回解析結果（包含是否為新建立）；
@@ -86,28 +92,39 @@ public class SecuritiesController : ApiControllerBase
     }
 
     /// <summary>
-    /// 建立新的證券資料。
+    /// 刷新資料庫中既有證券的 metadata，從外部 API 取得最新資料並更新。
     /// </summary>
-    /// <param name="request">建立證券的請求資料。</param>
+    /// <param name="force">是否強制刷新所有證券，不論是否過期（預設 false）。</param>
+    /// <param name="limit">最多處理的證券數量（預設 100）。</param>
     /// <param name="cancellationToken">取消權杖。</param>
-    /// <returns>
-    /// 成功時返回 201 Created 與證券資料；
-    /// 若必填欄位缺失則返回 400；
-    /// 若證券已存在則返回 409 Conflict。
-    /// </returns>
-    [HttpPost]
-    public async Task<ActionResult<SecurityResponse>> CreateSecurity(
-        CreateSecurityRequest request,
-        CancellationToken cancellationToken)
+    /// <returns>刷新結果統計。</returns>
+    [HttpPost("refresh-all")]
+    public async Task<ActionResult<RefreshSecuritiesResponse>> RefreshAllSecurities(
+        [FromQuery] bool force = false,
+        [FromQuery] int limit = 100,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _securityService.CreateAsync(request, cancellationToken);
-        if (!result.IsSuccess)
-        {
-            return result.ErrorCode == "security.duplicate"
-                ? Conflict(new ApiError(result.ErrorCode, result.ErrorMessage!))
-                : ToActionResult(result);
-        }
+        var result = await _securityService.RefreshAllAsync(force, limit, cancellationToken);
+        return Ok(result);
+    }
 
-        return CreatedAtAction(nameof(GetSecurity), new { id = result.Value!.Id }, result.Value);
+    /// <summary>
+    /// 批次刷新資料庫中既有證券的價格資料。
+    /// 若今日已同步且未強制刷新，則略過。
+    /// </summary>
+    /// <param name="days">拉取最近幾天的日線資料（預設 365）。</param>
+    /// <param name="force">是否強制刷新，忽略今日已同步的檢查（預設 false）。</param>
+    /// <param name="limit">最多處理的證券數量（預設 100）。</param>
+    /// <param name="cancellationToken">取消權杖。</param>
+    /// <returns>批次刷新結果統計。</returns>
+    [HttpPost("refresh-all-prices")]
+    public async Task<ActionResult<RefreshSecuritiesPricesResponse>> RefreshAllPrices(
+        [FromQuery] int days = 365,
+        [FromQuery] bool force = false,
+        [FromQuery] int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _marketPriceService.RefreshAllPricesAsync(days, force, limit, cancellationToken);
+        return Ok(result);
     }
 }

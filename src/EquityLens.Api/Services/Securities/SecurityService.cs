@@ -10,7 +10,8 @@ using EquityLens.Api.Services.Redis;
 namespace EquityLens.Api.Services.Securities;
 
 /// <summary>
-/// 證券資料服務實現，提供證券查詢、搜尋、建立與解析功能。
+/// 證券資料服務實現，提供證券查詢、搜尋、解析與刷新功能。
+/// 所有證券資料以外部 API 為唯一事實來源。
 /// </summary>
 public sealed class SecurityService : ISecurityService
 {
@@ -59,14 +60,12 @@ public sealed class SecurityService : ISecurityService
         var normalizedQuery = query.Trim();
         var cacheKey = $"equitylens:cache:security-search:{normalizedQuery}";
 
-        // 嘗試從 Redis 快取取得
         var cached = await _redisCache.GetAsync<IReadOnlyList<SecuritySearchResult>>(cacheKey, cancellationToken);
         if (cached is not null)
         {
             return cached;
         }
 
-        // 先查詢本地資料庫中的證券
         var localResults = (await _securityRepository.SearchAsync(normalizedQuery, cancellationToken))
             .Select(x => new SecuritySearchResult(
                 x.Id,
@@ -83,7 +82,6 @@ public sealed class SecurityService : ISecurityService
 
         var results = new List<SecuritySearchResult>(localResults);
 
-        // 再依序查詢各外部資料提供者，並合併結果
         foreach (var provider in _marketDataProviders)
         {
             IReadOnlyList<ExternalSecuritySearchResult> externalResults;
@@ -125,7 +123,6 @@ public sealed class SecurityService : ISecurityService
             .Take(25)
             .ToList();
 
-        // 寫入 Redis 快取
         await _redisCache.SetAsync(cacheKey, finalResults, cancellationToken: cancellationToken);
 
         return finalResults;
@@ -138,48 +135,6 @@ public sealed class SecurityService : ISecurityService
         return security is null
             ? Result<SecurityResponse>.Failure("security.not_found", "Security was not found.")
             : Result<SecurityResponse>.Success(security);
-    }
-
-    /// <inheritdoc />
-    public async Task<Result<SecurityResponse>> CreateAsync(
-        CreateSecurityRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(request.Ticker) ||
-            string.IsNullOrWhiteSpace(request.Exchange) ||
-            string.IsNullOrWhiteSpace(request.Name))
-        {
-            return Result<SecurityResponse>.Failure("security.required_fields", "Ticker, exchange, and name are required.");
-        }
-
-        var ticker = request.Ticker.Trim().ToUpperInvariant();
-        var exchange = request.Exchange.Trim().ToUpperInvariant();
-
-        if (await _securityRepository.TickerExchangeExistsAsync(ticker, exchange, cancellationToken))
-        {
-            return Result<SecurityResponse>.Failure("security.duplicate", "Security already exists for ticker and exchange.");
-        }
-
-        var security = new Security
-        {
-            Ticker = ticker,
-            Exchange = exchange,
-            Name = request.Name.Trim(),
-            AssetType = string.IsNullOrWhiteSpace(request.AssetType) ? null : request.AssetType.Trim(),
-            Currency = NormalizeCurrency(request.Currency),
-            Isin = string.IsNullOrWhiteSpace(request.Isin) ? null : request.Isin.Trim().ToUpperInvariant(),
-            Sector = string.IsNullOrWhiteSpace(request.Sector) ? null : request.Sector.Trim(),
-            Industry = string.IsNullOrWhiteSpace(request.Industry) ? null : request.Industry.Trim(),
-            IsActive = true,
-            MetadataUpdatedAtUtc = DateTime.UtcNow,
-            MetadataSource = "Manual"
-        };
-
-        _securityRepository.Add(security);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        var response = await _securityRepository.GetAsync(security.Id, cancellationToken);
-        return Result<SecurityResponse>.Success(response!);
     }
 
     /// <inheritdoc />
@@ -200,7 +155,6 @@ public sealed class SecurityService : ISecurityService
     {
         Security? security = null;
 
-        // 嘗試從 SecurityId 或 Ticker+Exchange 取得本地 Security
         if (request.SecurityId.HasValue)
         {
             security = await _securityRepository.GetEntityAsync(request.SecurityId.Value, cancellationToken);
@@ -222,7 +176,6 @@ public sealed class SecurityService : ISecurityService
 
         if (security is not null)
         {
-            // 本地已有：檢查 metadata 是否過期，過期則嘗試刷新
             if (IsMetadataStale(security))
             {
                 await TryRefreshMetadataAsync(security, cancellationToken);
@@ -232,7 +185,6 @@ public sealed class SecurityService : ISecurityService
             return Result<ResolveSecurityResponse>.Success(ToResolveResponse(security, false));
         }
 
-        // 本地沒有：嘗試從外部 API 建立
         if (string.IsNullOrWhiteSpace(request.Ticker) || string.IsNullOrWhiteSpace(request.Exchange))
         {
             return Result<ResolveSecurityResponse>.Failure("security.required_fields", "Ticker and exchange are required to create a new security.");
@@ -241,7 +193,7 @@ public sealed class SecurityService : ISecurityService
         var newTicker = request.Ticker.Trim().ToUpperInvariant();
         var newExchange = request.Exchange.Trim().ToUpperInvariant();
 
-        security = await TryCreateFromExternalAsync(newTicker, newExchange, request, cancellationToken);
+        security = await TryCreateFromExternalAsync(newTicker, newExchange, cancellationToken);
         if (security is null)
         {
             return Result<ResolveSecurityResponse>.Failure("security.not_found", "Security was not found in external providers.");
@@ -250,13 +202,67 @@ public sealed class SecurityService : ISecurityService
         _securityRepository.Add(security);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        // 清除搜尋快取
         await _redisCache.RemoveByPatternAsync("equitylens:cache:security-search:*");
 
         return Result<ResolveSecurityResponse>.Success(ToResolveResponse(security, true));
     }
 
-    // 確保證券存在的核心邏輯：依 SecurityId 查詢，或依代號/交易所查詢/建立
+    /// <inheritdoc />
+    public async Task<RefreshSecuritiesResponse> RefreshAllAsync(
+        bool force,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var candidates = await _securityRepository.GetActiveEntitiesAsync(limit, cancellationToken);
+
+        var updated = 0;
+        var skipped = 0;
+        var failures = new List<RefreshSecurityFailureResponse>();
+
+        foreach (var security in candidates)
+        {
+            if (!force && !IsMetadataStale(security))
+            {
+                skipped++;
+                continue;
+            }
+
+            try
+            {
+                var refreshed = await TryRefreshMetadataAsync(security, cancellationToken);
+                if (refreshed)
+                {
+                    updated++;
+                }
+                else
+                {
+                    skipped++;
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(new RefreshSecurityFailureResponse(
+                    security.Id,
+                    security.Ticker,
+                    security.Exchange,
+                    ex.Message));
+            }
+        }
+
+        if (updated > 0)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return new RefreshSecuritiesResponse(
+            candidates.Count,
+            candidates.Count,
+            updated,
+            skipped,
+            failures.Count,
+            failures);
+    }
+
     private async Task<Result<EnsureSecurityResult>> EnsureCoreAsync(
         EnsureSecurityRequest request,
         CancellationToken cancellationToken)
@@ -282,27 +288,16 @@ public sealed class SecurityService : ISecurityService
             return Result<EnsureSecurityResult>.Success(new EnsureSecurityResult(security, false));
         }
 
-        security = new Security
+        security = await TryCreateFromExternalAsync(ticker, exchange, cancellationToken);
+        if (security is null)
         {
-            Id = Guid.NewGuid(),
-            Ticker = ticker,
-            Exchange = exchange,
-            Name = string.IsNullOrWhiteSpace(request.Name) ? ticker : request.Name.Trim(),
-            AssetType = string.IsNullOrWhiteSpace(request.AssetType) ? null : request.AssetType.Trim(),
-            Currency = NormalizeCurrency(request.Currency),
-            Isin = string.IsNullOrWhiteSpace(request.Isin) ? null : request.Isin.Trim().ToUpperInvariant(),
-            Sector = string.IsNullOrWhiteSpace(request.Sector) ? null : request.Sector.Trim(),
-            Industry = string.IsNullOrWhiteSpace(request.Industry) ? null : request.Industry.Trim(),
-            IsActive = true,
-            MetadataUpdatedAtUtc = DateTime.UtcNow,
-            MetadataSource = "Manual"
-        };
+            return Result<EnsureSecurityResult>.Failure("security.not_found", "Security was not found in external providers.");
+        }
 
         _securityRepository.Add(security);
         return Result<EnsureSecurityResult>.Success(new EnsureSecurityResult(security, true));
     }
 
-    // 判斷證券 metadata 是否已過期（超過 7 天未更新）
     private static bool IsMetadataStale(Security security)
     {
         if (security.MetadataUpdatedAtUtc is null)
@@ -313,13 +308,12 @@ public sealed class SecurityService : ISecurityService
         return DateTime.UtcNow - security.MetadataUpdatedAtUtc.Value > MetadataStaleThreshold;
     }
 
-    // 嘗試從外部 API 刷新證券 metadata；失敗則靜默忽略
-    private async Task TryRefreshMetadataAsync(Security security, CancellationToken cancellationToken)
+    private async Task<bool> TryRefreshMetadataAsync(Security security, CancellationToken cancellationToken)
     {
         var provider = _marketDataProviders.FirstOrDefault(x => x.Supports(security.Exchange));
         if (provider is null)
         {
-            return;
+            return false;
         }
 
         try
@@ -327,91 +321,92 @@ public sealed class SecurityService : ISecurityService
             var external = await provider.ResolveSecurityAsync(security.Ticker, security.Exchange, cancellationToken);
             if (external is null)
             {
-                return;
+                return false;
             }
 
-            // 保守更新：只覆蓋 Name 與 Currency；其餘欄位僅在本地為 null 時補上
-            security.Name = external.Name;
-            security.AssetType ??= external.AssetType;
-            security.Currency = string.IsNullOrWhiteSpace(external.Currency)
-                ? security.Currency
-                : external.Currency.Trim().ToUpperInvariant();
-            security.Isin ??= external.Isin;
-            security.Sector ??= external.Sector;
-            security.Industry ??= external.Industry;
-            security.MetadataUpdatedAtUtc = DateTime.UtcNow;
-            security.MetadataSource = provider.SourceName;
+            ApplyExternalMetadata(security, external, provider.SourceName);
+            return true;
         }
         catch
         {
-            // 外部 API 錯誤時靜默忽略，不影響既有資料
+            return false;
         }
     }
 
-    // 嘗試從外部 API 建立證券；失敗時若 request 有 Name 則回退到 request 資料
     private async Task<Security?> TryCreateFromExternalAsync(
         string ticker,
         string exchange,
-        ResolveSecurityRequest request,
         CancellationToken cancellationToken)
     {
         var provider = _marketDataProviders.FirstOrDefault(x => x.Supports(exchange));
-        if (provider is not null)
+        if (provider is null)
         {
-            try
-            {
-                var external = await provider.ResolveSecurityAsync(ticker, exchange, cancellationToken);
-                if (external is not null)
-                {
-                    return new Security
-                    {
-                        Id = Guid.NewGuid(),
-                        Ticker = ticker,
-                        Exchange = exchange,
-                        Name = external.Name,
-                        AssetType = external.AssetType,
-                        Currency = string.IsNullOrWhiteSpace(external.Currency)
-                            ? NormalizeCurrency(request.Currency)
-                            : external.Currency.Trim().ToUpperInvariant(),
-                        Isin = external.Isin,
-                        Sector = external.Sector,
-                        Industry = external.Industry,
-                        IsActive = true,
-                        MetadataUpdatedAtUtc = DateTime.UtcNow,
-                        MetadataSource = provider.SourceName
-                    };
-                }
-            }
-            catch
-            {
-                // 外部 API 錯誤，回退到 request 資料
-            }
+            return null;
         }
 
-        // 外部 API 找不到或失敗，嘗試用 request 資料建立
-        if (!string.IsNullOrWhiteSpace(request.Name))
+        try
         {
-            return new Security
+            var external = await provider.ResolveSecurityAsync(ticker, exchange, cancellationToken);
+            if (external is null)
+            {
+                return null;
+            }
+
+            var security = new Security
             {
                 Id = Guid.NewGuid(),
                 Ticker = ticker,
                 Exchange = exchange,
-                Name = request.Name.Trim(),
-                AssetType = string.IsNullOrWhiteSpace(request.AssetType) ? null : request.AssetType.Trim(),
-                Currency = NormalizeCurrency(request.Currency),
-                Isin = string.IsNullOrWhiteSpace(request.Isin) ? null : request.Isin.Trim().ToUpperInvariant(),
-                Sector = string.IsNullOrWhiteSpace(request.Sector) ? null : request.Sector.Trim(),
-                Industry = string.IsNullOrWhiteSpace(request.Industry) ? null : request.Industry.Trim(),
                 IsActive = true,
                 MetadataUpdatedAtUtc = DateTime.UtcNow,
-                MetadataSource = "Manual"
+                MetadataSource = provider.SourceName
             };
-        }
 
-        return null;
+            ApplyExternalMetadata(security, external, provider.SourceName);
+            return security;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
-    // 將 Security 實體轉換為 ResolveSecurityResponse
+    private static void ApplyExternalMetadata(Security security, ExternalSecuritySearchResult external, string sourceName)
+    {
+        if (!string.IsNullOrWhiteSpace(external.Name))
+        {
+            security.Name = external.Name.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.AssetType))
+        {
+            security.AssetType = external.AssetType.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.Currency))
+        {
+            security.Currency = external.Currency.Trim().ToUpperInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.Isin))
+        {
+            security.Isin = external.Isin.Trim().ToUpperInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.Sector))
+        {
+            security.Sector = external.Sector.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.Industry))
+        {
+            security.Industry = external.Industry.Trim();
+        }
+
+        security.MetadataUpdatedAtUtc = DateTime.UtcNow;
+        security.MetadataSource = sourceName;
+    }
+
     private static ResolveSecurityResponse ToResolveResponse(Security security, bool created)
     {
         return new ResolveSecurityResponse(
@@ -427,12 +422,5 @@ public sealed class SecurityService : ISecurityService
             security.Industry);
     }
 
-    // 將貨幣代碼標準化：空白時預設為 USD，否則轉為大寫
-    private static string NormalizeCurrency(string? currency)
-    {
-        return string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();
-    }
-
-    // 確保證券結果的內部記錄，包含證券實體與是否為新建立
     private sealed record EnsureSecurityResult(Security Security, bool Created);
 }
