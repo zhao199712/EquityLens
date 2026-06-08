@@ -22,6 +22,10 @@ public class SecurityConfiguration : IEntityTypeConfiguration<Security>
         builder.Property(x => x.Sector).HasColumnName("sector").HasMaxLength(64);
         builder.Property(x => x.Industry).HasColumnName("industry").HasMaxLength(64);
         builder.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        builder.Property(x => x.MetadataUpdatedAtUtc).HasColumnName("metadata_updated_at_utc");
+        builder.Property(x => x.MetadataSource).HasColumnName("metadata_source").HasMaxLength(32);
+        builder.Property(x => x.PricesSyncedAtUtc).HasColumnName("prices_synced_at_utc");
+        builder.Property(x => x.PricesSource).HasColumnName("prices_source").HasMaxLength(32);
 
         // Unique constraint on (Ticker, Exchange)
         builder.HasIndex(x => new { x.Ticker, x.Exchange }).IsUnique();

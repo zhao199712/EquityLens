@@ -24,13 +24,14 @@ public class MarketPriceConfiguration : IEntityTypeConfiguration<MarketPrice>
         builder.Property(x => x.Volume).HasColumnName("volume");
         builder.Property(x => x.DataSource).HasColumnName("data_source").HasMaxLength(32);
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("now()");
+        builder.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").HasDefaultValueSql("now()");
 
         builder.HasOne(x => x.Security)
             .WithMany(s => s.Prices)
             .HasForeignKey(x => x.SecurityId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Index for querying price history
-        builder.HasIndex(x => new { x.SecurityId, x.Interval, x.PriceTime });
+        // Unique index for querying and preventing duplicates
+        builder.HasIndex(x => new { x.SecurityId, x.Interval, x.PriceTime }).IsUnique();
     }
 }
