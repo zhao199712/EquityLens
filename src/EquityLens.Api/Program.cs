@@ -80,6 +80,14 @@ builder.Services.AddHttpClient<FinMindMarketDataProvider>((sp, client) =>
     client.BaseAddress = new Uri(options.BaseUrl);
 });
 
+builder.Services.AddHttpClient<YahooFinanceMarketDataProvider>(client =>
+{
+    client.BaseAddress = new Uri("https://query1.finance.yahoo.com");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+});
+
+builder.Services.AddTransient<IMarketDataProvider>(sp => sp.GetRequiredService<YahooFinanceMarketDataProvider>());
 builder.Services.AddTransient<IMarketDataProvider>(sp => sp.GetRequiredService<AlphaVantageMarketDataProvider>());
 builder.Services.AddTransient<IMarketDataProvider>(sp => sp.GetRequiredService<FinMindMarketDataProvider>());
 

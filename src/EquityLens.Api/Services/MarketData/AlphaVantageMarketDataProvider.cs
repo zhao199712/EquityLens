@@ -122,8 +122,8 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
         var url = QueryHelpers.AddQueryString("/query", new Dictionary<string, string?>
         {
             ["function"] = "TIME_SERIES_DAILY",
-            ["symbol"] = security.Ticker,
-            ["outputsize"] = "full",
+            ["symbol"] = ToAlphaVantageSymbol(security.Ticker),
+            ["outputsize"] = "compact",
             ["apikey"] = _options.ApiKey
         });
 
@@ -132,6 +132,21 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        if (document.RootElement.TryGetProperty("Information", out var info))
+        {
+            throw new InvalidOperationException($"Alpha Vantage: {info.GetString()}");
+        }
+
+        if (document.RootElement.TryGetProperty("Note", out var note))
+        {
+            throw new InvalidOperationException($"Alpha Vantage: {note.GetString()}");
+        }
+
+        if (document.RootElement.TryGetProperty("Error Message", out var error))
+        {
+            throw new InvalidOperationException($"Alpha Vantage: {error.GetString()}");
+        }
 
         if (!document.RootElement.TryGetProperty("Time Series (Daily)", out var series))
         {
@@ -181,5 +196,18 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
         return string.Equals(region, "United States", StringComparison.OrdinalIgnoreCase)
             ? "US"
             : string.IsNullOrWhiteSpace(region) ? "US" : region.Trim().ToUpperInvariant().Replace(" ", "_");
+    }
+
+    private static string ToAlphaVantageSymbol(string ticker)
+    {
+        var normalized = ticker.Trim().ToUpperInvariant();
+
+        // BRKB / BRK.B 映射
+        if (normalized == "BRKB")
+        {
+            return "BRK.B";
+        }
+
+        return normalized;
     }
 }
