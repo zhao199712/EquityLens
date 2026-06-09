@@ -10,7 +10,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<EquityLens
     {
         var options = new DbContextOptionsBuilder<EquityLensDbContext>()
             .UseNpgsql(
-                "Host=localhost:5433;Database=equitylens;Username=equitylens;Password=equitylens",
+                "Host=localhost:5432;Database=equitylens;Username=ymsh20220;Password=ymsh20220",
                 o => o.UseVector())
             .Options;
         return new EquityLensDbContext(options);
