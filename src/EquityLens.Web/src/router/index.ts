@@ -1,4 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
+// TODO: API 完成後啟用 auth store
+// import { useAuthStore } from '../stores/auth'
+import LoginView from '../views/auth/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import PortfolioListView from '../views/portfolios/PortfolioListView.vue'
 import PortfolioDetailView from '../views/portfolios/PortfolioDetailView.vue'
@@ -20,9 +23,16 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
+      path: '/login',
+      name: 'login',
+      component: LoginView,
+      meta: { requiresAuth: false },
+    },
+    {
       path: '/',
       name: 'dashboard',
       component: DashboardView,
+      meta: { requiresAuth: true },
     },
     {
       path: '/portfolios',
@@ -103,3 +113,15 @@ export const router = createRouter({
     },
   ],
 })
+
+// TODO: API 完成後啟用
+// router.beforeEach((to, _from) => {
+//   const authStore = useAuthStore()
+//
+//   if (to.meta.requiresAuth !== false && !authStore.isAuthenticated) {
+//     return { name: 'login' }
+//   }
+//   if (to.name === 'login' && authStore.isAuthenticated) {
+//     return { name: 'dashboard' }
+//   }
+// })

@@ -2,9 +2,18 @@
 import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { NConfigProvider, darkTheme } from 'naive-ui'
+import { useAuthStore } from './stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
+
+const isLoginPage = computed(() => route.name === 'login')
+
+async function handleLogout() {
+  await authStore.logout()
+  router.push({ name: 'login' })
+}
 
 const themeOverrides = {
   common: {
@@ -93,8 +102,8 @@ function handleMenuSelect(key: string) {
 <template>
   <NConfigProvider :theme="darkTheme" :theme-overrides="themeOverrides">
     <div class="kimi-app-shell">
-      <!-- Header -->
-      <header class="kimi-app-header">
+      <!-- Header - hidden on login page -->
+      <header v-if="!isLoginPage" class="kimi-app-header">
         <RouterLink class="kimi-brand" to="/">
           <span class="kimi-brand-mark">EL</span>
           <span class="kimi-brand-text">EquityLens</span>
@@ -130,7 +139,10 @@ function handleMenuSelect(key: string) {
           </button>
         </nav>
 
-        <RouterLink class="kimi-admin-link" to="/settings">Settings</RouterLink>
+        <div class="kimi-header-right">
+          <RouterLink class="kimi-admin-link" to="/settings">Settings</RouterLink>
+          <button class="kimi-logout-btn" @click="handleLogout">Logout</button>
+        </div>
       </header>
 
       <!-- Content -->
@@ -233,6 +245,32 @@ function handleMenuSelect(key: string) {
 
 .kimi-admin-link:hover {
   color: var(--kimi-text-light);
+}
+
+.kimi-header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.kimi-logout-btn {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: none;
+  border: 1px solid var(--kimi-border-light);
+  cursor: pointer;
+  padding: 6px 12px;
+  color: var(--kimi-muted);
+  transition: all 0.2s ease;
+  font-family: var(--kimi-font-body);
+}
+
+.kimi-logout-btn:hover {
+  color: var(--kimi-text-light);
+  border-color: var(--kimi-text-light);
 }
 
 .kimi-app-content {
