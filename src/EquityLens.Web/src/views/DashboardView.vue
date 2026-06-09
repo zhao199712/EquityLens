@@ -1,373 +1,183 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  NButton,
-  NGrid,
-  NGridItem,
-  NTag,
-  NTimeline,
-  NTimelineItem,
-  NList,
-  NListItem,
-  NThing,
-  NSpace,
-} from 'naive-ui'
-import {
-  WalletOutline,
-  ShieldCheckmarkOutline,
-  DocumentTextOutline,
-  SparklesOutline,
-  TrendingUpOutline,
-  TrendingDownOutline,
-  ArrowForwardOutline,
-  TimeOutline,
-} from '@vicons/ionicons5'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
-
-use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
+import ParticleCanvas from '../components/kimi/ParticleCanvas.vue'
+import ScrollReveal from '../components/kimi/ScrollReveal.vue'
 
 const router = useRouter()
 
-// Mock data for demo
-const portfolioCount = ref(3)
-const riskRunCount = ref(12)
-const reportCount = ref(8)
-const aiMemoCount = ref(5)
-
-const metrics = [
-  {
-    label: '投資組合',
-    value: portfolioCount.value,
-    change: '+2',
-    positive: true,
-    icon: WalletOutline,
-    color: '#60a5fa',
-  },
-  {
-    label: '風險分析',
-    value: riskRunCount.value,
-    change: '+5',
-    positive: true,
-    icon: ShieldCheckmarkOutline,
-    color: '#34d399',
-  },
-  {
-    label: '財務報告',
-    value: reportCount.value,
-    change: '+3',
-    positive: true,
-    icon: DocumentTextOutline,
-    color: '#fbbf24',
-  },
-  {
-    label: 'AI 分析',
-    value: aiMemoCount.value,
-    change: '+1',
-    positive: true,
-    icon: SparklesOutline,
-    color: '#c084fc',
-  },
+const kpiData = [
+  { label: 'TOTAL ASSETS', value: 'NT$ 12,580,000', sub: '較上月 +2.3%' },
+  { label: 'TOTAL RETURN', value: '+18.72%', sub: '年化報酬' },
+  { label: 'PORTFOLIO BETA', value: '1.08', sub: '相對大盤' },
+  { label: 'SHARPE RATIO', value: '1.42', sub: '風險調整後報酬' },
 ]
 
-// Portfolio value chart
-const portfolioChartOption = computed(() => ({
-  backgroundColor: 'transparent',
-  grid: {
-    left: '3%',
-    right: '4%',
-    bottom: '3%',
-    top: '10%',
-    containLabel: true,
-  },
-  tooltip: {
-    trigger: 'axis',
-    backgroundColor: 'rgba(17, 24, 39, 0.9)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    textStyle: { color: '#f0f4f8' },
-  },
-  xAxis: {
-    type: 'category',
-    data: ['1月', '2月', '3月', '4月', '5月', '6月'],
-    axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } },
-    axisLabel: { color: '#64748b' },
-  },
-  yAxis: {
-    type: 'value',
-    axisLine: { show: false },
-    splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } },
-    axisLabel: { color: '#64748b' },
-  },
-  series: [
-    {
-      name: '投資組合價值',
-      type: 'line',
-      smooth: true,
-      data: [1200000, 1250000, 1230000, 1320000, 1380000, 1450000],
-      lineStyle: { color: '#60a5fa', width: 3 },
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(96, 165, 250, 0.3)' },
-            { offset: 1, color: 'rgba(96, 165, 250, 0)' },
-          ],
-        },
-      },
-      itemStyle: { color: '#60a5fa' },
-      symbol: 'none',
-    },
-  ],
-}))
-
-// Recent activities
-const recentActivities: { title: string; description: string; time: string; type: string; status: 'error' | 'default' | 'success' | 'info' | 'warning' }[] = [
-  {
-    title: '完成投資組合風險分析',
-    description: '科技成長型投資組合 - VaR 95%: -2.3%',
-    time: '2 小時前',
-    type: 'risk',
-    status: 'success',
-  },
-  {
-    title: '新增 AI 財務分析報告',
-    description: 'TSMC 2025 Q1 財報分析',
-    time: '5 小時前',
-    type: 'report',
-    status: 'info',
-  },
-  {
-    title: '建立新投資組合',
-    description: '價值型藍籌股組合',
-    time: '1 天前',
-    type: 'portfolio',
-    status: 'default',
-  },
-  {
-    title: '風險模型參數更新',
-    description: '更新置信水準至 99%',
-    time: '2 天前',
-    type: 'settings',
-    status: 'warning',
-  },
-]
-
-// Recent risk runs
 const recentRiskRuns = [
   { name: '科技成長型投資組合', date: '2026-06-03', var95: '-2.3%', var99: '-3.8%', status: 'completed' },
   { name: '價值型藍籌股組合', date: '2026-06-02', var95: '-1.5%', var99: '-2.7%', status: 'completed' },
   { name: '全球平衡型組合', date: '2026-06-01', var95: '-1.8%', var99: '-3.1%', status: 'completed' },
 ]
 
-// Recent reports
 const recentReports = [
-  { name: 'TSMC 2025 Q1 財報分析', date: '2026-06-03', type: 'AI Memo', confidence: '高' },
-  { name: 'Apple FY2025 半年報', date: '2026-06-02', type: 'Financial Report', confidence: '中' },
-  { name: 'NVIDIA 風險評估報告', date: '2026-06-01', type: 'Risk Report', confidence: '高' },
+  { name: 'TSMC 2025 Q1 財報分析', type: 'AI Memo', confidence: '高', date: '2026-06-03' },
+  { name: 'Apple FY2025 半年報', type: 'Financial Report', confidence: '中', date: '2026-06-02' },
+  { name: 'NVIDIA 風險評估報告', type: 'Risk Report', confidence: '高', date: '2026-06-01' },
 ]
 
-function navigateToPortfolios() {
-  router.push({ name: 'portfolios' })
-}
+const activities = [
+  { title: '完成投資組合風險分析', desc: '科技成長型投資組合 — VaR 95%: -2.3%', time: '2 小時前' },
+  { title: '新增 AI 財務分析報告', desc: 'TSMC 2025 Q1 財報分析', time: '5 小時前' },
+  { title: '建立新投資組合', desc: '價值型藍籌股組合', time: '1 天前' },
+  { title: '風險模型參數更新', desc: '更新置信水準至 99%', time: '2 天前' },
+]
 </script>
 
 <template>
-  <main class="page animate-fade-in">
-    <!-- Header -->
-    <section class="page-heading">
-      <div>
-        <p class="eyebrow">Investment Intelligence Workspace</p>
-        <h1>Dashboard</h1>
-      </div>
-      <NButton type="primary" class="btn-primary" @click="navigateToPortfolios">
-        <template #icon>
-          <NIcon><ArrowForwardOutline /></NIcon>
-        </template>
-        查看投資組合
-      </NButton>
-    </section>
+  <div class="kimi-page-light">
+    <!-- Hero -->
+    <div class="kimi-hero" style="min-height: 80vh">
+      <ParticleCanvas theme="warm" />
+      <div class="kimi-hero-content">
+        <span class="kimi-font-mono" style="font-size: 14px; letter-spacing: 0.3em; color: var(--kimi-text-light)">
+          EQUITYLENS
+        </span>
+        <span class="kimi-caption" style="font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase">
+          AI-ASSISTED INVESTMENT ANALYTICS
+        </span>
 
-    <!-- Metrics Grid -->
-    <NGrid :cols="4" :x-gap="16" :y-gap="16" responsive="screen">
-      <NGridItem v-for="metric in metrics" :key="metric.label">
-        <div class="metric-card">
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+        <div style="text-align: center; margin-top: 24px">
+          <h1 class="kimi-display" style="margin: 0">PORTFOLIO</h1>
+          <h1 class="kimi-display" style="margin: 0">ANALYSIS</h1>
+        </div>
+
+        <p style="text-align: center; color: var(--kimi-muted); font-size: 14px; max-width: 480px; line-height: 1.6">
+          即時追蹤投資組合表現，智能分析收益與風險，數據驅動的資產配置洞察
+        </p>
+
+        <div style="display: flex; gap: 12px; margin-top: 16px">
+          <button class="kimi-btn kimi-btn-solid" @click="router.push({ name: 'portfolios' })">
+            VIEW PORTFOLIOS
+          </button>
+          <button class="kimi-btn" @click="router.push({ name: 'financial-reports' })">
+            VIEW REPORTS
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="kimi-content">
+      <!-- KPI Cards -->
+      <ScrollReveal>
+        <div class="kimi-section">
+          <div class="kimi-kpi-grid">
             <div
-              :style="{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                display: 'grid',
-                placeItems: 'center',
-                background: `rgba(${metric.color === '#60a5fa' ? '96, 165, 250' : metric.color === '#34d399' ? '52, 211, 153' : metric.color === '#fbbf24' ? '251, 191, 36' : '192, 132, 252'}, 0.15)`,
-              }"
+              v-for="(kpi, i) in kpiData"
+              :key="i"
+              class="kimi-kpi-cell"
             >
-              <NIcon :size="20" :color="metric.color">
-                <component :is="metric.icon" />
-              </NIcon>
+              <span class="kimi-caption" style="margin-bottom: 8px">{{ kpi.label }}</span>
+              <span class="kimi-data" style="color: var(--kimi-text-light)">{{ kpi.value }}</span>
+              <span style="font-size: 12px; color: var(--kimi-muted); margin-top: 4px">{{ kpi.sub }}</span>
+              <div class="accent-bar" style="background-color: var(--kimi-accent-orange)" />
             </div>
-            <span class="metric-label">{{ metric.label }}</span>
-          </div>
-          <div class="metric-value">{{ metric.value }}</div>
-          <div class="metric-change" :class="metric.positive ? 'positive' : 'negative'">
-            <NIcon :size="14" style="vertical-align: middle; margin-right: 4px;">
-              <component :is="metric.positive ? TrendingUpOutline : TrendingDownOutline" />
-            </NIcon>
-            {{ metric.change }} 本月
           </div>
         </div>
-      </NGridItem>
-    </NGrid>
+      </ScrollReveal>
 
-    <!-- Charts & Activity -->
-    <NGrid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" style="margin-top: 24px;">
-      <NGridItem>
-        <div class="glass-panel">
-          <h2 style="margin-bottom: 20px;">投資組合價值趨勢</h2>
-          <VChart :option="portfolioChartOption" style="height: 300px;" autoresize />
+      <!-- Recent Risk Runs -->
+      <ScrollReveal :delay="0.1" style="margin-top: 60px">
+        <div class="kimi-section">
+          <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600">最近風險分析</h2>
+            <span class="kimi-caption" style="margin-top: 4px; display: block">RECENT RISK ANALYSIS</span>
+          </div>
+          <div style="overflow-x: auto">
+            <table class="kimi-table kimi-table-light">
+              <thead>
+                <tr>
+                  <th>投資組合</th>
+                  <th>日期</th>
+                  <th>VaR 95%</th>
+                  <th>VaR 99%</th>
+                  <th>狀態</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="run in recentRiskRuns" :key="run.name">
+                  <td style="font-weight: 600">{{ run.name }}</td>
+                  <td style="color: var(--kimi-muted)">{{ run.date }}</td>
+                  <td style="color: #f87171; font-weight: 600">{{ run.var95 }}</td>
+                  <td style="color: #f87171; font-weight: 600">{{ run.var99 }}</td>
+                  <td>
+                    <span class="kimi-tag" style="border-color: #34d399; color: #34d399">COMPLETED</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </NGridItem>
+      </ScrollReveal>
 
-      <NGridItem>
-        <div class="glass-panel">
-          <h2 style="margin-bottom: 20px;">最近活動</h2>
-          <NTimeline>
-            <NTimelineItem
-              v-for="activity in recentActivities"
-              :key="activity.title"
-              :type="activity.status"
+      <!-- Recent AI Reports -->
+      <ScrollReveal :delay="0.15" style="margin-top: 60px">
+        <div class="kimi-section">
+          <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600">最近 AI 財報分析</h2>
+            <span class="kimi-caption" style="margin-top: 4px; display: block">RECENT AI REPORTS</span>
+          </div>
+          <div>
+            <div
+              v-for="(report, i) in recentReports"
+              :key="i"
+              style="display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light); cursor: pointer; transition: background 0.2s"
+              @click="router.push({ name: 'financial-report-detail', params: { id: String(i + 1) } })"
             >
-              <template #icon>
-                <NIcon :size="16">
-                  <TimeOutline />
-                </NIcon>
-              </template>
               <div>
-                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
-                  {{ activity.title }}
-                </div>
-                <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 4px;">
-                  {{ activity.description }}
-                </div>
-                <div style="color: var(--text-tertiary); font-size: 12px;">
-                  {{ activity.time }}
-                </div>
+                <div style="font-weight: 600; font-size: 14px">{{ report.name }}</div>
+                <div style="font-size: 12px; color: var(--kimi-muted); margin-top: 2px">{{ report.date }}</div>
               </div>
-            </NTimelineItem>
-          </NTimeline>
+              <div style="display: flex; gap: 8px">
+                <span class="kimi-tag">{{ report.type }}</span>
+                <span class="kimi-tag">信心: {{ report.confidence }}</span>
+              </div>
+            </div>
+          </div>
         </div>
-      </NGridItem>
-    </NGrid>
+      </ScrollReveal>
 
-    <!-- Recent Risk Runs -->
-    <div class="glass-panel" style="margin-top: 24px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-        <h2 style="margin: 0;">最近風險分析</h2>
-        <NButton text type="primary" size="small">
-          查看全部
-          <template #icon>
-            <NIcon><ArrowForwardOutline /></NIcon>
-          </template>
-        </NButton>
-      </div>
-      <div class="glass-table">
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr style="border-bottom: 1px solid var(--border-subtle);">
-              <th style="text-align: left; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">投資組合</th>
-              <th style="text-align: left; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">日期</th>
-              <th style="text-align: left; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">VaR 95%</th>
-              <th style="text-align: left; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">VaR 99%</th>
-              <th style="text-align: left; padding: 12px 16px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">狀態</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="run in recentRiskRuns"
-              :key="run.name"
-              style="border-bottom: 1px solid var(--border-subtle); transition: background 0.2s;"
-              class="table-row-hover"
+      <!-- Activities -->
+      <ScrollReveal :delay="0.2" style="margin-top: 60px">
+        <div class="kimi-section">
+          <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600">最近活動</h2>
+            <span class="kimi-caption" style="margin-top: 4px; display: block">RECENT ACTIVITY</span>
+          </div>
+          <div>
+            <div
+              v-for="(act, i) in activities"
+              :key="i"
+              style="display: flex; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light)"
             >
-              <td style="padding: 14px 16px; color: var(--text-primary); font-weight: 500;">{{ run.name }}</td>
-              <td style="padding: 14px 16px; color: var(--text-secondary);">{{ run.date }}</td>
-              <td style="padding: 14px 16px; color: var(--danger); font-weight: 600;">{{ run.var95 }}</td>
-              <td style="padding: 14px 16px; color: var(--danger); font-weight: 600;">{{ run.var99 }}</td>
-              <td style="padding: 14px 16px;">
-                <NTag size="small" type="success" round>
-                  <template #icon>
-                    <NIcon><ShieldCheckmarkOutline /></NIcon>
-                  </template>
-                  完成
-                </NTag>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              <div>
+                <div style="font-weight: 600; font-size: 14px">{{ act.title }}</div>
+                <div style="font-size: 13px; color: var(--kimi-muted); margin-top: 2px">{{ act.desc }}</div>
+              </div>
+              <span style="font-size: 12px; color: var(--kimi-muted); white-space: nowrap">{{ act.time }}</span>
+            </div>
+          </div>
+        </div>
+      </ScrollReveal>
+
+      <!-- Bottom spacing -->
+      <div style="height: 80px" />
     </div>
 
-    <!-- Recent Reports -->
-    <div class="glass-panel" style="margin-top: 24px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-        <h2 style="margin: 0;">最近 AI 財報分析</h2>
-        <NButton text type="primary" size="small">
-          查看全部
-          <template #icon>
-            <NIcon><ArrowForwardOutline /></NIcon>
-          </template>
-        </NButton>
-      </div>
-      <NList hoverable clickable>
-        <NListItem v-for="report in recentReports" :key="report.name">
-          <NThing>
-            <template #header>
-              <span style="color: var(--text-primary); font-weight: 600;">{{ report.name }}</span>
-            </template>
-            <template #header-extra>
-              <NSpace>
-                <NTag size="small" type="info" round>{{ report.type }}</NTag>
-                <NTag size="small" type="warning" round>信心: {{ report.confidence }}</NTag>
-              </NSpace>
-            </template>
-            <template #description>
-              <span style="color: var(--text-secondary); font-size: 13px;">{{ report.date }}</span>
-            </template>
-          </NThing>
-        </NListItem>
-      </NList>
-    </div>
-  </main>
+    <!-- Footer -->
+    <footer class="kimi-footer">
+      <span>RISE VISION 2026</span>
+      <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px">DASHBOARD</span>
+      <span>數據僅供參考</span>
+    </footer>
+  </div>
 </template>
-
-<style scoped>
-.table-row-hover:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-:deep(.n-timeline-item-content__title) {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-:deep(.n-timeline-item-content__content) {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-:deep(.n-list-item) {
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-:deep(.n-list-item:hover) {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-:deep(.n-thing-header) {
-  margin-bottom: 4px;
-}
-</style>

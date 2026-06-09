@@ -1,0 +1,586 @@
+/* ========================================
+   Kimi Design System — 科技感投資分析
+   Zero-radius, monochrome, editorial
+   ======================================== */
+
+:root {
+  /* Light Theme */
+  --kimi-bg-light: #F5F5F5;
+  --kimi-text-light: #000000;
+  --kimi-border-light: #E0E0E0;
+  --kimi-accent-orange: #FF6B00;
+
+  /* Dark Theme */
+  --kimi-bg-dark: #0A0A0A;
+  --kimi-text-dark: #FFFFFF;
+  --kimi-border-dark: #333333;
+  --kimi-accent-red: #8B1A2B;
+
+  /* Shared */
+  --kimi-radius: 0px;
+  --kimi-muted: #666666;
+  --kimi-bg-alt: #F9F9F9;
+  --kimi-bg-dark-alt: #111111;
+
+  /* Typography */
+  --kimi-font-body: 'Inter', 'Noto Sans TC', sans-serif;
+  --kimi-font-mono: 'Courier New', monospace;
+}
+
+/* ---- Scrollbar ---- */
+.kimi-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.kimi-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.kimi-scroll::-webkit-scrollbar-thumb {
+  background: var(--kimi-muted);
+}
+
+/* ---- Light Theme Page ---- */
+.kimi-page-light {
+  background-color: var(--kimi-bg-light);
+  color: var(--kimi-text-light);
+  font-family: var(--kimi-font-body);
+  min-height: 100vh;
+}
+
+/* ---- Dark Theme Page ---- */
+.kimi-page-dark {
+  background-color: var(--kimi-bg-dark);
+  color: var(--kimi-text-dark);
+  font-family: var(--kimi-font-body);
+  min-height: 100vh;
+}
+
+/* ---- Section ---- */
+.kimi-section {
+  width: 100%;
+  border: 1px solid var(--kimi-border-light);
+}
+
+.kimi-section-dark {
+  width: 100%;
+  border: 1px solid var(--kimi-border-dark);
+}
+
+/* ---- KPI Grid ---- */
+.kimi-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 1024px) {
+  .kimi-kpi-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.kimi-kpi-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 1024px) {
+  .kimi-kpi-grid-5 {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.kimi-kpi-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 12px;
+  border-bottom: 1px solid var(--kimi-border-light);
+  border-right: 1px solid var(--kimi-border-light);
+  position: relative;
+  height: 130px;
+  transition: transform 0.3s ease;
+  background: var(--kimi-bg-light);
+}
+
+.kimi-kpi-cell:hover {
+  transform: scale(1.02);
+}
+
+.kimi-kpi-cell:first-child {
+  border-left: none;
+}
+
+.kimi-kpi-cell-dark {
+  border-bottom: 1px solid var(--kimi-border-dark);
+  border-right: 1px solid var(--kimi-border-dark);
+  background: var(--kimi-bg-dark);
+}
+
+.kimi-kpi-cell-dark:first-child {
+  border-left: none;
+}
+
+.kimi-kpi-cell .accent-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  transition: width 0.3s ease;
+}
+
+.kimi-kpi-cell:hover .accent-bar {
+  width: 2px;
+}
+
+/* ---- Caption / Label ---- */
+.kimi-caption {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--kimi-muted);
+}
+
+.kimi-label {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--kimi-muted);
+}
+
+/* ---- Data Value ---- */
+.kimi-data {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.kimi-data-sm {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* ---- Display Title ---- */
+.kimi-display {
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-family: var(--kimi-font-body);
+}
+
+/* ---- Section Header ---- */
+.kimi-section-header {
+  margin-bottom: 24px;
+}
+
+.kimi-section-header h2 {
+  font-family: var(--kimi-font-body);
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.kimi-section-dark h2 {
+  color: var(--kimi-text-dark);
+}
+
+.kimi-section-light h2 {
+  color: var(--kimi-text-light);
+}
+
+/* ---- Panel ---- */
+.kimi-panel {
+  padding: 20px;
+  border: 1px solid var(--kimi-border-light);
+  background: var(--kimi-bg-light);
+}
+
+.kimi-panel-dark {
+  padding: 20px;
+  border: 1px solid var(--kimi-border-dark);
+  background: var(--kimi-bg-dark);
+}
+
+/* ---- Table ---- */
+.kimi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.kimi-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.kimi-table-light th {
+  background: var(--kimi-text-light);
+  color: var(--kimi-bg-light);
+  border-bottom: 1px solid var(--kimi-border-light);
+}
+
+.kimi-table-dark th {
+  background: var(--kimi-border-dark);
+  color: var(--kimi-text-dark);
+  border-bottom: 1px solid var(--kimi-border-dark);
+}
+
+.kimi-table td {
+  padding: 12px 16px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--kimi-border-light);
+}
+
+.kimi-table-dark td {
+  border-bottom: 1px solid var(--kimi-border-dark);
+}
+
+.kimi-table tbody tr:nth-child(even) {
+  background: var(--kimi-bg-alt);
+}
+
+.kimi-table-dark tbody tr:nth-child(even) {
+  background: var(--kimi-bg-dark-alt);
+}
+
+.kimi-table tbody tr.highlight {
+  background: var(--kimi-text-light) !important;
+  color: var(--kimi-bg-light);
+}
+
+.kimi-table-dark tbody tr.highlight {
+  background: var(--kimi-border-dark) !important;
+}
+
+.kimi-table tbody tr {
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.kimi-table tbody tr:hover {
+  background: var(--kimi-bg-alt);
+}
+
+.kimi-table-dark tbody tr:hover {
+  background: var(--kimi-bg-dark-alt);
+}
+
+/* ---- Button ---- */
+.kimi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--kimi-border-light);
+  background: transparent;
+  color: var(--kimi-text-light);
+  border-radius: var(--kimi-radius);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--kimi-font-body);
+}
+
+.kimi-btn:hover {
+  background: var(--kimi-text-light);
+  color: var(--kimi-bg-light);
+}
+
+.kimi-btn-dark {
+  border-color: var(--kimi-border-dark);
+  color: var(--kimi-text-dark);
+}
+
+.kimi-btn-dark:hover {
+  background: var(--kimi-text-dark);
+  color: var(--kimi-bg-dark);
+}
+
+.kimi-btn-solid {
+  background: var(--kimi-text-light);
+  color: var(--kimi-bg-light);
+  border-color: var(--kimi-text-light);
+}
+
+.kimi-btn-solid:hover {
+  opacity: 0.85;
+}
+
+.kimi-btn-solid-dark {
+  background: var(--kimi-text-dark);
+  color: var(--kimi-bg-dark);
+  border-color: var(--kimi-text-dark);
+}
+
+/* ---- Time Range Buttons ---- */
+.kimi-time-range {
+  display: flex;
+  gap: 8px;
+}
+
+.kimi-time-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: var(--kimi-font-mono);
+  border: 1px solid var(--kimi-border-light);
+  border-radius: var(--kimi-radius);
+  background: transparent;
+  color: var(--kimi-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.kimi-time-btn.active {
+  background: var(--kimi-text-light);
+  color: var(--kimi-bg-light);
+  border-color: var(--kimi-text-light);
+}
+
+.kimi-time-btn-dark {
+  border-color: var(--kimi-border-dark);
+}
+
+.kimi-time-btn-dark.active {
+  background: var(--kimi-text-dark);
+  color: var(--kimi-bg-dark);
+  border-color: var(--kimi-text-dark);
+}
+
+/* ---- Scroll Reveal Animation ---- */
+.kimi-reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kimi-reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.kimi-reveal-left {
+  opacity: 0;
+  transform: translateX(-10px);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kimi-reveal-left.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ---- Stagger Children ---- */
+.kimi-stagger > * {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kimi-stagger.visible > *:nth-child(1) { transition-delay: 0s; }
+.kimi-stagger.visible > *:nth-child(2) { transition-delay: 0.1s; }
+.kimi-stagger.visible > *:nth-child(3) { transition-delay: 0.2s; }
+.kimi-stagger.visible > *:nth-child(4) { transition-delay: 0.3s; }
+.kimi-stagger.visible > *:nth-child(5) { transition-delay: 0.4s; }
+
+.kimi-stagger.visible > * {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---- Hero ---- */
+.kimi-hero {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(20px, 4vw, 80px);
+}
+
+.kimi-hero canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.kimi-hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  width: 100%;
+  max-width: 900px;
+}
+
+/* ---- Content Padding ---- */
+.kimi-content {
+  padding-left: clamp(20px, 4vw, 80px);
+  padding-right: clamp(20px, 4vw, 80px);
+  margin-top: -80px;
+  position: relative;
+  z-index: 2;
+}
+
+/* ---- Grid Layouts ---- */
+.kimi-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+@media (min-width: 1024px) {
+  .kimi-grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.kimi-grid-4 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .kimi-grid-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1024px) {
+  .kimi-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.kimi-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .kimi-grid-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1024px) {
+  .kimi-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.kimi-grid-5-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1024px) {
+  .kimi-grid-5-2 {
+    grid-template-columns: 2fr 3fr;
+  }
+}
+
+/* ---- Nav Button ---- */
+.kimi-nav-btn {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 4px;
+  transition: all 0.3s ease;
+  font-family: var(--kimi-font-body);
+}
+
+.kimi-nav-btn:hover {
+  transform: translateY(-2px);
+}
+
+/* ---- Footer ---- */
+.kimi-footer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 60px;
+  border-top: 1px solid var(--kimi-border-light);
+  font-size: 11px;
+  color: var(--kimi-muted);
+}
+
+.kimi-footer-dark {
+  border-top-color: var(--kimi-border-dark);
+  background: var(--kimi-bg-dark);
+}
+
+/* ---- Divider ---- */
+.kimi-divider {
+  border: none;
+  border-top: 1px solid var(--kimi-border-light);
+}
+
+.kimi-divider-dark {
+  border-top-color: var(--kimi-border-dark);
+}
+
+/* ---- Tag ---- */
+.kimi-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--kimi-border-light);
+}
+
+.kimi-tag-dark {
+  border-color: var(--kimi-border-dark);
+}
+
+.kimi-tag-accent {
+  border-color: var(--kimi-accent-orange);
+  color: var(--kimi-accent-orange);
+}
+
+.kimi-tag-accent-dark {
+  border-color: var(--kimi-accent-red);
+  color: var(--kimi-accent-red);
+}
+
+/* ---- Donut Tooltip ---- */
+.kimi-donut-label {
+  font-size: 11px;
+  fill: var(--kimi-muted);
+}
+
+/* ---- Font Helpers ---- */
+.kimi-font-mono {
+  font-family: var(--kimi-font-mono);
+}
+
+.kimi-font-heading {
+  font-family: 'Noto Sans TC', 'Inter', sans-serif;
+}

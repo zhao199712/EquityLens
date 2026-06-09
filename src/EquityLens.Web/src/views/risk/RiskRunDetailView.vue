@@ -1,380 +1,156 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import {
-  NButton,
-  NTag,
-  NSteps,
-  NStep,
-  NIcon,
-  NSpace,
-} from 'naive-ui'
-import {
-  ArrowBackOutline,
-  CheckmarkCircleOutline,
-  PlayOutline,
-} from '@vicons/ionicons5'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
+import { useRouter } from 'vue-router'
+import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
+import LineChart from '../../components/kimi/LineChart.vue'
+import Footer from '../../components/kimi/Footer.vue'
 
-use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent])
-
-const route = useRoute()
 const router = useRouter()
-const riskRunId = route.params.id as string
 
-// Mock risk run data
-const riskRun = ref({
-  id: riskRunId,
-  portfolioName: '科技成長型投資組合',
-  status: 'completed',
-  createdAt: '2026-06-03 14:30:00',
-  completedAt: '2026-06-03 14:32:15',
-  duration: '2分15秒',
-  model: 'Historical Simulation',
-  confidenceLevel: 95,
-  lookbackWindow: 252,
-})
-
-// VaR/ES Results
-const riskMetrics = ref({
-  var95: -2.34,
-  var99: -3.87,
-  es95: -3.12,
-  es99: -4.56,
-  volatility: 18.3,
-  beta: 1.24,
-})
-
-// Loss distribution histogram
-const lossDistributionData = Array.from({ length: 50 }, (_, i) => {
-  const x = -8 + (i / 50) * 16
-  const y = Math.exp(-((x + 2) ** 2) / 4) * 15 + Math.random() * 0.5
-  return [x, y]
-})
-
-const lossDistributionOption = computed(() => ({
-  backgroundColor: 'transparent',
-  grid: {
-    left: '3%',
-    right: '4%',
-    bottom: '3%',
-    top: '10%',
-    containLabel: true,
-  },
-  tooltip: {
-    trigger: 'axis',
-    backgroundColor: 'rgba(17, 24, 39, 0.9)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    textStyle: { color: '#f0f4f8' },
-    formatter: (params: any) => {
-      const p = params[0]
-      return `損失: ${p.value[0].toFixed(2)}%<br/>頻率: ${p.value[1].toFixed(2)}`
-    },
-  },
-  xAxis: {
-    type: 'value',
-    name: '損失 (%)',
-    nameTextStyle: { color: '#64748b' },
-    axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } },
-    splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } },
-    axisLabel: { color: '#64748b', formatter: '{value}%' },
-  },
-  yAxis: {
-    type: 'value',
-    name: '頻率',
-    nameTextStyle: { color: '#64748b' },
-    axisLine: { show: false },
-    splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } },
-    axisLabel: { color: '#64748b' },
-  },
-  series: [
-    {
-      type: 'bar',
-      data: lossDistributionData,
-      barWidth: '90%',
-      itemStyle: {
-        color: (params: any) => {
-          const val = params.value[0]
-          if (val <= -3.87) return '#f87171'
-          if (val <= -2.34) return '#fbbf24'
-          return 'rgba(96, 165, 250, 0.6)'
-        },
-        borderRadius: [2, 2, 0, 0],
-      },
-      markLine: {
-        silent: true,
-        symbol: 'none',
-        lineStyle: { width: 2 },
-        data: [
-          {
-            xAxis: -2.34,
-            lineStyle: { color: '#fbbf24', type: 'dashed' },
-            label: { formatter: 'VaR 95%', color: '#fbbf24', position: 'insideEndTop' },
-          },
-          {
-            xAxis: -3.87,
-            lineStyle: { color: '#f87171', type: 'dashed' },
-            label: { formatter: 'VaR 99%', color: '#f87171', position: 'insideEndTop' },
-          },
-        ],
-      },
-    },
-  ],
-}))
-
-// Historical VaR trend
-const historicalVarData = Array.from({ length: 30 }, (_, i) => {
-  const date = new Date()
-  date.setDate(date.getDate() - (29 - i))
-  return {
-    date: date.toISOString().split('T')[0],
-    var95: -(1.5 + Math.random() * 2),
-    var99: -(2.5 + Math.random() * 3),
-  }
-})
-
-const historicalVarOption = computed(() => ({
-  backgroundColor: 'transparent',
-  grid: {
-    left: '3%',
-    right: '4%',
-    bottom: '3%',
-    top: '10%',
-    containLabel: true,
-  },
-  tooltip: {
-    trigger: 'axis',
-    backgroundColor: 'rgba(17, 24, 39, 0.9)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    textStyle: { color: '#f0f4f8' },
-  },
-  legend: {
-    data: ['VaR 95%', 'VaR 99%'],
-    textStyle: { color: '#94a3b8' },
-    top: 0,
-  },
-  xAxis: {
-    type: 'category',
-    data: historicalVarData.map(d => d.date.slice(5)),
-    axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } },
-    axisLabel: { color: '#64748b' },
-  },
-  yAxis: {
-    type: 'value',
-    axisLine: { show: false },
-    splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } },
-    axisLabel: { color: '#64748b', formatter: '{value}%' },
-  },
-  series: [
-    {
-      name: 'VaR 95%',
-      type: 'line',
-      data: historicalVarData.map(d => d.var95),
-      lineStyle: { color: '#fbbf24', width: 2 },
-      itemStyle: { color: '#fbbf24' },
-      symbol: 'circle',
-      symbolSize: 4,
-    },
-    {
-      name: 'VaR 99%',
-      type: 'line',
-      data: historicalVarData.map(d => d.var99),
-      lineStyle: { color: '#f87171', width: 2 },
-      itemStyle: { color: '#f87171' },
-      symbol: 'circle',
-      symbolSize: 4,
-    },
-  ],
-}))
-
-// Model assumptions
-const assumptions = ref([
-  { name: '計算模型', value: 'Historical Simulation' },
-  { name: '置信水準', value: '95% / 99%' },
-  { name: '回顧期間', value: '252 交易日' },
-  { name: '資料頻率', value: '日報酬' },
-  { name: '投資組合市值', value: 'NT$2,450,000' },
-  { name: '計算時間', value: '2026-06-03 14:30:00' },
-])
-
-function goBack() {
-  router.push({ name: 'portfolios' })
+const runInfo = {
+  id: 'RR-2026-0603-001',
+  portfolio: '科技成長型投資組合',
+  model: 'Historical VaR',
+  confidence: '95%',
+  lookback: '252 天',
+  date: '2026-06-03',
+  duration: '12.3s',
 }
 
-function formatPercent(value: number): string {
-  return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
-}
+const metrics = [
+  { label: 'VaR 95%', value: '-2.3%', sub: '1-day horizon' },
+  { label: 'VaR 99%', value: '-3.8%', sub: '1-day horizon' },
+  { label: 'ES 95%', value: '-3.1%', sub: 'Expected Shortfall' },
+  { label: 'Volatility', value: '12.4%', sub: 'Annualized' },
+]
+
+// Loss distribution data (histogram simulation)
+const lossDistribution = Array.from({ length: 30 }, (_, i) => {
+  const x = -5 + i * 0.33
+  const y = Math.exp(-0.5 * Math.pow((x + 1.5) / 1.2, 2)) * 100
+  return { x, y }
+})
+
+// VaR trend
+const var95Trend = [-1.8, -2.1, -2.3, -1.9, -2.5, -2.2, -2.0, -2.3, -2.4, -2.1, -1.9, -2.3, -2.5, -2.2, -2.0, -1.8, -2.1, -2.3, -2.4, -2.2, -2.0, -1.9, -2.3, -2.1, -2.3]
+const var99Trend = [-3.0, -3.5, -3.8, -3.2, -4.0, -3.6, -3.3, -3.8, -3.9, -3.5, -3.2, -3.8, -4.0, -3.6, -3.3, -3.0, -3.5, -3.8, -3.9, -3.6, -3.3, -3.2, -3.8, -3.5, -3.8]
 </script>
 
 <template>
-  <main class="page animate-fade-in">
-    <!-- Back Button -->
-    <div style="margin-bottom: 16px;">
-      <NButton text type="primary" size="small" @click="goBack">
-        <template #icon>
-          <NIcon><ArrowBackOutline /></NIcon>
-        </template>
-        返回投資組合
-      </NButton>
-    </div>
+  <div class="kimi-page-dark" style="padding-top: 40px">
+    <!-- Back + Header -->
+    <div class="kimi-content" style="margin-top: 0; padding-top: 20px">
+      <button class="kimi-btn kimi-btn-dark" style="margin-bottom: 24px" @click="router.push({ name: 'risk-runs' })">
+        ← BACK TO RISK RUNS
+      </button>
 
-    <!-- Header -->
-    <section class="page-heading">
-      <div>
-        <p class="eyebrow">Risk Analysis Run</p>
-        <h1>風險分析 #{{ riskRun.id }}</h1>
-        <p style="color: var(--text-secondary); margin-top: 8px;">{{ riskRun.portfolioName }}</p>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
+        <div>
+          <h1 style="font-size: 28px; font-weight: 700; margin: 0; color: #FFFFFF">{{ runInfo.portfolio }}</h1>
+          <span class="kimi-caption" style="margin-top: 4px; display: block">RISK ANALYSIS RUN — {{ runInfo.id }}</span>
+        </div>
+        <span class="kimi-tag" style="border-color: #34d399; color: #34d399">COMPLETED</span>
       </div>
-      <NSpace align="center">
-        <NTag type="success" round>
-          <template #icon>
-            <NIcon><CheckmarkCircleOutline /></NIcon>
-          </template>
-          已完成
-        </NTag>
-        <NButton type="primary" class="btn-primary" size="small">
-          <template #icon>
-            <NIcon><PlayOutline /></NIcon>
-          </template>
-          重新執行
-        </NButton>
-      </NSpace>
-    </section>
 
-    <!-- Run Info -->
-    <div class="glass-panel" style="padding: 20px 24px;">
-      <NSteps :current="3" size="small" style="max-width: 600px;">
-        <NStep title="準備資料" description="14:30:00" />
-        <NStep title="計算 VaR" description="14:31:20" />
-        <NStep title="產生報告" description="14:32:15" />
-      </NSteps>
-      <div style="display: flex; gap: 24px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
-        <div>
-          <span style="color: var(--text-tertiary); font-size: 12px;">執行時間</span>
-          <div style="color: var(--text-primary); font-weight: 600;">{{ riskRun.duration }}</div>
-        </div>
-        <div>
-          <span style="color: var(--text-tertiary); font-size: 12px;">計算模型</span>
-          <div style="color: var(--text-primary); font-weight: 600;">{{ riskRun.model }}</div>
-        </div>
-        <div>
-          <span style="color: var(--text-tertiary); font-size: 12px;">置信水準</span>
-          <div style="color: var(--text-primary); font-weight: 600;">{{ riskRun.confidenceLevel }}%</div>
-        </div>
-        <div>
-          <span style="color: var(--text-tertiary); font-size: 12px;">回顧期間</span>
-          <div style="color: var(--text-primary); font-weight: 600;">{{ riskRun.lookbackWindow }} 日</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Risk Metrics -->
-    <NGrid :cols="4" :x-gap="16" :y-gap="16" responsive="screen" style="margin-top: 24px;">
-      <NGridItem>
-        <div class="metric-card" style="border-left: 3px solid var(--warning);">
-          <div class="metric-label">VaR 95%</div>
-          <div class="metric-value" style="color: var(--warning);">{{ formatPercent(riskMetrics.var95) }}</div>
-          <div style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">單日最大損失</div>
-        </div>
-      </NGridItem>
-      <NGridItem>
-        <div class="metric-card" style="border-left: 3px solid var(--danger);">
-          <div class="metric-label">VaR 99%</div>
-          <div class="metric-value" style="color: var(--danger);">{{ formatPercent(riskMetrics.var99) }}</div>
-          <div style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">極端風險</div>
-        </div>
-      </NGridItem>
-      <NGridItem>
-        <div class="metric-card" style="border-left: 3px solid var(--warning);">
-          <div class="metric-label">ES 95%</div>
-          <div class="metric-value" style="color: var(--warning);">{{ formatPercent(riskMetrics.es95) }}</div>
-          <div style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">預期短缺</div>
-        </div>
-      </NGridItem>
-      <NGridItem>
-        <div class="metric-card" style="border-left: 3px solid var(--info);">
-          <div class="metric-label">波動率</div>
-          <div class="metric-value" style="color: var(--info);">{{ riskMetrics.volatility }}%</div>
-          <div style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">年化標準差</div>
-        </div>
-      </NGridItem>
-    </NGrid>
-
-    <!-- Charts -->
-    <NGrid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" style="margin-top: 24px;">
-      <NGridItem>
-        <div class="glass-panel">
-          <h2 style="margin-bottom: 20px;">損失分佈</h2>
-          <VChart :option="lossDistributionOption" style="height: 320px;" autoresize />
-          <div style="display: flex; gap: 16px; margin-top: 16px; justify-content: center;">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <div style="width: 12px; height: 12px; border-radius: 2px; background: rgba(96, 165, 250, 0.6);"></div>
-              <span style="color: var(--text-secondary); font-size: 12px;">正常區間</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <div style="width: 12px; height: 12px; border-radius: 2px; background: #fbbf24;"></div>
-              <span style="color: var(--text-secondary); font-size: 12px;">VaR 95%</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <div style="width: 12px; height: 12px; border-radius: 2px; background: #f87171;"></div>
-              <span style="color: var(--text-secondary); font-size: 12px;">VaR 99%</span>
+      <!-- Run Info -->
+      <ScrollReveal>
+        <div class="kimi-section-dark" style="margin-bottom: 40px">
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0">
+            <div v-for="(item, i) in [
+              { label: 'MODEL', value: runInfo.model },
+              { label: 'CONFIDENCE', value: runInfo.confidence },
+              { label: 'LOOKBACK', value: runInfo.lookback },
+              { label: 'DURATION', value: runInfo.duration },
+            ]" :key="i"
+              style="padding: 20px; border-right: 1px solid #333333; border-bottom: 1px solid #333333"
+            >
+              <span class="kimi-caption" style="margin-bottom: 4px; display: block; color: #666666">{{ item.label }}</span>
+              <span style="font-size: 18px; font-weight: 600; color: #FFFFFF">{{ item.value }}</span>
             </div>
           </div>
         </div>
-      </NGridItem>
+      </ScrollReveal>
 
-      <NGridItem>
-        <div class="glass-panel">
-          <h2 style="margin-bottom: 20px;">歷史 VaR 趨勢</h2>
-          <VChart :option="historicalVarOption" style="height: 320px;" autoresize />
-        </div>
-      </NGridItem>
-    </NGrid>
-
-    <!-- Model Assumptions -->
-    <div class="glass-panel" style="margin-top: 24px;">
-      <h2 style="margin-bottom: 20px;">模型假設與參數</h2>
-      <NGrid :cols="3" :x-gap="16" :y-gap="12" responsive="screen">
-        <NGridItem v-for="assumption in assumptions" :key="assumption.name">
-          <div style="padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
-            <div style="color: var(--text-tertiary); font-size: 12px; margin-bottom: 4px;">{{ assumption.name }}</div>
-            <div style="color: var(--text-primary); font-weight: 600;">{{ assumption.value }}</div>
+      <!-- Metrics -->
+      <ScrollReveal :delay="0.1">
+        <div class="kimi-section-dark">
+          <div class="kimi-kpi-grid" style="display: grid; grid-template-columns: repeat(4, 1fr)">
+            <div v-for="(m, i) in metrics" :key="i"
+              style="padding: 24px; border-right: 1px solid #333333; border-bottom: 1px solid #333333; text-align: center; position: relative"
+            >
+              <span class="kimi-caption" style="color: #666666; margin-bottom: 8px; display: block">{{ m.label }}</span>
+              <span style="font-size: 28px; font-weight: 600; color: #FFFFFF">{{ m.value }}</span>
+              <span style="font-size: 12px; color: #666666; margin-top: 4px; display: block">{{ m.sub }}</span>
+              <div class="accent-bar" style="background-color: #8B1A2B" />
+            </div>
           </div>
-        </NGridItem>
-      </NGrid>
+        </div>
+      </ScrollReveal>
+
+      <!-- Loss Distribution + VaR Trend -->
+      <div class="kimi-grid-2" style="margin-top: 40px">
+        <!-- Loss Distribution -->
+        <ScrollReveal style="padding: 20px; border: 1px solid #333333; background: #0A0A0A">
+          <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #FFFFFF">損失分佈</h2>
+          <span class="kimi-caption" style="color: #666666; display: block; margin-bottom: 16px">LOSS DISTRIBUTION</span>
+          <svg width="100%" height="280" viewBox="0 0 500 280">
+            <!-- Grid -->
+            <line v-for="i in 5" :key="'g-' + i" x1="60" :y1="20 + (i - 1) * 50" x2="480" :y2="20 + (i - 1) * 50" stroke="#333333" stroke-width="1" stroke-dasharray="4 4" />
+
+            <!-- Bars -->
+            <rect
+              v-for="(bar, i) in lossDistribution"
+              :key="'b-' + i"
+              :x="60 + (i / 30) * 420"
+              :y="220 - bar.y * 1.8"
+              :width="420 / 30 - 2"
+              :height="bar.y * 1.8"
+              :fill="bar.x < -2.3 ? (bar.x < -3.8 ? '#f87171' : '#fbbf24') : '#333333'"
+            />
+
+            <!-- VaR 95% line -->
+            <line :x1="60 + ((-2.3 + 5) / 10) * 420" y1="20" :x2="60 + ((-2.3 + 5) / 10) * 420" y2="220" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4 4" />
+            <text :x="60 + ((-2.3 + 5) / 10) * 420 + 5" y="15" fill="#fbbf24" font-size="10" font-weight="600">VaR 95%</text>
+
+            <!-- VaR 99% line -->
+            <line :x1="60 + ((-3.8 + 5) / 10) * 420" y1="20" :x2="60 + ((-3.8 + 5) / 10) * 420" y2="220" stroke="#f87171" stroke-width="1.5" stroke-dasharray="4 4" />
+            <text :x="60 + ((-3.8 + 5) / 10) * 420 + 5" y="30" fill="#f87171" font-size="10" font-weight="600">VaR 99%</text>
+          </svg>
+        </ScrollReveal>
+
+        <!-- VaR Trend -->
+        <ScrollReveal :delay="0.1" style="padding: 20px; border: 1px solid #333333; background: #0A0A0A">
+          <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #FFFFFF">VaR 歷史趨勢</h2>
+          <span class="kimi-caption" style="color: #666666; display: block; margin-bottom: 16px">HISTORICAL VaR TREND</span>
+          <LineChart
+            :data="var95Trend"
+            :labels="var95Trend.map((_, i) => String(i + 1))"
+            :y-axis-labels="['-5%', '-4%', '-3%', '-2%', '-1%', '0%']"
+            :height="280"
+            line-color="#fbbf24"
+            grid-color="#333333"
+            text-color="#666666"
+            :dark="true"
+            :show-area="false"
+            :second-line="var99Trend"
+            second-line-color="#f87171"
+          />
+        </ScrollReveal>
+      </div>
+
+      <div style="height: 80px" />
     </div>
-  </main>
+
+    <Footer :dark="true" label="RISK" />
+  </div>
 </template>
 
 <style scoped>
-:deep(.n-steps .n-step-indicator) {
-  background: var(--bg-tertiary) !important;
-  border-color: var(--border-medium) !important;
-}
-
-:deep(.n-steps .n-step-splitor) {
-  background: var(--border-medium) !important;
-}
-
-:deep(.n-steps .n-step-content__title) {
-  color: var(--text-primary) !important;
-}
-
-:deep(.n-steps .n-step-content__description) {
-  color: var(--text-secondary) !important;
-}
-
-:deep(.n-step--finish .n-step-indicator) {
-  background: var(--success) !important;
-  border-color: var(--success) !important;
-}
-
-:deep(.n-step--process .n-step-indicator) {
-  background: var(--accent-primary) !important;
-  border-color: var(--accent-primary) !important;
+@media (max-width: 1024px) {
+  .kimi-grid-2 > * {
+    border-right: none !important;
+  }
+  .kimi-grid-2 {
+    display: block;
+  }
 }
 </style>

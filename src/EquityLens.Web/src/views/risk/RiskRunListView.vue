@@ -1,286 +1,147 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  NButton,
-  NInput,
-  NTag,
-  NEmpty,
-  NModal,
-  NForm,
-  NFormItem,
-  NSelect,
-  NSpace,
-  NIcon,
-  NPopconfirm,
-  NGrid,
-  NGridItem,
-} from 'naive-ui'
-import {
-  AddOutline,
-  SearchOutline,
-  ShieldCheckmarkOutline,
-  TimeOutline,
-  ArrowForwardOutline,
-  TrashOutline,
-} from '@vicons/ionicons5'
+import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 
 const router = useRouter()
-
-const searchQuery = ref('')
-const showCreateModal = ref(false)
-const createForm = ref({
-  name: '',
-  portfolioId: null as string | null,
-  model: 'historical',
-})
-
-const modelOptions = [
-  { label: '歷史模擬法', value: 'historical' },
-  { label: '參數法 (常態分配)', value: 'parametric' },
-  { label: '蒙地卡羅模擬', value: 'monte-carlo' },
-]
-
-const portfolioOptions = [
-  { label: '科技成長型投資組合', value: '1' },
-  { label: '價值型藍籌股組合', value: '2' },
-  { label: '全球平衡型組合', value: '3' },
-]
+const search = ref('')
 
 const riskRuns = ref([
-  {
-    id: '1',
-    name: '科技成長型投資組合 VaR 計算',
-    portfolioName: '科技成長型投資組合',
-    status: 'completed',
-    model: 'historical',
-    var95: '-2.34%',
-    var99: '-3.87%',
-    date: '2026-06-03',
-  },
-  {
-    id: '2',
-    name: '價值型藍籌股組合 VaR 計算',
-    portfolioName: '價值型藍籌股組合',
-    status: 'completed',
-    model: 'historical',
-    var95: '-1.52%',
-    var99: '-2.71%',
-    date: '2026-06-02',
-  },
-  {
-    id: '3',
-    name: '全球平衡型組合 VaR 計算',
-    portfolioName: '全球平衡型組合',
-    status: 'running',
-    model: 'parametric',
-    var95: '-',
-    var99: '-',
-    date: '2026-06-01',
-  },
+  { id: '1', name: '科技成長型投資組合', model: 'Historical VaR', date: '2026-06-03', var95: '-2.3%', var99: '-3.8%', status: 'completed' },
+  { id: '2', name: '價值型藍籌股組合', model: 'Parametric VaR', date: '2026-06-02', var95: '-1.5%', var99: '-2.7%', status: 'completed' },
+  { id: '3', name: '全球平衡型組合', model: 'Monte Carlo', date: '2026-06-01', var95: '-1.8%', var99: '-3.1%', status: 'completed' },
+  { id: '4', name: '台灣核心持股組合', model: 'Historical VaR', date: '2026-05-30', var95: '-2.1%', var99: '-3.5%', status: 'completed' },
 ])
 
-const filteredRuns = computed(() => {
-  if (!searchQuery.value) return riskRuns.value
-  const q = searchQuery.value.toLowerCase()
-  return riskRuns.value.filter(r =>
-    r.name.toLowerCase().includes(q) ||
-    r.portfolioName.toLowerCase().includes(q)
+const filteredRuns = ref(riskRuns.value)
+const showCreate = ref(false)
+const newRun = ref({ name: '', model: 'Historical VaR' })
+
+function filterRuns() {
+  const q = search.value.toLowerCase()
+  filteredRuns.value = riskRuns.value.filter(
+    (r) => r.name.toLowerCase().includes(q) || r.model.toLowerCase().includes(q)
   )
-})
-
-function getStatusType(status: string): 'success' | 'info' | 'warning' | 'error' {
-  const map: Record<string, 'success' | 'info' | 'warning' | 'error'> = {
-    completed: 'success',
-    running: 'info',
-    pending: 'warning',
-    failed: 'error',
-  }
-  return map[status] || 'default'
 }
 
-function getStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    completed: '完成',
-    running: '執行中',
-    pending: '等待中',
-    failed: '失敗',
-  }
-  return map[status] || status
-}
-
-function navigateToDetail(id: string) {
-  router.push({ name: 'risk-run-detail', params: { id } })
-}
-
-function handleCreate() {
-  const newRun = {
+function createRun() {
+  riskRuns.value.push({
     id: String(riskRuns.value.length + 1),
-    name: createForm.value.name,
-    portfolioName: portfolioOptions.find(p => p.value === createForm.value.portfolioId)?.label || '未指定',
-    status: 'pending',
-    model: createForm.value.model,
-    var95: '-',
-    var99: '-',
+    name: newRun.value.name,
+    model: newRun.value.model,
     date: new Date().toISOString().split('T')[0],
-  }
-  riskRuns.value.unshift(newRun)
-  showCreateModal.value = false
-  createForm.value = { name: '', portfolioId: null, model: 'historical' }
-}
-
-function handleDelete(id: string) {
-  riskRuns.value = riskRuns.value.filter(r => r.id !== id)
+    var95: '-2.0%',
+    var99: '-3.2%',
+    status: 'completed',
+  })
+  filterRuns()
+  showCreate.value = false
+  newRun.value = { name: '', model: 'Historical VaR' }
 }
 </script>
 
 <template>
-  <main class="page animate-fade-in">
-    <section class="page-heading">
-      <div>
-        <p class="eyebrow">Risk Analysis</p>
-        <h1>風險分析</h1>
+  <div class="kimi-page-light" style="padding-top: 40px">
+    <div class="kimi-content" style="margin-top: 0; padding-top: 20px">
+      <!-- Header -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
+        <div>
+          <h1 style="font-size: 28px; font-weight: 700; margin: 0">風險分析</h1>
+          <span class="kimi-caption" style="margin-top: 4px; display: block">RISK ANALYSIS RUNS</span>
+        </div>
+        <button class="kimi-btn kimi-btn-solid" @click="showCreate = !showCreate">
+          {{ showCreate ? 'CANCEL' : '+ NEW RISK RUN' }}
+        </button>
       </div>
-      <NButton type="primary" class="btn-primary" @click="showCreateModal = true">
-        <template #icon>
-          <NIcon><AddOutline /></NIcon>
-        </template>
-        執行風險分析
-      </NButton>
-    </section>
 
-    <div class="glass-panel" style="padding: 16px 20px; margin-top: 0;">
-      <NInput
-        v-model:value="searchQuery"
-        placeholder="搜尋風險分析..."
-        clearable
-        style="max-width: 400px;"
-      >
-        <template #prefix>
-          <NIcon><SearchOutline /></NIcon>
-        </template>
-      </NInput>
-    </div>
+      <!-- Create Form -->
+      <ScrollReveal v-if="showCreate">
+        <div class="kimi-section" style="margin-bottom: 40px; padding: 20px">
+          <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600">建立新的風險分析</h3>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px">
+            <input v-model="newRun.name" placeholder="投資組合名稱" class="kimi-input" />
+            <select v-model="newRun.model" class="kimi-input">
+              <option>Historical VaR</option>
+              <option>Parametric VaR</option>
+              <option>Monte Carlo</option>
+            </select>
+          </div>
+          <button class="kimi-btn kimi-btn-solid" @click="createRun">RUN ANALYSIS</button>
+        </div>
+      </ScrollReveal>
 
-    <div v-if="filteredRuns.length > 0" style="margin-top: 24px;">
-      <NGrid :cols="3" :x-gap="16" :y-gap="16" responsive="screen">
-        <NGridItem v-for="run in filteredRuns" :key="run.id">
+      <!-- Search -->
+      <div style="margin-bottom: 24px">
+        <input
+          v-model="search"
+          placeholder="搜尋風險分析..."
+          class="kimi-input"
+          style="width: 300px"
+          @input="filterRuns"
+        />
+      </div>
+
+      <!-- Risk Run Grid -->
+      <div class="kimi-grid-3">
+        <ScrollReveal v-for="(run, i) in filteredRuns" :key="run.id" :delay="i * 0.1">
           <div
-            class="glass-card"
-            style="padding: 24px; cursor: pointer; position: relative; overflow: hidden;"
-            @click="navigateToDetail(run.id)"
+            class="kimi-panel"
+            style="cursor: pointer; transition: all 0.2s ease"
+            @click="router.push({ name: 'risk-run-detail', params: { id: run.id } })"
           >
-            <div style="position: absolute; top: 16px; right: 16px;">
-              <NTag size="small" :type="getStatusType(run.status)" round>
-                {{ getStatusLabel(run.status) }}
-              </NTag>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+              <span class="kimi-tag">{{ run.model }}</span>
+              <span class="kimi-tag" style="border-color: #34d399; color: #34d399">COMPLETED</span>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-              <div
-                style="
-                  width: 48px;
-                  height: 48px;
-                  border-radius: 12px;
-                  display: grid;
-                  place-items: center;
-                  background: linear-gradient(135deg, rgba(96, 165, 250, 0.2), rgba(129, 140, 248, 0.2));
-                  border: 1px solid rgba(96, 165, 250, 0.2);
-                "
-              >
-                <NIcon :size="24" color="#60a5fa">
-                  <ShieldCheckmarkOutline />
-                </NIcon>
-              </div>
-              <div>
-                <h3 style="margin: 0; font-size: 16px; font-weight: 600;">{{ run.name }}</h3>
-                <p style="margin: 4px 0 0; color: var(--text-tertiary); font-size: 13px;">
-                  {{ run.portfolioName }}
-                </p>
-              </div>
-            </div>
+            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 600">{{ run.name }}</h3>
+            <p style="margin: 0 0 16px; font-size: 13px; color: var(--kimi-muted)">{{ run.date }}</p>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
               <div>
-                <div style="color: var(--text-tertiary); font-size: 12px; margin-bottom: 4px;">VaR 95%</div>
-                <div style="color: var(--text-primary); font-size: 18px; font-weight: 700;">{{ run.var95 }}</div>
+                <span style="font-size: 11px; color: var(--kimi-muted); display: block; margin-bottom: 4px">VaR 95%</span>
+                <span style="font-size: 16px; font-weight: 600; color: #f87171">{{ run.var95 }}</span>
               </div>
               <div>
-                <div style="color: var(--text-tertiary); font-size: 12px; margin-bottom: 4px;">模型</div>
-                <div style="color: var(--text-primary); font-size: 18px; font-weight: 700;">{{ run.model }}</div>
+                <span style="font-size: 11px; color: var(--kimi-muted); display: block; margin-bottom: 4px">VaR 99%</span>
+                <span style="font-size: 16px; font-weight: 600; color: #f87171">{{ run.var99 }}</span>
               </div>
-            </div>
-
-            <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
-              <span style="color: var(--text-tertiary); font-size: 12px;">
-                <NIcon :size="14" style="vertical-align: middle; margin-right: 4px;"><TimeOutline /></NIcon>
-                {{ run.date }}
-              </span>
-              <NSpace>
-                <NPopconfirm @positive-click="handleDelete(run.id)">
-                  <template #trigger>
-                    <NButton text type="error" size="small" @click.stop>
-                      <template #icon>
-                        <NIcon><TrashOutline /></NIcon>
-                      </template>
-                    </NButton>
-                  </template>
-                  確定要刪除此風險分析嗎？
-                </NPopconfirm>
-                <NButton text type="primary" size="small" @click.stop="navigateToDetail(run.id)">
-                  查看
-                  <template #icon>
-                    <NIcon><ArrowForwardOutline /></NIcon>
-                  </template>
-                </NButton>
-              </NSpace>
             </div>
           </div>
-        </NGridItem>
-      </NGrid>
+        </ScrollReveal>
+      </div>
+
+      <div style="height: 80px" />
     </div>
 
-    <div v-else class="empty-state">
-      <NEmpty description="尚無風險分析">
-        <template #extra>
-          <NButton type="primary" class="btn-primary" @click="showCreateModal = true">
-            執行第一個風險分析
-          </NButton>
-        </template>
-      </NEmpty>
-    </div>
-
-    <NModal
-      v-model:show="showCreateModal"
-      title="執行風險分析"
-      preset="card"
-      style="width: 480px;"
-      :bordered="false"
-    >
-      <NForm :model="createForm" label-placement="top">
-        <NFormItem label="名稱" required>
-          <NInput v-model:value="createForm.name" placeholder="輸入分析名稱" />
-        </NFormItem>
-        <NFormItem label="投資組合">
-          <NSelect
-            v-model:value="createForm.portfolioId"
-            :options="portfolioOptions"
-            placeholder="選擇投資組合"
-          />
-        </NFormItem>
-        <NFormItem label="計算模型">
-          <NSelect
-            v-model:value="createForm.model"
-            :options="modelOptions"
-          />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showCreateModal = false">取消</NButton>
-          <NButton type="primary" class="btn-primary" @click="handleCreate">建立</NButton>
-        </NSpace>
-      </template>
-    </NModal>
-  </main>
+    <footer class="kimi-footer">
+      <span>RISE VISION 2026</span>
+      <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px">RISK</span>
+      <span>數據僅供參考</span>
+    </footer>
+  </div>
 </template>
+
+<style scoped>
+.kimi-input {
+  padding: 8px 12px;
+  font-size: 14px;
+  font-family: var(--kimi-font-body);
+  border: 1px solid var(--kimi-border-light);
+  background: transparent;
+  color: var(--kimi-text-light);
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+.kimi-input:focus {
+  border-color: #000000;
+}
+.kimi-input::placeholder {
+  color: #999999;
+}
+select.kimi-input {
+  appearance: none;
+  cursor: pointer;
+}
+</style>

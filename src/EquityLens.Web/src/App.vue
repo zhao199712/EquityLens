@@ -1,46 +1,79 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { NConfigProvider, NLayout, NLayoutHeader, NLayoutContent, NMenu, darkTheme } from 'naive-ui'
-import {
-  GridOutline,
-  FolderOpenOutline,
-  TrendingUpOutline,
-  DocumentTextOutline,
-  SettingsOutline,
-} from '@vicons/ionicons5'
-import { renderIcon } from './utils/icons'
+import { NConfigProvider, darkTheme } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
 
-const menuOptions = [
-  {
-    label: 'Dashboard',
-    key: 'dashboard',
-    icon: renderIcon(GridOutline),
+const themeOverrides = {
+  common: {
+    primaryColor: '#60a5fa',
+    bodyColor: '#F5F5F5',
+    cardColor: 'transparent',
+    modalColor: '#FFFFFF',
+    tableColor: 'transparent',
+    tableHeaderColor: '#F5F5F5',
+    borderColor: 'rgba(0,0,0,0.08)',
+    textColor1: '#000000',
+    textColor2: '#666666',
+    textColor3: '#999999',
+    placeholderColor: '#999999',
+    inputColor: 'transparent',
+    buttonColor2: 'transparent',
   },
-  {
-    label: 'Portfolios',
-    key: 'portfolios',
-    icon: renderIcon(FolderOpenOutline),
+  Menu: {
+    itemTextColor: '#666666',
+    itemTextColorHover: '#000000',
+    itemTextColorActive: '#000000',
+    itemColorHover: 'transparent',
+    itemColorActive: 'transparent',
   },
-  {
-    label: 'Risk Runs',
-    key: 'risk-runs',
-    icon: renderIcon(TrendingUpOutline),
+  Card: {
+    color: 'transparent',
+    borderColor: 'rgba(0,0,0,0.08)',
   },
-  {
-    label: 'Reports',
-    key: 'financial-reports',
-    icon: renderIcon(DocumentTextOutline),
+  Table: {
+    thColor: '#F5F5F5',
+    thTextColor: '#666666',
+    tdTextColor: '#000000',
+    borderColor: 'rgba(0,0,0,0.08)',
   },
-  {
-    label: 'Settings',
-    key: 'settings',
-    icon: renderIcon(SettingsOutline),
+  Tabs: {
+    tabTextColor: '#666666',
+    tabTextColorActive: '#000000',
+    tabTextColorHover: '#000000',
+    tabColor: 'transparent',
+    tabColorActive: 'transparent',
+    barColor: '#000000',
   },
-]
+  Input: {
+    color: 'transparent',
+    borderColor: 'rgba(0,0,0,0.15)',
+    borderColorHover: '#000000',
+    borderColorFocus: '#000000',
+    placeholderColor: '#999999',
+    textColor: '#000000',
+  },
+  Button: {
+    textColor: '#000000',
+    textColorPrimary: '#FFFFFF',
+    colorPrimary: '#000000',
+    colorHoverPrimary: '#333333',
+    colorPressedPrimary: '#000000',
+    borderColorPrimary: '#000000',
+    borderColorHoverPrimary: '#000000',
+  },
+  Tag: {
+    color: 'rgba(0,0,0,0.05)',
+    textColor: '#666666',
+    textColorSuccess: '#34d399',
+    textColorWarning: '#fbbf24',
+    textColorError: '#f87171',
+  },
+  Dialog: { color: '#FFFFFF', textColor: '#000000' },
+  Modal: { color: '#FFFFFF', textColor: '#000000' },
+}
 
 const activeMenuKey = computed(() => {
   const name = String(route.name ?? 'dashboard')
@@ -55,153 +88,165 @@ function handleMenuSelect(key: string) {
     router.push({ name: key })
   }
 }
-
-const themeOverrides = {
-  common: {
-    primaryColor: '#60a5fa',
-    primaryColorHover: '#7cb8fb',
-    primaryColorPressed: '#4a8fe8',
-    primaryColorSuppl: '#60a5fa',
-    bodyColor: '#0a0e1a',
-    cardColor: 'rgba(255, 255, 255, 0.03)',
-    modalColor: '#111827',
-    tableColor: 'transparent',
-    tableHeaderColor: '#1a1f35',
-    tableColorHover: 'rgba(255, 255, 255, 0.04)',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    textColor1: '#f0f4f8',
-    textColor2: '#94a3b8',
-    textColor3: '#64748b',
-    placeholderColor: '#475569',
-    inputColor: 'rgba(255, 255, 255, 0.06)',
-    inputColorDisabled: 'rgba(255, 255, 255, 0.03)',
-    buttonColor2: 'rgba(255, 255, 255, 0.06)',
-    buttonColor2Hover: 'rgba(255, 255, 255, 0.10)',
-    buttonColor2Pressed: 'rgba(255, 255, 255, 0.04)',
-  },
-  Menu: {
-    itemTextColor: '#94a3b8',
-    itemTextColorHover: '#f0f4f8',
-    itemTextColorActive: '#60a5fa',
-    itemTextColorActiveHover: '#7cb8fb',
-    itemColorHover: 'rgba(255, 255, 255, 0.06)',
-    itemColorActive: 'rgba(255, 255, 255, 0.06)',
-    itemColorActiveHover: 'rgba(255, 255, 255, 0.10)',
-    arrowColor: '#94a3b8',
-    arrowColorHover: '#f0f4f8',
-    arrowColorActive: '#60a5fa',
-    arrowColorActiveHover: '#7cb8fb',
-    groupTextColor: '#64748b',
-  },
-  Card: {
-    color: 'rgba(255, 255, 255, 0.03)',
-    colorModal: '#111827',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    titleTextColor: '#f0f4f8',
-  },
-  Table: {
-    thColor: '#1a1f35',
-    thTextColor: '#94a3b8',
-    tdTextColor: '#f0f4f8',
-    tdColorHover: 'rgba(255, 255, 255, 0.04)',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  Tabs: {
-    tabTextColor: '#94a3b8',
-    tabTextColorActive: '#60a5fa',
-    tabTextColorHover: '#f0f4f8',
-    tabColor: 'transparent',
-    tabColorActive: 'rgba(255, 255, 255, 0.06)',
-    tabColorHover: 'rgba(255, 255, 255, 0.04)',
-    barColor: '#60a5fa',
-  },
-  Input: {
-    color: 'rgba(255, 255, 255, 0.06)',
-    colorFocus: 'rgba(255, 255, 255, 0.08)',
-    colorDisabled: 'rgba(255, 255, 255, 0.03)',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderColorHover: 'rgba(255, 255, 255, 0.10)',
-    borderColorFocus: '#60a5fa',
-    placeholderColor: '#475569',
-    textColor: '#f0f4f8',
-  },
-  Select: {
-    color: 'rgba(255, 255, 255, 0.06)',
-    colorActive: 'rgba(255, 255, 255, 0.08)',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderColorHover: 'rgba(255, 255, 255, 0.10)',
-    borderColorFocus: '#60a5fa',
-    placeholderColor: '#475569',
-    textColor: '#f0f4f8',
-  },
-  Button: {
-    textColor: '#f0f4f8',
-    textColorPrimary: '#ffffff',
-    textColorHoverPrimary: '#ffffff',
-    textColorPressedPrimary: '#ffffff',
-    textColorFocusPrimary: '#ffffff',
-    colorPrimary: '#60a5fa',
-    colorHoverPrimary: '#7cb8fb',
-    colorPressedPrimary: '#4a8fe8',
-    colorFocusPrimary: '#60a5fa',
-    colorDisabledPrimary: 'rgba(96, 165, 250, 0.5)',
-    borderColorPrimary: 'transparent',
-    borderColorHoverPrimary: 'transparent',
-    borderColorPressedPrimary: 'transparent',
-    borderColorFocusPrimary: 'transparent',
-    rippleColorPrimary: 'rgba(255, 255, 255, 0.2)',
-  },
-  Tag: {
-    color: 'rgba(255, 255, 255, 0.06)',
-    colorBordered: 'rgba(255, 255, 255, 0.06)',
-    textColor: '#94a3b8',
-    textColorSuccess: '#34d399',
-    textColorWarning: '#fbbf24',
-    textColorError: '#f87171',
-    textColorInfo: '#60a5fa',
-    borderColorSuccess: 'rgba(52, 211, 153, 0.3)',
-    borderColorWarning: 'rgba(251, 191, 36, 0.3)',
-    borderColorError: 'rgba(248, 113, 113, 0.3)',
-    borderColorInfo: 'rgba(96, 165, 250, 0.3)',
-  },
-  Dialog: {
-    color: '#111827',
-    textColor: '#f0f4f8',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  Modal: {
-    color: '#111827',
-    textColor: '#f0f4f8',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  Drawer: {
-    color: '#111827',
-    textColor: '#f0f4f8',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-}
 </script>
 
 <template>
   <NConfigProvider :theme="darkTheme" :theme-overrides="themeOverrides">
-    <NLayout class="app-shell">
-      <NLayoutHeader class="app-header" bordered>
-        <RouterLink class="brand" to="/">
-          <span class="brand-mark">EL</span>
-          <span>EquityLens</span>
+    <div class="kimi-app-shell">
+      <!-- Header -->
+      <header class="kimi-app-header">
+        <RouterLink class="kimi-brand" to="/">
+          <span class="kimi-brand-mark">EL</span>
+          <span class="kimi-brand-text">EquityLens</span>
         </RouterLink>
-        <NMenu
-          :value="activeMenuKey"
-          mode="horizontal"
-          :options="menuOptions"
-          class="nav-menu"
-          @update:value="handleMenuSelect"
-        />
-      </NLayoutHeader>
 
-      <NLayoutContent class="app-content">
+        <nav class="kimi-main-nav">
+          <button
+            :class="['kimi-nav-item', activeMenuKey === 'dashboard' && 'active']"
+            @click="handleMenuSelect('dashboard')"
+          >
+            Dashboard
+          </button>
+          <span class="kimi-nav-sep">|</span>
+          <button
+            :class="['kimi-nav-item', activeMenuKey === 'portfolios' && 'active']"
+            @click="handleMenuSelect('portfolios')"
+          >
+            Portfolios
+          </button>
+          <span class="kimi-nav-sep">|</span>
+          <button
+            :class="['kimi-nav-item', activeMenuKey === 'risk-runs' && 'active']"
+            @click="handleMenuSelect('risk-runs')"
+          >
+            Risk Runs
+          </button>
+          <span class="kimi-nav-sep">|</span>
+          <button
+            :class="['kimi-nav-item', activeMenuKey === 'financial-reports' && 'active']"
+            @click="handleMenuSelect('financial-reports')"
+          >
+            Reports
+          </button>
+        </nav>
+
+        <RouterLink class="kimi-admin-link" to="/settings">Settings</RouterLink>
+      </header>
+
+      <!-- Content -->
+      <main class="kimi-app-content">
         <RouterView />
-      </NLayoutContent>
-    </NLayout>
+      </main>
+    </div>
   </NConfigProvider>
 </template>
+
+<style scoped>
+.kimi-app-shell {
+  min-height: 100vh;
+  background: var(--kimi-bg-light);
+}
+
+.kimi-app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  height: 60px;
+  padding: 0 clamp(20px, 4vw, 80px);
+  background: var(--kimi-bg-light);
+  border-bottom: 1px solid var(--kimi-border-light);
+}
+
+.kimi-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--kimi-text-light);
+}
+
+.kimi-brand-mark {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  background: var(--kimi-text-light);
+  color: var(--kimi-bg-light);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.kimi-brand-text {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.kimi-main-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kimi-nav-item {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  color: var(--kimi-muted);
+  transition: all 0.2s ease;
+  font-family: var(--kimi-font-body);
+}
+
+.kimi-nav-item:hover {
+  color: var(--kimi-text-light);
+}
+
+.kimi-nav-item.active {
+  color: var(--kimi-text-light);
+  font-weight: 700;
+}
+
+.kimi-nav-sep {
+  color: var(--kimi-border-light);
+  font-size: 12px;
+}
+
+.kimi-admin-link {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--kimi-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.kimi-admin-link:hover {
+  color: var(--kimi-text-light);
+}
+
+.kimi-app-content {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .kimi-app-header {
+    gap: 16px;
+    padding: 0 16px;
+  }
+  .kimi-main-nav {
+    display: none;
+  }
+}
+</style>
