@@ -86,6 +86,16 @@ public sealed class SecurityRepository : ISecurityRepository
         return _dbContext.Securities.AnyAsync(x => x.Ticker == ticker && x.Exchange == exchange, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Security>> GetActiveEntitiesAsync(int limit, CancellationToken cancellationToken)
+    {
+        return await _dbContext.Securities
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Ticker)
+            .ThenBy(x => x.Exchange)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
+
     public void Add(Security security)
     {
         _dbContext.Securities.Add(security);

@@ -44,6 +44,9 @@ public class EquityLensDbContext : DbContext
     // Jobs
     public DbSet<JobRun> JobRuns => Set<JobRun>();
 
+    // Auth
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -6,6 +6,9 @@ using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Services.MarketData;
 
+/// <summary>
+/// FinMind 市場資料提供者，提供台股（TWSE/TPEX）證券搜尋、解析與每日價格查詢。
+/// </summary>
 public sealed class FinMindMarketDataProvider : IMarketDataProvider
 {
     private static readonly HashSet<string> SupportedExchanges = new(StringComparer.OrdinalIgnoreCase)
@@ -17,16 +20,24 @@ public sealed class FinMindMarketDataProvider : IMarketDataProvider
     private readonly HttpClient _httpClient;
     private readonly FinMindOptions _options;
 
+    /// <summary>
+    /// 初始化 FinMind 市場資料提供者。
+    /// </summary>
+    /// <param name="httpClient">HTTP 客戶端。</param>
+    /// <param name="options">FinMind 設定選項。</param>
     public FinMindMarketDataProvider(HttpClient httpClient, IOptions<FinMindOptions> options)
     {
         _httpClient = httpClient;
         _options = options.Value;
     }
 
+    /// <inheritdoc />
     public string SourceName => "FinMind";
 
+    /// <inheritdoc />
     public bool Supports(string exchange) => SupportedExchanges.Contains(exchange);
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<ExternalSecuritySearchResult>> SearchSecuritiesAsync(
         string query,
         CancellationToken cancellationToken)
@@ -91,6 +102,22 @@ public sealed class FinMindMarketDataProvider : IMarketDataProvider
         return results.Take(20).ToList();
     }
 
+    /// <inheritdoc />
+    public async Task<ExternalSecuritySearchResult?> ResolveSecurityAsync(
+        string ticker,
+        string exchange,
+        CancellationToken cancellationToken)
+    {
+        var results = await SearchSecuritiesAsync(ticker, cancellationToken);
+        var normalizedTicker = ticker.Trim().ToUpperInvariant();
+        var normalizedExchange = exchange.Trim().ToUpperInvariant();
+
+        return results.FirstOrDefault(x =>
+            x.Ticker.Equals(normalizedTicker, StringComparison.OrdinalIgnoreCase) &&
+            x.Exchange.Equals(normalizedExchange, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<ImportedMarketPrice>> GetDailyPricesAsync(
         Security security,
         DateOnly from,

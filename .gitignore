@@ -53,3 +53,6 @@ opencode.jsonc
 .idea/
 .DS_Store
 Thumbs.db
+
+# Windows NTFS Alternate Data Streams
+*:Zone.Identifier

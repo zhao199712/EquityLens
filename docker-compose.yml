@@ -59,22 +59,19 @@ services:
       - equitylens
 
   garage-webui:
-    image: khairul169/garage-webui:1.1.0
+    image: khairul169/garage-webui:latest
     container_name: equitylens-garage-webui
+    environment:
+      CONFIG_PATH: /etc/garage.toml
+      API_BASE_URL: http://garage:3903
+      S3_ENDPOINT_URL: http://garage:3900
     ports:
       - "${GARAGE_WEBUI_PORT:-3909}:3909"
-    environment:
-      API_BASE_URL: "http://garage:3903"
-      S3_ENDPOINT_URL: "http://garage:3900"
     volumes:
       - ./infra/garage/garage.toml:/etc/garage.toml:ro
     depends_on:
-      - garage
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3909 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      garage:
+        condition: service_healthy
     networks:
       - equitylens
 

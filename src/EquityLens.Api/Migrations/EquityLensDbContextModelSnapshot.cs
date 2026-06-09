@@ -694,13 +694,20 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("security_id");
 
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc")
+                        .HasDefaultValueSql("now()");
+
                     b.Property<long?>("Volume")
                         .HasColumnType("bigint")
                         .HasColumnName("volume");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SecurityId", "Interval", "PriceTime");
+                    b.HasIndex("SecurityId", "Interval", "PriceTime")
+                        .IsUnique();
 
                     b.ToTable("market_price", (string)null);
                 });
@@ -865,6 +872,66 @@ namespace EquityLens.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("portfolio_snapshot", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("CreatedByIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)")
+                        .HasColumnName("created_by_ip");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<bool>("IsRevoked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_revoked");
+
+                    b.Property<bool>("IsUsed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_used");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("token");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("user_agent");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("refresh_token", (string)null);
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskMetric", b =>
@@ -1165,11 +1232,29 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("character varying(12)")
                         .HasColumnName("isin");
 
+                    b.Property<string>("MetadataSource")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("metadata_source");
+
+                    b.Property<DateTime?>("MetadataUpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("metadata_updated_at_utc");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("name");
+
+                    b.Property<string>("PricesSource")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("prices_source");
+
+                    b.Property<DateTime?>("PricesSyncedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("prices_synced_at_utc");
 
                     b.Property<string>("Sector")
                         .HasMaxLength(64)
@@ -1459,6 +1544,17 @@ namespace EquityLens.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Portfolio");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskMetric", b =>

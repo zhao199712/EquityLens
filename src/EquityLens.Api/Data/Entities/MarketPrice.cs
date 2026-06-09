@@ -14,6 +14,7 @@ public class MarketPrice
     public long? Volume { get; set; }
     public string? DataSource { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
     // Navigation
     public Security Security { get; set; } = null!;

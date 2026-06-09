@@ -5,33 +5,45 @@ using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Repositories.PortfolioHoldings;
 using EquityLens.Api.Repositories.Portfolios;
-using EquityLens.Api.Services.DemoUser;
+using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Services.Securities;
 
 namespace EquityLens.Api.Services.PortfolioHoldings;
 
+/// <summary>
+/// 投資組合持倉服務實現，提供持倉的查詢、建立、更新與刪除功能。
+/// </summary>
 public sealed class PortfolioHoldingService : IPortfolioHoldingService
 {
     private readonly EquityLensDbContext _dbContext;
-    private readonly IDemoUserContext _demoUserContext;
+    private readonly ICurrentUserContext _currentUser;
     private readonly IPortfolioRepository _portfolioRepository;
     private readonly IPortfolioHoldingRepository _holdingRepository;
     private readonly ISecurityService _securityService;
 
+    /// <summary>
+    /// 初始化投資組合持倉服務。
+    /// </summary>
+    /// <param name="dbContext">資料庫內容。</param>
+    /// <param name="currentUser">目前使用者內容。</param>
+    /// <param name="portfolioRepository">投資組合儲存庫。</param>
+    /// <param name="holdingRepository">持倉儲存庫。</param>
+    /// <param name="securityService">證券服務。</param>
     public PortfolioHoldingService(
         EquityLensDbContext dbContext,
-        IDemoUserContext demoUserContext,
+        ICurrentUserContext currentUser,
         IPortfolioRepository portfolioRepository,
         IPortfolioHoldingRepository holdingRepository,
         ISecurityService securityService)
     {
         _dbContext = dbContext;
-        _demoUserContext = demoUserContext;
+        _currentUser = currentUser;
         _portfolioRepository = portfolioRepository;
         _holdingRepository = holdingRepository;
         _securityService = securityService;
     }
 
+    /// <inheritdoc />
     public async Task<Result<IReadOnlyList<PortfolioHoldingResponse>>> ListAsync(
         Guid portfolioId,
         CancellationToken cancellationToken)
@@ -45,6 +57,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         return Result<IReadOnlyList<PortfolioHoldingResponse>>.Success(holdings);
     }
 
+    /// <inheritdoc />
     public async Task<Result<PortfolioHoldingResponse>> CreateAsync(
         Guid portfolioId,
         CreatePortfolioHoldingRequest request,
@@ -58,13 +71,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         var securityResult = await _securityService.EnsureAsync(new EnsureSecurityRequest(
             request.SecurityId,
             request.Ticker,
-            request.Exchange,
-            request.Name,
-            request.AssetType,
-            request.Currency,
-            request.Isin,
-            request.Sector,
-            request.Industry), cancellationToken);
+            request.Exchange), cancellationToken);
         if (!securityResult.IsSuccess)
         {
             return Result<PortfolioHoldingResponse>.Failure(securityResult.ErrorCode!, securityResult.ErrorMessage!);
@@ -95,6 +102,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         return Result<PortfolioHoldingResponse>.Success(response!);
     }
 
+    /// <inheritdoc />
     public async Task<Result<bool>> UpdateAsync(
         Guid portfolioId,
         Guid holdingId,
@@ -122,6 +130,7 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         return Result<bool>.Success(true);
     }
 
+    /// <inheritdoc />
     public async Task<Result<bool>> DeleteAsync(Guid portfolioId, Guid holdingId, CancellationToken cancellationToken)
     {
         if (!await PortfolioExistsAsync(portfolioId, cancellationToken))
@@ -141,11 +150,13 @@ public sealed class PortfolioHoldingService : IPortfolioHoldingService
         return Result<bool>.Success(true);
     }
 
+    // 驗證投資組合是否存在且屬於當前使用者
     private Task<bool> PortfolioExistsAsync(Guid portfolioId, CancellationToken cancellationToken)
     {
-        return _portfolioRepository.ActiveExistsAsync(portfolioId, _demoUserContext.UserId, cancellationToken);
+        return _portfolioRepository.ActiveExistsAsync(portfolioId, _currentUser.UserId, cancellationToken);
     }
 
+    // 將貨幣代碼標準化：空白時預設為 USD，否則轉為大寫
     private static string NormalizeCurrency(string? currency)
     {
         return string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();

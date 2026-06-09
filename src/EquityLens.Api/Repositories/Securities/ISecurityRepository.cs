@@ -11,5 +11,6 @@ public interface ISecurityRepository
     Task<Security?> GetEntityByTickerExchangeAsync(string ticker, string exchange, CancellationToken cancellationToken);
     Task<bool> ActiveExistsAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> TickerExchangeExistsAsync(string ticker, string exchange, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Security>> GetActiveEntitiesAsync(int limit, CancellationToken cancellationToken);
     void Add(Security security);
 }

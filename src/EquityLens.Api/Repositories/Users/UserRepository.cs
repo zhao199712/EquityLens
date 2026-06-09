@@ -18,6 +18,11 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users.AnyAsync(x => x.Id == id, cancellationToken);
     }
 
+    public Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken)
+    {
+        return _dbContext.Users.FirstOrDefaultAsync(x => x.Email == email, cancellationToken);
+    }
+
     public void Add(AppUser user)
     {
         _dbContext.Users.Add(user);

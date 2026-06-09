@@ -6,6 +6,9 @@ using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Services.MarketData;
 
+/// <summary>
+/// Alpha Vantage 市場資料提供者，提供美股（NASDAQ/NYSE/AMEX）證券搜尋、解析與每日價格查詢。
+/// </summary>
 public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
 {
     private static readonly HashSet<string> SupportedExchanges = new(StringComparer.OrdinalIgnoreCase)
@@ -19,16 +22,24 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
     private readonly HttpClient _httpClient;
     private readonly AlphaVantageOptions _options;
 
+    /// <summary>
+    /// 初始化 Alpha Vantage 市場資料提供者。
+    /// </summary>
+    /// <param name="httpClient">HTTP 客戶端。</param>
+    /// <param name="options">Alpha Vantage 設定選項。</param>
     public AlphaVantageMarketDataProvider(HttpClient httpClient, IOptions<AlphaVantageOptions> options)
     {
         _httpClient = httpClient;
         _options = options.Value;
     }
 
+    /// <inheritdoc />
     public string SourceName => "AlphaVantage";
 
+    /// <inheritdoc />
     public bool Supports(string exchange) => SupportedExchanges.Contains(exchange);
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<ExternalSecuritySearchResult>> SearchSecuritiesAsync(
         string query,
         CancellationToken cancellationToken)
@@ -81,6 +92,22 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
         return results;
     }
 
+    /// <inheritdoc />
+    public async Task<ExternalSecuritySearchResult?> ResolveSecurityAsync(
+        string ticker,
+        string exchange,
+        CancellationToken cancellationToken)
+    {
+        var results = await SearchSecuritiesAsync(ticker, cancellationToken);
+        var normalizedTicker = ticker.Trim().ToUpperInvariant();
+        var normalizedExchange = NormalizeExchange(exchange);
+
+        return results.FirstOrDefault(x =>
+            x.Ticker.Equals(normalizedTicker, StringComparison.OrdinalIgnoreCase) &&
+            x.Exchange.Equals(normalizedExchange, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<ImportedMarketPrice>> GetDailyPricesAsync(
         Security security,
         DateOnly from,
@@ -95,8 +122,8 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
         var url = QueryHelpers.AddQueryString("/query", new Dictionary<string, string?>
         {
             ["function"] = "TIME_SERIES_DAILY",
-            ["symbol"] = security.Ticker,
-            ["outputsize"] = "full",
+            ["symbol"] = ToAlphaVantageSymbol(security.Ticker),
+            ["outputsize"] = "compact",
             ["apikey"] = _options.ApiKey
         });
 
@@ -105,6 +132,21 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        if (document.RootElement.TryGetProperty("Information", out var info))
+        {
+            throw new InvalidOperationException($"Alpha Vantage: {info.GetString()}");
+        }
+
+        if (document.RootElement.TryGetProperty("Note", out var note))
+        {
+            throw new InvalidOperationException($"Alpha Vantage: {note.GetString()}");
+        }
+
+        if (document.RootElement.TryGetProperty("Error Message", out var error))
+        {
+            throw new InvalidOperationException($"Alpha Vantage: {error.GetString()}");
+        }
 
         if (!document.RootElement.TryGetProperty("Time Series (Daily)", out var series))
         {
@@ -154,5 +196,18 @@ public sealed class AlphaVantageMarketDataProvider : IMarketDataProvider
         return string.Equals(region, "United States", StringComparison.OrdinalIgnoreCase)
             ? "US"
             : string.IsNullOrWhiteSpace(region) ? "US" : region.Trim().ToUpperInvariant().Replace(" ", "_");
+    }
+
+    private static string ToAlphaVantageSymbol(string ticker)
+    {
+        var normalized = ticker.Trim().ToUpperInvariant();
+
+        // BRKB / BRK.B 映射
+        if (normalized == "BRKB")
+        {
+            return "BRK.B";
+        }
+
+        return normalized;
     }
 }

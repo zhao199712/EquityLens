@@ -5,30 +5,49 @@ using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Repositories.Securities;
 using EquityLens.Api.Services.MarketData;
+using EquityLens.Api.Services.Redis;
 
 namespace EquityLens.Api.Services.Securities;
 
+/// <summary>
+/// 證券資料服務實現，提供證券查詢、搜尋、解析與刷新功能。
+/// 所有證券資料以外部 API 為唯一事實來源。
+/// </summary>
 public sealed class SecurityService : ISecurityService
 {
+    private static readonly TimeSpan MetadataStaleThreshold = TimeSpan.FromDays(7);
+
     private readonly EquityLensDbContext _dbContext;
     private readonly ISecurityRepository _securityRepository;
     private readonly IEnumerable<IMarketDataProvider> _marketDataProviders;
+    private readonly IRedisCacheService _redisCache;
 
+    /// <summary>
+    /// 初始化證券服務。
+    /// </summary>
+    /// <param name="dbContext">資料庫內容。</param>
+    /// <param name="securityRepository">證券儲存庫。</param>
+    /// <param name="marketDataProviders">市場資料提供者集合。</param>
+    /// <param name="redisCache">Redis 快取服務。</param>
     public SecurityService(
         EquityLensDbContext dbContext,
         ISecurityRepository securityRepository,
-        IEnumerable<IMarketDataProvider> marketDataProviders)
+        IEnumerable<IMarketDataProvider> marketDataProviders,
+        IRedisCacheService redisCache)
     {
         _dbContext = dbContext;
         _securityRepository = securityRepository;
         _marketDataProviders = marketDataProviders;
+        _redisCache = redisCache;
     }
 
+    /// <inheritdoc />
     public Task<IReadOnlyList<SecurityResponse>> SearchAsync(string? query, CancellationToken cancellationToken)
     {
         return _securityRepository.SearchAsync(query, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<SecuritySearchResult>> SearchAvailableAsync(
         string? query,
         CancellationToken cancellationToken)
@@ -39,6 +58,14 @@ public sealed class SecurityService : ISecurityService
         }
 
         var normalizedQuery = query.Trim();
+        var cacheKey = $"equitylens:cache:security-search:{normalizedQuery}";
+
+        var cached = await _redisCache.GetAsync<IReadOnlyList<SecuritySearchResult>>(cacheKey, cancellationToken);
+        if (cached is not null)
+        {
+            return cached;
+        }
+
         var localResults = (await _securityRepository.SearchAsync(normalizedQuery, cancellationToken))
             .Select(x => new SecuritySearchResult(
                 x.Id,
@@ -54,6 +81,7 @@ public sealed class SecurityService : ISecurityService
             .ToList();
 
         var results = new List<SecuritySearchResult>(localResults);
+
         foreach (var provider in _marketDataProviders)
         {
             IReadOnlyList<ExternalSecuritySearchResult> externalResults;
@@ -87,15 +115,20 @@ public sealed class SecurityService : ISecurityService
                 x.Source)));
         }
 
-        return results
+        var finalResults = results
             .GroupBy(x => new { x.Ticker, x.Exchange })
             .Select(x => x.OrderByDescending(result => result.SecurityId.HasValue).First())
             .OrderBy(x => x.Ticker)
             .ThenBy(x => x.Exchange)
             .Take(25)
             .ToList();
+
+        await _redisCache.SetAsync(cacheKey, finalResults, cancellationToken: cancellationToken);
+
+        return finalResults;
     }
 
+    /// <inheritdoc />
     public async Task<Result<SecurityResponse>> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         var security = await _securityRepository.GetAsync(id, cancellationToken);
@@ -104,45 +137,7 @@ public sealed class SecurityService : ISecurityService
             : Result<SecurityResponse>.Success(security);
     }
 
-    public async Task<Result<SecurityResponse>> CreateAsync(
-        CreateSecurityRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(request.Ticker) ||
-            string.IsNullOrWhiteSpace(request.Exchange) ||
-            string.IsNullOrWhiteSpace(request.Name))
-        {
-            return Result<SecurityResponse>.Failure("security.required_fields", "Ticker, exchange, and name are required.");
-        }
-
-        var ticker = request.Ticker.Trim().ToUpperInvariant();
-        var exchange = request.Exchange.Trim().ToUpperInvariant();
-
-        if (await _securityRepository.TickerExchangeExistsAsync(ticker, exchange, cancellationToken))
-        {
-            return Result<SecurityResponse>.Failure("security.duplicate", "Security already exists for ticker and exchange.");
-        }
-
-        var security = new Security
-        {
-            Ticker = ticker,
-            Exchange = exchange,
-            Name = request.Name.Trim(),
-            AssetType = string.IsNullOrWhiteSpace(request.AssetType) ? null : request.AssetType.Trim(),
-            Currency = NormalizeCurrency(request.Currency),
-            Isin = string.IsNullOrWhiteSpace(request.Isin) ? null : request.Isin.Trim().ToUpperInvariant(),
-            Sector = string.IsNullOrWhiteSpace(request.Sector) ? null : request.Sector.Trim(),
-            Industry = string.IsNullOrWhiteSpace(request.Industry) ? null : request.Industry.Trim(),
-            IsActive = true
-        };
-
-        _securityRepository.Add(security);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        var response = await _securityRepository.GetAsync(security.Id, cancellationToken);
-        return Result<SecurityResponse>.Success(response!);
-    }
-
+    /// <inheritdoc />
     public async Task<Result<Security>> EnsureAsync(
         EnsureSecurityRequest request,
         CancellationToken cancellationToken)
@@ -153,31 +148,119 @@ public sealed class SecurityService : ISecurityService
             : Result<Security>.Failure(result.ErrorCode!, result.ErrorMessage!);
     }
 
+    /// <inheritdoc />
     public async Task<Result<ResolveSecurityResponse>> ResolveAsync(
         ResolveSecurityRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await EnsureCoreAsync(new EnsureSecurityRequest(
-            request.SecurityId,
-            request.Ticker,
-            request.Exchange,
-            request.Name,
-            request.AssetType,
-            request.Currency,
-            request.Isin,
-            request.Sector,
-            request.Industry), cancellationToken);
-        if (!result.IsSuccess)
+        Security? security = null;
+
+        if (request.SecurityId.HasValue)
         {
-            return Result<ResolveSecurityResponse>.Failure(result.ErrorCode!, result.ErrorMessage!);
+            security = await _securityRepository.GetEntityAsync(request.SecurityId.Value, cancellationToken);
+            if (security is null)
+            {
+                return Result<ResolveSecurityResponse>.Failure("security.not_found", "Security was not found.");
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(request.Ticker) && !string.IsNullOrWhiteSpace(request.Exchange))
+        {
+            var ticker = request.Ticker.Trim().ToUpperInvariant();
+            var exchange = request.Exchange.Trim().ToUpperInvariant();
+            security = await _securityRepository.GetEntityByTickerExchangeAsync(ticker, exchange, cancellationToken);
+        }
+        else
+        {
+            return Result<ResolveSecurityResponse>.Failure("security.required_fields", "SecurityId or ticker and exchange are required.");
         }
 
-        if (result.Value!.Created)
+        if (security is not null)
+        {
+            if (IsMetadataStale(security))
+            {
+                await TryRefreshMetadataAsync(security, cancellationToken);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            return Result<ResolveSecurityResponse>.Success(ToResolveResponse(security, false));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Ticker) || string.IsNullOrWhiteSpace(request.Exchange))
+        {
+            return Result<ResolveSecurityResponse>.Failure("security.required_fields", "Ticker and exchange are required to create a new security.");
+        }
+
+        var newTicker = request.Ticker.Trim().ToUpperInvariant();
+        var newExchange = request.Exchange.Trim().ToUpperInvariant();
+
+        security = await TryCreateFromExternalAsync(newTicker, newExchange, cancellationToken);
+        if (security is null)
+        {
+            return Result<ResolveSecurityResponse>.Failure("security.not_found", "Security was not found in external providers.");
+        }
+
+        _securityRepository.Add(security);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _redisCache.RemoveByPatternAsync("equitylens:cache:security-search:*");
+
+        return Result<ResolveSecurityResponse>.Success(ToResolveResponse(security, true));
+    }
+
+    /// <inheritdoc />
+    public async Task<RefreshSecuritiesResponse> RefreshAllAsync(
+        bool force,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var candidates = await _securityRepository.GetActiveEntitiesAsync(limit, cancellationToken);
+
+        var updated = 0;
+        var skipped = 0;
+        var failures = new List<RefreshSecurityFailureResponse>();
+
+        foreach (var security in candidates)
+        {
+            if (!force && !IsMetadataStale(security))
+            {
+                skipped++;
+                continue;
+            }
+
+            try
+            {
+                var refreshed = await TryRefreshMetadataAsync(security, cancellationToken);
+                if (refreshed)
+                {
+                    updated++;
+                }
+                else
+                {
+                    skipped++;
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(new RefreshSecurityFailureResponse(
+                    security.Id,
+                    security.Ticker,
+                    security.Exchange,
+                    ex.Message));
+            }
+        }
+
+        if (updated > 0)
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        return Result<ResolveSecurityResponse>.Success(ToResolveResponse(result.Value.Security, result.Value.Created));
+        return new RefreshSecuritiesResponse(
+            candidates.Count,
+            candidates.Count,
+            updated,
+            skipped,
+            failures.Count,
+            failures);
     }
 
     private async Task<Result<EnsureSecurityResult>> EnsureCoreAsync(
@@ -205,22 +288,123 @@ public sealed class SecurityService : ISecurityService
             return Result<EnsureSecurityResult>.Success(new EnsureSecurityResult(security, false));
         }
 
-        security = new Security
+        security = await TryCreateFromExternalAsync(ticker, exchange, cancellationToken);
+        if (security is null)
         {
-            Id = Guid.NewGuid(),
-            Ticker = ticker,
-            Exchange = exchange,
-            Name = string.IsNullOrWhiteSpace(request.Name) ? ticker : request.Name.Trim(),
-            AssetType = string.IsNullOrWhiteSpace(request.AssetType) ? null : request.AssetType.Trim(),
-            Currency = NormalizeCurrency(request.Currency),
-            Isin = string.IsNullOrWhiteSpace(request.Isin) ? null : request.Isin.Trim().ToUpperInvariant(),
-            Sector = string.IsNullOrWhiteSpace(request.Sector) ? null : request.Sector.Trim(),
-            Industry = string.IsNullOrWhiteSpace(request.Industry) ? null : request.Industry.Trim(),
-            IsActive = true
-        };
+            return Result<EnsureSecurityResult>.Failure("security.not_found", "Security was not found in external providers.");
+        }
 
         _securityRepository.Add(security);
         return Result<EnsureSecurityResult>.Success(new EnsureSecurityResult(security, true));
+    }
+
+    private static bool IsMetadataStale(Security security)
+    {
+        if (security.MetadataUpdatedAtUtc is null)
+        {
+            return true;
+        }
+
+        return DateTime.UtcNow - security.MetadataUpdatedAtUtc.Value > MetadataStaleThreshold;
+    }
+
+    private async Task<bool> TryRefreshMetadataAsync(Security security, CancellationToken cancellationToken)
+    {
+        var provider = _marketDataProviders.FirstOrDefault(x => x.Supports(security.Exchange));
+        if (provider is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var external = await provider.ResolveSecurityAsync(security.Ticker, security.Exchange, cancellationToken);
+            if (external is null)
+            {
+                return false;
+            }
+
+            ApplyExternalMetadata(security, external, provider.SourceName);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<Security?> TryCreateFromExternalAsync(
+        string ticker,
+        string exchange,
+        CancellationToken cancellationToken)
+    {
+        var provider = _marketDataProviders.FirstOrDefault(x => x.Supports(exchange));
+        if (provider is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var external = await provider.ResolveSecurityAsync(ticker, exchange, cancellationToken);
+            if (external is null)
+            {
+                return null;
+            }
+
+            var security = new Security
+            {
+                Id = Guid.NewGuid(),
+                Ticker = ticker,
+                Exchange = exchange,
+                IsActive = true,
+                MetadataUpdatedAtUtc = DateTime.UtcNow,
+                MetadataSource = provider.SourceName
+            };
+
+            ApplyExternalMetadata(security, external, provider.SourceName);
+            return security;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void ApplyExternalMetadata(Security security, ExternalSecuritySearchResult external, string sourceName)
+    {
+        if (!string.IsNullOrWhiteSpace(external.Name))
+        {
+            security.Name = external.Name.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.AssetType))
+        {
+            security.AssetType = external.AssetType.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.Currency))
+        {
+            security.Currency = external.Currency.Trim().ToUpperInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.Isin))
+        {
+            security.Isin = external.Isin.Trim().ToUpperInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.Sector))
+        {
+            security.Sector = external.Sector.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.Industry))
+        {
+            security.Industry = external.Industry.Trim();
+        }
+
+        security.MetadataUpdatedAtUtc = DateTime.UtcNow;
+        security.MetadataSource = sourceName;
     }
 
     private static ResolveSecurityResponse ToResolveResponse(Security security, bool created)
@@ -236,11 +420,6 @@ public sealed class SecurityService : ISecurityService
             security.Isin,
             security.Sector,
             security.Industry);
-    }
-
-    private static string NormalizeCurrency(string? currency)
-    {
-        return string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();
     }
 
     private sealed record EnsureSecurityResult(Security Security, bool Created);

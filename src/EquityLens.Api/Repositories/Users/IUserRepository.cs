@@ -5,5 +5,6 @@ namespace EquityLens.Api.Repositories.Users;
 public interface IUserRepository
 {
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
+    Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken);
     void Add(AppUser user);
 }

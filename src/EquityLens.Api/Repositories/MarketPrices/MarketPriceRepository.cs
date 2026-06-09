@@ -97,6 +97,8 @@ public sealed class MarketPriceRepository : IMarketPriceRepository
         var inserted = 0;
         var updated = 0;
 
+        var now = DateTime.UtcNow;
+
         foreach (var price in prices)
         {
             if (existingPrices.TryGetValue(price.PriceTime, out var existing))
@@ -108,10 +110,12 @@ public sealed class MarketPriceRepository : IMarketPriceRepository
                 existing.AdjustedClose = price.AdjustedClose;
                 existing.Volume = price.Volume;
                 existing.DataSource = price.DataSource;
+                existing.UpdatedAtUtc = now;
                 updated++;
                 continue;
             }
 
+            price.UpdatedAtUtc = now;
             _dbContext.MarketPrices.Add(price);
             inserted++;
         }
