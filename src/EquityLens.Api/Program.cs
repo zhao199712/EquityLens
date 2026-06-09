@@ -138,7 +138,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<IPasswordHasher<AppUser>>();
+builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 
 var app = builder.Build();
 
