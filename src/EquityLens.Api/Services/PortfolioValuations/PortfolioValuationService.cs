@@ -3,7 +3,7 @@ using EquityLens.Api.Contracts.Portfolios;
 using EquityLens.Api.Domain.Calculations;
 using EquityLens.Api.Repositories.MarketPrices;
 using EquityLens.Api.Repositories.Portfolios;
-using EquityLens.Api.Services.DemoUser;
+using EquityLens.Api.Services.CurrentUser;
 
 namespace EquityLens.Api.Services.PortfolioValuations;
 
@@ -14,22 +14,22 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
 {
     private const string DailyInterval = "1d";
 
-    private readonly IDemoUserContext _demoUserContext;
+    private readonly ICurrentUserContext _currentUser;
     private readonly IPortfolioRepository _portfolioRepository;
     private readonly IMarketPriceRepository _marketPriceRepository;
 
     /// <summary>
     /// 初始化投資組合估值服務。
     /// </summary>
-    /// <param name="demoUserContext">演示使用者內容。</param>
+    /// <param name="currentUser">目前使用者內容。</param>
     /// <param name="portfolioRepository">投資組合儲存庫。</param>
     /// <param name="marketPriceRepository">市場價格儲存庫。</param>
     public PortfolioValuationService(
-        IDemoUserContext demoUserContext,
+        ICurrentUserContext currentUser,
         IPortfolioRepository portfolioRepository,
         IMarketPriceRepository marketPriceRepository)
     {
-        _demoUserContext = demoUserContext;
+        _currentUser = currentUser;
         _portfolioRepository = portfolioRepository;
         _marketPriceRepository = marketPriceRepository;
     }
@@ -41,7 +41,7 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
     {
         var portfolio = await _portfolioRepository.GetDetailAsync(
             portfolioId,
-            _demoUserContext.UserId,
+            _currentUser.UserId,
             cancellationToken);
 
         if (portfolio is null)

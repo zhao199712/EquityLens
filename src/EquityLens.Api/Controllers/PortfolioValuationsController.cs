@@ -1,5 +1,6 @@
 using EquityLens.Api.Contracts.Portfolios;
 using EquityLens.Api.Services.PortfolioValuations;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EquityLens.Api.Controllers;
@@ -7,6 +8,7 @@ namespace EquityLens.Api.Controllers;
 /// <summary>
 /// 投資組合估值控制器，提供投資組合的市場估值計算功能。
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/portfolios/{portfolioId:guid}/valuation")]
 public class PortfolioValuationsController : ApiControllerBase

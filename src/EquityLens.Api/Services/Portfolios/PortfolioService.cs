@@ -3,7 +3,7 @@ using EquityLens.Api.Contracts.Portfolios;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Repositories.Portfolios;
-using EquityLens.Api.Services.DemoUser;
+using EquityLens.Api.Services.CurrentUser;
 
 namespace EquityLens.Api.Services.Portfolios;
 
@@ -13,36 +13,35 @@ namespace EquityLens.Api.Services.Portfolios;
 public sealed class PortfolioService : IPortfolioService
 {
     private readonly EquityLensDbContext _dbContext;
-    private readonly IDemoUserContext _demoUserContext;
+    private readonly ICurrentUserContext _currentUser;
     private readonly IPortfolioRepository _portfolioRepository;
 
     /// <summary>
     /// 初始化投資組合服務。
     /// </summary>
     /// <param name="dbContext">資料庫內容。</param>
-    /// <param name="demoUserContext">演示使用者內容。</param>
+    /// <param name="currentUser">目前使用者內容。</param>
     /// <param name="portfolioRepository">投資組合儲存庫。</param>
     public PortfolioService(
         EquityLensDbContext dbContext,
-        IDemoUserContext demoUserContext,
+        ICurrentUserContext currentUser,
         IPortfolioRepository portfolioRepository)
     {
         _dbContext = dbContext;
-        _demoUserContext = demoUserContext;
+        _currentUser = currentUser;
         _portfolioRepository = portfolioRepository;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<PortfolioListItemResponse>> ListAsync(CancellationToken cancellationToken)
     {
-        await _demoUserContext.EnsureUserAsync(cancellationToken);
-        return await _portfolioRepository.ListActiveAsync(_demoUserContext.UserId, cancellationToken);
+        return await _portfolioRepository.ListActiveAsync(_currentUser.UserId, cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task<Result<PortfolioDetailResponse>> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        var portfolio = await _portfolioRepository.GetDetailAsync(id, _demoUserContext.UserId, cancellationToken);
+        var portfolio = await _portfolioRepository.GetDetailAsync(id, _currentUser.UserId, cancellationToken);
         return portfolio is null
             ? Result<PortfolioDetailResponse>.Failure("portfolio.not_found", "Portfolio was not found.")
             : Result<PortfolioDetailResponse>.Success(portfolio);
@@ -58,12 +57,10 @@ public sealed class PortfolioService : IPortfolioService
             return Result<PortfolioDetailResponse>.Failure("portfolio.name_required", "Portfolio name is required.");
         }
 
-        await _demoUserContext.EnsureUserAsync(cancellationToken);
-
         var now = DateTime.UtcNow;
         var portfolio = new Portfolio
         {
-            OwnerUserId = _demoUserContext.UserId,
+            OwnerUserId = _currentUser.UserId,
             Name = request.Name.Trim(),
             Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
             BaseCurrency = NormalizeCurrency(request.BaseCurrency),
@@ -75,7 +72,7 @@ public sealed class PortfolioService : IPortfolioService
         _portfolioRepository.Add(portfolio);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var response = await _portfolioRepository.GetDetailAsync(portfolio.Id, _demoUserContext.UserId, cancellationToken);
+        var response = await _portfolioRepository.GetDetailAsync(portfolio.Id, _currentUser.UserId, cancellationToken);
         return Result<PortfolioDetailResponse>.Success(response!);
     }
 
@@ -90,7 +87,7 @@ public sealed class PortfolioService : IPortfolioService
             return Result<bool>.Failure("portfolio.name_required", "Portfolio name is required.");
         }
 
-        var portfolio = await _portfolioRepository.GetActiveAsync(id, _demoUserContext.UserId, cancellationToken);
+        var portfolio = await _portfolioRepository.GetActiveAsync(id, _currentUser.UserId, cancellationToken);
         if (portfolio is null)
         {
             return Result<bool>.Failure("portfolio.not_found", "Portfolio was not found.");
@@ -108,7 +105,7 @@ public sealed class PortfolioService : IPortfolioService
     /// <inheritdoc />
     public async Task<Result<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
-        var portfolio = await _portfolioRepository.GetActiveAsync(id, _demoUserContext.UserId, cancellationToken);
+        var portfolio = await _portfolioRepository.GetActiveAsync(id, _currentUser.UserId, cancellationToken);
         if (portfolio is null)
         {
             return Result<bool>.Failure("portfolio.not_found", "Portfolio was not found.");

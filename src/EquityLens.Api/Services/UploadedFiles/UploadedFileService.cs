@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using EquityLens.Api.Contracts.Files;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
-using EquityLens.Api.Services.DemoUser;
+using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Services.ObjectStorage;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,31 +14,30 @@ namespace EquityLens.Api.Services.UploadedFiles;
 public sealed class UploadedFileService : IUploadedFileService
 {
     private readonly EquityLensDbContext _dbContext;
-    private readonly IDemoUserContext _demoUserContext;
+    private readonly ICurrentUserContext _currentUser;
     private readonly IObjectStorageService _objectStorage;
 
     /// <summary>
     /// 初始化已上傳檔案服務。
     /// </summary>
     /// <param name="dbContext">資料庫內容。</param>
-    /// <param name="demoUserContext">演示使用者內容。</param>
+    /// <param name="currentUser">目前使用者內容。</param>
     /// <param name="objectStorage">物件儲存服務。</param>
     public UploadedFileService(
         EquityLensDbContext dbContext,
-        IDemoUserContext demoUserContext,
+        ICurrentUserContext currentUser,
         IObjectStorageService objectStorage)
     {
         _dbContext = dbContext;
-        _demoUserContext = demoUserContext;
+        _currentUser = currentUser;
         _objectStorage = objectStorage;
     }
 
     /// <inheritdoc />
     public async Task<UploadedFileResponse> UploadAsync(IFormFile file, CancellationToken cancellationToken = default)
     {
-        await _demoUserContext.EnsureUserAsync(cancellationToken);
 
-        var userId = _demoUserContext.UserId;
+        var userId = _currentUser.UserId;
         var objectKey = BuildObjectKey(userId, file.FileName);
 
         // 計算 SHA256 雜湊並上傳至物件儲存
@@ -77,11 +76,10 @@ public sealed class UploadedFileService : IUploadedFileService
     /// <inheritdoc />
     public async Task<IReadOnlyList<UploadedFileResponse>> ListAsync(CancellationToken cancellationToken = default)
     {
-        await _demoUserContext.EnsureUserAsync(cancellationToken);
 
         var files = await _dbContext.UploadedFiles
             .AsNoTracking()
-            .Where(x => x.UploadedByUserId == _demoUserContext.UserId)
+            .Where(x => x.UploadedByUserId == _currentUser.UserId)
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
@@ -91,11 +89,10 @@ public sealed class UploadedFileService : IUploadedFileService
     /// <inheritdoc />
     public async Task<UploadedFileResponse?> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await _demoUserContext.EnsureUserAsync(cancellationToken);
 
         var file = await _dbContext.UploadedFiles
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id && x.UploadedByUserId == _demoUserContext.UserId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == id && x.UploadedByUserId == _currentUser.UserId, cancellationToken);
 
         return file is null ? null : ToResponse(file);
     }
@@ -103,11 +100,10 @@ public sealed class UploadedFileService : IUploadedFileService
     /// <inheritdoc />
     public async Task<PresignedUrlResponse?> CreateDownloadUrlAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await _demoUserContext.EnsureUserAsync(cancellationToken);
 
         var file = await _dbContext.UploadedFiles
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id && x.UploadedByUserId == _demoUserContext.UserId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == id && x.UploadedByUserId == _currentUser.UserId, cancellationToken);
 
         if (file is null)
         {
@@ -122,10 +118,9 @@ public sealed class UploadedFileService : IUploadedFileService
     /// <inheritdoc />
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await _demoUserContext.EnsureUserAsync(cancellationToken);
 
         var file = await _dbContext.UploadedFiles
-            .FirstOrDefaultAsync(x => x.Id == id && x.UploadedByUserId == _demoUserContext.UserId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == id && x.UploadedByUserId == _currentUser.UserId, cancellationToken);
 
         if (file is null)
         {

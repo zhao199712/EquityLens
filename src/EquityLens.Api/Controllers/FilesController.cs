@@ -1,5 +1,6 @@
 using EquityLens.Api.Contracts.Files;
 using EquityLens.Api.Services.UploadedFiles;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EquityLens.Api.Controllers;
@@ -7,6 +8,7 @@ namespace EquityLens.Api.Controllers;
 /// <summary>
 /// 檔案控制器，提供檔案上傳、查詢、取得下載 URL 與刪除功能。
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/files")]
 public sealed class FilesController : ControllerBase

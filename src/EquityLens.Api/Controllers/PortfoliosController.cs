@@ -1,5 +1,6 @@
 using EquityLens.Api.Contracts.Portfolios;
 using EquityLens.Api.Services.Portfolios;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EquityLens.Api.Controllers;
@@ -7,6 +8,7 @@ namespace EquityLens.Api.Controllers;
 /// <summary>
 /// 投資組合控制器，提供投資組合的查詢、建立、更新與刪除功能。
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class PortfoliosController : ApiControllerBase
