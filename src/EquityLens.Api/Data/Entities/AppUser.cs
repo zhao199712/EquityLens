@@ -14,5 +14,6 @@ public class AppUser
     // Navigation
     public ICollection<Portfolio> Portfolios { get; set; } = [];
     public ICollection<UploadedFile> UploadedFiles { get; set; } = [];
+    public ICollection<FinancialFiling> FinancialFilings { get; set; } = [];
     public ICollection<JobRun> JobRuns { get; set; } = [];
 }

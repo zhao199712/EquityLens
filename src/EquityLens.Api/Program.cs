@@ -27,6 +27,7 @@ using EquityLens.Api.Services.PortfolioValuations;
 using EquityLens.Api.Services.Redis;
 using EquityLens.Api.Services.Securities;
 using EquityLens.Api.Services.UploadedFiles;
+using EquityLens.Api.Services.FinancialFilings;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 
@@ -75,6 +76,7 @@ builder.Services.AddScoped<IPortfolioHoldingService, PortfolioHoldingService>();
 builder.Services.AddScoped<IPortfolioValuationService, PortfolioValuationService>();
 builder.Services.AddScoped<IMarketPriceService, MarketPriceService>();
 builder.Services.AddScoped<IUploadedFileService, UploadedFileService>();
+builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();
 
 builder.Services.AddHttpClient<AlphaVantageMarketDataProvider>((sp, client) =>
 {

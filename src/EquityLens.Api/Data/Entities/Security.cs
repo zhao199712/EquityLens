@@ -21,4 +21,5 @@ public class Security
     public ICollection<PortfolioHolding> Holdings { get; set; } = [];
     public ICollection<MarketPrice> Prices { get; set; } = [];
     public ICollection<FinancialStatement> FinancialStatements { get; set; } = [];
+    public ICollection<FinancialFiling> FinancialFilings { get; set; } = [];
 }

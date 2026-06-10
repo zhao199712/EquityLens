@@ -40,9 +40,16 @@ public class EquityLensDbContext : DbContext
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();
     public DbSet<DocumentEmbedding> DocumentEmbeddings => Set<DocumentEmbedding>();
+    public DbSet<FinancialFiling> FinancialFilings => Set<FinancialFiling>();
 
     // Jobs
     public DbSet<JobRun> JobRuns => Set<JobRun>();
+
+    // Exchange Rates
+    public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
+
+    // Transactions
+    public DbSet<PortfolioTransaction> PortfolioTransactions => Set<PortfolioTransaction>();
 
     // Auth
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();

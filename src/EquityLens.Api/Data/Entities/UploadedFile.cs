@@ -17,5 +17,6 @@ public class UploadedFile
     // Navigation
     public AppUser UploadedByUser { get; set; } = null!;
     public ICollection<Document> Documents { get; set; } = [];
+    public ICollection<FinancialFiling> FinancialFilings { get; set; } = [];
     public ICollection<JobRun> JobRuns { get; set; } = [];
 }
