@@ -62,6 +62,12 @@ public sealed class PortfolioHoldingRepository : IPortfolioHoldingRepository
             .SingleOrDefaultAsync(x => x.Id == holdingId && x.PortfolioId == portfolioId, cancellationToken);
     }
 
+    public Task<PortfolioHolding?> GetBySecurityIdAsync(Guid portfolioId, Guid securityId, CancellationToken cancellationToken)
+    {
+        return _dbContext.PortfolioHoldings
+            .SingleOrDefaultAsync(x => x.PortfolioId == portfolioId && x.SecurityId == securityId, cancellationToken);
+    }
+
     public Task<bool> SecurityHoldingExistsAsync(Guid portfolioId, Guid securityId, CancellationToken cancellationToken)
     {
         return _dbContext.PortfolioHoldings

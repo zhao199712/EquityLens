@@ -30,5 +30,7 @@ public class PortfolioHoldingConfiguration : IEntityTypeConfiguration<PortfolioH
             .WithMany(s => s.Holdings)
             .HasForeignKey(x => x.SecurityId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => new { x.PortfolioId, x.SecurityId }).IsUnique();
     }
 }
