@@ -9,5 +9,6 @@ public interface IPortfolioRepository
     Task<PortfolioDetailResponse?> GetDetailAsync(Guid id, Guid ownerUserId, CancellationToken cancellationToken);
     Task<Portfolio?> GetActiveAsync(Guid id, Guid ownerUserId, CancellationToken cancellationToken);
     Task<bool> ActiveExistsAsync(Guid id, Guid ownerUserId, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameAsync(Guid ownerUserId, string name, Guid? excludeId, CancellationToken cancellationToken);
     void Add(Portfolio portfolio);
 }

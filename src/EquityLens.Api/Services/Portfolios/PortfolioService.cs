@@ -57,13 +57,25 @@ public sealed class PortfolioService : IPortfolioService
             return Result<PortfolioDetailResponse>.Failure("portfolio.name_required", "Portfolio name is required.");
         }
 
+        var name = request.Name.Trim();
+        if (await _portfolioRepository.ExistsByNameAsync(_currentUser.UserId, name, null, cancellationToken))
+        {
+            return Result<PortfolioDetailResponse>.Failure("portfolio.name_duplicate", "A portfolio with this name already exists.");
+        }
+
+        var currencyResult = NormalizeCurrency(request.BaseCurrency);
+        if (!currencyResult.IsSuccess)
+        {
+            return Result<PortfolioDetailResponse>.Failure(currencyResult.ErrorCode!, currencyResult.ErrorMessage!);
+        }
+
         var now = DateTime.UtcNow;
         var portfolio = new Portfolio
         {
             OwnerUserId = _currentUser.UserId,
-            Name = request.Name.Trim(),
+            Name = name,
             Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
-            BaseCurrency = NormalizeCurrency(request.BaseCurrency),
+            BaseCurrency = currencyResult.Value!,
             IsActive = true,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -93,9 +105,22 @@ public sealed class PortfolioService : IPortfolioService
             return Result<bool>.Failure("portfolio.not_found", "Portfolio was not found.");
         }
 
-        portfolio.Name = request.Name.Trim();
+        var name = request.Name.Trim();
+        if (await _portfolioRepository.ExistsByNameAsync(_currentUser.UserId, name, id, cancellationToken))
+        {
+            return Result<bool>.Failure("portfolio.name_duplicate", "A portfolio with this name already exists.");
+        }
+
+        portfolio.Name = name;
         portfolio.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
-        portfolio.BaseCurrency = NormalizeCurrency(request.BaseCurrency);
+
+        var currencyResult = NormalizeCurrency(request.BaseCurrency);
+        if (!currencyResult.IsSuccess)
+        {
+            return Result<bool>.Failure(currencyResult.ErrorCode!, currencyResult.ErrorMessage!);
+        }
+
+        portfolio.BaseCurrency = currencyResult.Value!;
         portfolio.UpdatedAtUtc = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -118,9 +143,15 @@ public sealed class PortfolioService : IPortfolioService
         return Result<bool>.Success(true);
     }
 
-    // 將貨幣代碼標準化：空白時預設為 USD，否則轉為大寫
-    private static string NormalizeCurrency(string? currency)
+    // 將貨幣代碼標準化：空白時預設為 TWD，否則轉為大寫；只允許 TWD 或 USD
+    private static Result<string> NormalizeCurrency(string? currency)
     {
-        return string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(currency))
+            return Result<string>.Success("TWD");
+
+        var normalized = currency.Trim().ToUpperInvariant();
+        return normalized is "TWD" or "USD"
+            ? Result<string>.Success(normalized)
+            : Result<string>.Failure("portfolio.invalid_currency", $"Unsupported currency: {currency}. Only TWD and USD are supported.");
     }
 }

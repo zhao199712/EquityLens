@@ -4,6 +4,7 @@ using EquityLens.Api.Domain.Calculations;
 using EquityLens.Api.Repositories.MarketPrices;
 using EquityLens.Api.Repositories.Portfolios;
 using EquityLens.Api.Services.CurrentUser;
+using EquityLens.Api.Services.ExchangeRates;
 
 namespace EquityLens.Api.Services.PortfolioValuations;
 
@@ -17,6 +18,7 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
     private readonly ICurrentUserContext _currentUser;
     private readonly IPortfolioRepository _portfolioRepository;
     private readonly IMarketPriceRepository _marketPriceRepository;
+    private readonly IExchangeRateService _exchangeRateService;
 
     /// <summary>
     /// 初始化投資組合估值服務。
@@ -24,14 +26,17 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
     /// <param name="currentUser">目前使用者內容。</param>
     /// <param name="portfolioRepository">投資組合儲存庫。</param>
     /// <param name="marketPriceRepository">市場價格儲存庫。</param>
+    /// <param name="exchangeRateService">匯率服務。</param>
     public PortfolioValuationService(
         ICurrentUserContext currentUser,
         IPortfolioRepository portfolioRepository,
-        IMarketPriceRepository marketPriceRepository)
+        IMarketPriceRepository marketPriceRepository,
+        IExchangeRateService exchangeRateService)
     {
         _currentUser = currentUser;
         _portfolioRepository = portfolioRepository;
         _marketPriceRepository = marketPriceRepository;
+        _exchangeRateService = exchangeRateService;
     }
 
     /// <inheritdoc />
@@ -60,36 +65,19 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
             DailyInterval,
             cancellationToken);
 
-        // 逐筆計算持倉的市值、損益與估值狀態
-        var holdingDrafts = portfolio.Holdings
-            .Select(holding =>
+        // 逐筆計算持倉的市值、損益與估值狀態，並換算成 BaseCurrency
+        var holdingDrafts = new List<HoldingValuationDraft>();
+        foreach (var holding in portfolio.Holdings)
+        {
+            var costValue = PortfolioMath.CalculateCostValue(holding.Quantity, holding.AverageCost);
+
+            // 將成本換算成 BaseCurrency
+            var costValueInBase = await _exchangeRateService.ConvertAsync(
+                costValue, holding.CostCurrency, portfolio.BaseCurrency, cancellationToken);
+
+            if (!latestPrices.TryGetValue(holding.SecurityId, out var latestPrice))
             {
-                var costValue = PortfolioMath.CalculateCostValue(holding.Quantity, holding.AverageCost);
-                if (!latestPrices.TryGetValue(holding.SecurityId, out var latestPrice))
-                {
-                    return new HoldingValuationDraft(
-                        holding.Id,
-                        holding.SecurityId,
-                        holding.Ticker,
-                        holding.Exchange,
-                        holding.SecurityName,
-                        holding.Quantity,
-                        holding.AverageCost,
-                        holding.CostCurrency,
-                        null,
-                        null,
-                        costValue,
-                        null,
-                        null,
-                        null,
-                        "MissingPrice");
-                }
-
-                var marketValue = PortfolioMath.CalculateMarketValue(holding.Quantity, latestPrice.Price);
-                var unrealizedPnl = PortfolioMath.CalculateUnrealizedPnl(marketValue, costValue);
-                var unrealizedPnlPercent = PortfolioMath.CalculateUnrealizedPnlPercent(unrealizedPnl, costValue);
-
-                return new HoldingValuationDraft(
+                holdingDrafts.Add(new HoldingValuationDraft(
                     holding.Id,
                     holding.SecurityId,
                     holding.Ticker,
@@ -98,15 +86,40 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
                     holding.Quantity,
                     holding.AverageCost,
                     holding.CostCurrency,
-                    latestPrice.Price,
-                    latestPrice.PriceTime,
-                    costValue,
-                    marketValue,
-                    unrealizedPnl,
-                    unrealizedPnlPercent,
-                    "Priced");
-            })
-            .ToList();
+                    null,
+                    null,
+                    costValueInBase,
+                    null,
+                    null,
+                    null,
+                    "MissingPrice"));
+                continue;
+            }
+
+            var marketValue = PortfolioMath.CalculateMarketValue(holding.Quantity, latestPrice.Price);
+            var marketValueInBase = await _exchangeRateService.ConvertAsync(
+                marketValue, holding.CostCurrency, portfolio.BaseCurrency, cancellationToken);
+
+            var unrealizedPnl = PortfolioMath.CalculateUnrealizedPnl(marketValueInBase, costValueInBase);
+            var unrealizedPnlPercent = PortfolioMath.CalculateUnrealizedPnlPercent(unrealizedPnl, costValueInBase);
+
+            holdingDrafts.Add(new HoldingValuationDraft(
+                holding.Id,
+                holding.SecurityId,
+                holding.Ticker,
+                holding.Exchange,
+                holding.SecurityName,
+                holding.Quantity,
+                holding.AverageCost,
+                holding.CostCurrency,
+                latestPrice.Price,
+                latestPrice.PriceTime,
+                costValueInBase,
+                marketValueInBase,
+                unrealizedPnl,
+                unrealizedPnlPercent,
+                "Priced"));
+        }
 
         // 彙總投資組合層級的數據
         var totalCostValue = holdingDrafts.Sum(x => x.CostValue);

@@ -16,7 +16,7 @@ public class PortfolioConfiguration : IEntityTypeConfiguration<Portfolio>
         builder.Property(x => x.OwnerUserId).HasColumnName("owner_user_id").IsRequired();
         builder.Property(x => x.Name).HasColumnName("name").HasMaxLength(128).IsRequired();
         builder.Property(x => x.Description).HasColumnName("description").HasMaxLength(512);
-        builder.Property(x => x.BaseCurrency).HasColumnName("base_currency").HasMaxLength(3).HasDefaultValue("USD");
+        builder.Property(x => x.BaseCurrency).HasColumnName("base_currency").HasMaxLength(3).HasDefaultValue("TWD");
         builder.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("now()");
         builder.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").HasDefaultValueSql("now()");

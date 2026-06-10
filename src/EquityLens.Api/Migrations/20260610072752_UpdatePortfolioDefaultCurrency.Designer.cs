@@ -3,6 +3,7 @@ using System;
 using EquityLens.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Pgvector;
 namespace EquityLens.Api.Migrations
 {
     [DbContext(typeof(EquityLensDbContext))]
-    partial class EquityLensDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260610072752_UpdatePortfolioDefaultCurrency")]
+    partial class UpdatePortfolioDefaultCurrency
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -853,10 +856,9 @@ namespace EquityLens.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SecurityId");
+                    b.HasIndex("PortfolioId");
 
-                    b.HasIndex("PortfolioId", "SecurityId")
-                        .IsUnique();
+                    b.HasIndex("SecurityId");
 
                     b.ToTable("portfolio_holding", (string)null);
                 });
@@ -911,66 +913,6 @@ namespace EquityLens.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("portfolio_snapshot", (string)null);
-                });
-
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PortfolioTransaction", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<decimal>("Fee")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(18,6)")
-                        .HasDefaultValue(0m)
-                        .HasColumnName("fee");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("note");
-
-                    b.Property<Guid>("PortfolioId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("portfolio_id");
-
-                    b.Property<decimal>("Price")
-                        .HasColumnType("numeric(18,6)")
-                        .HasColumnName("price");
-
-                    b.Property<decimal>("Quantity")
-                        .HasColumnType("numeric(18,6)")
-                        .HasColumnName("quantity");
-
-                    b.Property<Guid>("SecurityId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("security_id");
-
-                    b.Property<DateOnly>("TransactionDate")
-                        .HasColumnType("date")
-                        .HasColumnName("transaction_date");
-
-                    b.Property<string>("TransactionType")
-                        .IsRequired()
-                        .HasMaxLength(4)
-                        .HasColumnType("character varying(4)")
-                        .HasColumnName("transaction_type");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SecurityId");
-
-                    b.HasIndex("PortfolioId", "SecurityId", "TransactionDate", "TransactionType");
-
-                    b.ToTable("portfolio_transaction", (string)null);
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RefreshToken", b =>
@@ -1643,25 +1585,6 @@ namespace EquityLens.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Portfolio");
-                });
-
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PortfolioTransaction", b =>
-                {
-                    b.HasOne("EquityLens.Api.Data.Entities.Portfolio", "Portfolio")
-                        .WithMany()
-                        .HasForeignKey("PortfolioId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("EquityLens.Api.Data.Entities.Security", "Security")
-                        .WithMany()
-                        .HasForeignKey("SecurityId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Portfolio");
-
-                    b.Navigation("Security");
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RefreshToken", b =>

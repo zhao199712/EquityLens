@@ -76,6 +76,16 @@ public sealed class PortfolioRepository : IPortfolioRepository
             cancellationToken);
     }
 
+    public Task<bool> ExistsByNameAsync(Guid ownerUserId, string name, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        return _dbContext.Portfolios.AnyAsync(
+            x => x.OwnerUserId == ownerUserId
+                && x.IsActive
+                && x.Name == name
+                && (excludeId == null || x.Id != excludeId.Value),
+            cancellationToken);
+    }
+
     public void Add(Portfolio portfolio)
     {
         _dbContext.Portfolios.Add(portfolio);
