@@ -5,7 +5,14 @@ interface User {
   id: string
   email: string
   displayName: string
-  role: string
+}
+
+interface AuthResponse {
+  accessToken: string
+  refreshToken: string
+  tokenType: string
+  expiresIn: number
+  user: User
 }
 
 interface AuthState {
@@ -23,16 +30,27 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => !!state.token,
-    isAdmin: (state) => state.user?.role === 'Admin',
   },
 
   actions: {
+    async register(email: string, password: string, displayName?: string) {
+      const response = await http.post<AuthResponse>('/auth/register', {
+        email,
+        password,
+        displayName,
+      })
+
+      const { user, accessToken, refreshToken } = response.data
+      this.user = user
+      this.token = accessToken
+      this.refreshTokenValue = refreshToken
+      sessionStorage.setItem('auth_token', accessToken)
+      sessionStorage.setItem('refresh_token', refreshToken)
+      http.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+    },
+
     async login(email: string, password: string) {
-      const response = await http.post<{
-        user: User
-        accessToken: string
-        refreshToken: string
-      }>('/auth/login', {
+      const response = await http.post<AuthResponse>('/auth/login', {
         email,
         password,
       })
@@ -47,6 +65,14 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
+      try {
+        if (this.token) {
+          await http.post('/auth/logout')
+        }
+      } catch {
+        // ignore - still clear local state
+      }
+
       this.user = null
       this.token = null
       this.refreshTokenValue = null
@@ -59,7 +85,7 @@ export const useAuthStore = defineStore('auth', {
       if (!this.refreshTokenValue) return null
 
       try {
-        const response = await http.post<{ accessToken: string; refreshToken: string }>(
+        const response = await http.post<AuthResponse>(
           '/auth/refresh',
           { refreshToken: this.refreshTokenValue },
         )
@@ -72,7 +98,7 @@ export const useAuthStore = defineStore('auth', {
         http.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
         return accessToken
       } catch {
-        this.logout()
+        this.clearAuth()
         return null
       }
     },
@@ -82,11 +108,20 @@ export const useAuthStore = defineStore('auth', {
 
       try {
         http.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
-        const response = await http.get<User>('/auth/me')
-        this.user = response.data
+        const response = await http.get<{ user: User }>('/auth/me')
+        this.user = response.data.user
       } catch {
-        this.logout()
+        this.clearAuth()
       }
+    },
+
+    clearAuth() {
+      this.user = null
+      this.token = null
+      this.refreshTokenValue = null
+      sessionStorage.removeItem('auth_token')
+      sessionStorage.removeItem('refresh_token')
+      delete http.defaults.headers.common['Authorization']
     },
 
     initializeAuth() {

@@ -8,7 +8,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const isLoginPage = computed(() => route.name === 'login')
+const isAuthPage = computed(() => route.name === 'login' || route.name === 'register')
 
 async function handleLogout() {
   await authStore.logout()
@@ -103,7 +103,7 @@ function handleMenuSelect(key: string) {
   <NConfigProvider :theme="darkTheme" :theme-overrides="themeOverrides">
     <div class="kimi-app-shell">
       <!-- Header - hidden on login page -->
-      <header v-if="!isLoginPage" class="kimi-app-header">
+      <header v-if="!isAuthPage" class="kimi-app-header">
         <RouterLink class="kimi-brand" to="/">
           <span class="kimi-brand-mark">EL</span>
           <span class="kimi-brand-text">EquityLens</span>

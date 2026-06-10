@@ -6,14 +6,26 @@ import { useAuthStore } from '../../stores/auth'
 const router = useRouter()
 const authStore = useAuthStore()
 
+const displayName = ref('')
 const email = ref('')
 const password = ref('')
+const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
 
-async function handleLogin() {
+async function handleRegister() {
   if (!email.value || !password.value) {
     error.value = '請填寫所有欄位'
+    return
+  }
+
+  if (password.value.length < 6) {
+    error.value = '密碼至少需要 6 個字元'
+    return
+  }
+
+  if (password.value !== confirmPassword.value) {
+    error.value = '兩次密碼輸入不一致'
     return
   }
 
@@ -21,10 +33,15 @@ async function handleLogin() {
   error.value = ''
 
   try {
-    await authStore.login(email.value, password.value)
+    await authStore.register(email.value, password.value, displayName.value || undefined)
     router.push({ name: 'dashboard' })
   } catch (e: any) {
-    error.value = e?.response?.data?.message || '登入失敗，請檢查帳號密碼'
+    const msg = e?.response?.data?.message
+    if (e?.response?.status === 409) {
+      error.value = '此 Email 已被註冊'
+    } else {
+      error.value = msg || '註冊失敗，請稍後再試'
+    }
   } finally {
     loading.value = false
   }
@@ -68,15 +85,26 @@ async function handleLogin() {
         </div>
       </div>
 
-      <!-- Right Side - Login Form -->
+      <!-- Right Side - Register Form -->
       <div class="kimi-login-form-wrapper">
         <div class="kimi-login-form">
           <div class="kimi-login-header">
-            <h2>歡迎回來</h2>
-            <p>請登入您的帳號</p>
+            <h2>建立帳號</h2>
+            <p>填寫以下資訊完成註冊</p>
           </div>
 
-          <form class="kimi-form" @submit.prevent="handleLogin">
+          <form class="kimi-form" @submit.prevent="handleRegister">
+            <div class="kimi-form-group">
+              <label class="kimi-label">顯示名稱</label>
+              <input
+                v-model="displayName"
+                type="text"
+                class="kimi-input"
+                placeholder="選填"
+                autocomplete="name"
+              />
+            </div>
+
             <div class="kimi-form-group">
               <label class="kimi-label">電子信箱</label>
               <input
@@ -94,8 +122,19 @@ async function handleLogin() {
                 v-model="password"
                 type="password"
                 class="kimi-input"
-                placeholder="••••••••"
-                autocomplete="current-password"
+                placeholder="至少 6 個字元"
+                autocomplete="new-password"
+              />
+            </div>
+
+            <div class="kimi-form-group">
+              <label class="kimi-label">確認密碼</label>
+              <input
+                v-model="confirmPassword"
+                type="password"
+                class="kimi-input"
+                placeholder="再次輸入密碼"
+                autocomplete="new-password"
               />
             </div>
 
@@ -109,12 +148,12 @@ async function handleLogin() {
               :disabled="loading"
             >
               <span v-if="loading" class="kimi-spinner"></span>
-              <span v-else>登入</span>
+              <span v-else>註冊</span>
             </button>
           </form>
 
           <div class="kimi-login-footer">
-            <p>還沒有帳號？ <RouterLink to="/register">立即註冊</RouterLink></p>
+            <p>已經有帳號？ <RouterLink to="/login">立即登入</RouterLink></p>
           </div>
         </div>
       </div>
@@ -136,7 +175,7 @@ async function handleLogin() {
   display: flex;
   width: 100%;
   max-width: 900px;
-  min-height: 520px;
+  min-height: 560px;
   background: var(--kimi-card-light);
   border: 1px solid var(--kimi-border-light);
   overflow: hidden;
@@ -237,7 +276,7 @@ async function handleLogin() {
 }
 
 .kimi-login-header {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .kimi-login-header h2 {
@@ -256,7 +295,7 @@ async function handleLogin() {
 .kimi-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .kimi-form-group {
@@ -274,7 +313,7 @@ async function handleLogin() {
 
 .kimi-input {
   width: 100%;
-  height: 44px;
+  height: 40px;
   padding: 0 14px;
   background: transparent;
   border: 1px solid var(--kimi-border-light);
