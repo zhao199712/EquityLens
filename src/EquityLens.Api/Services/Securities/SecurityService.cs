@@ -388,6 +388,12 @@ public sealed class SecurityService : ISecurityService
             security.Currency = external.Currency.Trim().ToUpperInvariant();
         }
 
+        // Fallback: 外部 API 若未提供 currency，依據交易所推斷
+        if (security.Currency == "USD" && security.Exchange is "TWSE" or "TPEX")
+        {
+            security.Currency = "TWD";
+        }
+
         if (!string.IsNullOrWhiteSpace(external.Isin))
         {
             security.Isin = external.Isin.Trim().ToUpperInvariant();
