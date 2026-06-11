@@ -1,5 +1,8 @@
 # EquityLens Agent Guide
 
+## Environment Assumptions
+- Development and verification are done on Linux. Commands assume a Linux shell (bash) unless stated otherwise.
+
 ## Repo Shape
 - Backend API lives in `src/EquityLens.Api` (`net10.0`, nullable enabled, implicit usings); entrypoint and DI wiring are in `Program.cs`.
 - Frontend app lives in `src/EquityLens.Web` (Vue 3 + Vite + TypeScript); entrypoints are `src/main.ts`, `src/App.vue`, and `src/router/index.ts`.
