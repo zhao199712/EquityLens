@@ -371,4 +371,111 @@ public sealed class RiskMathTests
 
         Assert.Equal(annualizedMeanLogReturn + 0.5m * sigma2, result.AnnualizedDrift, 6);
     }
+    // ── Correlation Matrix Tests ──
+
+    [Fact]
+    public void CalculateCorrelationMatrix_PerfectCorrelation_DiagonalOne()
+    {
+        var returns1 = new decimal[] { 0.01m, 0.02m, 0.03m, 0.04m, 0.05m };
+        var returns2 = new decimal[] { 0.01m, 0.02m, 0.03m, 0.04m, 0.05m };
+        var matrix = new List<IReadOnlyList<decimal>> { returns1, returns2 };
+        var result = RiskMath.CalculateCorrelationMatrix(matrix);
+        Assert.Equal(2, result.Length);
+        Assert.Equal(1m, result[0][0]);
+        Assert.Equal(1m, result[1][1]);
+        Assert.Equal(1m, result[0][1], 6);
+    }
+
+    [Fact]
+    public void CalculateCorrelationMatrix_NegativeCorrelation_ReturnsNegative()
+    {
+        var x = new decimal[] { 0.01m, 0.02m, 0.03m, 0.04m, 0.05m };
+        var y = new decimal[] { -0.01m, -0.02m, -0.03m, -0.04m, -0.05m };
+        var matrix = new List<IReadOnlyList<decimal>> { x, y };
+        var result = RiskMath.CalculateCorrelationMatrix(matrix);
+        Assert.Equal(-1m, result[0][1], 6);
+    }
+
+    // ── Cholesky Decomposition Tests ──
+
+    [Fact]
+    public void CholeskyDecompose_LowerTriangularTimesTransposeEqualsOriginal()
+    {
+        var matrix = new[]
+        {
+            new decimal[] { 1m, 0.5m },
+            new decimal[] { 0.5m, 1m },
+        };
+        var L = RiskMath.CholeskyDecompose(matrix);
+        Assert.NotNull(L);
+
+        var product = new decimal[2][];
+        for (var i = 0; i < 2; i++)
+        {
+            product[i] = new decimal[2];
+            for (var j = 0; j < 2; j++)
+                for (var k = 0; k < 2; k++)
+                    product[i][j] += L![i][k] * L![j][k];
+        }
+
+        for (var i = 0; i < 2; i++)
+            for (var j = 0; j < 2; j++)
+                Assert.Equal(matrix[i][j], product[i][j], 6);
+    }
+
+    [Fact]
+    public void CholeskyDecompose_NonPositiveDefinite_ReturnsNull()
+    {
+        var matrix = new[]
+        {
+            new decimal[] { -1m, 0m },
+            new decimal[] { 0m, 1m },
+        };
+        var result = RiskMath.CholeskyDecompose(matrix);
+        Assert.Null(result);
+    }
+
+    // ── Correlated GBM MC Tests ──
+
+    [Fact]
+    public void RunCorrelatedGbmMonteCarloSimulation_ReturnsPositiveValues()
+    {
+        var initial = new decimal[] { 100m, 200m };
+        var drifts = new decimal[] { 0.08m, 0.10m };
+        var vols = new decimal[] { 0.20m, 0.25m };
+        var weights = new decimal[] { 0.5m, 0.5m };
+        var corr = new[]
+        {
+            new decimal[] { 1m, 0.5m },
+            new decimal[] { 0.5m, 1m },
+        };
+
+        var result = RiskMath.RunCorrelatedGbmMonteCarloSimulation(
+            initial, drifts, vols, weights, corr, 30, 2000);
+
+        Assert.True(result.MeanFinalValue > 0);
+        Assert.True(result.MedianFinalValue > 0);
+        Assert.True(result.BestCase95Percentile >= result.WorstCase95Percentile);
+        Assert.Equal(0.95m, result.ConfidenceLevel);
+    }
+
+    [Fact]
+    public void RunCorrelatedGbmMonteCarloSimulation_ZeroVol_Deterministic()
+    {
+        var initial = new decimal[] { 100m, 200m };
+        var drifts = new decimal[] { 0.10m, 0.10m };
+        var vols = new decimal[] { 0m, 0m };
+        var weights = new decimal[] { 0.5m, 0.5m };
+        var corr = new[]
+        {
+            new decimal[] { 1m, 0m },
+            new decimal[] { 0m, 1m },
+        };
+
+        var result = RiskMath.RunCorrelatedGbmMonteCarloSimulation(
+            initial, drifts, vols, weights, corr, 252, 1000);
+
+        var expected = 150m * (decimal)Math.Exp(0.10);
+        Assert.Equal(expected, result.MeanFinalValue, 1);
+    }
 }

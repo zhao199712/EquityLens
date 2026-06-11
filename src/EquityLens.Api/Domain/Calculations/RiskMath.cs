@@ -518,6 +518,223 @@ public static class RiskMath
     }
 
     /// <summary>
+    /// 計算相關係數矩陣（N×N Pearson Correlation Matrix）。
+    /// </summary>
+    /// <param name="returnsMatrix">各資產報酬率序列集合，每個元素為一檔資產的 log return 序列。</param>
+    /// <returns>N×N 相關係數矩陣。若輸入為空或長度不足則回傳空陣列。</returns>
+    public static decimal[][] CalculateCorrelationMatrix(
+        IReadOnlyList<IReadOnlyList<decimal>> returnsMatrix)
+    {
+        var n = returnsMatrix.Count;
+        if (n == 0) return Array.Empty<decimal[]>();
+
+        var corr = new decimal[n][];
+        for (var i = 0; i < n; i++)
+        {
+            corr[i] = new decimal[n];
+            corr[i][i] = 1m;
+            for (var j = 0; j < i; j++)
+            {
+                var c = CalculateCorrelation(returnsMatrix[i], returnsMatrix[j]);
+                corr[i][j] = c;
+                corr[j][i] = c;
+            }
+        }
+        return corr;
+    }
+
+    /// <summary>
+    /// Cholesky 分解，將正定矩陣分解為下三角矩陣 L（L × Lᵀ = A）。
+    /// </summary>
+    /// <param name="matrix">正定對稱矩陣。</param>
+    /// <returns>下三角矩陣 L，若矩陣非正定則回傳 null。</returns>
+    /// <remarks>
+    /// 模型：Cholesky Decomposition。
+    /// 公式：A = L Lᵀ，其中 L 為下三角矩陣。
+    /// 用於 Correlated Monte Carlo Simulation，將獨立常態亂數轉換為具有指定相關性的亂數。
+    /// </remarks>
+    public static decimal[][]? CholeskyDecompose(decimal[][] matrix)
+    {
+        var n = matrix.Length;
+        if (n == 0) return null;
+
+        var L = new decimal[n][];
+        for (var i = 0; i < n; i++)
+        {
+            L[i] = new decimal[n];
+            for (var j = 0; j <= i; j++)
+            {
+                var sum = 0m;
+                for (var k = 0; k < j; k++)
+                    sum += L[i][k] * L[j][k];
+
+                if (i == j)
+                {
+                    var val = matrix[i][i] - sum;
+                    if (val <= 1e-15m) return null;
+                    L[i][i] = (decimal)Math.Sqrt((double)val);
+                }
+                else
+                {
+                    if (L[j][j] == 0) return null;
+                    L[i][j] = (matrix[i][j] - sum) / L[j][j];
+                }
+            }
+        }
+        return L;
+    }
+
+    /// <summary>
+    /// 多資產相關 GBM 蒙地卡羅模擬（Correlated GBM Monte Carlo for Multi-Asset Portfolio）。
+    /// 使用 Cholesky 分解保留資產間的相關性，模擬未來投資組合價值分布。
+    /// </summary>
+    /// <param name="initialValues">各資產初始價格 S₀ 序列。</param>
+    /// <param name="annualizedDrifts">各資產年化漂移項 μ 序列。</param>
+    /// <param name="annualizedVolatilities">各資產年化波動率 σ 序列。</param>
+    /// <param name="weights">各資產在投資組合中的權重序列（應和為 1）。</param>
+    /// <param name="correlationMatrix">各資產間 N×N 相關係數矩陣。</param>
+    /// <param name="days">模擬天數。</param>
+    /// <param name="simulations">模擬路徑數量，預設 10,000。</param>
+    /// <param name="confidenceLevel">信心水準，預設 0.95。</param>
+    /// <param name="initialPortfolioValue">投資組合初始總市值；提供時會以總市值尺度輸出最終價值。</param>
+    /// <param name="portfolioWeights">以市值計算的投資組合權重；提供時用於計算各資產報酬對總市值的貢獻。</param>
+    /// <param name="tradingDays">年交易日數，預設 252。</param>
+    /// <returns>蒙地卡羅模擬結果。</returns>
+    /// <remarks>
+    /// 模型：多資產相關 GBM 蒙地卡羅模擬（Correlated Geometric Brownian Motion Monte Carlo）。
+    /// <para>
+    /// 每檔資產的 SDE：dS_i = μ_i S_i dt + σ_i S_i dW_i
+    /// </para>
+    /// <para>
+    /// 其中 dW_i × dW_j = ρ_ij dt，相關性由 correlation matrix 定義。
+    /// 使用 Cholesky 分解 L (L Lᵀ = Σ) 將獨立常態亂數 Z 轉換為相關亂數：
+    /// Z_corr = L × Z_indep
+    /// </para>
+    /// <para>
+    /// 每日資產價格更新（對數 Euler–Maruyama）：
+    /// S_i,t+Δt = S_i,t × exp((μ_i - ½σ_i²)Δt + σ_i√Δt × Z_corr_i)
+    /// </para>
+    /// <para>
+    /// 每條模擬路徑結束時計算投資組合價值：V_T = Σ(w_i × S_i,T)。
+    /// 若提供 initialPortfolioValue 與 portfolioWeights，則計算總市值尺度：
+    /// V_T = V_0 × Σ(w_i × S_i,T / S_i,0)。
+    /// 最後從所有路徑的 V_T 分布中計算 VaR、ES 與統計量。
+    /// </para>
+    /// <para>
+    /// 若 correlation matrix 非正定，則回傳含 0 的預設結果（呼叫端應視為模擬失敗）。
+    /// </para>
+    /// </remarks>
+    public static MonteCarloResult RunCorrelatedGbmMonteCarloSimulation(
+        IReadOnlyList<decimal> initialValues,
+        IReadOnlyList<decimal> annualizedDrifts,
+        IReadOnlyList<decimal> annualizedVolatilities,
+        IReadOnlyList<decimal> weights,
+        decimal[][] correlationMatrix,
+        int days,
+        int simulations = 10000,
+        decimal confidenceLevel = 0.95m,
+        decimal? initialPortfolioValue = null,
+        IReadOnlyList<decimal>? portfolioWeights = null,
+        int tradingDays = 252)
+    {
+        var n = initialValues.Count;
+
+        if (n == 0 || simulations <= 0 || days <= 0)
+            return new MonteCarloResult(0, 0, 0, 0, 0, 0, confidenceLevel);
+
+        var L = CholeskyDecompose(correlationMatrix);
+        if (L is null)
+            return new MonteCarloResult(0, 0, 0, 0, 0, 0, confidenceLevel);
+
+        var random = new Random();
+        var finalValues = new decimal[simulations];
+        var dt = 1.0 / tradingDays;
+        var sqrtDt = Math.Sqrt(dt);
+
+        var drifts = new double[n];
+        var diffusions = new double[n];
+        for (var i = 0; i < n; i++)
+        {
+            var sigma = (double)annualizedVolatilities[i];
+            drifts[i] = ((double)annualizedDrifts[i] - 0.5 * sigma * sigma) * dt;
+            diffusions[i] = sigma * sqrtDt;
+        }
+
+        for (var s = 0; s < simulations; s++)
+        {
+            var prices = new double[n];
+            for (var i = 0; i < n; i++)
+                prices[i] = (double)initialValues[i];
+
+            for (var d = 0; d < days; d++)
+            {
+                var zIndep = new double[n];
+                for (var i = 0; i < n; i++)
+                    zIndep[i] = NextGaussian(random);
+
+                var zCorr = new double[n];
+                for (var i = 0; i < n; i++)
+                {
+                    var sum = 0.0;
+                    for (var j = 0; j <= i; j++)
+                        sum += (double)L[i][j] * zIndep[j];
+                    zCorr[i] = sum;
+                }
+
+                for (var i = 0; i < n; i++)
+                {
+                    if (prices[i] <= 0) continue;
+                    prices[i] *= Math.Exp(drifts[i] + diffusions[i] * zCorr[i]);
+                    if (prices[i] < 0) prices[i] = 0;
+                }
+            }
+
+            var portfolioScaleWeights = portfolioWeights;
+            var portfolioValue = 0m;
+            if (initialPortfolioValue is null || portfolioScaleWeights is null || portfolioScaleWeights.Count != n)
+            {
+                for (var i = 0; i < n; i++)
+                    portfolioValue += weights[i] * (decimal)prices[i];
+            }
+            else
+            {
+                var portfolioReturnMultiplier = 0m;
+                for (var i = 0; i < n; i++)
+                {
+                    var initialValue = initialValues[i];
+                    var assetMultiplier = initialValue == 0 ? 0 : (decimal)prices[i] / initialValue;
+                    portfolioReturnMultiplier += portfolioScaleWeights[i] * assetMultiplier;
+                }
+                portfolioValue = initialPortfolioValue.Value * portfolioReturnMultiplier;
+            }
+            finalValues[s] = portfolioValue;
+        }
+
+        Array.Sort(finalValues);
+        var mean = finalValues.Average();
+        var median = finalValues[simulations / 2];
+        var upperIndex = (int)(confidenceLevel * simulations);
+        var lowerIndex = (int)((1m - confidenceLevel) * simulations);
+        var bestCase = finalValues[Math.Min(upperIndex, simulations - 1)];
+        var worstCase = finalValues[Math.Max(lowerIndex, 0)];
+
+        var basePortfolioValue = initialPortfolioValue ?? 0m;
+        if (initialPortfolioValue is null)
+        {
+            for (var i = 0; i < n; i++)
+                basePortfolioValue += weights[i] * initialValues[i];
+        }
+
+        var returnDist = finalValues
+            .Select(v => basePortfolioValue == 0 ? 0 : (v - basePortfolioValue) / basePortfolioValue)
+            .ToList();
+        var simulatedVaR = CalculateHistoricalVaR(returnDist, confidenceLevel);
+        var simulatedES = CalculateExpectedShortfall(returnDist, confidenceLevel);
+
+        return new MonteCarloResult(mean, median, bestCase, worstCase, simulatedVaR, simulatedES, confidenceLevel);
+    }
+
+    /// <summary>
     /// 計算序列平均值（算術平均數）。
     /// </summary>
     /// <param name="values">數值序列。</param>

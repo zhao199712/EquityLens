@@ -31,10 +31,13 @@ using EquityLens.Api.Services.Redis;
 using EquityLens.Api.Services.Securities;
 using EquityLens.Api.Services.UploadedFiles;
 using EquityLens.Api.Services.FinancialFilings;
+using EquityLens.Api.Services.PortfolioTransactions;
+using EquityLens.Api.Services.RiskAnalysis;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseDefaultServiceProvider(o => o.ValidateOnBuild = false);
 
 // Add services to the container.
 builder.Services.AddDbContext<EquityLensDbContext>(options =>
@@ -83,6 +86,8 @@ builder.Services.AddScoped<IMarketPriceService, MarketPriceService>();
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 builder.Services.AddScoped<IUploadedFileService, UploadedFileService>();
 builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();
+builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddScoped<IRiskAnalysisService, RiskAnalysisService>();
 
 builder.Services.AddHttpClient<AlphaVantageMarketDataProvider>((sp, client) =>
 {
