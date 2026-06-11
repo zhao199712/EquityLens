@@ -9,15 +9,18 @@ using Pgvector.EntityFrameworkCore;
 using StackExchange.Redis;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
+using EquityLens.Api.Repositories.ExchangeRates;
 using EquityLens.Api.Repositories.MarketPrices;
 using EquityLens.Api.Repositories.PortfolioHoldings;
 using EquityLens.Api.Repositories.Portfolios;
+using EquityLens.Api.Repositories.PortfolioTransactions;
 using EquityLens.Api.Repositories.Securities;
 using EquityLens.Api.Repositories.Users;
 using EquityLens.Api.Services.Auth;
 using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Services.DemoData;
 using EquityLens.Api.Services.DemoUser;
+using EquityLens.Api.Services.ExchangeRates;
 using EquityLens.Api.Services.MarketData;
 using EquityLens.Api.Services.MarketPrices;
 using EquityLens.Api.Services.ObjectStorage;
@@ -28,10 +31,13 @@ using EquityLens.Api.Services.Redis;
 using EquityLens.Api.Services.Securities;
 using EquityLens.Api.Services.UploadedFiles;
 using EquityLens.Api.Services.FinancialFilings;
+using EquityLens.Api.Services.PortfolioTransactions;
+using EquityLens.Api.Services.RiskAnalysis;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseDefaultServiceProvider(o => o.ValidateOnBuild = false);
 
 // Add services to the container.
 builder.Services.AddDbContext<EquityLensDbContext>(options =>
@@ -67,6 +73,8 @@ builder.Services.AddScoped<IPortfolioRepository, PortfolioRepository>();
 builder.Services.AddScoped<ISecurityRepository, SecurityRepository>();
 builder.Services.AddScoped<IPortfolioHoldingRepository, PortfolioHoldingRepository>();
 builder.Services.AddScoped<IMarketPriceRepository, MarketPriceRepository>();
+builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+builder.Services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
 
 builder.Services.AddScoped<IDemoUserContext, DemoUserContext>();
 builder.Services.AddScoped<IDemoDataService, DemoDataService>();
@@ -77,6 +85,9 @@ builder.Services.AddScoped<IPortfolioValuationService, PortfolioValuationService
 builder.Services.AddScoped<IMarketPriceService, MarketPriceService>();
 builder.Services.AddScoped<IUploadedFileService, UploadedFileService>();
 builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();
+builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
+builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddScoped<IRiskAnalysisService, RiskAnalysisService>();
 
 builder.Services.AddHttpClient<AlphaVantageMarketDataProvider>((sp, client) =>
 {
