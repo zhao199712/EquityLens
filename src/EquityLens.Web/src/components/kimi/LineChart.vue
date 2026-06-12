@@ -35,7 +35,7 @@
 
     <!-- X axis labels -->
     <text
-      v-for="(label, i) in labels"
+      v-for="i in visibleLabelIndices"
       :key="'x-' + i"
       :x="getX(i)"
       :y="height - 10"
@@ -44,7 +44,7 @@
       font-size="11"
       font-family="Inter, sans-serif"
     >
-      {{ label }}
+      {{ labels[i] }}
     </text>
 
     <!-- Area fill -->
@@ -108,6 +108,7 @@ const props = withDefaults(defineProps<{
   showPoints?: boolean
   secondLine?: number[]
   secondLineColor?: string
+  maxLabels?: number
 }>(), {
   width: 800,
   height: 400,
@@ -118,6 +119,7 @@ const props = withDefaults(defineProps<{
   showArea: true,
   showPoints: true,
   secondLineColor: '#8B1A2B',
+  maxLabels: 10,
 })
 
 const pathRef = ref<SVGPathElement>()
@@ -147,6 +149,20 @@ const areaPath = computed(() => {
 const secondLinePath = computed(() => {
   if (!props.secondLine) return ''
   return props.secondLine.map((v, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(v)}`).join(' ')
+})
+
+const visibleLabelIndices = computed(() => {
+  const count = props.labels.length
+  if (count <= props.maxLabels) {
+    return props.labels.map((_, i) => i)
+  }
+  const step = Math.ceil(count / props.maxLabels)
+  const indices = new Set<number>()
+  for (let i = 0; i < count; i += step) {
+    indices.add(i)
+  }
+  indices.add(count - 1)
+  return Array.from(indices).sort((a, b) => a - b)
 })
 
 onMounted(() => {

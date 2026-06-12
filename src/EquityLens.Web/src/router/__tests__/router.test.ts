@@ -41,7 +41,7 @@ describe('router guard', () => {
       const store = useAuthStore()
       expect(store.isAuthenticated).toBe(false)
 
-      const to = { meta: {}, name: 'portfolios' }
+      const to = { meta: { requiresAuth: undefined as boolean | undefined }, name: 'portfolios' }
       const shouldRedirect = to.meta.requiresAuth !== false && !store.isAuthenticated
       expect(shouldRedirect).toBe(true)
     })

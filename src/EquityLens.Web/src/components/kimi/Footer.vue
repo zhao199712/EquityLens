@@ -9,7 +9,8 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const props = defineProps<{
   dark?: boolean
   label?: string
 }>()

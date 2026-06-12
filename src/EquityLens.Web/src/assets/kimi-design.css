@@ -120,6 +120,10 @@
   border-left: none;
 }
 
+.kimi-kpi-cell-dark .accent-bar {
+  background-color: var(--kimi-accent-red);
+}
+
 .kimi-kpi-cell .accent-bar {
   position: absolute;
   left: 0;

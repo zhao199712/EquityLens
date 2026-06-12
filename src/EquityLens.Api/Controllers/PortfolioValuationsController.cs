@@ -38,4 +38,23 @@ public class PortfolioValuationsController : ApiControllerBase
         var result = await _valuationService.GetValuationAsync(portfolioId, cancellationToken);
         return ToActionResult(result);
     }
+
+    /// <summary>
+    /// 計算指定投資組合的歷史市場估值序列，用於投資組合價值走勢圖。
+    /// </summary>
+    /// <param name="portfolioId">投資組合的唯一識別碼。</param>
+    /// <param name="from">估值起始日期。</param>
+    /// <param name="to">估值結束日期。</param>
+    /// <param name="cancellationToken">取消權杖。</param>
+    /// <returns>歷史估值序列；若投資組合不存在則返回 404。</returns>
+    [HttpGet("history")]
+    public async Task<ActionResult<PortfolioValuationHistoryResponse>> GetValuationHistory(
+        Guid portfolioId,
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
+        CancellationToken cancellationToken)
+    {
+        var result = await _valuationService.GetValuationHistoryAsync(portfolioId, from, to, cancellationToken);
+        return ToActionResult(result);
+    }
 }
