@@ -74,12 +74,12 @@ public class AuthController : ControllerBase
             Id = Guid.NewGuid(),
             Email = request.Email,
             DisplayName = request.DisplayName ?? request.Email.Split('@')[0],
-            PasswordHash = _passwordHasher.HashPassword(null!, request.Password),
             Role = "User",
             IsActive = true,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
+        user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
         _userRepository.Add(user);
         await _dbContext.SaveChangesAsync(cancellationToken);

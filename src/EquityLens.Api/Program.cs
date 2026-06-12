@@ -30,6 +30,9 @@ using EquityLens.Api.Services.UploadedFiles;
 using EquityLens.Api.Services.FinancialFilings;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
+using EquityLens.Api.Repositories.PortfolioTransactions;
+using EquityLens.Api.Services.ExchangeRates;
+using EquityLens.Api.Repositories.ExchangeRates;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -67,7 +70,9 @@ builder.Services.AddScoped<IPortfolioRepository, PortfolioRepository>();
 builder.Services.AddScoped<ISecurityRepository, SecurityRepository>();
 builder.Services.AddScoped<IPortfolioHoldingRepository, PortfolioHoldingRepository>();
 builder.Services.AddScoped<IMarketPriceRepository, MarketPriceRepository>();
-
+builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
+builder.Services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
 builder.Services.AddScoped<IDemoUserContext, DemoUserContext>();
 builder.Services.AddScoped<IDemoDataService, DemoDataService>();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();

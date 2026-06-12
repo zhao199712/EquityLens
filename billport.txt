@@ -1,5 +1,8 @@
-資料庫 (PostgreSQL/TimescaleDB): localhost:5433 (帳密皆為 equitylens)
+資料庫 (PostgreSQL/TimescaleDB): localhost:5433 (帳密皆為 equitylens 密碼是equitylens_dev_password
+)
 
 快取 (Redis): localhost:6380
 
 物件儲存 (Garage/S3): localhost:9000
+
+啟動後端API伺服器 dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj
