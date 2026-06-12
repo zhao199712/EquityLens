@@ -12,6 +12,15 @@
         "PG_PASSWORD": "equitylens",
         "PG_DATABASE": "equitylens"
       }
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "@playwright/mcp@latest"],
+      "enabled": true
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp"
     }
   }
 }

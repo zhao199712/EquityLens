@@ -74,6 +74,40 @@ public sealed class RiskMathTests
         Assert.Equal(0, RiskMath.CalculateAnnualizedVolatility(0));
     }
 
+    [Fact]
+    public void CalculateEwmaVolatility_ReturnsPositiveForVolatileReturns()
+    {
+        var returns = new decimal[] { 0.01m, -0.02m, 0.015m, -0.01m, 0.03m };
+        var result = RiskMath.CalculateEwmaVolatility(returns, 0.94m);
+        Assert.True(result > 0);
+    }
+
+    [Fact]
+    public void CalculateEwmaVolatility_ZeroReturns_ReturnsZero()
+    {
+        var returns = new decimal[] { 0m, 0m, 0m, 0m };
+        var result = RiskMath.CalculateEwmaVolatility(returns, 0.94m);
+        Assert.Equal(0, result);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void CalculateEwmaVolatility_InvalidLambda_ReturnsZero(double lambda)
+    {
+        var returns = new decimal[] { 0.01m, -0.02m, 0.015m };
+        var result = RiskMath.CalculateEwmaVolatility(returns, (decimal)lambda);
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public void CalculateRollingLogReturns_ReturnsWindowSums()
+    {
+        var returns = new decimal[] { 0.01m, 0.02m, -0.01m, 0.03m };
+        var result = RiskMath.CalculateRollingLogReturns(returns, 2);
+        Assert.Equal(new[] { 0.03m, 0.01m, 0.02m }, result);
+    }
+
     [Theory]
     [InlineData(0.10, 0.02, 0.15, 0.5333)]
     [InlineData(0, 0.02, 0.15, -0.1333)]

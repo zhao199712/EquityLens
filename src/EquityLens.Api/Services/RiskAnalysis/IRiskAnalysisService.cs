@@ -28,7 +28,7 @@ public interface IRiskAnalysisService
     /// <param name="portfolioId">投資組合唯一識別碼。</param>
     /// <param name="from">歷史價格起始日期。</param>
     /// <param name="to">歷史價格結束日期。</param>
-    /// <param name="horizonDays">蒙地卡羅模擬天數（預設 30）。</param>
+    /// <param name="horizonDays">相容舊版呼叫保留；回應固定包含 1、7、30 日期限。</param>
     /// <param name="confidenceLevel">信心水準（例如 0.95 = 95%）。</param>
     /// <param name="simulations">蒙地卡羅模擬路徑數量（預設 10000）。</param>
     /// <param name="providerUserId">認證使用者的 UserId（由 controller 傳入）。</param>

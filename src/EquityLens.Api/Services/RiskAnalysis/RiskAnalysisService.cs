@@ -17,10 +17,12 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
     private const int MinPriceCount = 30;
     private const decimal MaxConfidenceLevel = 0.999m;
     private const decimal MinConfidenceLevel = 0.90m;
-    private const int MaxHorizonDays = 252;
-    private const int MinHorizonDays = 1;
     private const int MaxSimulations = 100000;
     private const int MinSimulations = 1000;
+    private const decimal EwmaLambda = 0.94m;
+    private const string VolatilityMethod = "EWMA";
+    private const string DriftAssumption = "ZeroDrift";
+    private static readonly int[] SupportedHorizons = [1, 7, 30];
 
     private readonly ISecurityRepository _securityRepository;
     private readonly IMarketPriceRepository _marketPriceRepository;
@@ -73,12 +75,6 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
                 "risk.invalid_confidence_level", "Confidence level must be between 0.90 and 0.999.");
         }
 
-        if (horizonDays < MinHorizonDays || horizonDays > MaxHorizonDays)
-        {
-            return Result<SecurityRiskResponse>.Failure(
-                "risk.invalid_horizon_days", "Horizon days must be between 1 and 252.");
-        }
-
         if (simulations < MinSimulations || simulations > MaxSimulations)
         {
             return Result<SecurityRiskResponse>.Failure(
@@ -115,16 +111,10 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             logReturns.Add(logReturn);
         }
 
-        var historicalVaR = RiskMath.CalculateHistoricalVaR(logReturns, confidenceLevel);
-        var historicalES = RiskMath.CalculateExpectedShortfall(logReturns, confidenceLevel);
-
-        var mcResult = RiskMath.RunMonteCarloSimulation(
-            priceValues[^1],
-            gbmParams.AnnualizedDrift,
-            gbmParams.AnnualizedVolatility,
-            horizonDays,
-            simulations,
-            confidenceLevel);
+        var ewmaDailyVolatility = RiskMath.CalculateEwmaVolatility(logReturns, EwmaLambda);
+        var ewmaAnnualizedVolatility = RiskMath.CalculateAnnualizedVolatility(ewmaDailyVolatility);
+        var horizons = BuildSecurityHorizons(
+            priceValues[^1], logReturns, ewmaAnnualizedVolatility, simulations, confidenceLevel);
 
         var response = new SecurityRiskResponse(
             securityId,
@@ -132,19 +122,15 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             to,
             gbmParams.PriceCount,
             gbmParams.ReturnCount,
-            gbmParams.AnnualizedDrift,
-            gbmParams.AnnualizedVolatility,
-            historicalVaR,
-            historicalES,
-            mcResult.ConfidenceLevel,
-            horizonDays,
+            0,
+            ewmaAnnualizedVolatility,
+            confidenceLevel,
             simulations,
-            mcResult.SimulatedVaR,
-            mcResult.SimulatedES,
-            mcResult.MeanFinalValue,
-            mcResult.MedianFinalValue,
-            mcResult.WorstCase95Percentile,
-            mcResult.BestCase95Percentile);
+            VolatilityMethod,
+            EwmaLambda,
+            DriftAssumption,
+            SupportedHorizons,
+            horizons);
 
         return Result<SecurityRiskResponse>.Success(response);
     }
@@ -170,12 +156,6 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         {
             return Result<PortfolioRiskResponse>.Failure(
                 "risk.invalid_confidence_level", "Confidence level must be between 0.90 and 0.999.");
-        }
-
-        if (horizonDays < MinHorizonDays || horizonDays > MaxHorizonDays)
-        {
-            return Result<PortfolioRiskResponse>.Failure(
-                "risk.invalid_horizon_days", "Horizon days must be between 1 and 252.");
         }
 
         if (simulations < MinSimulations || simulations > MaxSimulations)
@@ -331,10 +311,8 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         }
 
         // 計算風險指標
-        var volatility = RiskMath.CalculateVolatility(portfolioReturns);
+        var volatility = RiskMath.CalculateEwmaVolatility(portfolioReturns, EwmaLambda);
         var annualizedVolatility = RiskMath.CalculateAnnualizedVolatility(volatility);
-        var historicalVaR = RiskMath.CalculateHistoricalVaR(portfolioReturns, confidenceLevel);
-        var historicalES = RiskMath.CalculateExpectedShortfall(portfolioReturns, confidenceLevel);
 
         // Sharpe 使用 portfolioReturns 的平均值年化
         var meanReturn = portfolioReturns.Average();
@@ -372,10 +350,10 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
                 secPrices?.Count ?? 0));
         }
 
-        // Correlated GBM Monte Carlo
-        var mcResult = RunCorrelatedMonteCarlo(
-            dateToPrice, weightsBySecurityId, totalMarketValue,
-            horizonDays, simulations, confidenceLevel);
+        // Correlated zero-drift GBM Monte Carlo for the fixed product horizons.
+        var horizons = BuildPortfolioHorizons(
+            portfolioReturns, dateToPrice, weightsBySecurityId, totalMarketValue,
+            simulations, confidenceLevel);
 
         var response = new PortfolioRiskResponse(
             portfolioId,
@@ -387,19 +365,15 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             portfolioReturns.Count,
             totalMarketValue,
             annualizedVolatility,
-            historicalVaR,
-            historicalES,
             maxDrawdown,
             sharpeRatio,
             confidenceLevel,
-            horizonDays,
             simulations,
-            mcResult.SimulatedVaR,
-            mcResult.SimulatedES,
-            mcResult.MeanFinalValue,
-            mcResult.MedianFinalValue,
-            mcResult.WorstCase95Percentile,
-            mcResult.BestCase95Percentile,
+            VolatilityMethod,
+            EwmaLambda,
+            DriftAssumption,
+            SupportedHorizons,
+            horizons,
             holdingRisks);
 
         return Result<PortfolioRiskResponse>.Success(response);
@@ -422,7 +396,7 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             return new MonteCarloResult(0, 0, 0, 0, 0, 0, confidenceLevel);
         }
 
-        // Compute log returns matrix and GBM params for each asset
+        // Compute log returns matrix and EWMA volatility for each asset.
         var returnsMatrix = new List<IReadOnlyList<decimal>>(n);
         var initialValues = new List<decimal>(n);
         var drifts = new List<decimal>(n);
@@ -455,11 +429,9 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             }
 
             returnsMatrix.Add(logReturns);
-            var meanLog = logReturns.Average();
-            var dailyVol = RiskMath.CalculateVolatility(logReturns);
+            var dailyVol = RiskMath.CalculateEwmaVolatility(logReturns, EwmaLambda);
             var annVol = RiskMath.CalculateAnnualizedVolatility(dailyVol);
-            var annDrift = meanLog * 252 + 0.5m * annVol * annVol;
-            drifts.Add(annDrift);
+            drifts.Add(0);
             vols.Add(annVol);
         }
 
@@ -512,6 +484,73 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         return mcResult;
     }
 
+    private static IReadOnlyList<RiskHorizonResult> BuildSecurityHorizons(
+        decimal initialValue,
+        IReadOnlyList<decimal> logReturns,
+        decimal annualizedVolatility,
+        int simulations,
+        decimal confidenceLevel)
+    {
+        return SupportedHorizons
+            .Select(horizonDays =>
+            {
+                var rollingReturns = RiskMath.CalculateRollingLogReturns(logReturns, horizonDays);
+                var mcResult = RiskMath.RunMonteCarloSimulation(
+                    initialValue,
+                    0,
+                    annualizedVolatility,
+                    horizonDays,
+                    simulations,
+                    confidenceLevel);
+
+                return new RiskHorizonResult(
+                    horizonDays,
+                    RiskMath.CalculateHistoricalVaR(rollingReturns, confidenceLevel),
+                    RiskMath.CalculateExpectedShortfall(rollingReturns, confidenceLevel),
+                    mcResult.SimulatedVaR,
+                    mcResult.SimulatedES,
+                    mcResult.MeanFinalValue,
+                    mcResult.MedianFinalValue,
+                    mcResult.WorstCase95Percentile,
+                    mcResult.BestCase95Percentile);
+            })
+            .ToList();
+    }
+
+    private IReadOnlyList<RiskHorizonResult> BuildPortfolioHorizons(
+        IReadOnlyList<decimal> portfolioReturns,
+        IReadOnlyDictionary<Guid, IReadOnlyList<decimal>> alignedPrices,
+        IReadOnlyDictionary<Guid, decimal> weights,
+        decimal totalMarketValue,
+        int simulations,
+        decimal confidenceLevel)
+    {
+        return SupportedHorizons
+            .Select(horizonDays =>
+            {
+                var rollingReturns = RiskMath.CalculateRollingLogReturns(portfolioReturns, horizonDays);
+                var mcResult = RunCorrelatedMonteCarlo(
+                    alignedPrices,
+                    weights,
+                    totalMarketValue,
+                    horizonDays,
+                    simulations,
+                    confidenceLevel);
+
+                return new RiskHorizonResult(
+                    horizonDays,
+                    RiskMath.CalculateHistoricalVaR(rollingReturns, confidenceLevel),
+                    RiskMath.CalculateExpectedShortfall(rollingReturns, confidenceLevel),
+                    mcResult.SimulatedVaR,
+                    mcResult.SimulatedES,
+                    mcResult.MeanFinalValue,
+                    mcResult.MedianFinalValue,
+                    mcResult.WorstCase95Percentile,
+                    mcResult.BestCase95Percentile);
+            })
+            .ToList();
+    }
+
     private static decimal CalculateLogReturnVolatility(IReadOnlyList<decimal> prices)
     {
         if (prices.Count < 2) return 0;
@@ -521,6 +560,6 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             if (prices[i - 1] <= 0 || prices[i] <= 0) return 0;
             logReturns.Add((decimal)Math.Log((double)(prices[i] / prices[i - 1])));
         }
-        return RiskMath.CalculateVolatility(logReturns);
+        return RiskMath.CalculateEwmaVolatility(logReturns, EwmaLambda);
     }
 }
