@@ -7,7 +7,7 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "PostgreSQL": "Host=localhost:5432;Database=equitylens;Username=your_user;Password=your_password"
+    "PostgreSQL": "Host=localhost:5433;Database=equitylens;Username=your_user;Password=your_password"
   },
   "MarketData": {
     "AlphaVantage": {

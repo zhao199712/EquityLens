@@ -2,7 +2,7 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { router } from '../router'
 
 export const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080',
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5034/api',
   timeout: 10000,
 })
 
