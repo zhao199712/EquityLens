@@ -49,7 +49,7 @@ services:
       - "${GARAGE_ADMIN_PORT:-3903}:3903"
     volumes:
       - garage-data:/var/lib/garage
-      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro,z
     healthcheck:
       test: ["CMD", "/garage", "status"]
       interval: 10s
@@ -68,7 +68,7 @@ services:
     ports:
       - "${GARAGE_WEBUI_PORT:-3909}:3909"
     volumes:
-      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro,z
     depends_on:
       garage:
         condition: service_healthy

@@ -77,15 +77,24 @@ public sealed class RiskAnalysisServiceTests
         Assert.Equal(To, response.To);
         Assert.Equal(252, response.PriceCount);
         Assert.Equal(ConfidenceLevel, response.ConfidenceLevel);
-        Assert.Equal(HorizonDays, response.HorizonDays);
         Assert.Equal(Simulations, response.Simulations);
+        Assert.Equal("EWMA", response.VolatilityMethod);
+        Assert.Equal(0.94m, response.EwmaLambda);
+        Assert.Equal("ZeroDrift", response.DriftAssumption);
+        Assert.Equal(new[] { 1, 7, 30 }, response.SupportedHorizons);
+        Assert.Equal(3, response.Horizons.Count);
+        Assert.Equal(new[] { 1, 7, 30 }, response.Horizons.Select(x => x.HorizonDays));
+        Assert.Equal(0, response.AnnualizedDrift);
         Assert.True(response.AnnualizedVolatility > 0);
-        Assert.True(response.HistoricalVaR < 0);
-        Assert.True(response.HistoricalES <= response.HistoricalVaR);
-        Assert.True(response.MonteCarloVaR < 0);
-        Assert.True(response.MonteCarloES <= response.MonteCarloVaR);
-        Assert.True(response.MonteCarloMeanFinalValue > 0);
-        Assert.True(response.MonteCarloBestCaseFinalValue >= response.MonteCarloWorstCaseFinalValue);
+        foreach (var horizon in response.Horizons)
+        {
+            Assert.True(horizon.HistoricalVaR < 0);
+            Assert.True(horizon.HistoricalES <= horizon.HistoricalVaR);
+            Assert.True(horizon.MonteCarloVaR < 0);
+            Assert.True(horizon.MonteCarloES <= horizon.MonteCarloVaR);
+            Assert.True(horizon.MonteCarloMeanFinalValue > 0);
+            Assert.True(horizon.MonteCarloBestCaseFinalValue >= horizon.MonteCarloWorstCaseFinalValue);
+        }
     }
 
     [Fact]
@@ -196,9 +205,17 @@ public sealed class RiskAnalysisServiceTests
         Assert.True(response.AlignedReturnCount > 0);
         Assert.True(response.TotalMarketValue > 0);
         Assert.True(response.HistoricalAnnualizedVolatility >= 0);
-        Assert.True(response.HistoricalVaR <= 0);
-        Assert.True(response.HistoricalES <= response.HistoricalVaR);
-        Assert.True(response.MonteCarloMeanFinalValue > response.TotalMarketValue * 0.5m);
+        Assert.Equal("EWMA", response.VolatilityMethod);
+        Assert.Equal(0.94m, response.EwmaLambda);
+        Assert.Equal("ZeroDrift", response.DriftAssumption);
+        Assert.Equal(new[] { 1, 7, 30 }, response.SupportedHorizons);
+        Assert.Equal(3, response.Horizons.Count);
+        foreach (var horizon in response.Horizons)
+        {
+            Assert.True(horizon.HistoricalVaR <= 0);
+            Assert.True(horizon.HistoricalES <= horizon.HistoricalVaR);
+            Assert.True(horizon.MonteCarloMeanFinalValue > response.TotalMarketValue * 0.5m);
+        }
         Assert.Equal(0.95m, response.ConfidenceLevel);
         Assert.Equal(2, response.Holdings.Count);
     }
@@ -231,7 +248,8 @@ public sealed class RiskAnalysisServiceTests
             PortfolioId, From, To, HorizonDays, 0.95m, 5000, UserId, default);
 
         Assert.True(result.IsSuccess, $"Expected success but got: {result.ErrorCode}:{result.ErrorMessage}");
-        Assert.True(result.Value!.MonteCarloMeanFinalValue > result.Value.TotalMarketValue * 0.5m);
+        Assert.All(result.Value!.Horizons,
+            horizon => Assert.True(horizon.MonteCarloMeanFinalValue > result.Value.TotalMarketValue * 0.5m));
     }
 
     [Fact]

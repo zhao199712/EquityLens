@@ -11,20 +11,16 @@ namespace EquityLens.Api.Contracts.Risk;
 /// <param name="PricedHoldingCount">有最新價格的持倉數量。</param>
 /// <param name="AlignedReturnCount">所有資產日期對齊後的報酬率筆數。</param>
 /// <param name="TotalMarketValue">投資組合總市值（以基準貨幣計價）。</param>
-/// <param name="HistoricalAnnualizedVolatility">投資組合歷史年化波動率。</param>
-/// <param name="HistoricalVaR">投資組合歷史模擬法 VaR。</param>
-/// <param name="HistoricalES">投資組合歷史模擬法 Expected Shortfall。</param>
+/// <param name="HistoricalAnnualizedVolatility">投資組合 EWMA 年化波動率。</param>
 /// <param name="MaxDrawdown">投資組合最大回撤。</param>
 /// <param name="SharpeRatio">投資組合夏普比率。</param>
 /// <param name="ConfidenceLevel">風險指標的信心水準。</param>
-/// <param name="HorizonDays">蒙地卡羅模擬天數。</param>
 /// <param name="Simulations">蒙地卡羅模擬路徑數量。</param>
-/// <param name="MonteCarloVaR">Correlated GBM Monte Carlo 模擬 VaR。</param>
-/// <param name="MonteCarloES">Correlated GBM Monte Carlo 模擬 ES。</param>
-/// <param name="MonteCarloMeanFinalValue">模擬最終價值的平均值。</param>
-/// <param name="MonteCarloMedianFinalValue">模擬最終價值的中位數。</param>
-/// <param name="MonteCarloWorstCaseFinalValue">信心水準下的最差情境最終價值。</param>
-/// <param name="MonteCarloBestCaseFinalValue">信心水準下的最佳情境最終價值。</param>
+/// <param name="VolatilityMethod">波動率估計方法。</param>
+/// <param name="EwmaLambda">EWMA 衰減係數。</param>
+/// <param name="DriftAssumption">漂移項假設。</param>
+/// <param name="SupportedHorizons">固定輸出的風險期限。</param>
+/// <param name="Horizons">各期限的 VaR、ES 與蒙地卡羅結果。</param>
 /// <param name="Holdings">各持倉的風險貢獻摘要。</param>
 public sealed record PortfolioRiskResponse(
     Guid PortfolioId,
@@ -36,19 +32,15 @@ public sealed record PortfolioRiskResponse(
     int AlignedReturnCount,
     decimal TotalMarketValue,
     decimal HistoricalAnnualizedVolatility,
-    decimal HistoricalVaR,
-    decimal HistoricalES,
     decimal MaxDrawdown,
     decimal SharpeRatio,
     decimal ConfidenceLevel,
-    int HorizonDays,
     int Simulations,
-    decimal MonteCarloVaR,
-    decimal MonteCarloES,
-    decimal MonteCarloMeanFinalValue,
-    decimal MonteCarloMedianFinalValue,
-    decimal MonteCarloWorstCaseFinalValue,
-    decimal MonteCarloBestCaseFinalValue,
+    string VolatilityMethod,
+    decimal EwmaLambda,
+    string DriftAssumption,
+    IReadOnlyList<int> SupportedHorizons,
+    IReadOnlyList<RiskHorizonResult> Horizons,
     IReadOnlyList<PortfolioHoldingRiskResponse> Holdings);
 
 /// <summary>

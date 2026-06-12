@@ -30,7 +30,7 @@ public sealed class SecurityRiskController : ApiControllerBase
     /// <param name="securityId">證券的唯一識別碼。</param>
     /// <param name="from">歷史價格起始日期。</param>
     /// <param name="to">歷史價格結束日期。</param>
-    /// <param name="horizonDays">模擬天數（預設 30）。</param>
+    /// <param name="horizonDays">相容舊版呼叫保留；回應固定包含 1、7、30 日期限。</param>
     /// <param name="confidenceLevel">信心水準（預設 0.95）。</param>
     /// <param name="simulations">蒙地卡羅模擬路徑數量（預設 10000）。</param>
     /// <param name="cancellationToken">取消權杖。</param>

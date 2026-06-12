@@ -108,6 +108,63 @@ public static class RiskMath
     }
 
     /// <summary>
+    /// 使用 EWMA（Exponentially Weighted Moving Average）估計條件日波動率。
+    /// </summary>
+    /// <param name="returns">每日對數報酬率序列。</param>
+    /// <param name="lambda">衰減係數，日資料常用 0.94。</param>
+    /// <returns>EWMA 日波動率。若資料不足或 lambda 無效則回傳 0。</returns>
+    /// <remarks>
+    /// 模型：RiskMetrics EWMA volatility model。
+    /// 公式：σ_t² = λσ_{t-1}² + (1 - λ)r_{t-1}²。
+    /// 初始變異數使用樣本變異數，讓估計在短樣本下較穩定。
+    /// </remarks>
+    public static decimal CalculateEwmaVolatility(
+        IReadOnlyList<decimal> returns,
+        decimal lambda = 0.94m)
+    {
+        if (returns is null || returns.Count < 2 || lambda <= 0 || lambda >= 1)
+            return 0;
+
+        var variance = CalculateVariance(returns);
+        if (variance <= 0)
+            return 0;
+
+        for (var i = 0; i < returns.Count; i++)
+        {
+            variance = lambda * variance + (1 - lambda) * returns[i] * returns[i];
+        }
+
+        return variance <= 0 ? 0 : (decimal)Math.Sqrt((double)variance);
+    }
+
+    /// <summary>
+    /// 將每日對數報酬率聚合為滾動 N 日對數報酬率。
+    /// </summary>
+    /// <param name="returns">每日對數報酬率序列。</param>
+    /// <param name="horizonDays">持有期間天數。</param>
+    /// <returns>滾動 N 日對數報酬率序列。</returns>
+    public static IReadOnlyList<decimal> CalculateRollingLogReturns(
+        IReadOnlyList<decimal> returns,
+        int horizonDays)
+    {
+        if (returns is null || horizonDays <= 0 || returns.Count < horizonDays)
+            return Array.Empty<decimal>();
+
+        var rolling = new List<decimal>(returns.Count - horizonDays + 1);
+        var windowSum = 0m;
+        for (var i = 0; i < returns.Count; i++)
+        {
+            windowSum += returns[i];
+            if (i >= horizonDays)
+                windowSum -= returns[i - horizonDays];
+            if (i >= horizonDays - 1)
+                rolling.Add(windowSum);
+        }
+
+        return rolling;
+    }
+
+    /// <summary>
     /// 計算夏普比率（Sharpe Ratio）。
     /// </summary>
     /// <param name="portfolioReturn">投資組合報酬率。</param>
