@@ -3,6 +3,8 @@ import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
+import { createI18n } from 'vue-i18n'
+import en from '../../../locales/en'
 import LoginView from '../LoginView.vue'
 
 vi.mock('../../../services/http', () => ({
@@ -27,14 +29,23 @@ function createTestRouter() {
   })
 }
 
+function createTestI18n() {
+  return createI18n({
+    legacy: false,
+    locale: 'en',
+    messages: { en },
+  })
+}
+
 function mountLogin() {
   const pinia = createPinia()
   setActivePinia(pinia)
   const router = createTestRouter()
+  const i18n = createTestI18n()
 
   return mount(LoginView, {
     global: {
-      plugins: [pinia, router],
+      plugins: [pinia, router, i18n],
       stubs: { RouterLink: true },
     },
   })
@@ -46,45 +57,45 @@ describe('LoginView', () => {
     sessionStorage.clear()
   })
 
-  it('渲染登入表單', () => {
+  it('renders login form', () => {
     const wrapper = mountLogin()
 
-    expect(wrapper.find('h2').text()).toBe('歡迎回來')
+    expect(wrapper.find('h2').text()).toBe('Welcome Back')
     expect(wrapper.find('input[type="email"]').exists()).toBe(true)
     expect(wrapper.find('input[type="password"]').exists()).toBe(true)
-    expect(wrapper.find('button[type="submit"]').text()).toContain('登入')
+    expect(wrapper.find('button[type="submit"]').text()).toContain('Sign In')
   })
 
-  it('渲染品牌區域', () => {
+  it('renders brand area', () => {
     const wrapper = mountLogin()
     expect(wrapper.find('.kimi-login-title').text()).toBe('EQUITYLENS')
   })
 
-  it('渲染註冊連結', () => {
+  it('renders register link', () => {
     const wrapper = mountLogin()
     const link = wrapper.findComponent({ name: 'RouterLink' })
     expect(link.props('to')).toBe('/register')
   })
 
-  it('空欄位時顯示錯誤訊息', async () => {
+  it('shows error when fields are empty', async () => {
     const wrapper = mountLogin()
 
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('請填寫所有欄位')
+    expect(wrapper.find('.kimi-error').text()).toBe('Please fill in all fields')
     expect(mockedHttp.post).not.toHaveBeenCalled()
   })
 
-  it('只填 email 不填 password 時顯示錯誤', async () => {
+  it('shows error when only email is filled', async () => {
     const wrapper = mountLogin()
 
     await wrapper.find('input[type="email"]').setValue('test@test.com')
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('請填寫所有欄位')
+    expect(wrapper.find('.kimi-error').text()).toBe('Please fill in all fields')
   })
 
-  it('登入成功時跳轉到 dashboard', async () => {
+  it('redirects to dashboard on successful login', async () => {
     mockedHttp.post.mockResolvedValueOnce({
       data: {
         accessToken: 'token',
@@ -99,7 +110,7 @@ describe('LoginView', () => {
     setActivePinia(pinia)
 
     const wrapper = mount(LoginView, {
-      global: { plugins: [pinia, router], stubs: { RouterLink: true } },
+      global: { plugins: [pinia, router, createTestI18n()], stubs: { RouterLink: true } },
     })
 
     await wrapper.find('input[type="email"]').setValue('test@test.com')
@@ -111,7 +122,7 @@ describe('LoginView', () => {
     })
   })
 
-  it('登入失敗時顯示錯誤訊息', async () => {
+  it('shows error message on login failure', async () => {
     mockedHttp.post.mockRejectedValueOnce({
       response: { status: 401, data: { message: 'Invalid email or password.' } },
     })
@@ -127,7 +138,7 @@ describe('LoginView', () => {
     })
   })
 
-  it('登入失敗無 message 時顯示預設錯誤', async () => {
+  it('shows default error when no message from server', async () => {
     mockedHttp.post.mockRejectedValueOnce(new Error('Network error'))
 
     const wrapper = mountLogin()
@@ -137,11 +148,11 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('登入失敗，請檢查帳號密碼')
+      expect(wrapper.find('.kimi-error').text()).toBe('Login failed, please check your credentials')
     })
   })
 
-  it('loading 時按鈕顯示 spinner', async () => {
+  it('shows spinner during loading', async () => {
     let resolveLogin: (v: unknown) => void
     mockedHttp.post.mockImplementation(
       () => new Promise((resolve) => { resolveLogin = resolve }),

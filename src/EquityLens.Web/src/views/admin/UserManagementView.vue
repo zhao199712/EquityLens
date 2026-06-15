@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   NButton,
   NInput,
@@ -20,11 +21,12 @@ import {
   TrashOutline,
 } from '@vicons/ionicons5'
 
+const { t } = useI18n()
+
 const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 
-// Mock users
 const users = ref([
   { id: '1', name: 'Admin User', email: 'admin@equitylens.com', role: 'admin', status: 'active', lastLogin: '2026-06-03 10:00:00' },
   { id: '2', name: 'Analyst A', email: 'analyst.a@equitylens.com', role: 'analyst', status: 'active', lastLogin: '2026-06-03 09:30:00' },
@@ -44,11 +46,11 @@ const filteredUsers = computed(() => {
   return result
 })
 
-const roleOptions = [
-  { label: '管理員', value: 'admin' },
-  { label: '分析師', value: 'analyst' },
-  { label: '檢視者', value: 'viewer' },
-]
+const roleOptions = computed(() => [
+  { label: t('admin.users.roleAdmin'), value: 'admin' },
+  { label: t('admin.users.roleAnalyst'), value: 'analyst' },
+  { label: t('admin.users.roleViewer'), value: 'viewer' },
+])
 
 const showCreateModal = ref(false)
 const createForm = ref({
@@ -59,9 +61,9 @@ const createForm = ref({
 
 function getRoleLabel(role: string): string {
   const map: Record<string, string> = {
-    admin: '管理員',
-    analyst: '分析師',
-    viewer: '檢視者',
+    admin: t('admin.users.roleAdmin'),
+    analyst: t('admin.users.roleAnalyst'),
+    viewer: t('admin.users.roleViewer'),
   }
   return map[role] || role
 }
@@ -97,21 +99,21 @@ function handleDelete(id: string) {
   <main class="page animate-fade-in">
     <section class="page-heading">
       <div>
-        <p class="eyebrow">User Management</p>
-        <h1>使用者管理</h1>
+        <p class="eyebrow">{{ t('admin.users.titleEn') }}</p>
+        <h1>{{ t('admin.users.title') }}</h1>
       </div>
       <NButton type="primary" class="btn-primary" @click="showCreateModal = true">
         <template #icon>
           <NIcon><AddOutline /></NIcon>
         </template>
-        新增使用者
+        {{ t('admin.users.create') }}
       </NButton>
     </section>
 
     <div class="glass-panel" style="padding: 16px 20px;">
       <NInput
         v-model:value="searchQuery"
-        placeholder="搜尋使用者..."
+        :placeholder="t('admin.users.searchPlaceholder')"
         clearable
         style="max-width: 400px;"
       >
@@ -126,11 +128,11 @@ function handleDelete(id: string) {
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr style="border-bottom: 1px solid var(--border-subtle);">
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">使用者</th>
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">角色</th>
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">狀態</th>
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">最後登入</th>
-              <th style="text-align: center; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">操作</th>
+              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.user') }}</th>
+              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.role') }}</th>
+              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.status') }}</th>
+              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.lastLogin') }}</th>
+              <th style="text-align: center; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -160,7 +162,7 @@ function handleDelete(id: string) {
               </td>
               <td style="padding: 14px 20px;">
                 <NTag :type="user.status === 'active' ? 'success' : 'default'" size="small" round>
-                  {{ user.status === 'active' ? '啟用' : '停用' }}
+                  {{ user.status === 'active' ? t('admin.users.active') : t('admin.users.inactive') }}
                 </NTag>
               </td>
               <td style="padding: 14px 20px; color: var(--text-secondary); font-size: 13px;">
@@ -181,7 +183,7 @@ function handleDelete(id: string) {
                         </template>
                       </NButton>
                     </template>
-                    確定要刪除此使用者嗎？
+                    {{ t('admin.users.delete') }}?
                   </NPopconfirm>
                 </NSpace>
               </td>
@@ -197,26 +199,26 @@ function handleDelete(id: string) {
     <!-- Create Modal -->
     <NModal
       v-model:show="showCreateModal"
-      title="新增使用者"
+      :title="t('admin.users.createTitle')"
       preset="card"
       style="width: 420px;"
       :bordered="false"
     >
       <NForm :model="createForm" label-placement="top">
-        <NFormItem label="名稱" required>
-          <NInput v-model:value="createForm.name" placeholder="輸入使用者名稱" />
+        <NFormItem :label="t('admin.users.name')" required>
+          <NInput v-model:value="createForm.name" :placeholder="t('admin.users.namePlaceholder')" />
         </NFormItem>
-        <NFormItem label="Email" required>
-          <NInput v-model:value="createForm.email" placeholder="輸入 Email" />
+        <NFormItem :label="t('admin.users.email')" required>
+          <NInput v-model:value="createForm.email" :placeholder="t('admin.users.emailPlaceholder')" />
         </NFormItem>
-        <NFormItem label="角色">
+        <NFormItem :label="t('admin.users.role')">
           <NSelect v-model:value="createForm.role" :options="roleOptions" />
         </NFormItem>
       </NForm>
       <template #footer>
         <NSpace justify="end">
-          <NButton @click="showCreateModal = false">取消</NButton>
-          <NButton type="primary" class="btn-primary" @click="handleCreate">新增</NButton>
+          <NButton @click="showCreateModal = false">{{ t('admin.users.cancel') }}</NButton>
+          <NButton type="primary" class="btn-primary" @click="handleCreate">{{ t('admin.users.createBtn') }}</NButton>
         </NSpace>
       </template>
     </NModal>

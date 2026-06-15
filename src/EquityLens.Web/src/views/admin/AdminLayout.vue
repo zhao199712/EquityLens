@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { NLayout, NLayoutSider, NLayoutContent, NMenu } from 'naive-ui'
 import {
   PeopleOutline,
@@ -15,62 +16,63 @@ import { renderIcon } from '../../utils/icons'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 function handleMenuSelect(key: string) {
-  const item = menuOptions.find(m => m.key === key)
+  const item = menuOptions.value.find(m => m.key === key)
   if (item) {
     router.push(item.path)
   }
 }
 
-const menuOptions = [
+const menuOptions = computed(() => [
   {
-    label: '使用者管理',
+    label: t('admin.layout.userMgmt'),
     key: 'users',
     icon: renderIcon(PeopleOutline),
     path: '/admin/users',
   },
   {
-    label: '股票標的管理',
+    label: t('admin.layout.stockMgmt'),
     key: 'stocks',
     icon: renderIcon(BusinessOutline),
     path: '/admin/stocks',
   },
   {
-    label: '市場價格管理',
+    label: t('admin.layout.priceMgmt'),
     key: 'prices',
     icon: renderIcon(TrendingUpOutline),
     path: '/admin/prices',
   },
   {
-    label: '財報資料管理',
+    label: t('admin.layout.reportMgmt'),
     key: 'reports',
     icon: renderIcon(DocumentTextOutline),
     path: '/admin/reports',
   },
   {
-    label: 'Risk Model 管理',
+    label: t('admin.layout.riskModelMgmt'),
     key: 'risk-models',
     icon: renderIcon(ShieldCheckmarkOutline),
     path: '/admin/risk-models',
   },
   {
-    label: 'AI Report 設定',
+    label: t('admin.layout.aiSettings'),
     key: 'ai-settings',
     icon: renderIcon(SparklesOutline),
     path: '/admin/ai-settings',
   },
   {
-    label: 'Job 狀態管理',
+    label: t('admin.layout.jobMgmt'),
     key: 'jobs',
     icon: renderIcon(TimeOutline),
     path: '/admin/jobs',
   },
-]
+])
 
 const activeMenuKey = computed(() => {
   const path = route.path
-  const item = menuOptions.find(m => path.startsWith(m.path))
+  const item = menuOptions.value.find(m => path.startsWith(m.path))
   return item?.key || 'users'
 })
 </script>
@@ -87,7 +89,7 @@ const activeMenuKey = computed(() => {
     >
       <div style="padding: 20px 16px 12px;">
         <div style="color: var(--text-tertiary); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">
-          管理後台
+          {{ t('admin.layout.title') }}
         </div>
       </div>
       <NMenu

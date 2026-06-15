@@ -1,27 +1,30 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { NButton, NEmpty, NIcon } from 'naive-ui'
 import { ShieldCheckmarkOutline } from '@vicons/ionicons5'
+
+const { t } = useI18n()
 </script>
 
 <template>
   <main class="page animate-fade-in">
     <section class="page-heading">
       <div>
-        <p class="eyebrow">Risk Model Management</p>
-        <h1>Risk Model 管理</h1>
+        <p class="eyebrow">{{ t('admin.riskModels.titleEn') }}</p>
+        <h1>{{ t('admin.riskModels.title') }}</h1>
       </div>
       <NButton type="primary" class="btn-primary">
         <template #icon>
           <NIcon><ShieldCheckmarkOutline /></NIcon>
         </template>
-        新增模型
+        {{ t('admin.riskModels.create') }}
       </NButton>
     </section>
 
     <div class="empty-state">
-      <NEmpty description="Risk Model 管理功能開發中">
+      <NEmpty :description="t('admin.riskModels.emptyTitle')">
         <template #extra>
-          <NButton type="primary" class="btn-primary">瞭解更多</NButton>
+          <NButton type="primary" class="btn-primary">{{ t('admin.riskModels.learnMore') }}</NButton>
         </template>
       </NEmpty>
     </div>

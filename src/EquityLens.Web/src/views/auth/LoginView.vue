@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const email = ref('')
 const password = ref('')
@@ -13,7 +15,7 @@ const error = ref('')
 
 async function handleLogin() {
   if (!email.value || !password.value) {
-    error.value = '請填寫所有欄位'
+    error.value = t('auth.login.errorFillAll')
     return
   }
 
@@ -24,7 +26,7 @@ async function handleLogin() {
     await authStore.login(email.value, password.value)
     router.push({ name: 'dashboard' })
   } catch (e: any) {
-    error.value = e?.response?.data?.message || '登入失敗，請檢查帳號密碼'
+    error.value = e?.response?.data?.message || t('auth.login.errorLoginFailed')
   } finally {
     loading.value = false
   }
@@ -46,22 +48,22 @@ async function handleLogin() {
             <div class="kimi-feature-item">
               <div class="kimi-feature-icon">📊</div>
               <div>
-                <div class="kimi-feature-title">Portfolio Tracking</div>
-                <div class="kimi-feature-desc">即時追蹤投資組合表現</div>
+                <div class="kimi-feature-title">{{ t('auth.login.featurePortfolio') }}</div>
+                <div class="kimi-feature-desc">{{ t('auth.login.featurePortfolioDesc') }}</div>
               </div>
             </div>
             <div class="kimi-feature-item">
               <div class="kimi-feature-icon">🤖</div>
               <div>
-                <div class="kimi-feature-title">AI Analysis</div>
-                <div class="kimi-feature-desc">智能風險與財報分析</div>
+                <div class="kimi-feature-title">{{ t('auth.login.featureAI') }}</div>
+                <div class="kimi-feature-desc">{{ t('auth.login.featureAIDesc') }}</div>
               </div>
             </div>
             <div class="kimi-feature-item">
               <div class="kimi-feature-icon">📈</div>
               <div>
-                <div class="kimi-feature-title">Risk Management</div>
-                <div class="kimi-feature-desc">數據驅動的資產配置</div>
+                <div class="kimi-feature-title">{{ t('auth.login.featureRisk') }}</div>
+                <div class="kimi-feature-desc">{{ t('auth.login.featureRiskDesc') }}</div>
               </div>
             </div>
           </div>
@@ -72,13 +74,13 @@ async function handleLogin() {
       <div class="kimi-login-form-wrapper">
         <div class="kimi-login-form">
           <div class="kimi-login-header">
-            <h2>歡迎回來</h2>
-            <p>請登入您的帳號</p>
+            <h2>{{ t('auth.login.welcomeBack') }}</h2>
+            <p>{{ t('auth.login.pleaseLogin') }}</p>
           </div>
 
           <form class="kimi-form" @submit.prevent="handleLogin">
             <div class="kimi-form-group">
-              <label class="kimi-label">電子信箱</label>
+              <label class="kimi-label">{{ t('auth.login.email') }}</label>
               <input
                 v-model="email"
                 type="email"
@@ -89,7 +91,7 @@ async function handleLogin() {
             </div>
 
             <div class="kimi-form-group">
-              <label class="kimi-label">密碼</label>
+              <label class="kimi-label">{{ t('auth.login.password') }}</label>
               <input
                 v-model="password"
                 type="password"
@@ -109,12 +111,12 @@ async function handleLogin() {
               :disabled="loading"
             >
               <span v-if="loading" class="kimi-spinner"></span>
-              <span v-else>登入</span>
+              <span v-else>{{ t('auth.login.loginBtn') }}</span>
             </button>
           </form>
 
           <div class="kimi-login-footer">
-            <p>還沒有帳號？ <RouterLink to="/register">立即註冊</RouterLink></p>
+            <p>{{ t('auth.login.noAccount') }} <RouterLink to="/register">{{ t('auth.login.register') }}</RouterLink></p>
           </div>
         </div>
       </div>
@@ -142,7 +144,6 @@ async function handleLogin() {
   overflow: hidden;
 }
 
-/* Left Brand Side */
 .kimi-login-brand {
   flex: 1;
   padding: 48px 40px;
@@ -222,7 +223,6 @@ async function handleLogin() {
   margin-top: 2px;
 }
 
-/* Right Form Side */
 .kimi-login-form-wrapper {
   flex: 1;
   display: flex;
@@ -369,7 +369,6 @@ async function handleLogin() {
   color: var(--kimi-text-light);
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .kimi-login-container {
     flex-direction: column;

@@ -1,16 +1,19 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import ParticleCanvas from '../components/kimi/ParticleCanvas.vue'
 import ScrollReveal from '../components/kimi/ScrollReveal.vue'
 
 const router = useRouter()
+const { t } = useI18n()
 
-const kpiData = [
-  { label: 'TOTAL ASSETS', value: 'NT$ 12,580,000', sub: '較上月 +2.3%' },
-  { label: 'TOTAL RETURN', value: '+18.72%', sub: '年化報酬' },
-  { label: 'PORTFOLIO BETA', value: '1.08', sub: '相對大盤' },
-  { label: 'SHARPE RATIO', value: '1.42', sub: '風險調整後報酬' },
-]
+const kpiData = computed(() => [
+  { label: t('dashboard.kpi.totalAssets'), value: 'NT$ 12,580,000', sub: t('dashboard.kpi.totalAssetsSub') },
+  { label: t('dashboard.kpi.totalReturn'), value: '+18.72%', sub: t('dashboard.kpi.totalReturnSub') },
+  { label: t('dashboard.kpi.portfolioBeta'), value: '1.08', sub: t('dashboard.kpi.portfolioBetaSub') },
+  { label: t('dashboard.kpi.sharpeRatio'), value: '1.42', sub: t('dashboard.kpi.sharpeRatioSub') },
+])
 
 const recentRiskRuns = [
   { name: '科技成長型投資組合', date: '2026-06-03', var95: '-2.3%', var99: '-3.8%', status: 'completed' },
@@ -24,12 +27,12 @@ const recentReports = [
   { name: 'NVIDIA 風險評估報告', type: 'Risk Report', confidence: '高', date: '2026-06-01' },
 ]
 
-const activities = [
-  { title: '完成投資組合風險分析', desc: '科技成長型投資組合 — VaR 95%: -2.3%', time: '2 小時前' },
-  { title: '新增 AI 財務分析報告', desc: 'TSMC 2025 Q1 財報分析', time: '5 小時前' },
-  { title: '建立新投資組合', desc: '價值型藍籌股組合', time: '1 天前' },
-  { title: '風險模型參數更新', desc: '更新置信水準至 99%', time: '2 天前' },
-]
+const activities = computed(() => [
+  { title: t('dashboard.activity.riskComplete'), desc: t('dashboard.activity.riskCompleteDesc'), time: t('dashboard.activity.time2h') },
+  { title: t('dashboard.activity.reportAdded'), desc: t('dashboard.activity.reportAddedDesc'), time: t('dashboard.activity.time5h') },
+  { title: t('dashboard.activity.portfolioCreated'), desc: t('dashboard.activity.portfolioCreatedDesc'), time: t('dashboard.activity.time1d') },
+  { title: t('dashboard.activity.riskModelUpdated'), desc: t('dashboard.activity.riskModelUpdatedDesc'), time: t('dashboard.activity.time2d') },
+])
 </script>
 
 <template>
@@ -51,15 +54,15 @@ const activities = [
         </div>
 
         <p style="text-align: center; color: var(--kimi-muted); font-size: 14px; max-width: 480px; line-height: 1.6">
-          即時追蹤投資組合表現，智能分析收益與風險，數據驅動的資產配置洞察
+          {{ t('dashboard.heroSubtitle') }}
         </p>
 
         <div style="display: flex; gap: 12px; margin-top: 16px">
           <button class="kimi-btn kimi-btn-solid" @click="router.push({ name: 'portfolios' })">
-            VIEW PORTFOLIOS
+            {{ t('dashboard.viewPortfolios') }}
           </button>
           <button class="kimi-btn" @click="router.push({ name: 'financial-reports' })">
-            VIEW REPORTS
+            {{ t('dashboard.viewReports') }}
           </button>
         </div>
       </div>
@@ -89,18 +92,18 @@ const activities = [
       <ScrollReveal :delay="0.1" style="margin-top: 60px">
         <div class="kimi-section">
           <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
-            <h2 style="margin: 0; font-size: 20px; font-weight: 600">最近風險分析</h2>
-            <span class="kimi-caption" style="margin-top: 4px; display: block">RECENT RISK ANALYSIS</span>
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600">{{ t('dashboard.recentRiskAnalysis') }}</h2>
+            <span class="kimi-caption" style="margin-top: 4px; display: block">{{ t('dashboard.recentRiskAnalysisEn') }}</span>
           </div>
           <div style="overflow-x: auto">
             <table class="kimi-table kimi-table-light">
               <thead>
                 <tr>
-                  <th>投資組合</th>
-                  <th>日期</th>
+                  <th>{{ t('dashboard.riskTable.portfolio') }}</th>
+                  <th>{{ t('dashboard.riskTable.date') }}</th>
                   <th>VaR 95%</th>
                   <th>VaR 99%</th>
-                  <th>狀態</th>
+                  <th>{{ t('dashboard.riskTable.status') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,8 +126,8 @@ const activities = [
       <ScrollReveal :delay="0.15" style="margin-top: 60px">
         <div class="kimi-section">
           <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
-            <h2 style="margin: 0; font-size: 20px; font-weight: 600">最近 AI 財報分析</h2>
-            <span class="kimi-caption" style="margin-top: 4px; display: block">RECENT AI REPORTS</span>
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600">{{ t('dashboard.recentAIReports') }}</h2>
+            <span class="kimi-caption" style="margin-top: 4px; display: block">{{ t('dashboard.recentAIReportsEn') }}</span>
           </div>
           <div>
             <div
@@ -139,7 +142,7 @@ const activities = [
               </div>
               <div style="display: flex; gap: 8px">
                 <span class="kimi-tag">{{ report.type }}</span>
-                <span class="kimi-tag">信心: {{ report.confidence }}</span>
+                <span class="kimi-tag">{{ t('dashboard.confidence') }}: {{ report.confidence }}</span>
               </div>
             </div>
           </div>
@@ -150,8 +153,8 @@ const activities = [
       <ScrollReveal :delay="0.2" style="margin-top: 60px">
         <div class="kimi-section">
           <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
-            <h2 style="margin: 0; font-size: 20px; font-weight: 600">最近活動</h2>
-            <span class="kimi-caption" style="margin-top: 4px; display: block">RECENT ACTIVITY</span>
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600">{{ t('dashboard.recentActivity') }}</h2>
+            <span class="kimi-caption" style="margin-top: 4px; display: block">{{ t('dashboard.recentActivityEn') }}</span>
           </div>
           <div>
             <div
@@ -177,7 +180,7 @@ const activities = [
     <footer class="kimi-footer">
       <span>RISE VISION 2026</span>
       <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px">DASHBOARD</span>
-      <span>數據僅供參考</span>
+      <span>{{ t('dashboard.footer') }}</span>
     </footer>
   </div>
 </template>

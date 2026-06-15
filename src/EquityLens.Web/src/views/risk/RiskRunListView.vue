@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 
 const router = useRouter()
+const { t } = useI18n()
 const search = ref('')
 
 const riskRuns = ref([
@@ -13,16 +15,21 @@ const riskRuns = ref([
   { id: '4', name: '台灣核心持股組合', model: 'Historical VaR', date: '2026-05-30', var95: '-2.1%', var99: '-3.5%', status: 'completed' },
 ])
 
-const filteredRuns = ref(riskRuns.value)
+const filteredRuns = computed(() => {
+  const q = search.value.toLowerCase()
+  return riskRuns.value.filter(
+    (r) => r.name.toLowerCase().includes(q) || r.model.toLowerCase().includes(q)
+  )
+})
+
 const showCreate = ref(false)
 const newRun = ref({ name: '', model: 'Historical VaR' })
 
-function filterRuns() {
-  const q = search.value.toLowerCase()
-  filteredRuns.value = riskRuns.value.filter(
-    (r) => r.name.toLowerCase().includes(q) || r.model.toLowerCase().includes(q)
-  )
-}
+const modelOptions = computed(() => [
+  { value: 'Historical VaR', label: t('risk.runs.modelVaR') },
+  { value: 'Parametric VaR', label: t('risk.runs.modelES') },
+  { value: 'Monte Carlo', label: t('risk.runs.modelStress') },
+])
 
 function createRun() {
   riskRuns.value.push({
@@ -34,7 +41,6 @@ function createRun() {
     var99: '-3.2%',
     status: 'completed',
   })
-  filterRuns()
   showCreate.value = false
   newRun.value = { name: '', model: 'Historical VaR' }
 }
@@ -46,27 +52,25 @@ function createRun() {
       <!-- Header -->
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
         <div>
-          <h1 style="font-size: 28px; font-weight: 700; margin: 0">風險分析</h1>
-          <span class="kimi-caption" style="margin-top: 4px; display: block">RISK ANALYSIS RUNS</span>
+          <h1 style="font-size: 28px; font-weight: 700; margin: 0">{{ t('risk.runs.title') }}</h1>
+          <span class="kimi-caption" style="margin-top: 4px; display: block">{{ t('risk.runs.titleEn') }}</span>
         </div>
         <button class="kimi-btn kimi-btn-solid" @click="showCreate = !showCreate">
-          {{ showCreate ? 'CANCEL' : '+ NEW RISK RUN' }}
+          {{ showCreate ? t('risk.runs.cancel') : t('risk.runs.create') }}
         </button>
       </div>
 
       <!-- Create Form -->
       <ScrollReveal v-if="showCreate">
         <div class="kimi-section" style="margin-bottom: 40px; padding: 20px">
-          <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600">建立新的風險分析</h3>
+          <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600">{{ t('risk.runs.createTitle') }}</h3>
           <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px">
-            <input v-model="newRun.name" placeholder="投資組合名稱" class="kimi-input" />
+            <input v-model="newRun.name" :placeholder="t('risk.runs.portfolioPlaceholder')" class="kimi-input" />
             <select v-model="newRun.model" class="kimi-input">
-              <option>Historical VaR</option>
-              <option>Parametric VaR</option>
-              <option>Monte Carlo</option>
+              <option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
-          <button class="kimi-btn kimi-btn-solid" @click="createRun">RUN ANALYSIS</button>
+          <button class="kimi-btn kimi-btn-solid" @click="createRun">{{ t('risk.runs.createBtn') }}</button>
         </div>
       </ScrollReveal>
 
@@ -74,10 +78,9 @@ function createRun() {
       <div style="margin-bottom: 24px">
         <input
           v-model="search"
-          placeholder="搜尋風險分析..."
+          :placeholder="t('risk.runs.searchPlaceholder')"
           class="kimi-input"
           style="width: 300px"
-          @input="filterRuns"
         />
       </div>
 
@@ -91,7 +94,7 @@ function createRun() {
           >
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
               <span class="kimi-tag">{{ run.model }}</span>
-              <span class="kimi-tag" style="border-color: #34d399; color: #34d399">COMPLETED</span>
+              <span class="kimi-tag" style="border-color: #34d399; color: #34d399">{{ t('common.status.completed') }}</span>
             </div>
 
             <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 600">{{ run.name }}</h3>
@@ -117,7 +120,7 @@ function createRun() {
     <footer class="kimi-footer">
       <span>RISE VISION 2026</span>
       <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px">RISK</span>
-      <span>數據僅供參考</span>
+      <span>{{ t('dashboard.footer') }}</span>
     </footer>
   </div>
 </template>

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
+import { createI18n } from 'vue-i18n'
+import en from '../../../locales/en'
 import RegisterView from '../RegisterView.vue'
 
 vi.mock('../../../services/http', () => ({
@@ -26,14 +28,23 @@ function createTestRouter() {
   })
 }
 
+function createTestI18n() {
+  return createI18n({
+    legacy: false,
+    locale: 'en',
+    messages: { en },
+  })
+}
+
 function mountRegister() {
   const pinia = createPinia()
   setActivePinia(pinia)
   const router = createTestRouter()
+  const i18n = createTestI18n()
 
   return mount(RegisterView, {
     global: {
-      plugins: [pinia, router],
+      plugins: [pinia, router, i18n],
       stubs: { RouterLink: true },
     },
   })
@@ -45,54 +56,52 @@ describe('RegisterView', () => {
     sessionStorage.clear()
   })
 
-  it('渲染註冊表單', () => {
+  it('renders register form', () => {
     const wrapper = mountRegister()
 
-    expect(wrapper.find('h2').text()).toBe('建立帳號')
-    expect(wrapper.find('input[placeholder="選填"]').exists()).toBe(true)
+    expect(wrapper.find('h2').text()).toBe('Create Account')
+    expect(wrapper.find('input[placeholder="Optional"]').exists()).toBe(true)
     expect(wrapper.find('input[type="email"]').exists()).toBe(true)
-    expect(wrapper.find('input[placeholder="至少 6 個字元"]').exists()).toBe(true)
-    expect(wrapper.find('input[placeholder="再次輸入密碼"]').exists()).toBe(true)
-    expect(wrapper.find('button[type="submit"]').text()).toContain('註冊')
+    expect(wrapper.find('input[placeholder="••••••••"]').exists()).toBe(true)
+    expect(wrapper.find('button[type="submit"]').text()).toContain('Register')
   })
 
-  it('渲染登入連結', () => {
+  it('renders login link', () => {
     const wrapper = mountRegister()
     const link = wrapper.findComponent({ name: 'RouterLink' })
     expect(link.props('to')).toBe('/login')
   })
 
-  it('空欄位時顯示錯誤', async () => {
+  it('shows error when fields are empty', async () => {
     const wrapper = mountRegister()
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('請填寫所有欄位')
+    expect(wrapper.find('.kimi-error').text()).toBe('Please fill in all fields')
     expect(mockedHttp.post).not.toHaveBeenCalled()
   })
 
-  it('密碼不足 6 碼時顯示錯誤', async () => {
+  it('shows error when password is less than 6 characters', async () => {
     const wrapper = mountRegister()
 
     await wrapper.find('input[type="email"]').setValue('test@test.com')
-    await wrapper.find('input[placeholder="至少 6 個字元"]').setValue('12345')
-    await wrapper.find('input[placeholder="再次輸入密碼"]').setValue('12345')
+    await wrapper.find('input[type="password"]').setValue('12345')
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('密碼至少需要 6 個字元')
+    expect(wrapper.find('.kimi-error').text()).toBe('Password must be at least 6 characters')
   })
 
-  it('密碼不一致時顯示錯誤', async () => {
+  it('shows error when passwords do not match', async () => {
     const wrapper = mountRegister()
 
     await wrapper.find('input[type="email"]').setValue('test@test.com')
-    await wrapper.find('input[placeholder="至少 6 個字元"]').setValue('password123')
-    await wrapper.find('input[placeholder="再次輸入密碼"]').setValue('password456')
+    await wrapper.find('input[type="password"]').setValue('password123')
+    await wrapper.findAll('input[type="password"]')[1].setValue('password456')
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('兩次密碼輸入不一致')
+    expect(wrapper.find('.kimi-error').text()).toBe('Passwords do not match')
   })
 
-  it('註冊成功時跳轉到 dashboard', async () => {
+  it('redirects to dashboard on successful registration', async () => {
     mockedHttp.post.mockResolvedValueOnce({
       data: {
         accessToken: 'token',
@@ -107,13 +116,13 @@ describe('RegisterView', () => {
     setActivePinia(pinia)
 
     const wrapper = mount(RegisterView, {
-      global: { plugins: [pinia, router], stubs: { RouterLink: true } },
+      global: { plugins: [pinia, router, createTestI18n()], stubs: { RouterLink: true } },
     })
 
-    await wrapper.find('input[placeholder="選填"]').setValue('Test User')
+    await wrapper.find('input[placeholder="Optional"]').setValue('Test User')
     await wrapper.find('input[type="email"]').setValue('test@test.com')
-    await wrapper.find('input[placeholder="至少 6 個字元"]').setValue('password123')
-    await wrapper.find('input[placeholder="再次輸入密碼"]').setValue('password123')
+    await wrapper.find('input[type="password"]').setValue('password123')
+    await wrapper.findAll('input[type="password"]')[1].setValue('password123')
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
@@ -126,7 +135,7 @@ describe('RegisterView', () => {
     })
   })
 
-  it('不填顯示名稱時 displayName 傳 undefined', async () => {
+  it('sends undefined displayName when not filled', async () => {
     mockedHttp.post.mockResolvedValueOnce({
       data: {
         accessToken: 'token',
@@ -138,8 +147,8 @@ describe('RegisterView', () => {
     const wrapper = mountRegister()
 
     await wrapper.find('input[type="email"]').setValue('test@test.com')
-    await wrapper.find('input[placeholder="至少 6 個字元"]').setValue('password123')
-    await wrapper.find('input[placeholder="再次輸入密碼"]').setValue('password123')
+    await wrapper.find('input[type="password"]').setValue('password123')
+    await wrapper.findAll('input[type="password"]')[1].setValue('password123')
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
@@ -151,7 +160,7 @@ describe('RegisterView', () => {
     })
   })
 
-  it('409 錯誤時顯示 Email 已被註冊', async () => {
+  it('shows email taken error on 409', async () => {
     mockedHttp.post.mockRejectedValueOnce({
       response: { status: 409, data: { message: 'Email already exists' } },
     })
@@ -159,16 +168,16 @@ describe('RegisterView', () => {
     const wrapper = mountRegister()
 
     await wrapper.find('input[type="email"]').setValue('test@test.com')
-    await wrapper.find('input[placeholder="至少 6 個字元"]').setValue('password123')
-    await wrapper.find('input[placeholder="再次輸入密碼"]').setValue('password123')
+    await wrapper.find('input[type="password"]').setValue('password123')
+    await wrapper.findAll('input[type="password"]')[1].setValue('password123')
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('此 Email 已被註冊')
+      expect(wrapper.find('.kimi-error').text()).toBe('This email is already registered')
     })
   })
 
-  it('其他錯誤時顯示後端 message', async () => {
+  it('shows backend message on other errors', async () => {
     mockedHttp.post.mockRejectedValueOnce({
       response: { status: 500, data: { message: 'Server error' } },
     })
@@ -176,8 +185,8 @@ describe('RegisterView', () => {
     const wrapper = mountRegister()
 
     await wrapper.find('input[type="email"]').setValue('test@test.com')
-    await wrapper.find('input[placeholder="至少 6 個字元"]').setValue('password123')
-    await wrapper.find('input[placeholder="再次輸入密碼"]').setValue('password123')
+    await wrapper.find('input[type="password"]').setValue('password123')
+    await wrapper.findAll('input[type="password"]')[1].setValue('password123')
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
@@ -185,18 +194,18 @@ describe('RegisterView', () => {
     })
   })
 
-  it('網路錯誤時顯示預設訊息', async () => {
+  it('shows default error on network error', async () => {
     mockedHttp.post.mockRejectedValueOnce(new Error('Network error'))
 
     const wrapper = mountRegister()
 
     await wrapper.find('input[type="email"]').setValue('test@test.com')
-    await wrapper.find('input[placeholder="至少 6 個字元"]').setValue('password123')
-    await wrapper.find('input[placeholder="再次輸入密碼"]').setValue('password123')
+    await wrapper.find('input[type="password"]').setValue('password123')
+    await wrapper.findAll('input[type="password"]')[1].setValue('password123')
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('註冊失敗，請稍後再試')
+      expect(wrapper.find('.kimi-error').text()).toBe('Registration failed, please try again later')
     })
   })
 })

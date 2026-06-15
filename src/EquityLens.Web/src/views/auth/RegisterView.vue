@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const displayName = ref('')
 const email = ref('')
@@ -15,17 +17,17 @@ const error = ref('')
 
 async function handleRegister() {
   if (!email.value || !password.value) {
-    error.value = '請填寫所有欄位'
+    error.value = t('auth.register.errorFillAll')
     return
   }
 
   if (password.value.length < 6) {
-    error.value = '密碼至少需要 6 個字元'
+    error.value = t('auth.register.errorPasswordMin')
     return
   }
 
   if (password.value !== confirmPassword.value) {
-    error.value = '兩次密碼輸入不一致'
+    error.value = t('auth.register.errorPasswordMismatch')
     return
   }
 
@@ -38,9 +40,9 @@ async function handleRegister() {
   } catch (e: any) {
     const msg = e?.response?.data?.message
     if (e?.response?.status === 409) {
-      error.value = '此 Email 已被註冊'
+      error.value = t('auth.register.errorEmailTaken')
     } else {
-      error.value = msg || '註冊失敗，請稍後再試'
+      error.value = msg || t('auth.register.errorRegisterFailed')
     }
   } finally {
     loading.value = false
@@ -63,22 +65,22 @@ async function handleRegister() {
             <div class="kimi-feature-item">
               <div class="kimi-feature-icon">📊</div>
               <div>
-                <div class="kimi-feature-title">Portfolio Tracking</div>
-                <div class="kimi-feature-desc">即時追蹤投資組合表現</div>
+                <div class="kimi-feature-title">{{ t('auth.login.featurePortfolio') }}</div>
+                <div class="kimi-feature-desc">{{ t('auth.login.featurePortfolioDesc') }}</div>
               </div>
             </div>
             <div class="kimi-feature-item">
               <div class="kimi-feature-icon">🤖</div>
               <div>
-                <div class="kimi-feature-title">AI Analysis</div>
-                <div class="kimi-feature-desc">智能風險與財報分析</div>
+                <div class="kimi-feature-title">{{ t('auth.login.featureAI') }}</div>
+                <div class="kimi-feature-desc">{{ t('auth.login.featureAIDesc') }}</div>
               </div>
             </div>
             <div class="kimi-feature-item">
               <div class="kimi-feature-icon">📈</div>
               <div>
-                <div class="kimi-feature-title">Risk Management</div>
-                <div class="kimi-feature-desc">數據驅動的資產配置</div>
+                <div class="kimi-feature-title">{{ t('auth.login.featureRisk') }}</div>
+                <div class="kimi-feature-desc">{{ t('auth.login.featureRiskDesc') }}</div>
               </div>
             </div>
           </div>
@@ -89,24 +91,24 @@ async function handleRegister() {
       <div class="kimi-login-form-wrapper">
         <div class="kimi-login-form">
           <div class="kimi-login-header">
-            <h2>建立帳號</h2>
-            <p>填寫以下資訊完成註冊</p>
+            <h2>{{ t('auth.register.createAccount') }}</h2>
+            <p>{{ t('auth.register.fillInfo') }}</p>
           </div>
 
           <form class="kimi-form" @submit.prevent="handleRegister">
             <div class="kimi-form-group">
-              <label class="kimi-label">顯示名稱</label>
+              <label class="kimi-label">{{ t('auth.register.displayName') }}</label>
               <input
                 v-model="displayName"
                 type="text"
                 class="kimi-input"
-                placeholder="選填"
+                :placeholder="t('auth.register.optional')"
                 autocomplete="name"
               />
             </div>
 
             <div class="kimi-form-group">
-              <label class="kimi-label">電子信箱</label>
+              <label class="kimi-label">{{ t('auth.register.email') }}</label>
               <input
                 v-model="email"
                 type="email"
@@ -117,23 +119,23 @@ async function handleRegister() {
             </div>
 
             <div class="kimi-form-group">
-              <label class="kimi-label">密碼</label>
+              <label class="kimi-label">{{ t('auth.register.password') }}</label>
               <input
                 v-model="password"
                 type="password"
                 class="kimi-input"
-                placeholder="至少 6 個字元"
+                placeholder="••••••••"
                 autocomplete="new-password"
               />
             </div>
 
             <div class="kimi-form-group">
-              <label class="kimi-label">確認密碼</label>
+              <label class="kimi-label">{{ t('auth.register.confirmPassword') }}</label>
               <input
                 v-model="confirmPassword"
                 type="password"
                 class="kimi-input"
-                placeholder="再次輸入密碼"
+                placeholder="••••••••"
                 autocomplete="new-password"
               />
             </div>
@@ -148,12 +150,12 @@ async function handleRegister() {
               :disabled="loading"
             >
               <span v-if="loading" class="kimi-spinner"></span>
-              <span v-else>註冊</span>
+              <span v-else>{{ t('auth.register.registerBtn') }}</span>
             </button>
           </form>
 
           <div class="kimi-login-footer">
-            <p>已經有帳號？ <RouterLink to="/login">立即登入</RouterLink></p>
+            <p>{{ t('auth.register.hasAccount') }} <RouterLink to="/login">{{ t('auth.register.login') }}</RouterLink></p>
           </div>
         </div>
       </div>
@@ -181,7 +183,6 @@ async function handleRegister() {
   overflow: hidden;
 }
 
-/* Left Brand Side */
 .kimi-login-brand {
   flex: 1;
   padding: 48px 40px;
@@ -261,7 +262,6 @@ async function handleRegister() {
   margin-top: 2px;
 }
 
-/* Right Form Side */
 .kimi-login-form-wrapper {
   flex: 1;
   display: flex;
@@ -408,7 +408,6 @@ async function handleRegister() {
   color: var(--kimi-text-light);
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .kimi-login-container {
     flex-direction: column;

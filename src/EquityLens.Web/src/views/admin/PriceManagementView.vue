@@ -1,27 +1,30 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { NButton, NEmpty, NIcon } from 'naive-ui'
 import { TrendingUpOutline } from '@vicons/ionicons5'
+
+const { t } = useI18n()
 </script>
 
 <template>
   <main class="page animate-fade-in">
     <section class="page-heading">
       <div>
-        <p class="eyebrow">Price Management</p>
-        <h1>市場價格管理</h1>
+        <p class="eyebrow">{{ t('admin.prices.titleEn') }}</p>
+        <h1>{{ t('admin.prices.title') }}</h1>
       </div>
       <NButton type="primary" class="btn-primary">
         <template #icon>
           <NIcon><TrendingUpOutline /></NIcon>
         </template>
-        匯入價格
+        {{ t('admin.prices.import') }}
       </NButton>
     </section>
 
     <div class="empty-state">
-      <NEmpty description="價格資料管理功能開發中">
+      <NEmpty :description="t('admin.prices.emptyTitle')">
         <template #extra>
-          <NButton type="primary" class="btn-primary">瞭解更多</NButton>
+          <NButton type="primary" class="btn-primary">{{ t('admin.prices.learnMore') }}</NButton>
         </template>
       </NEmpty>
     </div>

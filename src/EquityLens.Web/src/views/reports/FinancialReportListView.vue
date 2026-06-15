@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 
+const { t } = useI18n()
 const router = useRouter()
 const search = ref('')
 
@@ -45,20 +47,20 @@ function createReport() {
       <!-- Header -->
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
         <div>
-          <h1 style="font-size: 28px; font-weight: 700; margin: 0">財務報告</h1>
-          <span class="kimi-caption" style="margin-top: 4px; display: block">FINANCIAL REPORTS</span>
+          <h1 style="font-size: 28px; font-weight: 700; margin: 0">{{ t('reports.list.title') }}</h1>
+          <span class="kimi-caption" style="margin-top: 4px; display: block">{{ t('reports.list.titleEn') }}</span>
         </div>
         <button class="kimi-btn kimi-btn-solid" @click="showCreate = !showCreate">
-          {{ showCreate ? 'CANCEL' : '+ NEW REPORT' }}
+          {{ showCreate ? t('reports.list.cancel') : t('reports.list.create') }}
         </button>
       </div>
 
       <!-- Create Form -->
       <ScrollReveal v-if="showCreate">
         <div class="kimi-section" style="margin-bottom: 40px; padding: 20px">
-          <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600">建立新報告</h3>
+          <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600">{{ t('reports.list.createTitle') }}</h3>
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px">
-            <input v-model="newReport.name" placeholder="報告名稱" class="kimi-input" />
+            <input v-model="newReport.name" :placeholder="t('reports.list.tickerPlaceholder')" class="kimi-input" />
             <input v-model="newReport.company" placeholder="公司 (例: 台積電 2330)" class="kimi-input" />
             <select v-model="newReport.type" class="kimi-input">
               <option>AI Memo</option>
@@ -66,7 +68,7 @@ function createReport() {
               <option>Risk Report</option>
             </select>
           </div>
-          <button class="kimi-btn kimi-btn-solid" @click="createReport">CREATE</button>
+          <button class="kimi-btn kimi-btn-solid" @click="createReport">{{ t('reports.list.createBtn') }}</button>
         </div>
       </ScrollReveal>
 
@@ -74,7 +76,7 @@ function createReport() {
       <div style="margin-bottom: 24px">
         <input
           v-model="search"
-          placeholder="搜尋報告..."
+          :placeholder="t('reports.list.searchPlaceholder')"
           class="kimi-input"
           style="width: 300px"
           @input="filterReports"
@@ -91,7 +93,7 @@ function createReport() {
           >
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
               <span class="kimi-tag">{{ report.type }}</span>
-              <span class="kimi-tag">信心: {{ report.confidence }}</span>
+              <span class="kimi-tag">{{ t('reports.list.confidence') }}: {{ report.confidence }}</span>
             </div>
 
             <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 600">{{ report.name }}</h3>
@@ -110,7 +112,7 @@ function createReport() {
     <footer class="kimi-footer">
       <span>RISE VISION 2026</span>
       <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px">REPORTS</span>
-      <span>數據僅供參考</span>
+      <span>{{ t('dashboard.footer') }}</span>
     </footer>
   </div>
 </template>

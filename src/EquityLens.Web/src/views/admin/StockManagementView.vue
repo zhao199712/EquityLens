@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   NButton,
   NInput,
@@ -17,6 +18,8 @@ import {
   CreateOutline,
   TrashOutline,
 } from '@vicons/ionicons5'
+
+const { t } = useI18n()
 
 const searchQuery = ref('')
 
@@ -69,21 +72,21 @@ function handleDelete(symbol: string) {
   <main class="page animate-fade-in">
     <section class="page-heading">
       <div>
-        <p class="eyebrow">Stock Management</p>
-        <h1>股票標的管理</h1>
+        <p class="eyebrow">{{ t('admin.stocks.titleEn') }}</p>
+        <h1>{{ t('admin.stocks.title') }}</h1>
       </div>
       <NButton type="primary" class="btn-primary" @click="showCreateModal = true">
         <template #icon>
           <NIcon><AddOutline /></NIcon>
         </template>
-        新增標的
+        {{ t('admin.stocks.create') }}
       </NButton>
     </section>
 
     <div class="glass-panel" style="padding: 16px 20px;">
       <NInput
         v-model:value="searchQuery"
-        placeholder="搜尋股票代號或名稱..."
+        :placeholder="t('admin.stocks.searchPlaceholder')"
         clearable
         style="max-width: 400px;"
       >
@@ -98,12 +101,12 @@ function handleDelete(symbol: string) {
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr style="border-bottom: 1px solid var(--border-subtle);">
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">代號</th>
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">名稱</th>
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">產業</th>
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">市場</th>
-              <th style="text-align: right; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">價格</th>
-              <th style="text-align: center; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">操作</th>
+              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.stocks.table.ticker') }}</th>
+              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.stocks.table.name') }}</th>
+              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.stocks.table.sector') }}</th>
+              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.stocks.table.exchange') }}</th>
+              <th style="text-align: right; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.stocks.table.marketPrice') }}</th>
+              <th style="text-align: center; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.stocks.table.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -137,7 +140,7 @@ function handleDelete(symbol: string) {
                         </template>
                       </NButton>
                     </template>
-                    確定要刪除此標的嗎？
+                    {{ t('admin.stocks.delete') }}?
                   </NPopconfirm>
                 </NSpace>
               </td>
@@ -147,25 +150,25 @@ function handleDelete(symbol: string) {
       </div>
     </div>
 
-    <NModal v-model:show="showCreateModal" title="新增股票標的" preset="card" style="width: 420px;" :bordered="false">
+    <NModal v-model:show="showCreateModal" :title="t('admin.stocks.createTitle')" preset="card" style="width: 420px;" :bordered="false">
       <NForm :model="createForm" label-placement="top">
-        <NFormItem label="股票代號" required>
-          <NInput v-model:value="createForm.symbol" placeholder="例如: AAPL" />
+        <NFormItem :label="t('admin.stocks.ticker')" required>
+          <NInput v-model:value="createForm.symbol" :placeholder="t('admin.stocks.tickerPlaceholder')" />
         </NFormItem>
-        <NFormItem label="名稱" required>
-          <NInput v-model:value="createForm.name" placeholder="輸入公司名稱" />
+        <NFormItem :label="t('admin.stocks.name')" required>
+          <NInput v-model:value="createForm.name" :placeholder="t('admin.stocks.namePlaceholder')" />
         </NFormItem>
-        <NFormItem label="產業">
-          <NInput v-model:value="createForm.sector" placeholder="例如: Technology" />
+        <NFormItem :label="t('admin.stocks.table.sector')">
+          <NInput v-model:value="createForm.sector" placeholder="e.g. Technology" />
         </NFormItem>
-        <NFormItem label="市場">
-          <NInput v-model:value="createForm.market" placeholder="例如: NASDAQ" />
+        <NFormItem :label="t('admin.stocks.exchange')">
+          <NInput v-model:value="createForm.market" placeholder="e.g. NASDAQ" />
         </NFormItem>
       </NForm>
       <template #footer>
         <NSpace justify="end">
-          <NButton @click="showCreateModal = false">取消</NButton>
-          <NButton type="primary" class="btn-primary" @click="handleCreate">新增</NButton>
+          <NButton @click="showCreateModal = false">{{ t('admin.stocks.cancel') }}</NButton>
+          <NButton type="primary" class="btn-primary" @click="handleCreate">{{ t('admin.stocks.createBtn') }}</NButton>
         </NSpace>
       </template>
     </NModal>

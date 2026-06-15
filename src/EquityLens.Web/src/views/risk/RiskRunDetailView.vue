@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import LineChart from '../../components/kimi/LineChart.vue'
 import Footer from '../../components/kimi/Footer.vue'
 
 const router = useRouter()
+const { t } = useI18n()
 
 const runInfo = {
   id: 'RR-2026-0603-001',
@@ -16,12 +19,19 @@ const runInfo = {
   duration: '12.3s',
 }
 
-const metrics = [
-  { label: 'VaR 95%', value: '-2.3%', sub: '1-day horizon' },
-  { label: 'VaR 99%', value: '-3.8%', sub: '1-day horizon' },
-  { label: 'ES 95%', value: '-3.1%', sub: 'Expected Shortfall' },
-  { label: 'Volatility', value: '12.4%', sub: 'Annualized' },
-]
+const runInfoItems = computed(() => [
+  { label: t('risk.detail.model'), value: runInfo.model },
+  { label: t('risk.detail.status'), value: t('common.status.completed') },
+  { label: t('risk.detail.date'), value: runInfo.date },
+  { label: t('risk.detail.period'), value: runInfo.lookback },
+])
+
+const metrics = computed(() => [
+  { label: t('risk.detail.var95'), value: '-2.3%', sub: '1-day horizon' },
+  { label: t('risk.detail.var99'), value: '-3.8%', sub: '1-day horizon' },
+  { label: t('risk.detail.es95'), value: '-3.1%', sub: 'Expected Shortfall' },
+  { label: t('risk.detail.volatility'), value: '12.4%', sub: 'Annualized' },
+])
 
 // Loss distribution data (histogram simulation)
 const lossDistribution = Array.from({ length: 30 }, (_, i) => {
@@ -40,27 +50,22 @@ const var99Trend = [-3.0, -3.5, -3.8, -3.2, -4.0, -3.6, -3.3, -3.8, -3.9, -3.5, 
     <!-- Back + Header -->
     <div class="kimi-content" style="margin-top: 0; padding-top: 20px">
       <button class="kimi-btn kimi-btn-dark" style="margin-bottom: 24px" @click="router.push({ name: 'risk-runs' })">
-        ← BACK TO RISK RUNS
+        ← {{ t('risk.detail.runInfoEn') }}
       </button>
 
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
         <div>
           <h1 style="font-size: 28px; font-weight: 700; margin: 0; color: #FFFFFF">{{ runInfo.portfolio }}</h1>
-          <span class="kimi-caption" style="margin-top: 4px; display: block">RISK ANALYSIS RUN — {{ runInfo.id }}</span>
+          <span class="kimi-caption" style="margin-top: 4px; display: block">{{ t('risk.detail.runInfoEn') }} — {{ runInfo.id }}</span>
         </div>
-        <span class="kimi-tag" style="border-color: #34d399; color: #34d399">COMPLETED</span>
+        <span class="kimi-tag" style="border-color: #34d399; color: #34d399">{{ t('common.status.completed') }}</span>
       </div>
 
       <!-- Run Info -->
       <ScrollReveal>
         <div class="kimi-section-dark" style="margin-bottom: 40px">
           <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0">
-            <div v-for="(item, i) in [
-              { label: 'MODEL', value: runInfo.model },
-              { label: 'CONFIDENCE', value: runInfo.confidence },
-              { label: 'LOOKBACK', value: runInfo.lookback },
-              { label: 'DURATION', value: runInfo.duration },
-            ]" :key="i"
+            <div v-for="(item, i) in runInfoItems" :key="i"
               style="padding: 20px; border-right: 1px solid #333333; border-bottom: 1px solid #333333"
             >
               <span class="kimi-caption" style="margin-bottom: 4px; display: block; color: #666666">{{ item.label }}</span>
@@ -90,8 +95,8 @@ const var99Trend = [-3.0, -3.5, -3.8, -3.2, -4.0, -3.6, -3.3, -3.8, -3.9, -3.5, 
       <div class="kimi-grid-2" style="margin-top: 40px">
         <!-- Loss Distribution -->
         <ScrollReveal style="padding: 20px; border: 1px solid #333333; background: #0A0A0A">
-          <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #FFFFFF">損失分佈</h2>
-          <span class="kimi-caption" style="color: #666666; display: block; margin-bottom: 16px">LOSS DISTRIBUTION</span>
+          <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #FFFFFF">{{ t('risk.detail.lossDistribution') }}</h2>
+          <span class="kimi-caption" style="color: #666666; display: block; margin-bottom: 16px">{{ t('risk.detail.lossDistributionEn') }}</span>
           <svg width="100%" height="280" viewBox="0 0 500 280">
             <!-- Grid -->
             <line v-for="i in 5" :key="'g-' + i" x1="60" :y1="20 + (i - 1) * 50" x2="480" :y2="20 + (i - 1) * 50" stroke="#333333" stroke-width="1" stroke-dasharray="4 4" />
@@ -119,8 +124,8 @@ const var99Trend = [-3.0, -3.5, -3.8, -3.2, -4.0, -3.6, -3.3, -3.8, -3.9, -3.5, 
 
         <!-- VaR Trend -->
         <ScrollReveal :delay="0.1" style="padding: 20px; border: 1px solid #333333; background: #0A0A0A">
-          <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #FFFFFF">VaR 歷史趨勢</h2>
-          <span class="kimi-caption" style="color: #666666; display: block; margin-bottom: 16px">HISTORICAL VaR TREND</span>
+          <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #FFFFFF">{{ t('risk.detail.varTrend') }}</h2>
+          <span class="kimi-caption" style="color: #666666; display: block; margin-bottom: 16px">{{ t('risk.detail.varTrendEn') }}</span>
           <LineChart
             :data="var95Trend"
             :labels="var95Trend.map((_, i) => String(i + 1))"

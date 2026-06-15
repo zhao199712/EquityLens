@@ -2,13 +2,18 @@
 import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { NConfigProvider, darkTheme } from 'naive-ui'
+import { enUS, zhTW } from 'naive-ui'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from './stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { t, locale } = useI18n()
 
 const isAuthPage = computed(() => route.name === 'login' || route.name === 'register')
+
+const naiveLocale = computed(() => locale.value === 'zh-TW' ? zhTW : enUS)
 
 async function handleLogout() {
   await authStore.logout()
@@ -100,7 +105,7 @@ function handleMenuSelect(key: string) {
 </script>
 
 <template>
-  <NConfigProvider :theme="darkTheme" :theme-overrides="themeOverrides">
+  <NConfigProvider :theme="darkTheme" :theme-overrides="themeOverrides" :locale="naiveLocale">
     <div class="kimi-app-shell">
       <!-- Header - hidden on login page -->
       <header v-if="!isAuthPage" class="kimi-app-header">
@@ -114,34 +119,34 @@ function handleMenuSelect(key: string) {
             :class="['kimi-nav-item', activeMenuKey === 'dashboard' && 'active']"
             @click="handleMenuSelect('dashboard')"
           >
-            Dashboard
+            {{ t('nav.dashboard') }}
           </button>
           <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'portfolios' && 'active']"
             @click="handleMenuSelect('portfolios')"
           >
-            Portfolios
+            {{ t('nav.portfolios') }}
           </button>
           <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'risk-runs' && 'active']"
             @click="handleMenuSelect('risk-runs')"
           >
-            Risk Runs
+            {{ t('nav.riskRuns') }}
           </button>
           <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'financial-reports' && 'active']"
             @click="handleMenuSelect('financial-reports')"
           >
-            Reports
+            {{ t('nav.reports') }}
           </button>
         </nav>
 
         <div class="kimi-header-right">
-          <RouterLink class="kimi-admin-link" to="/settings">Settings</RouterLink>
-          <button class="kimi-logout-btn" @click="handleLogout">Logout</button>
+          <RouterLink class="kimi-admin-link" to="/settings">{{ t('nav.settings') }}</RouterLink>
+          <button class="kimi-logout-btn" @click="handleLogout">{{ t('nav.logout') }}</button>
         </div>
       </header>
 
