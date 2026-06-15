@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using EquityLens.Api.Data.Entities;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace EquityLens.Api.Services.MarketData;
 
@@ -36,22 +37,94 @@ public sealed class YahooFinanceMarketDataProvider : IMarketDataProvider
     public bool Supports(string exchange) => SupportedExchanges.Contains(exchange);
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<ExternalSecuritySearchResult>> SearchSecuritiesAsync(
+    public async Task<IReadOnlyList<ExternalSecuritySearchResult>> SearchSecuritiesAsync(
         string query,
         CancellationToken cancellationToken)
     {
-        // Yahoo Finance 目前不實作搜尋功能
-        return Task.FromResult<IReadOnlyList<ExternalSecuritySearchResult>>([]);
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        var url = QueryHelpers.AddQueryString("/v1/finance/search", new Dictionary<string, string?>
+        {
+            ["q"] = query.Trim(),
+            ["quotesCount"] = "10",
+            ["newsCount"] = "0"
+        });
+
+        using var response = await _httpClient.GetAsync(url, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        if (!document.RootElement.TryGetProperty("quotes", out var quotes) || quotes.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var results = new List<ExternalSecuritySearchResult>();
+        foreach (var quote in quotes.EnumerateArray())
+        {
+            var yahooSymbol = ReadString(quote, "symbol")?.Trim();
+            if (string.IsNullOrWhiteSpace(yahooSymbol))
+            {
+                continue;
+            }
+
+            var exchange = NormalizeYahooExchange(
+                ReadString(quote, "exchDisp") ?? ReadString(quote, "exchange"));
+            if (exchange is null || !Supports(exchange))
+            {
+                continue;
+            }
+
+            var ticker = FromYahooSymbol(yahooSymbol);
+            var name = ReadString(quote, "longname")
+                ?? ReadString(quote, "shortname")
+                ?? ReadString(quote, "displayName")
+                ?? ticker;
+            var quoteType = ReadString(quote, "quoteType") ?? "EQUITY";
+
+            results.Add(new ExternalSecuritySearchResult(
+                ticker,
+                exchange,
+                name.Trim(),
+                quoteType.Trim(),
+                "USD",
+                null,
+                null,
+                null,
+                SourceName));
+        }
+
+        return results
+            .GroupBy(x => new { x.Ticker, x.Exchange })
+            .Select(x => x.First())
+            .ToList();
     }
 
     /// <inheritdoc />
-    public Task<ExternalSecuritySearchResult?> ResolveSecurityAsync(
+    public async Task<ExternalSecuritySearchResult?> ResolveSecurityAsync(
         string ticker,
         string exchange,
         CancellationToken cancellationToken)
     {
-        // Yahoo Finance 目前不實作 metadata 解析
-        return Task.FromResult<ExternalSecuritySearchResult?>(null);
+        var normalizedTicker = ticker.Trim().ToUpperInvariant();
+        var normalizedExchange = exchange.Trim().ToUpperInvariant();
+        var yahooSymbol = ToYahooSymbol(normalizedTicker, normalizedExchange);
+
+        var searchResults = await SearchSecuritiesAsync(yahooSymbol, cancellationToken);
+        var match = searchResults.FirstOrDefault(x =>
+            TickerMatches(x.Ticker, normalizedTicker) &&
+            ExchangeMatches(x.Exchange, normalizedExchange));
+        if (match is not null)
+        {
+            return match;
+        }
+
+        return await ResolveFromChartMetaAsync(yahooSymbol, normalizedTicker, normalizedExchange, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -204,6 +277,111 @@ public sealed class YahooFinanceMarketDataProvider : IMarketDataProvider
             "NASDAQ" or "NYSE" or "AMEX" or "US" => normalized,
             _ => normalized
         };
+    }
+
+    private async Task<ExternalSecuritySearchResult?> ResolveFromChartMetaAsync(
+        string yahooSymbol,
+        string normalizedTicker,
+        string normalizedExchange,
+        CancellationToken cancellationToken)
+    {
+        var url = $"/v8/finance/chart/{Uri.EscapeDataString(yahooSymbol)}?range=1d&interval=1d";
+        using var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        if (!document.RootElement.TryGetProperty("chart", out var chart) ||
+            chart.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null ||
+            !chart.TryGetProperty("result", out var resultArray) ||
+            resultArray.ValueKind != JsonValueKind.Array ||
+            resultArray.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        var result = resultArray[0];
+        if (!result.TryGetProperty("meta", out var meta))
+        {
+            return null;
+        }
+
+        var symbol = ReadString(meta, "symbol") ?? yahooSymbol;
+        var ticker = FromYahooSymbol(symbol);
+        if (!TickerMatches(ticker, normalizedTicker))
+        {
+            return null;
+        }
+
+        var exchange = NormalizeYahooExchange(ReadString(meta, "exchangeName") ?? ReadString(meta, "fullExchangeName"));
+        if (exchange is null || !ExchangeMatches(exchange, normalizedExchange))
+        {
+            return null;
+        }
+
+        var assetType = ReadString(meta, "instrumentType") ?? "EQUITY";
+        var currency = ReadString(meta, "currency") ?? "USD";
+        return new ExternalSecuritySearchResult(
+            ticker,
+            exchange,
+            ticker,
+            assetType,
+            currency,
+            null,
+            null,
+            null,
+            SourceName);
+    }
+
+    private static string FromYahooSymbol(string symbol)
+    {
+        var normalized = symbol.Trim().ToUpperInvariant();
+        return normalized == "BRK-B" ? "BRKB" : normalized;
+    }
+
+    private static bool TickerMatches(string candidate, string expected)
+    {
+        return string.Equals(candidate, expected, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(ToYahooSymbol(candidate, "US"), ToYahooSymbol(expected, "US"), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ExchangeMatches(string candidate, string expected)
+    {
+        var normalizedCandidate = candidate.Trim().ToUpperInvariant();
+        var normalizedExpected = expected.Trim().ToUpperInvariant();
+        return normalizedCandidate == normalizedExpected ||
+            normalizedExpected == "US" && normalizedCandidate is "NASDAQ" or "NYSE" or "AMEX";
+    }
+
+    private static string? NormalizeYahooExchange(string? exchange)
+    {
+        if (string.IsNullOrWhiteSpace(exchange))
+        {
+            return null;
+        }
+
+        return exchange.Trim().ToUpperInvariant() switch
+        {
+            "NASDAQ" or "NMS" or "NCM" or "NGM" => "NASDAQ",
+            "NYSE" or "NYQ" => "NYSE",
+            "AMEX" or "ASE" => "AMEX",
+            "US" => "US",
+            _ => null
+        };
+    }
+
+    private static string? ReadString(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
     }
 
     private static decimal? ReadDecimal(JsonElement element, string propertyName, int index)

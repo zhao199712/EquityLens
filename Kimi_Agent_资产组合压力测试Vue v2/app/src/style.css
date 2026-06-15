@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Inter', 'Noto Sans TC', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+}
+
+@layer components {
+  .font-heading {
+    font-family: 'Noto Sans TC', sans-serif;
+  }
+  .font-mono-ticker {
+    font-family: 'Courier New', monospace;
+  }
+  .text-display {
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    font-weight: 600;
+    line-height: 1.1;
+  }
+  .text-data {
+    font-size: 28px;
+    font-weight: 600;
+  }
+  .text-caption {
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+  }
+  .page-padding {
+    padding-left: clamp(20px, 4vw, 80px);
+    padding-right: clamp(20px, 4vw, 80px);
+  }
+}

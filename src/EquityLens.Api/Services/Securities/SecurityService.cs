@@ -310,27 +310,26 @@ public sealed class SecurityService : ISecurityService
 
     private async Task<bool> TryRefreshMetadataAsync(Security security, CancellationToken cancellationToken)
     {
-        var provider = _marketDataProviders.FirstOrDefault(x => x.Supports(security.Exchange));
-        if (provider is null)
+        foreach (var provider in _marketDataProviders.Where(x => x.Supports(security.Exchange)))
         {
-            return false;
-        }
-
-        try
-        {
-            var external = await provider.ResolveSecurityAsync(security.Ticker, security.Exchange, cancellationToken);
-            if (external is null)
+            try
             {
-                return false;
-            }
+                var external = await provider.ResolveSecurityAsync(security.Ticker, security.Exchange, cancellationToken);
+                if (external is null)
+                {
+                    continue;
+                }
 
-            ApplyExternalMetadata(security, external, provider.SourceName);
-            return true;
+                ApplyExternalMetadata(security, external, provider.SourceName);
+                return true;
+            }
+            catch
+            {
+                continue;
+            }
         }
-        catch
-        {
-            return false;
-        }
+
+        return false;
     }
 
     private async Task<Security?> TryCreateFromExternalAsync(
@@ -338,37 +337,36 @@ public sealed class SecurityService : ISecurityService
         string exchange,
         CancellationToken cancellationToken)
     {
-        var provider = _marketDataProviders.FirstOrDefault(x => x.Supports(exchange));
-        if (provider is null)
+        foreach (var provider in _marketDataProviders.Where(x => x.Supports(exchange)))
         {
-            return null;
-        }
-
-        try
-        {
-            var external = await provider.ResolveSecurityAsync(ticker, exchange, cancellationToken);
-            if (external is null)
+            try
             {
-                return null;
+                var external = await provider.ResolveSecurityAsync(ticker, exchange, cancellationToken);
+                if (external is null)
+                {
+                    continue;
+                }
+
+                var security = new Security
+                {
+                    Id = Guid.NewGuid(),
+                    Ticker = ticker,
+                    Exchange = exchange,
+                    IsActive = true,
+                    MetadataUpdatedAtUtc = DateTime.UtcNow,
+                    MetadataSource = provider.SourceName
+                };
+
+                ApplyExternalMetadata(security, external, provider.SourceName);
+                return security;
             }
-
-            var security = new Security
+            catch
             {
-                Id = Guid.NewGuid(),
-                Ticker = ticker,
-                Exchange = exchange,
-                IsActive = true,
-                MetadataUpdatedAtUtc = DateTime.UtcNow,
-                MetadataSource = provider.SourceName
-            };
+                continue;
+            }
+        }
 
-            ApplyExternalMetadata(security, external, provider.SourceName);
-            return security;
-        }
-        catch
-        {
-            return null;
-        }
+        return null;
     }
 
     private static void ApplyExternalMetadata(Security security, ExternalSecuritySearchResult external, string sourceName)
