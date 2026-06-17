@@ -1,4 +1,11 @@
 {
+  "Jwt": {
+    "Key": "change-this-to-a-long-random-string-at-least-32-chars!!",
+    "Issuer": "EquityLens.Api",
+    "Audience": "EquityLens.Web",
+    "ExpireMinutes": "60",
+    "RefreshExpireDays": "7"
+  },
   "Logging": {
     "LogLevel": {
       "Default": "Information",
@@ -7,14 +14,32 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "PostgreSQL": "Host=localhost:5433;Database=equitylens;Username=your_user;Password=your_password"
+    "PostgreSQL": "Host=localhost:5432;Database=equitylens;Username=equitylens;Password=equitylens_dev_password"
+  },
+  "Redis": {
+    "ConnectionString": "localhost:6379",
+    "JobsStreamKey": "equitylens:jobs",
+    "ConsumerGroupName": "equitylens-workers",
+    "CacheKeyPrefix": "equitylens:cache",
+    "DefaultCacheMinutes": 15
+  },
+  "ObjectStorage": {
+    "ServiceUrl": "http://localhost:9000",
+    "Region": "garage",
+    "BucketName": "equitylens",
+    "AccessKeyId": "",
+    "SecretAccessKey": "",
+    "ForcePathStyle": true,
+    "PresignedUrlExpiryMinutes": 15
   },
   "MarketData": {
     "AlphaVantage": {
-      "BaseUrl": "https://www.alphavantage.co"
+      "BaseUrl": "https://www.alphavantage.co",
+      "ApiKey": "YOUR_ALPHA_VANTAGE_API_KEY"
     },
     "FinMind": {
-      "BaseUrl": "https://api.finmindtrade.com"
+      "BaseUrl": "https://api.finmindtrade.com",
+      "Token": "YOUR_FINMIND_TOKEN"
     }
   }
 }
