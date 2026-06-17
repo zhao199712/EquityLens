@@ -824,6 +824,277 @@ public static class RiskMath
         var u2 = 1.0 - random.NextDouble();
         return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
+
+    /// <summary>
+    /// 根據資產數量與共同交易日數量，自動決定 shrinkage alpha。
+    /// </summary>
+    public static decimal DetermineAutoShrinkageAlpha(int assetCount, int commonTradingDays)
+    {
+        if (assetCount <= 0 || commonTradingDays <= 0)
+            return 0.15m;
+
+        var p = assetCount * (assetCount + 1) / 2;
+        var ratio = (decimal)commonTradingDays / p;
+
+        if (assetCount <= 10 && commonTradingDays >= 500) return 0.03m;
+        if (assetCount <= 20 && ratio >= 3m) return 0.05m;
+        if (ratio >= 1.5m) return 0.08m;
+        if (ratio >= 1.0m) return 0.10m;
+        return 0.15m;
+    }
+
+    /// <summary>
+    /// 執行 Multivariate EWMA Filtered Historical Simulation（MVEWMA-FHS）。
+    /// 使用多元 EWMA covariance + diagonal shrinkage + jitter + 歷史向量殘差 bootstrap 模擬投資組合 VaR/ES。
+    /// </summary>
+    public static MvewmaFhsResult RunMultivariateFhsSimulation(
+        IReadOnlyList<IReadOnlyList<decimal>> returnMatrix,
+        IReadOnlyList<decimal> weights,
+        decimal initialPortfolioValue,
+        int horizonDays,
+        int simulations = 10000,
+        decimal confidenceLevel = 0.95m,
+        decimal lambda = 0.94m,
+        decimal shrinkageAlpha = 0.10m,
+        int tradingDays = 252)
+    {
+        var n = returnMatrix.Count;
+        var empty = new MvewmaFhsResult(0, 0, 0, 0, 0, 0, confidenceLevel,
+            shrinkageAlpha, n, 0, lambda, shrinkageAlpha, true);
+
+        if (n == 0 || simulations <= 0 || horizonDays <= 0)
+            return empty;
+
+        var returnLengths = returnMatrix.Select(r => r.Count).ToList();
+        var t = returnLengths.Min();
+        if (t < 10) return empty;
+
+        // Step 1: Build list of N×N EWMA covariance matrices
+        var covList = CalculateMultivariateEwmaCovariances(returnMatrix, lambda);
+
+        // Step 2: Apply diagonal shrinkage
+        var shrunkList = ApplyDiagonalShrinkage(covList, shrinkageAlpha);
+
+        // Step 3: Add jitter for numerical stability
+        var finalList = AddJitter(shrunkList);
+
+        // Step 4: Decompose latest covariance
+        var latestCov = finalList[^1];
+        var L = CholeskyDecompose(latestCov);
+        if (L is null) return empty;
+
+        // Step 5: Build historical residual vectors
+        var residuals = BuildFilteredResidualVectors(returnMatrix, finalList);
+
+        if (residuals.Count < 10) return empty;
+
+        // Step 6: Monte Carlo simulation
+        var random = new Random();
+        var finalValues = new decimal[simulations];
+        var basePortfolioValue = initialPortfolioValue;
+        var residualCount = residuals.Count;
+
+        for (var s = 0; s < simulations; s++)
+        {
+            var cumulative = new double[n];
+
+            for (var d = 0; d < horizonDays; d++)
+            {
+                var zTau = residuals[random.Next(residualCount)];
+
+                var rSim = new double[n];
+                for (var i = 0; i < n; i++)
+                {
+                    var sum = 0.0;
+                    for (var j = 0; j <= i; j++)
+                        sum += (double)L[i][j] * (double)zTau[j];
+                    rSim[i] = sum;
+                }
+
+                for (var i = 0; i < n; i++)
+                    cumulative[i] += rSim[i];
+            }
+
+            var portfolioReturnMultiplier = 0m;
+            for (var i = 0; i < n; i++)
+            {
+                var assetMultiplier = (decimal)Math.Exp(cumulative[i]);
+                portfolioReturnMultiplier += weights[i] * assetMultiplier;
+            }
+            finalValues[s] = basePortfolioValue * portfolioReturnMultiplier;
+        }
+
+        // Step 7: Compute statistics
+        Array.Sort(finalValues);
+        var mean = finalValues.Average();
+        var median = finalValues[simulations / 2];
+        var upperIndex = (int)(confidenceLevel * simulations);
+        var lowerIndex = (int)((1m - confidenceLevel) * simulations);
+        var bestCase = finalValues[Math.Min(upperIndex, simulations - 1)];
+        var worstCase = finalValues[Math.Max(lowerIndex, 0)];
+
+        var returnDist = finalValues
+            .Select(v => basePortfolioValue == 0 ? 0 : (v - basePortfolioValue) / basePortfolioValue)
+            .ToList();
+        var simulatedVaR = CalculateHistoricalVaR(returnDist, confidenceLevel);
+        var simulatedES = CalculateExpectedShortfall(returnDist, confidenceLevel);
+
+        return new MvewmaFhsResult(
+            mean, median, bestCase, worstCase, simulatedVaR, simulatedES, confidenceLevel,
+            shrinkageAlpha, n, t, lambda, shrinkageAlpha, false);
+    }
+
+    /// <summary>
+    /// 由多資產對數報酬序列建立多元 EWMA covariance 矩陣序列。
+    /// </summary>
+    public static IReadOnlyList<decimal[][]> CalculateMultivariateEwmaCovariances(
+        IReadOnlyList<IReadOnlyList<decimal>> returnMatrix,
+        decimal lambda = 0.94m)
+    {
+        var n = returnMatrix.Count;
+        if (n == 0) return Array.Empty<decimal[][]>();
+
+        var t = returnMatrix[0].Count;
+
+        // Initial sample covariance
+        var initialCov = new decimal[n][];
+        for (var i = 0; i < n; i++)
+        {
+            initialCov[i] = new decimal[n];
+            for (var j = 0; j <= i; j++)
+            {
+                initialCov[i][j] = CalculateCovariance(returnMatrix[i], returnMatrix[j]);
+                if (j < i)
+                    initialCov[j][i] = initialCov[i][j];
+            }
+        }
+
+        var result = new List<decimal[][]>(t);
+        var currentCov = initialCov;
+
+        for (var timeIdx = 0; timeIdx < t; timeIdx++)
+        {
+            var r = new decimal[n];
+            for (var i = 0; i < n; i++)
+                r[i] = returnMatrix[i][timeIdx];
+
+            var newCov = new decimal[n][];
+            for (var i = 0; i < n; i++)
+            {
+                newCov[i] = new decimal[n];
+                for (var j = 0; j < n; j++)
+                    newCov[i][j] = lambda * currentCov[i][j] + (1 - lambda) * r[i] * r[j];
+            }
+
+            result.Add(newCov);
+            currentCov = newCov;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 對 covariance 矩陣序列施加 diagonal shrinkage。
+    /// </summary>
+    public static IReadOnlyList<decimal[][]> ApplyDiagonalShrinkage(
+        IReadOnlyList<decimal[][]> covariances,
+        decimal alpha)
+    {
+        if (alpha <= 0) return covariances;
+
+        var result = new List<decimal[][]>(covariances.Count);
+        foreach (var cov in covariances)
+        {
+            var n = cov.Length;
+            var shrunk = new decimal[n][];
+            for (var i = 0; i < n; i++)
+            {
+                shrunk[i] = new decimal[n];
+                for (var j = 0; j < n; j++)
+                {
+                    if (i == j)
+                        shrunk[i][j] = cov[i][j];
+                    else
+                        shrunk[i][j] = (1 - alpha) * cov[i][j];
+                }
+            }
+            result.Add(shrunk);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 對 covariance 矩陣序列加入 jitter 以確保數值穩定性。
+    /// </summary>
+    public static IReadOnlyList<decimal[][]> AddJitter(
+        IReadOnlyList<decimal[][]> covariances)
+    {
+        var result = new List<decimal[][]>(covariances.Count);
+        foreach (var cov in covariances)
+        {
+            var n = cov.Length;
+            var diagSum = 0m;
+            for (var i = 0; i < n; i++)
+                diagSum += cov[i][i];
+            var epsilon = n > 0 ? Math.Max(1e-8m * diagSum / n, 1e-10m) : 1e-10m;
+
+            var jittered = new decimal[n][];
+            for (var i = 0; i < n; i++)
+            {
+                jittered[i] = new decimal[n];
+                for (var j = 0; j < n; j++)
+                {
+                    jittered[i][j] = cov[i][j];
+                    if (i == j) jittered[i][j] += epsilon;
+                }
+            }
+            result.Add(jittered);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 由報酬序列與對應 covariance 矩陣計算標準化歷史殘差向量。
+    /// </summary>
+    public static IReadOnlyList<decimal[]> BuildFilteredResidualVectors(
+        IReadOnlyList<IReadOnlyList<decimal>> returnMatrix,
+        IReadOnlyList<decimal[][]> covariances)
+    {
+        var n = returnMatrix.Count;
+        var t = returnMatrix[0].Count;
+        var result = new List<decimal[]>(t);
+
+        for (var timeIdx = 0; timeIdx < t && timeIdx < covariances.Count; timeIdx++)
+        {
+            var L = CholeskyDecompose(covariances[timeIdx]);
+            if (L is null) continue;
+
+            var r = new decimal[n];
+            for (var i = 0; i < n; i++)
+                r[i] = returnMatrix[i][timeIdx];
+
+            var z = SolveLowerTriangular(L, r);
+            if (z is not null)
+                result.Add(z);
+        }
+
+        return result;
+    }
+
+    private static decimal[]? SolveLowerTriangular(decimal[][] L, decimal[] b)
+    {
+        var n = L.Length;
+        var x = new decimal[n];
+        for (var i = 0; i < n; i++)
+        {
+            if (L[i][i] == 0) return null;
+            var sum = 0m;
+            for (var j = 0; j < i; j++)
+                sum += L[i][j] * x[j];
+            x[i] = (b[i] - sum) / L[i][i];
+        }
+        return x;
+    }
 }
 
 /// <summary>
@@ -859,3 +1130,21 @@ public sealed record GbmParameters(
     int PriceCount,
     int ReturnCount,
     int TradingDays);
+
+/// <summary>
+/// MVEWMA-FHS 模擬結果。
+/// </summary>
+public sealed record MvewmaFhsResult(
+    decimal MeanFinalValue,
+    decimal MedianFinalValue,
+    decimal BestCase95Percentile,
+    decimal WorstCase95Percentile,
+    decimal SimulatedVaR,
+    decimal SimulatedES,
+    decimal ConfidenceLevel,
+    decimal ShrinkageAlpha,
+    int AssetCount,
+    int CommonTradingDays,
+    decimal EwmaLambda,
+    decimal InputShrinkageAlpha,
+    bool DidFallback);

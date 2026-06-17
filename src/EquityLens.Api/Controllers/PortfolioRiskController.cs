@@ -54,11 +54,12 @@ public sealed class PortfolioRiskController : ApiControllerBase
         [FromQuery] int horizonDays = 30,
         [FromQuery] decimal confidenceLevel = 0.95m,
         [FromQuery] int simulations = 10000,
+        [FromQuery] string model = "gbm_ewma_normal",
         CancellationToken cancellationToken = default)
     {
         var result = await _riskAnalysisService.GetPortfolioRiskAsync(
             portfolioId, from, to, horizonDays, confidenceLevel, simulations,
-            _currentUser.UserId, cancellationToken);
+            _currentUser.UserId, cancellationToken, model);
         return ToActionResult(result);
     }
 }

@@ -46,5 +46,6 @@ public interface IRiskAnalysisService
         decimal confidenceLevel,
         int simulations,
         Guid providerUserId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string modelName = "gbm_ewma_normal");
 }

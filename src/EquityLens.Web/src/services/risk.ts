@@ -72,6 +72,10 @@ export interface PortfolioRiskResponse {
   volatilityMethod: string
   ewmaLambda: number
   driftAssumption: string
+  covarianceMethod: string | null
+  residualSampling: string | null
+  commonTradingDays: number | null
+  shrinkageAlpha: number | null
   supportedHorizons: number[]
   horizons: RiskHorizonResult[]
   holdings: PortfolioHoldingRisk[]
@@ -93,6 +97,7 @@ export interface PortfolioRiskParams {
   horizonDays?: number
   confidenceLevel?: number
   simulations?: number
+  model?: string
 }
 
 export async function getPortfolioRisk(

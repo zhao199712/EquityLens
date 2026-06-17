@@ -144,7 +144,8 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         decimal confidenceLevel,
         int simulations,
         Guid providerUserId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string modelName = "gbm_ewma_normal")
     {
         if (from >= to)
         {
@@ -351,9 +352,29 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         }
 
         // Correlated zero-drift GBM Monte Carlo for the fixed product horizons.
-        var horizons = BuildPortfolioHorizons(
-            portfolioReturns, dateToPrice, weightsBySecurityId, totalMarketValue,
-            simulations, confidenceLevel);
+        IReadOnlyList<RiskHorizonResult> horizons;
+        string? covarianceMethod = null;
+        string? residualSampling = null;
+        int? commonTradingDays = null;
+        decimal? shrinkageAlpha = null;
+
+        if (modelName == "mvewma_fhs")
+        {
+            horizons = BuildPortfolioHorizonsMvewmaFhs(
+                portfolioReturns, dateToPrice, weightsBySecurityId, totalMarketValue,
+                simulations, confidenceLevel,
+                out var alpha, out var ctd);
+            shrinkageAlpha = alpha;
+            commonTradingDays = ctd;
+            covarianceMethod = "MultivariateEWMA";
+            residualSampling = "HistoricalVectorBootstrap";
+        }
+        else
+        {
+            horizons = BuildPortfolioHorizons(
+                portfolioReturns, dateToPrice, weightsBySecurityId, totalMarketValue,
+                simulations, confidenceLevel);
+        }
 
         var response = new PortfolioRiskResponse(
             portfolioId,
@@ -374,7 +395,11 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             DriftAssumption,
             SupportedHorizons,
             horizons,
-            holdingRisks);
+            holdingRisks,
+            CovarianceMethod: covarianceMethod,
+            ResidualSampling: residualSampling,
+            CommonTradingDays: commonTradingDays,
+            ShrinkageAlpha: shrinkageAlpha);
 
         return Result<PortfolioRiskResponse>.Success(response);
     }
@@ -561,5 +586,77 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             logReturns.Add((decimal)Math.Log((double)(prices[i] / prices[i - 1])));
         }
         return RiskMath.CalculateEwmaVolatility(logReturns, EwmaLambda);
+    }
+
+    private IReadOnlyList<RiskHorizonResult> BuildPortfolioHorizonsMvewmaFhs(
+        IReadOnlyList<decimal> portfolioReturns,
+        IReadOnlyDictionary<Guid, IReadOnlyList<decimal>> alignedPrices,
+        IReadOnlyDictionary<Guid, decimal> weights,
+        decimal totalMarketValue,
+        int simulations,
+        decimal confidenceLevel,
+        out decimal shrinkageAlpha,
+        out int commonTradingDays)
+    {
+        var (returnMatrix, weightList) = BuildReturnMatrix(alignedPrices, weights);
+        var assetCount = returnMatrix.Count;
+        commonTradingDays = assetCount > 0 ? returnMatrix[0].Count : 0;
+        shrinkageAlpha = RiskMath.DetermineAutoShrinkageAlpha(assetCount, commonTradingDays);
+
+        var alpha = shrinkageAlpha;
+        var results = new List<RiskHorizonResult>(SupportedHorizons.Length);
+        foreach (var horizonDays in SupportedHorizons)
+        {
+            var rollingReturns = RiskMath.CalculateRollingLogReturns(portfolioReturns, horizonDays);
+            var fhsResult = RiskMath.RunMultivariateFhsSimulation(
+                returnMatrix, weightList, totalMarketValue, horizonDays,
+                simulations, confidenceLevel, EwmaLambda, alpha);
+
+            results.Add(new RiskHorizonResult(
+                horizonDays,
+                RiskMath.CalculateHistoricalVaR(rollingReturns, confidenceLevel),
+                RiskMath.CalculateExpectedShortfall(rollingReturns, confidenceLevel),
+                fhsResult.SimulatedVaR,
+                fhsResult.SimulatedES,
+                fhsResult.MeanFinalValue,
+                fhsResult.MedianFinalValue,
+                fhsResult.WorstCase95Percentile,
+                fhsResult.BestCase95Percentile));
+        }
+        return results;
+    }
+
+    private static (IReadOnlyList<IReadOnlyList<decimal>> ReturnMatrix, IReadOnlyList<decimal> Weights) BuildReturnMatrix(
+        IReadOnlyDictionary<Guid, IReadOnlyList<decimal>> alignedPrices,
+        IReadOnlyDictionary<Guid, decimal> weights)
+    {
+        var assetIds = alignedPrices.Keys
+            .Where(id => weights.GetValueOrDefault(id, 0) > 0)
+            .ToList();
+
+        var returnMatrix = new List<IReadOnlyList<decimal>>();
+        var weightList = new List<decimal>();
+
+        foreach (var id in assetIds)
+        {
+            var prices = alignedPrices[id];
+            var logReturns = new List<decimal>(prices.Count - 1);
+            for (var i = 1; i < prices.Count; i++)
+            {
+                if (prices[i - 1] <= 0 || prices[i] <= 0)
+                {
+                    logReturns.Clear();
+                    break;
+                }
+                logReturns.Add((decimal)Math.Log((double)(prices[i] / prices[i - 1])));
+            }
+
+            if (logReturns.Count < 2) continue;
+
+            returnMatrix.Add(logReturns);
+            weightList.Add(weights.GetValueOrDefault(id, 0));
+        }
+
+        return (returnMatrix, weightList);
     }
 }
