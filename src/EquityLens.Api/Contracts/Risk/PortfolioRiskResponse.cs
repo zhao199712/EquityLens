@@ -41,7 +41,11 @@ public sealed record PortfolioRiskResponse(
     string DriftAssumption,
     IReadOnlyList<int> SupportedHorizons,
     IReadOnlyList<RiskHorizonResult> Horizons,
-    IReadOnlyList<PortfolioHoldingRiskResponse> Holdings);
+    IReadOnlyList<PortfolioHoldingRiskResponse> Holdings,
+    string? CovarianceMethod = null,
+    string? ResidualSampling = null,
+    int? CommonTradingDays = null,
+    decimal? ShrinkageAlpha = null);
 
 /// <summary>
 /// 投資組合中單一持倉的風險貢獻摘要。

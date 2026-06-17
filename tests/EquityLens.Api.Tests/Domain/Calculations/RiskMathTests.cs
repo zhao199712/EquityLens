@@ -512,4 +512,222 @@ public sealed class RiskMathTests
         var expected = 150m * (decimal)Math.Exp(0.10);
         Assert.Equal(expected, result.MeanFinalValue, 1);
     }
+
+    [Theory]
+    [InlineData(10, 500, 0.03)]
+    [InlineData(20, 1500, 0.05)]
+    [InlineData(30, 800, 0.08)]
+    [InlineData(40, 850, 0.10)]
+    [InlineData(50, 400, 0.15)]
+    public void DetermineAutoShrinkageAlpha_ReturnsExpected(
+        int assetCount, int commonTradingDays, decimal expected)
+    {
+        var result = RiskMath.DetermineAutoShrinkageAlpha(assetCount, commonTradingDays);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void DetermineAutoShrinkageAlpha_ZeroInputs_ReturnsFallback()
+    {
+        Assert.Equal(0.15m, RiskMath.DetermineAutoShrinkageAlpha(0, 0));
+        Assert.Equal(0.15m, RiskMath.DetermineAutoShrinkageAlpha(10, 0));
+        Assert.Equal(0.15m, RiskMath.DetermineAutoShrinkageAlpha(0, 100));
+    }
+
+    [Fact]
+    public void CalculateMultivariateEwmaCovariances_ReturnsCorrectCount()
+    {
+        var returnMatrix = new IReadOnlyList<decimal>[]
+        {
+            new decimal[] { 0.01m, 0.02m, -0.01m, 0.03m, 0m },
+            new decimal[] { -0.02m, 0.01m, 0.03m, -0.01m, 0.02m },
+        };
+
+        var result = RiskMath.CalculateMultivariateEwmaCovariances(returnMatrix, 0.94m);
+
+        Assert.Equal(5, result.Count);
+        Assert.Equal(2, result[0].Length);
+        Assert.Equal(2, result[0][0].Length);
+    }
+
+    [Fact]
+    public void CalculateMultivariateEwmaCovariances_DiagonalIsPositive()
+    {
+        var returnMatrix = new IReadOnlyList<decimal>[]
+        {
+            new decimal[] { 0.01m, 0.02m, -0.01m, 0.03m, 0m, 0.01m, -0.02m },
+            new decimal[] { -0.02m, 0.01m, 0.03m, -0.01m, 0.02m, 0m, 0.01m },
+        };
+
+        var result = RiskMath.CalculateMultivariateEwmaCovariances(returnMatrix, 0.94m);
+
+        foreach (var cov in result)
+        {
+            Assert.True(cov[0][0] > 0);
+            Assert.True(cov[1][1] > 0);
+        }
+    }
+
+    [Fact]
+    public void ApplyDiagonalShrinkage_PreservesDiagonal()
+    {
+        var cov = new decimal[][][]
+        {
+            new[]
+            {
+                new decimal[] { 0.0004m, 0.0002m },
+                new decimal[] { 0.0002m, 0.0009m },
+            }
+        };
+
+        var result = RiskMath.ApplyDiagonalShrinkage(cov, 0.10m);
+
+        Assert.Equal(0.0004m, result[0][0][0]);
+        Assert.Equal(0.0009m, result[0][1][1]);
+        Assert.True(result[0][0][1] < cov[0][0][1]);
+    }
+
+    [Fact]
+    public void ApplyDiagonalShrinkage_ZeroAlpha_ReturnsSame()
+    {
+        var cov = new decimal[][][]
+        {
+            new[]
+            {
+                new decimal[] { 0.0004m, 0.0002m },
+                new decimal[] { 0.0002m, 0.0009m },
+            }
+        };
+
+        var result = RiskMath.ApplyDiagonalShrinkage(cov, 0m);
+
+        Assert.Equal(cov[0][0][1], result[0][0][1]);
+    }
+
+    [Fact]
+    public void AddJitter_IncreasesDiagonal()
+    {
+        var cov = new decimal[][][]
+        {
+            new[]
+            {
+                new decimal[] { 0.0004m, 0.0002m },
+                new decimal[] { 0.0002m, 0.0009m },
+            }
+        };
+
+        var result = RiskMath.AddJitter(cov);
+
+        Assert.True(result[0][0][0] > cov[0][0][0]);
+        Assert.True(result[0][1][1] > cov[0][1][1]);
+        Assert.Equal(cov[0][0][1], result[0][0][1]);
+    }
+
+    [Fact]
+    public void BuildFilteredResidualVectors_ReturnsNonEmpty()
+    {
+        var returnMatrix = new IReadOnlyList<decimal>[]
+        {
+            new decimal[] { 0.01m, 0.02m, -0.01m, 0.03m, 0m, 0.01m, -0.02m, 0.015m },
+            new decimal[] { -0.02m, 0.01m, 0.03m, -0.01m, 0.02m, 0m, 0.01m, -0.005m },
+        };
+
+        var covList = RiskMath.CalculateMultivariateEwmaCovariances(returnMatrix, 0.94m);
+        var shrunk = RiskMath.ApplyDiagonalShrinkage(covList, 0.10m);
+        var jittered = RiskMath.AddJitter(shrunk);
+
+        var residuals = RiskMath.BuildFilteredResidualVectors(returnMatrix, jittered);
+
+        Assert.True(residuals.Count > 0);
+        Assert.Equal(2, residuals[0].Length);
+    }
+
+    [Fact]
+    public void RunMultivariateFhsSimulation_ProducesResults()
+    {
+        var random = new Random(42);
+        var n = 3;
+        var t = 200;
+        var returnMatrix = new IReadOnlyList<decimal>[n];
+        for (var i = 0; i < n; i++)
+        {
+            var returns = new decimal[t];
+            for (var j = 0; j < t; j++)
+                returns[j] = (decimal)(random.NextDouble() * 0.04 - 0.02);
+            returnMatrix[i] = returns;
+        }
+
+        var weights = new decimal[] { 0.4m, 0.35m, 0.25m };
+        var initialValue = 1000000m;
+
+        var result = RiskMath.RunMultivariateFhsSimulation(
+            returnMatrix, weights, initialValue, 30,
+            5000, 0.95m, 0.94m, 0.10m);
+
+        Assert.True(result.MeanFinalValue > 0);
+        Assert.True(result.MedianFinalValue > 0);
+        Assert.True(result.SimulatedVaR < 0);
+        Assert.True(result.SimulatedES <= result.SimulatedVaR);
+        Assert.Equal(0.95m, result.ConfidenceLevel);
+        Assert.Equal(3, result.AssetCount);
+        Assert.Equal(t, result.CommonTradingDays);
+        Assert.False(result.DidFallback);
+    }
+
+    [Fact]
+    public void RunMultivariateFhsSimulation_ZeroVol_Deterministic()
+    {
+        var n = 2;
+        var t = 100;
+        var returnMatrix = new IReadOnlyList<decimal>[n];
+        for (var i = 0; i < n; i++)
+        {
+            var returns = new decimal[t];
+            for (var j = 0; j < t; j++)
+                returns[j] = 0m;
+            returnMatrix[i] = returns;
+        }
+
+        var weights = new decimal[] { 0.5m, 0.5m };
+        var initialValue = 100000m;
+
+        var result = RiskMath.RunMultivariateFhsSimulation(
+            returnMatrix, weights, initialValue, 30,
+            1000, 0.95m, 0.94m, 0.10m);
+
+        Assert.Equal(initialValue, result.MeanFinalValue, 0);
+    }
+
+    [Fact]
+    public void RunMultivariateFhsSimulation_EmptyInputs_ReturnsFallback()
+    {
+        var result = RiskMath.RunMultivariateFhsSimulation(
+            Array.Empty<IReadOnlyList<decimal>>(),
+            Array.Empty<decimal>(),
+            100000m, 30, 1000, 0.95m);
+
+        Assert.True(result.DidFallback);
+    }
+
+    [Fact]
+    public void RunMultivariateFhsSimulation_SingleAsset_Works()
+    {
+        var random = new Random(42);
+        var t = 200;
+        var returns = new decimal[t];
+        for (var j = 0; j < t; j++)
+            returns[j] = (decimal)(random.NextDouble() * 0.04 - 0.02);
+
+        var returnMatrix = new IReadOnlyList<decimal>[] { returns };
+        var weights = new decimal[] { 1.0m };
+        var initialValue = 500000m;
+
+        var result = RiskMath.RunMultivariateFhsSimulation(
+            returnMatrix, weights, initialValue, 7,
+            5000, 0.95m, 0.94m, 0.10m);
+
+        Assert.True(result.MeanFinalValue > 0);
+        Assert.Equal(1, result.AssetCount);
+        Assert.False(result.DidFallback);
+    }
 }
