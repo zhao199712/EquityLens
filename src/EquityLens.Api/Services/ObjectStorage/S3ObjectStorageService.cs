@@ -37,7 +37,8 @@ public sealed class S3ObjectStorageService : IObjectStorageService
             Key = objectKey,
             InputStream = content,
             ContentType = contentType ?? "application/octet-stream",
-            AutoCloseStream = false
+            AutoCloseStream = false,
+            UseChunkEncoding = false
         };
 
         return await _s3Client.PutObjectAsync(request, cancellationToken);

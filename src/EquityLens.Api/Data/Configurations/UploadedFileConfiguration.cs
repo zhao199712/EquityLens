@@ -13,7 +13,7 @@ public class UploadedFileConfiguration : IEntityTypeConfiguration<UploadedFile>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
 
-        builder.Property(x => x.UploadedByUserId).HasColumnName("uploaded_by_user_id").IsRequired();
+        builder.Property(x => x.UploadedByUserId).HasColumnName("uploaded_by_user_id");
         builder.Property(x => x.BucketName).HasColumnName("bucket_name").HasMaxLength(128).IsRequired();
         builder.Property(x => x.ObjectKey).HasColumnName("object_key").HasMaxLength(512).IsRequired();
         builder.Property(x => x.OriginalFileName).HasColumnName("original_file_name").HasMaxLength(256).IsRequired();
@@ -27,7 +27,7 @@ public class UploadedFileConfiguration : IEntityTypeConfiguration<UploadedFile>
         builder.HasOne(x => x.UploadedByUser)
             .WithMany(u => u.UploadedFiles)
             .HasForeignKey(x => x.UploadedByUserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ObjectKey).IsUnique();
     }

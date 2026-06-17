@@ -3,7 +3,7 @@ namespace EquityLens.Api.Data.Entities;
 public class UploadedFile
 {
     public Guid Id { get; set; }
-    public Guid UploadedByUserId { get; set; }
+    public Guid? UploadedByUserId { get; set; }
     public string BucketName { get; set; } = string.Empty;
     public string ObjectKey { get; set; } = string.Empty;
     public string OriginalFileName { get; set; } = string.Empty;
@@ -15,8 +15,9 @@ public class UploadedFile
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     // Navigation
-    public AppUser UploadedByUser { get; set; } = null!;
+    public AppUser? UploadedByUser { get; set; }
     public ICollection<Document> Documents { get; set; } = [];
     public ICollection<FinancialFiling> FinancialFilings { get; set; } = [];
     public ICollection<JobRun> JobRuns { get; set; } = [];
+    public ICollection<InvestorConference> InvestorConferences { get; set; } = [];
 }

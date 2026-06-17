@@ -3,6 +3,7 @@ using System;
 using EquityLens.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Pgvector;
 namespace EquityLens.Api.Migrations
 {
     [DbContext(typeof(EquityLensDbContext))]
-    partial class EquityLensDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260617094804_AddInvestorConference")]
+    partial class AddInvestorConference
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -510,7 +513,7 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("character varying(1024)")
                         .HasColumnName("source_url");
 
-                    b.Property<Guid?>("UploadedByUserId")
+                    b.Property<Guid>("UploadedByUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("uploaded_by_user_id");
 
@@ -1625,7 +1628,7 @@ namespace EquityLens.Api.Migrations
                         .HasDefaultValue("Pending")
                         .HasColumnName("upload_status");
 
-                    b.Property<Guid?>("UploadedByUserId")
+                    b.Property<Guid>("UploadedByUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("uploaded_by_user_id");
 
@@ -1734,7 +1737,8 @@ namespace EquityLens.Api.Migrations
                     b.HasOne("EquityLens.Api.Data.Entities.AppUser", "UploadedByUser")
                         .WithMany("FinancialFilings")
                         .HasForeignKey("UploadedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("EquityLens.Api.Data.Entities.UploadedFile", "UploadedFile")
                         .WithMany("FinancialFilings")
@@ -1976,7 +1980,8 @@ namespace EquityLens.Api.Migrations
                     b.HasOne("EquityLens.Api.Data.Entities.AppUser", "UploadedByUser")
                         .WithMany("UploadedFiles")
                         .HasForeignKey("UploadedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("UploadedByUser");
                 });
