@@ -6,7 +6,7 @@ public class FinancialFiling
     public Guid SecurityId { get; set; }
     public Guid UploadedFileId { get; set; }
     public Guid? DocumentId { get; set; }
-    public Guid UploadedByUserId { get; set; }
+    public Guid? UploadedByUserId { get; set; }
 
     public string FilingType { get; set; } = string.Empty;
     // AnnualReport, QuarterlyReport, 10-K, 10-Q, 20-F, EarningsRelease
@@ -31,5 +31,5 @@ public class FinancialFiling
     public Security Security { get; set; } = null!;
     public UploadedFile UploadedFile { get; set; } = null!;
     public Document? Document { get; set; }
-    public AppUser UploadedByUser { get; set; } = null!;
+    public AppUser? UploadedByUser { get; set; }
 }
