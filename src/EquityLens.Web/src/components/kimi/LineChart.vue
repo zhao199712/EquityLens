@@ -39,10 +39,11 @@
       :key="'x-' + i"
       :x="getX(i)"
       :y="height - 10"
-      text-anchor="middle"
+      text-anchor="end"
       :fill="textColor"
-      font-size="11"
+      font-size="10"
       font-family="Inter, sans-serif"
+      :transform="`rotate(-40, ${getX(i)}, ${height - 10})`"
     >
       {{ labels[i] }}
     </text>
@@ -119,14 +120,14 @@ const props = withDefaults(defineProps<{
   showArea: true,
   showPoints: true,
   secondLineColor: '#8B1A2B',
-  maxLabels: 10,
+  maxLabels: 8,
 })
 
 const pathRef = ref<SVGPathElement>()
 const areaRef = ref<SVGPathElement>()
 const secondPathRef = ref<SVGPathElement>()
 
-const padding = { top: 20, right: 20, bottom: 40, left: 70 }
+const padding = { top: 20, right: 20, bottom: 60, left: 70 }
 const chartW = computed(() => props.width - padding.left - padding.right)
 const chartH = computed(() => props.height - padding.top - padding.bottom)
 

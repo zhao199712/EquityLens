@@ -31,13 +31,12 @@ using EquityLens.Api.Services.Redis;
 using EquityLens.Api.Services.Securities;
 using EquityLens.Api.Services.UploadedFiles;
 using EquityLens.Api.Services.FinancialFilings;
+using EquityLens.Api.Services.DocumentParsing;
+using EquityLens.Api.Services.DocumentProcessing;
 using EquityLens.Api.Services.PortfolioTransactions;
 using EquityLens.Api.Services.RiskAnalysis;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
-using EquityLens.Api.Repositories.PortfolioTransactions;
-using EquityLens.Api.Services.ExchangeRates;
-using EquityLens.Api.Repositories.ExchangeRates;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseDefaultServiceProvider(o => o.ValidateOnBuild = false);
@@ -92,6 +91,14 @@ builder.Services.AddScoped<IUploadedFileService, UploadedFileService>();
 builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IRiskAnalysisService, RiskAnalysisService>();
+
+// TWSE 財報爬蟲服務
+builder.Services.AddHttpClient<TpeiTaiwan50Provider>();
+builder.Services.AddScoped<ITaiwan50ConstituentProvider, TpeiTaiwan50Provider>();
+builder.Services.AddHttpClient<TwseFilingCrawler>();
+builder.Services.AddScoped<ITwseFilingCrawler, TwseFilingCrawler>();
+builder.Services.AddScoped<IPdfParser, PigPdfParser>();
+builder.Services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
 
 builder.Services.AddHttpClient<AlphaVantageMarketDataProvider>((sp, client) =>
 {

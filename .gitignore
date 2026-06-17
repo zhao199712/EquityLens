@@ -56,3 +56,6 @@ Thumbs.db
 
 # Windows NTFS Alternate Data Streams
 *:Zone.Identifier
+
+.playwright-mcp/
+src/EquityLens.Api/filings/
