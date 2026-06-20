@@ -38,6 +38,7 @@ public sealed class ConferenceChunkingService : IConferenceChunkingService
         var succeeded = 0;
         var failed = 0;
         var skipped = 0;
+        var skippedPages = 0;
         var chunksCreated = 0;
 
         foreach (var conference in conferences)
@@ -66,6 +67,12 @@ public sealed class ConferenceChunkingService : IConferenceChunkingService
                 foreach (var page in pages.Where(p => !string.IsNullOrWhiteSpace(p.Text)))
                 {
                     var content = BuildChunkContent(conference, page);
+                    if (IsNoiseChunk(content))
+                    {
+                        skippedPages++;
+                        continue;
+                    }
+
                     _dbContext.DocumentChunks.Add(new DocumentChunk
                     {
                         Id = Guid.NewGuid(),
@@ -101,7 +108,7 @@ public sealed class ConferenceChunkingService : IConferenceChunkingService
             }
         }
 
-        return new ConferenceChunkingResult(conferences.Count, succeeded, failed, skipped, chunksCreated);
+        return new ConferenceChunkingResult(conferences.Count, succeeded, failed, skipped, chunksCreated, skippedPages);
     }
 
     private static string BuildChunkContent(InvestorConference conference, PdfPageText page)
@@ -132,5 +139,16 @@ Page: {page.PageNumber}
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(content));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static bool IsNoiseChunk(string content)
+    {
+        var normalized = content.Replace("\n", " ").Replace("\t", " ").Replace(" ", string.Empty);
+        return ContainsAny(normalized, ["SafeHarborNotice", "forward-lookingstatements", "Agenda", "會議議程"]);
+    }
+
+    private static bool ContainsAny(string value, IReadOnlyList<string> candidates)
+    {
+        return candidates.Any(candidate => value.Contains(candidate, StringComparison.OrdinalIgnoreCase));
     }
 }
