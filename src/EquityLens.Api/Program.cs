@@ -37,6 +37,7 @@ using EquityLens.Api.Services.PortfolioTransactions;
 using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Services.InvestorConferences;
 using EquityLens.Api.Services.FinancialData;
+using EquityLens.Api.Services.Ai;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 
@@ -100,7 +101,13 @@ builder.Services.AddScoped<IPdfTextExtractionService, PdfPigTextExtractionServic
 builder.Services.AddScoped<IConferenceChunkingService, ConferenceChunkingService>();
 builder.Services.AddScoped<IChunkEmbeddingService, ChunkEmbeddingService>();
 builder.Services.AddScoped<IEmbeddingExportService, EmbeddingExportService>();
+builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
+
+// AI / LLM 服務
+builder.Services.Configure<DeepSeekOptions>(builder.Configuration.GetSection("DeepSeek"));
+builder.Services.AddHttpClient<IChatCompletionService, DeepSeekChatCompletionService>();
+builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 
 builder.Services.AddScoped<IFinMindFinancialImportService, FinMindFinancialImportService>();
 builder.Services.AddHttpClient<FinMindFinancialImportService>((sp, client) =>
