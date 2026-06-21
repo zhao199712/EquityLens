@@ -16,7 +16,7 @@ public class FinancialFilingConfiguration : IEntityTypeConfiguration<FinancialFi
         builder.Property(x => x.SecurityId).HasColumnName("security_id").IsRequired();
         builder.Property(x => x.UploadedFileId).HasColumnName("uploaded_file_id").IsRequired();
         builder.Property(x => x.DocumentId).HasColumnName("document_id");
-        builder.Property(x => x.UploadedByUserId).HasColumnName("uploaded_by_user_id").IsRequired();
+        builder.Property(x => x.UploadedByUserId).HasColumnName("uploaded_by_user_id");
 
         builder.Property(x => x.FilingType).HasColumnName("filing_type").HasMaxLength(32).IsRequired();
         builder.Property(x => x.FiscalYear).HasColumnName("fiscal_year").IsRequired();
@@ -49,7 +49,7 @@ public class FinancialFilingConfiguration : IEntityTypeConfiguration<FinancialFi
         builder.HasOne(x => x.UploadedByUser)
             .WithMany(u => u.FinancialFilings)
             .HasForeignKey(x => x.UploadedByUserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Index by security for fast lookup
         builder.HasIndex(x => new { x.SecurityId, x.FiscalYear, x.FiscalQuarter, x.FilingType });

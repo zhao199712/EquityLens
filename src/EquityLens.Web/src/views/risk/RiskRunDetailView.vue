@@ -39,10 +39,14 @@ const toDate = computed(() => today.toISOString().split('T')[0])
 
 const runInfo = computed(() => {
   const r = risk.value
+  const modelName =
+    r?.covarianceMethod === 'MultivariateEWMA'
+      ? 'MVEWMA-FHS'
+      : 'Historical VaR + Monte Carlo'
   return {
     id: `RR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-001`,
     portfolio: portfolioName.value,
-    model: 'Historical VaR + Monte Carlo',
+    model: modelName,
     confidence: r ? `${(r.confidenceLevel * 100).toFixed(0)}%` : '95%',
     lookback: r ? `${r.alignedReturnCount} 天` : '252 天',
     date: new Date().toISOString().split('T')[0],
@@ -190,6 +194,7 @@ onMounted(async () => {
         horizonDays: 30,
         confidenceLevel: 0.95,
         simulations: 10000,
+        model: 'mvewma_fhs',
       }),
     ])
     portfolioName.value = portfolio.name
@@ -240,6 +245,28 @@ onMounted(async () => {
                 ]"
                 :key="i"
                 style="padding: 20px; border-right: 1px solid #333333; border-bottom: 1px solid #333333"
+              >
+                <span class="kimi-caption" style="margin-bottom: 4px; display: block; color: #666666">{{ item.label }}</span>
+                <span style="font-size: 16px; font-weight: 600; color: #FFFFFF">{{ item.value }}</span>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <!-- Model Metadata -->
+        <ScrollReveal :delay="0.05">
+          <div class="kimi-section-dark" style="margin-bottom: 40px">
+            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 600; color: #FFFFFF">模型細節</h3>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr)">
+              <div
+                v-for="(item, i) in [
+                  { label: 'COVARIANCE METHOD', value: risk.covarianceMethod ?? '—' },
+                  { label: 'RESIDUAL SAMPLING', value: risk.residualSampling ?? '—' },
+                  { label: 'COMMON TRADING DAYS', value: risk.commonTradingDays ? `${risk.commonTradingDays} 天` : '—' },
+                  { label: 'SHRINKAGE ALPHA', value: risk.shrinkageAlpha != null ? `${(risk.shrinkageAlpha * 100).toFixed(2)}%` : '—' },
+                ]"
+                :key="i"
+                style="padding: 20px; border-right: 1px solid #333333"
               >
                 <span class="kimi-caption" style="margin-bottom: 4px; display: block; color: #666666">{{ item.label }}</span>
                 <span style="font-size: 16px; font-weight: 600; color: #FFFFFF">{{ item.value }}</span>
