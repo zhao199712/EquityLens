@@ -9,6 +9,22 @@
   "ConnectionStrings": {
     "PostgreSQL": "Host=localhost:5433;Database=equitylens;Username=your_user;Password=your_password"
   },
+  "AI": {
+    "ChatProvider": "Gemini"
+  },
+  "DeepSeek": {
+    "BaseUrl": "https://api.deepseek.com",
+    "Model": "deepseek-chat",
+    "ApiKey": ""
+  },
+  "Gemini": {
+    "BaseUrl": "https://generativelanguage.googleapis.com/v1beta/",
+    "Model": "gemini-3.1-flash-lite",
+    "ApiKey": ""
+  },
+  "OpenAI": {
+    "ApiKey": ""
+  },
   "MarketData": {
     "AlphaVantage": {
       "BaseUrl": "https://www.alphavantage.co"

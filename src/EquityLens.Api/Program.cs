@@ -37,13 +37,71 @@ using EquityLens.Api.Services.PortfolioTransactions;
 using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Services.InvestorConferences;
 using EquityLens.Api.Services.FinancialData;
+using EquityLens.Api.Services.Ai;
+using EquityLens.Api.Observability;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseDefaultServiceProvider(o => o.ValidateOnBuild = false);
+
+const string serviceName = "equitylens-api";
+var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+var resourceBuilder = ResourceBuilder.CreateDefault().AddService(serviceName);
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(serviceName))
+    .WithTracing(tracing =>
+    {
+        tracing
+            .AddSource(EquityLensTelemetry.ActivitySourceName)
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation(options =>
+            {
+                options.EnrichWithHttpRequestMessage = (activity, request) =>
+                {
+                    if (request.RequestUri is not null)
+                    {
+                        activity.SetTag("url.full", request.RequestUri.GetLeftPart(UriPartial.Path));
+                    }
+                };
+            });
+
+        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+        {
+            tracing.AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint));
+        }
+    })
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddMeter(EquityLensTelemetry.MeterName)
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddRuntimeInstrumentation();
+
+        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+        {
+            metrics.AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint));
+        }
+    });
+
+builder.Logging.AddOpenTelemetry(logging =>
+{
+    logging.SetResourceBuilder(resourceBuilder);
+    logging.IncludeFormattedMessage = true;
+    logging.IncludeScopes = true;
+    if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+    {
+        logging.AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint));
+    }
+});
 
 // Add services to the container.
 builder.Services.AddDbContext<EquityLensDbContext>(options =>
@@ -100,7 +158,27 @@ builder.Services.AddScoped<IPdfTextExtractionService, PdfPigTextExtractionServic
 builder.Services.AddScoped<IConferenceChunkingService, ConferenceChunkingService>();
 builder.Services.AddScoped<IChunkEmbeddingService, ChunkEmbeddingService>();
 builder.Services.AddScoped<IEmbeddingExportService, EmbeddingExportService>();
+builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
+
+// AI / LLM 服務
+builder.Services.Configure<DeepSeekOptions>(builder.Configuration.GetSection("DeepSeek"));
+builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection("Gemini"));
+
+var chatProvider = builder.Configuration["AI:ChatProvider"]?.Trim();
+switch (chatProvider?.ToUpperInvariant())
+{
+    case null or "" or "DEEPSEEK":
+        builder.Services.AddHttpClient<IChatCompletionService, DeepSeekChatCompletionService>();
+        break;
+    case "GEMINI":
+        builder.Services.AddHttpClient<IChatCompletionService, GeminiChatCompletionService>();
+        break;
+    default:
+        throw new InvalidOperationException(
+            $"Unsupported AI:ChatProvider '{chatProvider}'. Supported values: DeepSeek, Gemini.");
+}
+builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 
 builder.Services.AddScoped<IFinMindFinancialImportService, FinMindFinancialImportService>();
 builder.Services.AddHttpClient<FinMindFinancialImportService>((sp, client) =>
