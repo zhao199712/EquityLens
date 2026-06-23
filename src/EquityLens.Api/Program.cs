@@ -40,6 +40,7 @@ using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Services.InvestorConferences;
 using EquityLens.Api.Services.FinancialData;
 using EquityLens.Api.Services.Ai;
+using EquityLens.Api.Services.Chat;
 using EquityLens.Api.Observability;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
@@ -182,6 +183,11 @@ switch (chatProvider?.ToUpperInvariant())
 }
 builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 
+// Agentic RAG Chat 服務
+builder.Services.AddScoped<IFinancialDataService, FinancialDataService>();
+builder.Services.AddHttpClient<IJinaSearchService, JinaSearchService>();
+builder.Services.AddHttpClient<IChatAgentService, ChatAgentService>();
+
 builder.Services.AddScoped<IFinMindFinancialImportService, FinMindFinancialImportService>();
 builder.Services.AddHttpClient<FinMindFinancialImportService>((sp, client) =>
 {
@@ -287,7 +293,9 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(
+                  "http://localhost:5173",
+                  "http://172.25.14.202:5173")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();

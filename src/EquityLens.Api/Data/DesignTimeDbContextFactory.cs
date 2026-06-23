@@ -9,7 +9,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<EquityLens
     public EquityLensDbContext CreateDbContext(string[] args)
     {
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__PostgreSQL")
-            ?? $"Host=localhost:{Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};Database={Environment.GetEnvironmentVariable("POSTGRES_DB") ?? "equitylens"};Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "ymsh20220"};Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? "a19971105"}";
+            ?? $"Host=localhost:{Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};Database={Environment.GetEnvironmentVariable("POSTGRES_DB") ?? "equitylens"};Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "equitylens"};Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? "equitylens_dev_password"}";
 
         var options = new DbContextOptionsBuilder<EquityLensDbContext>()
             .UseNpgsql(

@@ -22,6 +22,25 @@ public static class EquityLensTelemetry
         unit: "tokens",
         description: "LLM prompt and completion token usage.");
 
+    // Chat
+    public static readonly Counter<long> ChatMessages = Meter.CreateCounter<long>(
+        "equitylens.chat.messages",
+        description: "Number of chat messages sent.");
+    public static readonly Histogram<double> ChatLlmDuration = Meter.CreateHistogram<double>(
+        "equitylens.chat.llm.duration",
+        unit: "ms",
+        description: "Gemini API call duration per iteration.");
+    public static readonly Counter<long> ChatToolCalls = Meter.CreateCounter<long>(
+        "equitylens.chat.tool.calls",
+        description: "Number of tool calls in chat.");
+    public static readonly Histogram<double> ChatToolDuration = Meter.CreateHistogram<double>(
+        "equitylens.chat.tool.duration",
+        unit: "ms",
+        description: "Tool execution duration.");
+    public static readonly Counter<long> ChatSessions = Meter.CreateCounter<long>(
+        "equitylens.chat.sessions",
+        description: "Number of chat sessions created.");
+
     public static void MarkError(Activity? activity, Exception exception)
     {
         activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);

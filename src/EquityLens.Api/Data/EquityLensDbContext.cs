@@ -46,6 +46,10 @@ public class EquityLensDbContext : DbContext
     // Jobs
     public DbSet<JobRun> JobRuns => Set<JobRun>();
 
+    // Chat
+    public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+
     // Exchange Rates
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
 
