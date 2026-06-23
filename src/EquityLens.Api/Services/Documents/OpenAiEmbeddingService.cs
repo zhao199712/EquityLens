@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using EquityLens.Api.Observability;
 
 namespace EquityLens.Api.Services.Documents;
 
@@ -24,9 +25,16 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
         if (inputs.Count == 0)
             return [];
 
-        var apiKey = _configuration["OpenAI:ApiKey"]
-            ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
-            ?? throw new InvalidOperationException("OpenAI API key is not configured. Set OpenAI:ApiKey or OPENAI_API_KEY.");
+        using var activity = EquityLensTelemetry.ActivitySource.StartActivity("embedding.create");
+        activity?.SetTag("embedding.provider", "openai");
+        activity?.SetTag("embedding.model", Model);
+        activity?.SetTag("embedding.input_count", inputs.Count);
+
+        try
+        {
+            var apiKey = _configuration["OpenAI:ApiKey"]
+                ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
+                ?? throw new InvalidOperationException("OpenAI API key is not configured. Set OpenAI:ApiKey or OPENAI_API_KEY.");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, EmbeddingsEndpoint);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -45,10 +53,18 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
         var payload = JsonSerializer.Deserialize<OpenAiEmbeddingsResponse>(responseBody, JsonOptions)
             ?? throw new InvalidOperationException("OpenAI embeddings response is empty.");
 
-        return payload.Data
-            .OrderBy(x => x.Index)
-            .Select(x => x.Embedding)
-            .ToList();
+            var embeddings = payload.Data
+                .OrderBy(x => x.Index)
+                .Select(x => x.Embedding)
+                .ToList();
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
+            return embeddings;
+        }
+        catch (Exception exception)
+        {
+            EquityLensTelemetry.MarkError(activity, exception);
+            throw;
+        }
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

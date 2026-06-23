@@ -57,5 +57,15 @@ Thumbs.db
 # Windows NTFS Alternate Data Streams
 *:Zone.Identifier
 
+# Data artifacts
+annual-report-chunks*.jsonl
+0050_prices.csv
+mops_response_full.html
+法說會/
+
+# Exports
+exports/
+src/EquityLens.Api/exports/
+
+# Playwright MCP
 .playwright-mcp/
-src/EquityLens.Api/filings/
