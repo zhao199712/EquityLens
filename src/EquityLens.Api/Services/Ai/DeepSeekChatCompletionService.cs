@@ -18,11 +18,18 @@ public sealed class DeepSeekChatCompletionService : IChatCompletionService
         _httpClient.BaseAddress = new Uri(_options.BaseUrl.TrimEnd('/') + "/");
     }
 
+    public string Provider => "deepseek";
+    public string Model => _options.Model;
+
     public async Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default)
     {
-        var apiKey = _options.ApiKey
-            ?? Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
-            ?? throw new InvalidOperationException("DeepSeek API key is not configured. Set DeepSeek:ApiKey or DEEPSEEK_API_KEY.");
+        var apiKey = string.IsNullOrWhiteSpace(_options.ApiKey)
+            ? Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
+            : _options.ApiKey;
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            throw new InvalidOperationException("DeepSeek API key is not configured. Set DeepSeek:ApiKey or DEEPSEEK_API_KEY.");
+        }
 
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "chat/completions");
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);

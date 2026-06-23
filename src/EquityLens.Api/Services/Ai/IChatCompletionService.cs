@@ -14,5 +14,7 @@ public sealed record ChatCompletionResult(
 
 public interface IChatCompletionService
 {
+    string Provider { get; }
+    string Model { get; }
     Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default);
 }

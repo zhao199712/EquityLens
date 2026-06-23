@@ -31,13 +31,35 @@ public sealed record ResearchCitation(
     double RelevanceScore);
 
 public sealed record ResearchTrace(
-    string Intent,
+    string TraceId,
+    ResearchTraceIntent Intent,
     ResearchRetrievalStrategy RetrievalStrategy,
+    ResearchTraceRetrievalSummary Retrieval,
+    ResearchTraceTokenUsage TokenUsage,
     IReadOnlyList<ResearchTraceResult> Results,
     ResearchTraceLatency LatencyMs,
     string? RetrievalNote);
 
+public sealed record ResearchTraceIntent(
+    string Selected,
+    IReadOnlyList<string> MatchedKeywords,
+    double Confidence);
+
+public sealed record ResearchTraceRetrievalSummary(
+    int CandidateCount,
+    int SelectedCount,
+    int DiscardedCount,
+    IReadOnlyDictionary<string, int> DiscardedByReason);
+
+public sealed record ResearchTraceTokenUsage(
+    string Model,
+    int PromptTokens,
+    int CompletionTokens,
+    int TotalTokens);
+
 public sealed record ResearchTraceResult(
+    string SearchId,
+    string Query,
     Guid DocumentChunkId,
     Guid DocumentId,
     string DocumentTitle,
@@ -46,12 +68,28 @@ public sealed record ResearchTraceResult(
     int? PageNumber,
     double RelevanceScore,
     double? AdjustedScore,
+    ResearchTraceScoreBreakdown? ScoreBreakdown,
+    int? RankBeforeRerank,
+    int? RankAfterRerank,
     bool Selected,
     string Decision,
     string Reason,
+    Guid? DuplicateOfChunkId,
     string ContentPreview);
 
+public sealed record ResearchTraceScoreBreakdown(
+    double Embedding,
+    double PrimaryBonus,
+    double RiskEvidenceBonus,
+    double FinancialEvidenceBonus,
+    double OutlookEvidenceBonus,
+    double AgendaPenalty,
+    double SafeHarborPenalty,
+    double FirstPagePenalty,
+    double Final);
+
 public sealed record ResearchTraceLatency(
-    long Retrieval,
+    long Search,
+    long Rerank,
     long Generation,
     long Total);

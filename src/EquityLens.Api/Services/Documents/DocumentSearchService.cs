@@ -2,6 +2,7 @@ using System.Data;
 using System.Globalization;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
+using EquityLens.Api.Observability;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Services.Documents;
@@ -36,12 +37,19 @@ public sealed class DocumentSearchService : IDocumentSearchService
         var embeddings = await _embeddingService.CreateEmbeddingsAsync([query], cancellationToken);
         var queryEmbedding = ToPgVectorLiteral(embeddings[0]);
 
-        var results = new List<DocumentSearchResult>();
-        var connection = _dbContext.Database.GetDbConnection();
-        if (connection.State != ConnectionState.Open)
+        using var activity = EquityLensTelemetry.ActivitySource.StartActivity("vector_search");
+        activity?.SetTag("embedding.model", _embeddingService.Model);
+        activity?.SetTag("retrieval.top_k", topK);
+        activity?.SetTag("document.type", documentType);
+
+        try
         {
-            await connection.OpenAsync(cancellationToken);
-        }
+            var results = new List<DocumentSearchResult>();
+            var connection = _dbContext.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open)
+            {
+                await connection.OpenAsync(cancellationToken);
+            }
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -114,7 +122,15 @@ public sealed class DocumentSearchService : IDocumentSearchService
                 GetNullableString(reader, "security_name")));
         }
 
-        return new DocumentSearchResponse(query, _embeddingService.Model, results);
+            activity?.SetTag("result.count", results.Count);
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
+            return new DocumentSearchResponse(query, _embeddingService.Model, results);
+        }
+        catch (Exception exception)
+        {
+            EquityLensTelemetry.MarkError(activity, exception);
+            throw;
+        }
     }
 
     private static string ToPgVectorLiteral(IReadOnlyList<float> values)
