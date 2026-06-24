@@ -104,11 +104,11 @@ namespace EquityLens.Api.Migrations
                         deduped AS (
                             SELECT cid, MAX(v) AS vmax, MAX(bscore) AS bmax FROM ranked GROUP BY cid
                         ),
-                        combined AS (
-                            SELECT d.cid,
-                                   coalesce(1.0/(60.0+r_v.r),0.0) + coalesce(1.0/(60.0+r_b.r),0.0) AS hscore,
-                                   coalesce(r_v.v,0.0) AS bv, coalesce(r_b.b,0.0) AS bb
-                            FROM deduped d
+                    combined AS (
+                        SELECT d.cid,
+                               (coalesce(1.0/(60.0+r_v.r),0.0) + coalesce(1.0/(60.0+r_b.r),0.0))::double precision AS hscore,
+                               coalesce(r_v.v,0.0)::double precision AS bv, coalesce(r_b.b,0.0)::double precision AS bb
+                        FROM deduped d
                             LEFT JOIN (SELECT cid, v, ROW_NUMBER() OVER (ORDER BY v DESC) AS r FROM _vr2) r_v USING (cid)
                             LEFT JOIN (SELECT cid, b, ROW_NUMBER() OVER (ORDER BY b DESC) AS r FROM _br2) r_b USING (cid)
                         )
