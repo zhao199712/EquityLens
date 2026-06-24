@@ -57,5 +57,37 @@
       "BaseUrl": "https://api.finmindtrade.com",
       "Token": "YOUR_FINMIND_TOKEN"
     }
+  },
+  "Jina": {
+    "ApiKey": "",
+    "BaseUrl": "https://api.jina.ai/v1",
+    "RerankModel": "jina-reranker-v3"
+  },
+  "Brave": {
+    "ApiKey": "",
+    "BaseUrl": "https://api.search.brave.com/res/v1/web/search",
+    "DefaultCount": 10
+  },
+  "Retrieval": {
+    "DefaultTopK": 10,
+    "MaxTopK": 20,
+    "MinimumCandidateScore": 0.0,
+    "MinimumFinalScore": 0.0,
+    "PrimarySourceBonus": 0.05,
+    "RiskEvidenceBonus": 0.10,
+    "FinancialEvidenceBonus": 0.12,
+    "OutlookEvidenceBonus": 0.12,
+    "AgendaPenalty": 0.20,
+    "SafeHarborPenalty": 0.15,
+    "FirstPagePenalty": 0.10,
+    "AutoPrimaryRatio": 0.7,
+    "MaxSafeHarborChunks": 1,
+    "MaxCitationRetries": 1,
+    "LocalCandidateCountForRerank": 30,
+    "WebSearchCandidateCount": 10,
+    "WebContextLimit": 3,
+    "WebSearchMaxContentLength": 3000,
+    "WebSearchFreshness": "month",
+    "EnableJinaRerank": false
   }
 }

@@ -40,6 +40,7 @@ using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Services.InvestorConferences;
 using EquityLens.Api.Services.FinancialData;
 using EquityLens.Api.Services.Ai;
+using EquityLens.Api.Services.Ai.Retrieval;
 using EquityLens.Api.Services.Chat;
 using EquityLens.Api.Services.Research;
 using EquityLens.Api.Observability;
@@ -169,6 +170,21 @@ builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 // AI / LLM 服務
 builder.Services.Configure<DeepSeekOptions>(builder.Configuration.GetSection("DeepSeek"));
 builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection("Gemini"));
+builder.Services.Configure<RetrievalOptions>(builder.Configuration.GetSection(RetrievalOptions.SectionName));
+builder.Services.Configure<JinaOptions>(builder.Configuration.GetSection(JinaOptions.SectionName));
+builder.Services.Configure<BraveOptions>(builder.Configuration.GetSection(BraveOptions.SectionName));
+
+// Retrieval pipeline
+builder.Services.AddScoped<IIntentDetector, IntentDetector>();
+builder.Services.AddScoped<IRetrievalPlanner, RetrievalPlanner>();
+builder.Services.AddScoped<IDocumentRetriever, DocumentRetriever>();
+builder.Services.AddScoped<IWebRetriever, WebRetriever>();
+builder.Services.AddScoped<IJinaReranker, JinaReranker>();
+builder.Services.AddScoped<IResultReranker, ResultReranker>();
+builder.Services.AddScoped<IContextSelector, ContextSelector>();
+builder.Services.AddScoped<IContextFormatter, ContextFormatter>();
+builder.Services.AddScoped<ICitationValidator, CitationValidator>();
+builder.Services.AddScoped<IAnswerGenerator, AnswerGenerator>();
 
 var chatProvider = builder.Configuration["AI:ChatProvider"]?.Trim();
 switch (chatProvider?.ToUpperInvariant())
@@ -190,6 +206,7 @@ builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 // Agentic RAG Chat 服務
 builder.Services.AddScoped<IFinancialDataService, FinancialDataService>();
 builder.Services.AddHttpClient<IJinaSearchService, JinaSearchService>();
+builder.Services.AddHttpClient<IBraveSearchService, BraveSearchService>();
 
 builder.Services.AddScoped<IFinMindFinancialImportService, FinMindFinancialImportService>();
 builder.Services.AddHttpClient<FinMindFinancialImportService>((sp, client) =>

@@ -3,8 +3,10 @@ using System.Diagnostics;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Observability;
 using EquityLens.Api.Services.Ai;
+using EquityLens.Api.Services.Ai.Retrieval;
 using EquityLens.Api.Services.Documents;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Tests.Services.Ai;
 
@@ -24,8 +26,9 @@ public sealed class ResearchAnswerServiceObservabilityTests
             TopK: 2,
             Debug: true));
 
-        var ask = Assert.Single(activities, activity => activity.OperationName == "research.ask");
         Assert.NotNull(response.Trace);
+        var ask = Assert.Single(activities, activity =>
+            activity.OperationName == "research.ask" && activity.TraceId.ToString() == response.Trace.TraceId);
         Assert.Equal(ask.TraceId.ToString(), response.Trace.TraceId);
         Assert.Equal(
             response.Trace.Retrieval.CandidateCount,
@@ -72,19 +75,40 @@ public sealed class ResearchAnswerServiceObservabilityTests
             TopK: 2,
             Debug: true)));
 
-        Assert.Equal(
-            ActivityStatusCode.Error,
-            Assert.Single(activities, activity => activity.OperationName == "llm.complete").Status);
-        Assert.Equal(
-            ActivityStatusCode.Error,
-            Assert.Single(activities, activity => activity.OperationName == "research.ask").Status);
+        var askActivities = activities.Where(activity => activity.OperationName == "research.ask").ToList();
+        var llmCompleteActivities = activities.Where(activity => activity.OperationName == "llm.complete").ToList();
+
+        Assert.Contains(askActivities, activity => activity.Status == ActivityStatusCode.Error);
+
+        var failedAsk = askActivities.First(activity => activity.Status == ActivityStatusCode.Error);
+        var failedLlm = Assert.Single(llmCompleteActivities, activity => activity.TraceId == failedAsk.TraceId);
+        Assert.Equal(ActivityStatusCode.Error, failedLlm.Status);
     }
 
     private static ResearchAnswerService CreateService(IChatCompletionService chatService)
     {
-        return new ResearchAnswerService(
-            new FakeDocumentSearchService(),
+        var options = Options.Create(new RetrievalOptions());
+        var documentRetriever = new DocumentRetriever(new FakeDocumentSearchService(), options);
+        var reranker = new ResultReranker(options);
+        var contextSelector = new ContextSelector(options, NullLogger<ContextSelector>.Instance);
+        var formatter = new ContextFormatter();
+        var citationValidator = new CitationValidator();
+        var answerGenerator = new AnswerGenerator(
             chatService,
+            citationValidator,
+            options,
+            NullLogger<AnswerGenerator>.Instance);
+
+        return new ResearchAnswerService(
+            new IntentDetector(),
+            new RetrievalPlanner(options),
+            documentRetriever,
+            new FakeWebRetriever(),
+            reranker,
+            contextSelector,
+            formatter,
+            answerGenerator,
+            options,
             NullLogger<ResearchAnswerService>.Instance);
     }
 
@@ -133,6 +157,24 @@ public sealed class ResearchAnswerServiceObservabilityTests
                 Ticker: "2330",
                 Exchange: "TWSE",
                 SecurityName: "Test Security");
+        }
+    }
+
+    private sealed class FakeWebRetriever : IWebRetriever
+    {
+        public Task<IReadOnlyList<RetrievedDocumentChunk>> RetrieveWebAsync(
+            string query, int count, string? freshness, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<RetrievedDocumentChunk>>([]);
+        }
+    }
+
+    private sealed class FakeJinaReranker : IJinaReranker
+    {
+        public Task<IReadOnlyList<RetrievedDocumentChunk>> RerankAsync(
+            string query, IReadOnlyList<RetrievedDocumentChunk> chunks, int topN, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<RetrievedDocumentChunk>>(chunks.Take(topN).ToList());
         }
     }
 

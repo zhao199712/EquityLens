@@ -1,0 +1,59 @@
+{
+  "version": "1.0.0",
+  "description": "Small annotated regression dataset for retrieval QA. Contains expected intent, source type, and evidence terms. Does NOT contain full document text.",
+  "cases": [
+    {
+      "id": "risk-001",
+      "question": "台積電面臨哪些營運風險？",
+      "ticker": "2330",
+      "expectedIntent": "Risk",
+      "expectedPrimaryDocumentType": "EarningsPresentation",
+      "expectedEvidenceTerms": ["風險", "不確定性", "挑戰"],
+      "minExpectedCitations": 1
+    },
+    {
+      "id": "financial-001",
+      "question": "台積電上季營收與毛利率表現如何？",
+      "ticker": "2330",
+      "expectedIntent": "Financial",
+      "expectedPrimaryDocumentType": "EarningsPresentation",
+      "expectedEvidenceTerms": ["營收", "毛利率"],
+      "minExpectedCitations": 1
+    },
+    {
+      "id": "outlook-001",
+      "question": "管理層對下半年的業績展望與guidance為何？",
+      "ticker": "2330",
+      "expectedIntent": "Outlook",
+      "expectedPrimaryDocumentType": "EarningsPresentation",
+      "expectedEvidenceTerms": ["展望", "guidance"],
+      "minExpectedCitations": 1
+    },
+    {
+      "id": "annual-risk-001",
+      "question": "台積電年報揭露了哪些風險因素？",
+      "ticker": "2330",
+      "expectedIntent": "Risk",
+      "expectedPrimaryDocumentType": "AnnualReport",
+      "expectedEvidenceTerms": ["風險因素", "營運風險"],
+      "minExpectedCitations": 1
+    },
+    {
+      "id": "conference-only-001",
+      "question": "法說會中提到哪些客戶集中風險？",
+      "ticker": "2330",
+      "retrievalMode": "ConferenceOnly",
+      "expectedIntent": "Risk",
+      "expectedPrimaryDocumentType": "EarningsPresentation",
+      "expectedEvidenceTerms": ["客戶集中", "風險"],
+      "minExpectedCitations": 1
+    },
+    {
+      "id": "no-evidence-001",
+      "question": "台積電董事長最喜歡的顏色是什麼？",
+      "ticker": "2330",
+      "expectedIntent": "General",
+      "expectedStatus": "InsufficientEvidence"
+    }
+  ]
+}

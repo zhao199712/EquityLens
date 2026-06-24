@@ -6,7 +6,8 @@ public sealed record ResearchAskResponse(
     string Model,
     ResearchRetrievalStrategy RetrievalStrategy,
     IReadOnlyList<ResearchCitation> Citations,
-    ResearchTrace? Trace = null);
+    ResearchTrace? Trace = null,
+    string Status = "Answered");
 
 public sealed record ResearchRetrievalStrategy(
     string Mode,
@@ -21,12 +22,16 @@ public sealed record ResearchRetrievalSearch(
 
 public sealed record ResearchCitation(
     int Index,
-    Guid DocumentChunkId,
-    Guid DocumentId,
-    string DocumentTitle,
+    CitationSourceType SourceType,
+    Guid? DocumentChunkId,
+    Guid? DocumentId,
+    string Title,
     string? DocumentType,
     string SourceRole,
     int? PageNumber,
+    string? Url,
+    DateTimeOffset? PublishedAt,
+    DateTimeOffset? RetrievedAt,
     string QuoteText,
     double RelevanceScore);
 

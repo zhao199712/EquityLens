@@ -80,7 +80,7 @@ public sealed class ResearchPreflightService : IResearchPreflightService
     private async Task<List<Guid>> GetDocumentIdsAsync(
         Guid securityId,
         string? documentType,
-        string? retrievalMode,
+        RetrievalMode? retrievalMode,
         CancellationToken cancellationToken)
     {
         var includeAnnualReports = ShouldIncludeAnnualReports(documentType, retrievalMode);
@@ -108,23 +108,23 @@ public sealed class ResearchPreflightService : IResearchPreflightService
         return documentIds.Distinct().ToList();
     }
 
-    private static bool ShouldIncludeAnnualReports(string? documentType, string? retrievalMode)
+    private static bool ShouldIncludeAnnualReports(string? documentType, RetrievalMode? retrievalMode)
     {
         if (string.Equals(documentType, "EarningsPresentation", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        return !string.Equals(retrievalMode, "ConferenceOnly", StringComparison.OrdinalIgnoreCase);
+        return retrievalMode != Contracts.Research.RetrievalMode.ConferenceOnly;
     }
 
-    private static bool ShouldIncludeConferences(string? documentType, string? retrievalMode)
+    private static bool ShouldIncludeConferences(string? documentType, RetrievalMode? retrievalMode)
     {
         if (string.Equals(documentType, "AnnualReport", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        return !string.Equals(retrievalMode, "AnnualReportOnly", StringComparison.OrdinalIgnoreCase);
+        return retrievalMode != Contracts.Research.RetrievalMode.AnnualReportOnly;
     }
 }
