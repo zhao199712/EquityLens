@@ -9,7 +9,7 @@ services:
       - equitylens
 
   postgres:
-    image: timescale/timescaledb-ha:pg16
+    image: paradedb/paradedb:0.24.1-pg18
     container_name: equitylens-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-equitylens}
@@ -18,7 +18,26 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres-data:/home/postgres/pgdata/data
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-equitylens} -d ${POSTGRES_DB:-equitylens}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - equitylens
+
+  timescale:
+    image: timescale/timescaledb-ha:pg16
+    container_name: equitylens-timescale
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-equitylens}
+      POSTGRES_USER: ${POSTGRES_USER:-equitylens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-equitylens_dev_password}
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescale-data:/home/postgres/pgdata/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-equitylens} -d ${POSTGRES_DB:-equitylens}"]
       interval: 10s
@@ -86,6 +105,7 @@ services:
 
 volumes:
   postgres-data:
+  timescale-data:
   redis-data:
   garage-data:
 

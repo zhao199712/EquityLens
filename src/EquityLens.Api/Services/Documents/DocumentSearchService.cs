@@ -3,7 +3,9 @@ using System.Globalization;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
 using EquityLens.Api.Observability;
+using EquityLens.Api.Services.Ai;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Services.Documents;
 
@@ -13,11 +15,13 @@ public sealed class DocumentSearchService : IDocumentSearchService
     private const int MaxTopK = 20;
     private readonly EquityLensDbContext _dbContext;
     private readonly IEmbeddingService _embeddingService;
+    private readonly RetrievalOptions _options;
 
-    public DocumentSearchService(EquityLensDbContext dbContext, IEmbeddingService embeddingService)
+    public DocumentSearchService(EquityLensDbContext dbContext, IEmbeddingService embeddingService, IOptions<RetrievalOptions> options)
     {
         _dbContext = dbContext;
         _embeddingService = embeddingService;
+        _options = options.Value;
     }
 
     public async Task<DocumentSearchResponse> SearchAsync(DocumentSearchRequest request, CancellationToken cancellationToken = default)
@@ -34,13 +38,24 @@ public sealed class DocumentSearchService : IDocumentSearchService
             || string.Equals(request.DocumentType.Trim(), "auto", StringComparison.OrdinalIgnoreCase)
             ? null
             : request.DocumentType.Trim();
-        var embeddings = await _embeddingService.CreateEmbeddingsAsync([query], cancellationToken);
-        var queryEmbedding = ToPgVectorLiteral(embeddings[0]);
+        var mode = _options.RetrievalMode switch
+        {
+            "VectorOnly" => "vector",
+            "Bm25Only" => "bm25",
+            "Hybrid" => "hybrid",
+            _ => "vector"
+        };
 
-        using var activity = EquityLensTelemetry.ActivitySource.StartActivity("vector_search");
+        var embeddings = mode != "bm25"
+            ? await _embeddingService.CreateEmbeddingsAsync([query], cancellationToken)
+            : [];
+        var queryEmbedding = embeddings.Count > 0 ? ToPgVectorLiteral(embeddings[0]) : "";
+
+        using var activity = EquityLensTelemetry.ActivitySource.StartActivity("document_search");
         activity?.SetTag("embedding.model", _embeddingService.Model);
         activity?.SetTag("retrieval.top_k", topK);
         activity?.SetTag("document.type", documentType);
+        activity?.SetTag("retrieval.mode", mode);
 
         try
         {
@@ -51,78 +66,69 @@ public sealed class DocumentSearchService : IDocumentSearchService
                 await connection.OpenAsync(cancellationToken);
             }
 
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-            select
-                dc.id as document_chunk_id,
-                d.id as document_id,
-                d.title as document_title,
-                d.document_type,
-                coalesce(ic.source_url, ff.source_url, d.source_url) as source_url,
-                dc.chunk_index,
-                dc.page_number,
-                dc.section_title,
-                dc.content,
-                (de.embedding <=> @query_embedding::vector) as distance,
-                s.id as security_id,
-                s.ticker,
-                s.exchange,
-                s.name as security_name
-            from document_embedding de
-            inner join document_chunk dc on dc.id = de.document_chunk_id
-            inner join document d on d.id = dc.document_id
-            left join investor_conference ic on ic.document_id = d.id
-            left join financial_filing ff on ff.document_id = d.id
-            left join security s on s.id = coalesce(ic.security_id, ff.security_id)
-            where (@ticker::text is null or upper(s.ticker) = upper(@ticker::text))
-              and (@document_type::text is null or d.document_type = @document_type::text)
-            order by de.embedding <=> @query_embedding::vector
-            limit @top_k;
-            """;
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM search_document_chunks(" +
+                "query_text := @query_text, " +
+                "query_embedding := @query_embedding::vector, " +
+                "ticker_filter := @ticker, " +
+                "document_type_filter := @document_type, " +
+                "top_k := @top_k, " +
+                "mode := @mode)";
 
-        var embeddingParameter = command.CreateParameter();
-        embeddingParameter.ParameterName = "query_embedding";
-        embeddingParameter.Value = queryEmbedding;
-        command.Parameters.Add(embeddingParameter);
+            var queryTextParam = command.CreateParameter();
+            queryTextParam.ParameterName = "query_text";
+            queryTextParam.Value = mode == "vector" ? DBNull.Value : query;
+            command.Parameters.Add(queryTextParam);
 
-        var tickerParameter = command.CreateParameter();
-        tickerParameter.ParameterName = "ticker";
-        tickerParameter.Value = ticker is null ? DBNull.Value : ticker;
-        command.Parameters.Add(tickerParameter);
+            var embeddingParam = command.CreateParameter();
+            embeddingParam.ParameterName = "query_embedding";
+            embeddingParam.Value = mode == "bm25" ? DBNull.Value : queryEmbedding;
+            command.Parameters.Add(embeddingParam);
 
-        var documentTypeParameter = command.CreateParameter();
-        documentTypeParameter.ParameterName = "document_type";
-        documentTypeParameter.Value = documentType is null ? DBNull.Value : documentType;
-        command.Parameters.Add(documentTypeParameter);
+            var tickerParam = command.CreateParameter();
+            tickerParam.ParameterName = "ticker";
+            tickerParam.Value = ticker is null ? DBNull.Value : ticker;
+            command.Parameters.Add(tickerParam);
 
-        var topKParameter = command.CreateParameter();
-        topKParameter.ParameterName = "top_k";
-        topKParameter.Value = topK;
-        command.Parameters.Add(topKParameter);
+            var documentTypeParam = command.CreateParameter();
+            documentTypeParam.ParameterName = "document_type";
+            documentTypeParam.Value = documentType is null ? DBNull.Value : documentType;
+            command.Parameters.Add(documentTypeParam);
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            var distance = reader.GetDouble(reader.GetOrdinal("distance"));
-            results.Add(new DocumentSearchResult(
-                reader.GetGuid(reader.GetOrdinal("document_chunk_id")),
-                reader.GetGuid(reader.GetOrdinal("document_id")),
-                reader.GetString(reader.GetOrdinal("document_title")),
-                GetNullableString(reader, "document_type"),
-                GetNullableString(reader, "source_url"),
-                reader.GetInt32(reader.GetOrdinal("chunk_index")),
-                GetNullableInt32(reader, "page_number"),
-                GetNullableString(reader, "section_title"),
-                reader.GetString(reader.GetOrdinal("content")),
-                distance,
-                1 - distance,
-                GetNullableGuid(reader, "security_id"),
-                GetNullableString(reader, "ticker"),
-                GetNullableString(reader, "exchange"),
-                GetNullableString(reader, "security_name")));
-        }
+            var topKParam = command.CreateParameter();
+            topKParam.ParameterName = "top_k";
+            topKParam.Value = topK;
+            command.Parameters.Add(topKParam);
+
+            var modeParam = command.CreateParameter();
+            modeParam.ParameterName = "mode";
+            modeParam.Value = mode;
+            command.Parameters.Add(modeParam);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var score = reader.GetDouble(reader.GetOrdinal("score"));
+                results.Add(new DocumentSearchResult(
+                    reader.GetGuid(reader.GetOrdinal("document_chunk_id")),
+                    reader.GetGuid(reader.GetOrdinal("document_id")),
+                    reader.GetString(reader.GetOrdinal("document_title")),
+                    GetNullableString(reader, "document_type"),
+                    GetNullableString(reader, "source_url"),
+                    reader.GetInt32(reader.GetOrdinal("chunk_index")),
+                    GetNullableInt32(reader, "page_number"),
+                    GetNullableString(reader, "section_title"),
+                    reader.GetString(reader.GetOrdinal("content")),
+                    score,
+                    score,
+                    GetNullableGuid(reader, "security_id"),
+                    GetNullableString(reader, "ticker"),
+                    GetNullableString(reader, "exchange"),
+                    GetNullableString(reader, "security_name")));
+            }
 
             activity?.SetTag("result.count", results.Count);
+            activity?.SetTag("retrieval.mode_used", mode);
             activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
             return new DocumentSearchResponse(query, _embeddingService.Model, results);
         }

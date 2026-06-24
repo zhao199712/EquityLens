@@ -42,6 +42,7 @@ public sealed class RetrievalOptions
     [Range(0.0, 1.0)]
     public double AutoPrimaryRatio { get; set; } = 0.7;
 
+
     [Range(0, 10)]
     public int MaxSafeHarborChunks { get; set; } = 1;
 
@@ -63,4 +64,6 @@ public sealed class RetrievalOptions
     public string WebSearchFreshness { get; set; } = "month";
 
     public bool EnableJinaRerank { get; set; } = false;
+
+    public string RetrievalMode { get; set; } = "Hybrid";
 }

@@ -55,7 +55,6 @@ public sealed class RetrievalPlanner : IRetrievalPlanner
         var normalized = question.ToLowerInvariant();
         var mentionsConference = ContainsAny(normalized, ["法說", "conference", "earnings", "presentation", "management", "guidance", "展望"]);
         var mentionsAnnualReport = ContainsAny(normalized, ["年報", "annual report", "財報", "financial statement", "現金流", "資產負債", "損益"]);
-
         if (mentionsConference || (intent is ResearchQuestionIntent.Risk or ResearchQuestionIntent.Financial && !mentionsAnnualReport))
         {
             var (conferenceK, annualK) = SplitTopK(topK, _options.AutoPrimaryRatio);
