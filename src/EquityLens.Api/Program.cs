@@ -41,6 +41,7 @@ using EquityLens.Api.Services.InvestorConferences;
 using EquityLens.Api.Services.FinancialData;
 using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Chat;
+using EquityLens.Api.Services.Research;
 using EquityLens.Api.Observability;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
@@ -162,6 +163,7 @@ builder.Services.AddScoped<IConferenceChunkingService, ConferenceChunkingService
 builder.Services.AddScoped<IChunkEmbeddingService, ChunkEmbeddingService>();
 builder.Services.AddScoped<IEmbeddingExportService, EmbeddingExportService>();
 builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
+builder.Services.AddScoped<IResearchPreflightService, ResearchPreflightService>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務
@@ -173,9 +175,11 @@ switch (chatProvider?.ToUpperInvariant())
 {
     case null or "" or "DEEPSEEK":
         builder.Services.AddHttpClient<IChatCompletionService, DeepSeekChatCompletionService>();
+        builder.Services.AddHttpClient<IChatAgentService, DeepSeekChatAgentService>();
         break;
     case "GEMINI":
         builder.Services.AddHttpClient<IChatCompletionService, GeminiChatCompletionService>();
+        builder.Services.AddHttpClient<IChatAgentService, ChatAgentService>();
         break;
     default:
         throw new InvalidOperationException(
@@ -186,7 +190,6 @@ builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 // Agentic RAG Chat 服務
 builder.Services.AddScoped<IFinancialDataService, FinancialDataService>();
 builder.Services.AddHttpClient<IJinaSearchService, JinaSearchService>();
-builder.Services.AddHttpClient<IChatAgentService, ChatAgentService>();
 
 builder.Services.AddScoped<IFinMindFinancialImportService, FinMindFinancialImportService>();
 builder.Services.AddHttpClient<FinMindFinancialImportService>((sp, client) =>
