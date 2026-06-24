@@ -37,7 +37,7 @@ public interface IWebRetriever
         CancellationToken cancellationToken = default);
 }
 
-public interface IJinaReranker
+public interface IDocumentReranker
 {
     Task<IReadOnlyList<RetrievedDocumentChunk>> RerankAsync(
         string query,

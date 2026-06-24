@@ -200,7 +200,7 @@ public sealed class ResearchAnswerServiceRetrievalBehaviorTests
         }
     }
 
-    private sealed class FakeJinaReranker : IJinaReranker
+    private sealed class FakeReranker : IDocumentReranker
     {
         public Task<IReadOnlyList<RetrievedDocumentChunk>> RerankAsync(
             string query, IReadOnlyList<RetrievedDocumentChunk> chunks, int topN, CancellationToken cancellationToken = default)

@@ -63,7 +63,7 @@ public sealed class RetrievalOptions
 
     public string WebSearchFreshness { get; set; } = "month";
 
-    public bool EnableJinaRerank { get; set; } = false;
+    public string RerankProvider { get; set; } = "None";
 
     public string RetrievalMode { get; set; } = "Hybrid";
 }

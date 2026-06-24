@@ -5,16 +5,16 @@ using EquityLens.Api.Services.Chat;
 
 namespace EquityLens.Api.Services.Ai.Retrieval;
 
-public sealed class JinaReranker : IDocumentReranker
+public sealed class CohereReranker : IDocumentReranker
 {
-    private readonly IJinaSearchService _jinaSearch;
-    private readonly ILogger<JinaReranker> _logger;
+    private readonly ICohereRerankService _cohere;
+    private readonly ILogger<CohereReranker> _logger;
 
-    public JinaReranker(
-        IJinaSearchService jinaSearch,
-        ILogger<JinaReranker> logger)
+    public CohereReranker(
+        ICohereRerankService cohere,
+        ILogger<CohereReranker> logger)
     {
-        _jinaSearch = jinaSearch;
+        _cohere = cohere;
         _logger = logger;
     }
 
@@ -29,17 +29,17 @@ public sealed class JinaReranker : IDocumentReranker
             return [];
         }
 
-        using var rerankActivity = EquityLensTelemetry.ActivitySource.StartActivity("jina.rerank");
-        rerankActivity?.SetTag("rerank.candidate_count", chunks.Count);
-        rerankActivity?.SetTag("rerank.top_n", topN);
+        using var activity = EquityLensTelemetry.ActivitySource.StartActivity("cohere.rerank");
+        activity?.SetTag("rerank.candidate_count", chunks.Count);
+        activity?.SetTag("rerank.top_n", topN);
 
         var documents = chunks.Select(c => c.Result.Content).ToList();
-        var response = await _jinaSearch.RerankAsync(query, documents, chunks.Count, cancellationToken);
+        var response = await _cohere.RerankAsync(query, documents, chunks.Count, cancellationToken);
 
         if (response.Results.Count == 0)
         {
-            _logger.LogWarning("Jina rerank returned 0 results; falling back to original order");
-            rerankActivity?.SetStatus(ActivityStatusCode.Ok);
+            _logger.LogWarning("Cohere rerank returned 0 results; falling back to original order");
+            activity?.SetStatus(ActivityStatusCode.Ok);
             return chunks.Take(topN).ToList();
         }
 
@@ -62,7 +62,6 @@ public sealed class JinaReranker : IDocumentReranker
             .Select(x =>
             {
                 var result = x.Chunk.Result;
-                // Update relevance score with rerank score
                 var updatedResult = new DocumentSearchResult(
                     result.DocumentChunkId, result.DocumentId, result.DocumentTitle,
                     result.DocumentType, result.SourceUrl, result.ChunkIndex, result.PageNumber,
@@ -75,8 +74,8 @@ public sealed class JinaReranker : IDocumentReranker
             })
             .ToList();
 
-        rerankActivity?.SetTag("rerank.selected_count", reranked.Count);
-        rerankActivity?.SetStatus(ActivityStatusCode.Ok);
+        activity?.SetTag("rerank.selected_count", reranked.Count);
+        activity?.SetStatus(ActivityStatusCode.Ok);
 
         return reranked;
     }

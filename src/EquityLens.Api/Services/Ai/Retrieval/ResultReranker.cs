@@ -8,24 +8,24 @@ namespace EquityLens.Api.Services.Ai.Retrieval;
 public sealed class ResultReranker : IResultReranker
 {
     private readonly RetrievalOptions _options;
-    private readonly IJinaReranker? _jinaReranker;
+    private readonly IDocumentReranker? _reranker;
 
     public ResultReranker(
         IOptions<RetrievalOptions> options,
-        IJinaReranker? jinaReranker = null)
+        IDocumentReranker? reranker = null)
     {
         _options = options.Value;
-        _jinaReranker = jinaReranker;
+        _reranker = reranker;
     }
 
     public async Task<RankedSelection> Rank(IReadOnlyList<RetrievedDocumentChunk> chunks, ResearchQuestionIntent intent, int topK)
     {
         IReadOnlyList<RetrievedDocumentChunk> rerankedChunks = chunks;
 
-        if (_options.EnableJinaRerank && _jinaReranker is not null)
+        if (_options.RerankProvider != "None" && _reranker is not null)
         {
             var query = chunks.FirstOrDefault()?.Query ?? "";
-            rerankedChunks = await _jinaReranker.RerankAsync(query, chunks, Math.Max(topK * 2, _options.LocalCandidateCountForRerank));
+            rerankedChunks = await _reranker.RerankAsync(query, chunks, Math.Max(topK * 2, _options.LocalCandidateCountForRerank));
         }
 
         var safeHarborKeptCount = 0;
@@ -178,30 +178,45 @@ public sealed class ResultReranker : IResultReranker
         var result = chunk.Result;
         var content = result.Content;
         var embedding = result.RelevanceScore;
-        var primaryBonus = chunk.SourceRole == "Primary" ? _options.PrimarySourceBonus : 0;
+        var externalRerank = !string.Equals(_options.RerankProvider, "None", StringComparison.OrdinalIgnoreCase);
+        var primaryBonus = externalRerank ? 0 : (chunk.SourceRole == "Primary" ? _options.PrimarySourceBonus : 0);
         var riskEvidenceBonus = 0d;
         var financialEvidenceBonus = 0d;
         var outlookEvidenceBonus = 0d;
         var agendaPenalty = 0d;
         var safeHarborPenalty = 0d;
 
+        if (!externalRerank)
+        {
+            switch (intent)
+            {
+                case ResearchQuestionIntent.Risk:
+                    riskEvidenceBonus = HasRiskEvidence(content) ? _options.RiskEvidenceBonus : 0;
+                    outlookEvidenceBonus = ContainsAny(content, ["outlook", "guidance", "demand", "margin", "inventory", "headwind", "展望", "業績展望", "需求", "毛利", "庫存"]) ? _options.OutlookEvidenceBonus * 0.67 : 0;
+                    break;
+                case ResearchQuestionIntent.Financial:
+                    financialEvidenceBonus = ContainsAny(content, ["revenue", "gross margin", "operating margin", "eps", "income statement", "balance sheet", "cash flow", "營收", "毛利", "營業利益率", "每股盈餘", "現金流", "綜合損益表", "資產負債表"]) ? _options.FinancialEvidenceBonus : 0;
+                    outlookEvidenceBonus = ContainsAny(content, ["outlook", "guidance", "demand", "margin", "展望", "業績展望", "管理層"]) ? _options.OutlookEvidenceBonus * 0.67 : 0;
+                    break;
+                case ResearchQuestionIntent.Outlook:
+                    outlookEvidenceBonus = ContainsAny(content, ["outlook", "guidance", "future outlook", "business outlook", "management expects", "management expect", "demand", "key messages", "展望", "業績展望", "管理層預期", "管理層展望", "需求", "重點訊息"]) ? _options.OutlookEvidenceBonus : 0;
+                    financialEvidenceBonus = ContainsAny(content, ["revenue", "margin", "營收", "毛利"]) ? _options.FinancialEvidenceBonus * 0.5 : 0;
+                    break;
+            }
+        }
+
+        // guardrail penalties always apply regardless of external rerank
         switch (intent)
         {
             case ResearchQuestionIntent.Risk:
-                riskEvidenceBonus = HasRiskEvidence(content) ? _options.RiskEvidenceBonus : 0;
-                outlookEvidenceBonus = ContainsAny(content, ["outlook", "guidance", "demand", "margin", "inventory", "headwind", "展望", "業績展望", "需求", "毛利", "庫存"]) ? _options.OutlookEvidenceBonus * 0.67 : 0;
                 agendaPenalty = ContainsAny(content, ["Agenda", "會議議程", "綜合損益表", "資產負債表"]) ? -_options.AgendaPenalty : 0;
                 safeHarborPenalty = IsSafeHarbor(content) ? -_options.SafeHarborPenalty : 0;
                 break;
             case ResearchQuestionIntent.Financial:
-                financialEvidenceBonus = ContainsAny(content, ["revenue", "gross margin", "operating margin", "eps", "income statement", "balance sheet", "cash flow", "營收", "毛利", "營業利益率", "每股盈餘", "現金流", "綜合損益表", "資產負債表"]) ? _options.FinancialEvidenceBonus : 0;
-                outlookEvidenceBonus = ContainsAny(content, ["outlook", "guidance", "demand", "margin", "展望", "業績展望", "管理層"]) ? _options.OutlookEvidenceBonus * 0.67 : 0;
                 agendaPenalty = ContainsAny(content, ["Agenda", "會議議程"]) ? -_options.AgendaPenalty : 0;
                 safeHarborPenalty = IsSafeHarbor(content) ? -_options.SafeHarborPenalty : 0;
                 break;
             case ResearchQuestionIntent.Outlook:
-                outlookEvidenceBonus = ContainsAny(content, ["outlook", "guidance", "future outlook", "business outlook", "management expects", "management expect", "demand", "key messages", "展望", "業績展望", "管理層預期", "管理層展望", "需求", "重點訊息"]) ? _options.OutlookEvidenceBonus : 0;
-                financialEvidenceBonus = ContainsAny(content, ["revenue", "margin", "營收", "毛利"]) ? _options.FinancialEvidenceBonus * 0.5 : 0;
                 agendaPenalty = ContainsAny(content, ["Agenda", "會議議程"]) ? -_options.AgendaPenalty : 0;
                 safeHarborPenalty = IsSafeHarbor(content) ? -_options.SafeHarborPenalty : 0;
                 break;

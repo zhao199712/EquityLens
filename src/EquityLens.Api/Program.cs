@@ -172,6 +172,7 @@ builder.Services.Configure<DeepSeekOptions>(builder.Configuration.GetSection("De
 builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection("Gemini"));
 builder.Services.Configure<RetrievalOptions>(builder.Configuration.GetSection(RetrievalOptions.SectionName));
 builder.Services.Configure<JinaOptions>(builder.Configuration.GetSection(JinaOptions.SectionName));
+builder.Services.Configure<CohereOptions>(builder.Configuration.GetSection(CohereOptions.SectionName));
 builder.Services.Configure<BraveOptions>(builder.Configuration.GetSection(BraveOptions.SectionName));
 
 // Retrieval pipeline
@@ -179,7 +180,16 @@ builder.Services.AddScoped<IIntentDetector, IntentDetector>();
 builder.Services.AddScoped<IRetrievalPlanner, RetrievalPlanner>();
 builder.Services.AddScoped<IDocumentRetriever, DocumentRetriever>();
 builder.Services.AddScoped<IWebRetriever, WebRetriever>();
-builder.Services.AddScoped<IJinaReranker, JinaReranker>();
+var rerankProvider = builder.Configuration["Retrieval:RerankProvider"]?.Trim();
+switch (rerankProvider)
+{
+    case "Cohere":
+        builder.Services.AddScoped<IDocumentReranker, CohereReranker>();
+        break;
+    case "Jina":
+        builder.Services.AddScoped<IDocumentReranker, JinaReranker>();
+        break;
+}
 builder.Services.AddScoped<IResultReranker, ResultReranker>();
 builder.Services.AddScoped<IContextSelector, ContextSelector>();
 builder.Services.AddScoped<IContextFormatter, ContextFormatter>();
@@ -207,6 +217,7 @@ builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 builder.Services.AddScoped<IFinancialDataService, FinancialDataService>();
 builder.Services.AddHttpClient<IJinaSearchService, JinaSearchService>();
 builder.Services.AddHttpClient<IBraveSearchService, BraveSearchService>();
+builder.Services.AddHttpClient<ICohereRerankService, CohereRerankService>();
 
 builder.Services.AddScoped<IFinMindFinancialImportService, FinMindFinancialImportService>();
 builder.Services.AddHttpClient<FinMindFinancialImportService>((sp, client) =>
