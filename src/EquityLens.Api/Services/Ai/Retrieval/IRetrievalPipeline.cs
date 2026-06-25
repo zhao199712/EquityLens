@@ -46,6 +46,11 @@ public interface IDocumentReranker
         CancellationToken cancellationToken = default);
 }
 
+public interface IChunkContentCleaner
+{
+    string Clean(string content);
+}
+
 public interface IResultReranker
 {
     Task<RankedSelection> Rank(

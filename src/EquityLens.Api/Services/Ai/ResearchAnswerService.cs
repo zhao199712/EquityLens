@@ -16,6 +16,7 @@ public sealed class ResearchAnswerService : IResearchAnswerService
     private readonly IResultReranker _resultReranker;
     private readonly IContextSelector _contextSelector;
     private readonly IContextFormatter _contextFormatter;
+    private readonly IChunkContentCleaner _contentCleaner;
     private readonly IAnswerGenerator _answerGenerator;
     private readonly RetrievalOptions _options;
     private readonly ILogger<ResearchAnswerService> _logger;
@@ -28,6 +29,7 @@ public sealed class ResearchAnswerService : IResearchAnswerService
         IResultReranker resultReranker,
         IContextSelector contextSelector,
         IContextFormatter contextFormatter,
+        IChunkContentCleaner contentCleaner,
         IAnswerGenerator answerGenerator,
         IOptions<RetrievalOptions> options,
         ILogger<ResearchAnswerService> logger)
@@ -39,6 +41,7 @@ public sealed class ResearchAnswerService : IResearchAnswerService
         _resultReranker = resultReranker;
         _contextSelector = contextSelector;
         _contextFormatter = contextFormatter;
+        _contentCleaner = contentCleaner;
         _answerGenerator = answerGenerator;
         _options = options.Value;
         _logger = logger;
@@ -97,7 +100,7 @@ public sealed class ResearchAnswerService : IResearchAnswerService
             LogCandidateThreshold(chunks);
 
             var rerankStopwatch = Stopwatch.StartNew();
-            var rankedLocal = await _resultReranker.Rank(chunks, intentDetection.Selected, topK);
+            var rankedLocal = await RankLocalBySearchPathAsync(chunks, strategy, intentDetection.Selected, request.Question, topK);
 
             if (request.SourcePolicy == SourcePolicy.LocalThenWeb && rankedLocal.SelectedResults.Count == 0 && webChunks.Count == 0)
             {
@@ -163,7 +166,7 @@ public sealed class ResearchAnswerService : IResearchAnswerService
                     Url: selected.Chunk.Url,
                     PublishedAt: selected.Chunk.PublishedAt,
                     RetrievedAt: selected.Chunk.RetrievedAt ?? now,
-                    QuoteText: selected.Chunk.Result.Content.Length <= 300 ? selected.Chunk.Result.Content : selected.Chunk.Result.Content[..300] + "...",
+                    QuoteText: BuildQuoteText(selected.Chunk.Result.Content),
                     RelevanceScore: selected.Chunk.Result.RelevanceScore))
                 .ToList();
 
@@ -225,6 +228,259 @@ public sealed class ResearchAnswerService : IResearchAnswerService
             EquityLensTelemetry.AskRequests.Add(1, tags);
             EquityLensTelemetry.AskDuration.Record(totalStopwatch.Elapsed.TotalMilliseconds, tags);
         }
+    }
+
+    private string BuildQuoteText(string content)
+    {
+        var cleaned = _contentCleaner.Clean(content);
+        return cleaned.Length <= 300 ? cleaned : cleaned[..300] + "...";
+    }
+
+    private async Task<RankedSelection> RankLocalBySearchPathAsync(
+        IReadOnlyList<RetrievedDocumentChunk> chunks,
+        ResearchRetrievalStrategy strategy,
+        ResearchQuestionIntent intent,
+        string question,
+        int topK)
+    {
+        if (chunks.Count == 0)
+        {
+            return await _resultReranker.Rank(chunks, intent, topK);
+        }
+
+        var selected = new List<RetrievedDocumentChunk>();
+        var decisions = new List<RankingDecision>();
+        var processedChunkIds = new HashSet<Guid>();
+        var consumedChunkIds = new HashSet<Guid>();
+        var consumedExactContent = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var searchIndex = 0; searchIndex < strategy.Searches.Count; searchIndex++)
+        {
+            var search = strategy.Searches[searchIndex];
+            var searchId = $"search-{searchIndex + 1}";
+            var searchChunks = chunks
+                .Where(chunk => string.Equals(chunk.SearchId, searchId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var chunk in searchChunks)
+            {
+                processedChunkIds.Add(chunk.Result.DocumentChunkId);
+            }
+
+            if (searchChunks.Count == 0)
+            {
+                continue;
+            }
+
+            var routeTopK = Math.Min(search.TopK, topK);
+            var routeCandidateLimit = Math.Min(searchChunks.Count, Math.Max(routeTopK * 2, routeTopK + 4));
+            var ranked = await _resultReranker.Rank(searchChunks, intent, routeCandidateLimit);
+            decisions.AddRange(ranked.Decisions);
+            var routeSelected = DeduplicatePresentationLanguages(ranked.SelectedResults, decisions, question, routeTopK);
+
+            foreach (var chunk in routeSelected)
+            {
+                if (selected.Count < topK
+                    && consumedChunkIds.Add(chunk.Result.DocumentChunkId)
+                    && consumedExactContent.Add(chunk.Result.Content))
+                {
+                    selected.Add(chunk);
+                }
+            }
+        }
+
+        var unplannedChunks = chunks
+            .Where(chunk => !processedChunkIds.Contains(chunk.Result.DocumentChunkId))
+            .ToList();
+        if (selected.Count < topK && unplannedChunks.Count > 0)
+        {
+            var fallback = await _resultReranker.Rank(unplannedChunks, intent, topK - selected.Count);
+            decisions.AddRange(fallback.Decisions);
+
+            foreach (var chunk in fallback.SelectedResults)
+            {
+                if (selected.Count == topK)
+                {
+                    break;
+                }
+
+                if (consumedChunkIds.Add(chunk.Result.DocumentChunkId)
+                    && consumedExactContent.Add(chunk.Result.Content))
+                {
+                    selected.Add(chunk);
+                }
+            }
+        }
+
+        return new RankedSelection(selected, decisions);
+    }
+
+    private static IReadOnlyList<RetrievedDocumentChunk> DeduplicatePresentationLanguages(
+        IReadOnlyList<RetrievedDocumentChunk> chunks,
+        List<RankingDecision> decisions,
+        string question,
+        int topK)
+    {
+        var preferredLanguage = DetectPreferredLanguage(question);
+        var selected = new List<RetrievedDocumentChunk>();
+        var selectedKeys = new Dictionary<string, RetrievedDocumentChunk>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var chunk in chunks)
+        {
+            var key = BuildPresentationPageKey(chunk);
+            if (key is null)
+            {
+                if (selected.Count < topK)
+                {
+                    selected.Add(chunk);
+                }
+                continue;
+            }
+
+            if (!selectedKeys.TryGetValue(key, out var existing))
+            {
+                if (selected.Count < topK)
+                {
+                    selected.Add(chunk);
+                    selectedKeys[key] = chunk;
+                }
+                continue;
+            }
+
+            if (!ShouldPreferPresentationChunk(chunk, existing, preferredLanguage))
+            {
+                decisions.Add(BuildLanguageDedupDecision(chunk, existing));
+                continue;
+            }
+
+            var index = selected.FindIndex(item => item.Result.DocumentChunkId == existing.Result.DocumentChunkId);
+            if (index >= 0)
+            {
+                selected[index] = chunk;
+                selectedKeys[key] = chunk;
+                decisions.Add(BuildLanguageDedupDecision(existing, chunk));
+            }
+            else
+            {
+                decisions.Add(BuildLanguageDedupDecision(chunk, existing));
+            }
+        }
+
+        foreach (var chunk in chunks)
+        {
+            if (selected.Count == topK)
+            {
+                break;
+            }
+
+            if (selected.Any(item => item.Result.DocumentChunkId == chunk.Result.DocumentChunkId))
+            {
+                continue;
+            }
+
+            var key = BuildPresentationPageKey(chunk);
+            if (key is not null && selectedKeys.ContainsKey(key))
+            {
+                decisions.Add(BuildLanguageDedupDecision(chunk, selectedKeys[key]));
+                continue;
+            }
+
+            selected.Add(chunk);
+            if (key is not null)
+            {
+                selectedKeys[key] = chunk;
+            }
+        }
+
+        return selected;
+    }
+
+    private static RankingDecision BuildLanguageDedupDecision(
+        RetrievedDocumentChunk discarded,
+        RetrievedDocumentChunk kept)
+    {
+        return new RankingDecision(
+            discarded,
+            null,
+            null,
+            null,
+            null,
+            "DiscardedByPresentationLanguageDedup",
+            "Presentation page was removed because another language version of the same page was preferred.",
+            kept.Result.DocumentChunkId);
+    }
+
+    private static string DetectPreferredLanguage(string question)
+    {
+        return question.Any(c => c >= '\u4e00' && c <= '\u9fff') ? "zh-TW" : "en";
+    }
+
+    private static bool ShouldPreferPresentationChunk(
+        RetrievedDocumentChunk candidate,
+        RetrievedDocumentChunk existing,
+        string preferredLanguage)
+    {
+        var candidateLanguage = InferPresentationLanguage(candidate);
+        var existingLanguage = InferPresentationLanguage(existing);
+        var candidatePreferred = string.Equals(candidateLanguage, preferredLanguage, StringComparison.OrdinalIgnoreCase);
+        var existingPreferred = string.Equals(existingLanguage, preferredLanguage, StringComparison.OrdinalIgnoreCase);
+
+        if (candidatePreferred != existingPreferred)
+        {
+            return candidatePreferred;
+        }
+
+        return candidate.Result.RelevanceScore > existing.Result.RelevanceScore;
+    }
+
+    private static string? BuildPresentationPageKey(RetrievedDocumentChunk chunk)
+    {
+        var result = chunk.Result;
+        if (!string.Equals(result.DocumentType, "EarningsPresentation", StringComparison.OrdinalIgnoreCase)
+            || result.PageNumber is null)
+        {
+            return null;
+        }
+
+        return $"{result.Ticker ?? string.Empty}:{NormalizePresentationFamily(result.DocumentTitle)}:{result.PageNumber.Value}";
+    }
+
+    private static string NormalizePresentationFamily(string title)
+    {
+        return title
+            .Replace("E001", "001", StringComparison.OrdinalIgnoreCase)
+            .Replace("M001", "001", StringComparison.OrdinalIgnoreCase)
+            .Replace("_en", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("_zh", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("-en", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("-zh", string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string InferPresentationLanguage(RetrievedDocumentChunk chunk)
+    {
+        var title = chunk.Result.DocumentTitle;
+        if (title.Contains("M001", StringComparison.OrdinalIgnoreCase))
+        {
+            return "zh-TW";
+        }
+
+        if (title.Contains("E001", StringComparison.OrdinalIgnoreCase))
+        {
+            return "en";
+        }
+
+        var content = chunk.Result.Content;
+        if (content.Contains("Language: zh", StringComparison.OrdinalIgnoreCase))
+        {
+            return "zh-TW";
+        }
+
+        if (content.Contains("Language: en", StringComparison.OrdinalIgnoreCase))
+        {
+            return "en";
+        }
+
+        return "unknown";
     }
 
     private static IReadOnlyList<RetrievedDocumentChunk> MergeLocalAndWeb(

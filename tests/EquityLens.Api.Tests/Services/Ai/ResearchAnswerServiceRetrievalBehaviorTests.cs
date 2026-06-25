@@ -60,15 +60,42 @@ public sealed class ResearchAnswerServiceRetrievalBehaviorTests
         Assert.Equal("valid retry answer [1]", response.Answer);
     }
 
+    [Theory]
+    [InlineData("請說明台積電法說會的業績展望", "2026Q2_M001_zh.pdf", "2026Q2_E001_en.pdf")]
+    [InlineData("Summarize TSMC conference outlook", "2026Q2_E001_en.pdf", "2026Q2_M001_zh.pdf")]
+    public async Task AskAsync_DeduplicatesPresentationLanguages_PrefersQuestionLanguage(
+        string question,
+        string expectedTitle,
+        string duplicateTitle)
+    {
+        var service = CreateService(
+            new PresentationLanguageDuplicateSearchService(),
+            new SuccessfulChatService());
+
+        var response = await service.AskAsync(new ResearchAskRequest(
+            Ticker: "2330",
+            Question: question,
+            RetrievalMode: RetrievalMode.ConferenceOnly,
+            TopK: 2,
+            Debug: true));
+
+        Assert.Contains(response.Citations, citation => citation.Title == expectedTitle && citation.PageNumber == 10);
+        Assert.DoesNotContain(response.Citations, citation => citation.Title == duplicateTitle && citation.PageNumber == 10);
+        Assert.Contains(response.Trace!.Results, decision =>
+            decision.Decision == "DiscardedByPresentationLanguageDedup"
+            && decision.DocumentTitle == duplicateTitle
+            && decision.DuplicateOfChunkId is not null);
+    }
+
     private static ResearchAnswerService CreateService(
         IDocumentSearchService documentSearchService,
         IChatCompletionService chatService)
     {
         var options = Options.Create(new RetrievalOptions());
         var documentRetriever = new DocumentRetriever(documentSearchService, options);
-        var reranker = new ResultReranker(options);
+        var reranker = new ResultReranker(options, new ChunkContentCleaner());
         var contextSelector = new ContextSelector(options, NullLogger<ContextSelector>.Instance);
-        var formatter = new ContextFormatter();
+        var formatter = new ContextFormatter(new ChunkContentCleaner());
         var citationValidator = new CitationValidator();
         var answerGenerator = new AnswerGenerator(
             chatService,
@@ -84,6 +111,7 @@ public sealed class ResearchAnswerServiceRetrievalBehaviorTests
             reranker,
             contextSelector,
             formatter,
+            new ChunkContentCleaner(),
             answerGenerator,
             options,
             NullLogger<ResearchAnswerService>.Instance);
@@ -140,6 +168,62 @@ public sealed class ResearchAnswerServiceRetrievalBehaviorTests
         }
     }
 
+    private sealed class PresentationLanguageDuplicateSearchService : IDocumentSearchService
+    {
+        public Task<DocumentSearchResponse> SearchAsync(
+            DocumentSearchRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var results = new[]
+            {
+                CreateResult(
+                    Guid.NewGuid(),
+                    "2026Q2_M001_zh.pdf",
+                    10,
+                    0.92,
+                    "Language: zh-TW\n2026年第二季業績展望，HPC 和 AI 需求持續強勁，資本支出與現金流展望穩健。"),
+                CreateResult(
+                    Guid.NewGuid(),
+                    "2026Q2_E001_en.pdf",
+                    10,
+                    0.91,
+                    "Language: en\nFuture outlook and guidance show strong HPC and AI demand, with resilient capex and cash flow outlook."),
+                CreateResult(
+                    Guid.NewGuid(),
+                    "2026Q2_M001_zh.pdf",
+                    11,
+                    0.80,
+                    "Language: zh-TW\n其他法說會補充內容，說明毛利率、需求與業績展望。")
+            };
+            return Task.FromResult(new DocumentSearchResponse(request.Query, "test-embedding", results));
+        }
+
+        private static DocumentSearchResult CreateResult(
+            Guid documentId,
+            string title,
+            int pageNumber,
+            double relevance,
+            string content)
+        {
+            return new DocumentSearchResult(
+                DocumentChunkId: Guid.NewGuid(),
+                DocumentId: documentId,
+                DocumentTitle: title,
+                DocumentType: "EarningsPresentation",
+                SourceUrl: null,
+                ChunkIndex: pageNumber,
+                PageNumber: pageNumber,
+                SectionTitle: null,
+                Content: content,
+                Distance: 1 - relevance,
+                RelevanceScore: relevance,
+                SecurityId: null,
+                Ticker: "2330",
+                Exchange: "TWSE",
+                SecurityName: "TSMC");
+        }
+    }
+
     private sealed class CallTrackingChatService : IChatCompletionService
     {
         public bool WasCalled { get; private set; }
@@ -188,6 +272,19 @@ public sealed class ResearchAnswerServiceRetrievalBehaviorTests
                 ? "answer with [5]"
                 : "valid retry answer [1]";
             return Task.FromResult(new ChatCompletionResult(answer, Model, 10, 5));
+        }
+    }
+
+    private sealed class SuccessfulChatService : IChatCompletionService
+    {
+        public string Provider => "test";
+        public string Model => "test-model";
+
+        public Task<ChatCompletionResult> CompleteAsync(
+            ChatCompletionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ChatCompletionResult("answer [1]", Model, 10, 5));
         }
     }
 

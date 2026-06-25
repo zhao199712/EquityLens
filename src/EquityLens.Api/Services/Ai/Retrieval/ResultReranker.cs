@@ -8,13 +8,16 @@ namespace EquityLens.Api.Services.Ai.Retrieval;
 public sealed class ResultReranker : IResultReranker
 {
     private readonly RetrievalOptions _options;
+    private readonly IChunkContentCleaner _contentCleaner;
     private readonly IDocumentReranker? _reranker;
 
     public ResultReranker(
         IOptions<RetrievalOptions> options,
+        IChunkContentCleaner contentCleaner,
         IDocumentReranker? reranker = null)
     {
         _options = options.Value;
+        _contentCleaner = contentCleaner;
         _reranker = reranker;
     }
 
@@ -112,7 +115,7 @@ public sealed class ResultReranker : IResultReranker
                 }
             }
 
-            var contentKey = BuildContentDedupKey(result.Content);
+            var contentKey = BuildContentDedupKey(_contentCleaner.Clean(result.Content));
             if (!string.IsNullOrEmpty(contentKey) && seenContentKeys.TryGetValue(contentKey, out var duplicateContentChunkId))
             {
                 decisions.Add(new RankingDecision(
@@ -255,7 +258,14 @@ public sealed class ResultReranker : IResultReranker
             return true;
         }
 
-        return HasRiskEvidence(chunk.Result.Content);
+        if (HasRiskEvidence(chunk.Result.Content))
+        {
+            return true;
+        }
+
+        return chunk.SourceRole == "Primary"
+            && string.Equals(chunk.Result.DocumentType, "EarningsPresentation", StringComparison.OrdinalIgnoreCase)
+            && HasOutlookEvidence(chunk.Result.Content);
     }
 
     private static bool HasRiskEvidence(string content)
@@ -279,6 +289,33 @@ public sealed class ResultReranker : IResultReranker
             ]);
     }
 
+    private static bool HasOutlookEvidence(string content)
+    {
+        return ContainsAny(content,
+            [
+                "outlook",
+                "guidance",
+                "future outlook",
+                "business outlook",
+                "management expects",
+                "management expect",
+                "demand",
+                "capacity",
+                "capex",
+                "capital expenditure",
+                "cash flow",
+                "HPC",
+                "AI",
+                "展望",
+                "業績展望",
+                "管理層預期",
+                "需求",
+                "產能",
+                "資本支出",
+                "現金流"
+            ]);
+    }
+
     private static bool IsSafeHarbor(string content)
     {
         return ContainsAny(content, ["Safe Harbor Notice", "safe harbor", "forward-looking statements"]);
@@ -286,7 +323,7 @@ public sealed class ResultReranker : IResultReranker
 
     private static string BuildContentDedupKey(string content)
     {
-        const int maxLength = 120;
+        const int maxLength = 300;
         var normalized = string.Join(" ", content
             .ToLowerInvariant()
             .Replace("\n", " ")

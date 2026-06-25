@@ -89,9 +89,9 @@ public sealed class ResearchAnswerServiceObservabilityTests
     {
         var options = Options.Create(new RetrievalOptions());
         var documentRetriever = new DocumentRetriever(new FakeDocumentSearchService(), options);
-        var reranker = new ResultReranker(options);
+        var reranker = new ResultReranker(options, new ChunkContentCleaner());
         var contextSelector = new ContextSelector(options, NullLogger<ContextSelector>.Instance);
-        var formatter = new ContextFormatter();
+        var formatter = new ContextFormatter(new ChunkContentCleaner());
         var citationValidator = new CitationValidator();
         var answerGenerator = new AnswerGenerator(
             chatService,
@@ -107,6 +107,7 @@ public sealed class ResearchAnswerServiceObservabilityTests
             reranker,
             contextSelector,
             formatter,
+            new ChunkContentCleaner(),
             answerGenerator,
             options,
             NullLogger<ResearchAnswerService>.Instance);

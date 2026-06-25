@@ -190,6 +190,7 @@ switch (rerankProvider)
         builder.Services.AddScoped<IDocumentReranker, JinaReranker>();
         break;
 }
+builder.Services.AddScoped<IChunkContentCleaner, ChunkContentCleaner>();
 builder.Services.AddScoped<IResultReranker, ResultReranker>();
 builder.Services.AddScoped<IContextSelector, ContextSelector>();
 builder.Services.AddScoped<IContextFormatter, ContextFormatter>();

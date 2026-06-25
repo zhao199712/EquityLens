@@ -78,13 +78,43 @@ public sealed class RetrievalPipelineComponentTests
         }
     }
 
+    public class ChunkContentCleanerTests
+    {
+        private readonly ChunkContentCleaner _cleaner = new();
+
+        [Fact]
+        public void Clean_RemovesStructuredChunkMetadataAndKeepsBody()
+        {
+            var cleaned = _cleaner.Clean("Company: 台積電\nTicker: 2330\nExchange: TWSE\nDocumentType: EarningsPresentation\nSource: InvestorConference\nConferenceDate: unknown\nLanguage: zh-TW\nPage: 9\n2026年第二季業績展望 合併營收 毛利率");
+
+            Assert.DoesNotContain("Company:", cleaned);
+            Assert.DoesNotContain("Ticker:", cleaned);
+            Assert.DoesNotContain("DocumentType:", cleaned);
+            Assert.Contains("2026年第二季業績展望", cleaned);
+            Assert.Contains("毛利率", cleaned);
+        }
+
+        [Fact]
+        public void Clean_RemovesInvestorPresentationBoilerplateAndKeepsEvidence()
+        {
+            var cleaned = _cleaner.Clean("UnleashInnovation©92026TSMC, LtdTSMC PropertyFuture OutlookBased on our current business outlook, management expects revenue growth. https://www.tsmc.com invest@tsmc.com");
+
+            Assert.DoesNotContain("UnleashInnovation", cleaned);
+            Assert.DoesNotContain("TSMC Property", cleaned);
+            Assert.DoesNotContain("https://www.tsmc.com", cleaned);
+            Assert.DoesNotContain("invest@tsmc.com", cleaned);
+            Assert.Contains("Future OutlookBased", cleaned);
+            Assert.Contains("management expects revenue growth", cleaned);
+        }
+    }
+
     public class ResultRerankerTests
     {
         private readonly ResultReranker _reranker;
 
         public ResultRerankerTests()
         {
-            _reranker = new ResultReranker(Options.Create(new RetrievalOptions()));
+            _reranker = new ResultReranker(Options.Create(new RetrievalOptions()), new ChunkContentCleaner());
         }
 
         [Fact]
@@ -147,18 +177,51 @@ public sealed class RetrievalPipelineComponentTests
             Assert.Contains(result.Decisions, d => d.Decision == "DiscardedBySafeHarborLimit");
         }
 
+
+        [Fact]
+        public async Task Rank_EarningsPresentationMetadataPrefix_DoesNotDeduplicateDistinctPages()
+        {
+            var documentId = Guid.NewGuid();
+            var chunks = new[]
+            {
+                CreateChunk("Company: 台積電\nTicker: 2330\nExchange: TWSE\nDocumentType: EarningsPresentation\nSource: InvestorConference\nConferenceDate: unknown\nLanguage: zh-TW\nPage: 8\n現金流量表 自由現金流量 營運活動之現金流入 資本支出", 0.95, documentId, pageNumber: 8, documentType: "EarningsPresentation"),
+                CreateChunk("Company: 台積電\nTicker: 2330\nExchange: TWSE\nDocumentType: EarningsPresentation\nSource: InvestorConference\nConferenceDate: unknown\nLanguage: zh-TW\nPage: 9\n2026年第二季業績展望 合併營收 毛利率 營業利益率", 0.94, documentId, pageNumber: 9, documentType: "EarningsPresentation")
+            };
+
+            var result = await _reranker.Rank(chunks, ResearchQuestionIntent.Outlook, topK: 5);
+
+            Assert.Equal(2, result.SelectedResults.Count);
+            Assert.DoesNotContain(result.Decisions, d => d.Decision == "DiscardedByContentDedup");
+        }
+
+        [Fact]
+        public async Task Rank_RiskIntent_KeepsPrimaryConferenceOutlookEvidence()
+        {
+            var chunks = new[]
+            {
+                CreateChunk("Future outlook: management expects 2026 revenue growth and cash flow for capital expenditure.", 0.95, documentType: "EarningsPresentation")
+            };
+
+            var result = await _reranker.Rank(chunks, ResearchQuestionIntent.Risk, topK: 5);
+
+            Assert.Single(result.SelectedResults);
+            Assert.Equal("Selected", Assert.Single(result.Decisions).Decision);
+        }
+
         private static RetrievedDocumentChunk CreateChunk(
             string content,
             double relevance,
             Guid? documentId = null,
-            int? pageNumber = null)
+            int? pageNumber = null,
+            string documentType = "AnnualReport",
+            string sourceRole = "Primary")
         {
             return new RetrievedDocumentChunk(
                 new DocumentSearchResult(
                     DocumentChunkId: Guid.NewGuid(),
                     DocumentId: documentId ?? Guid.NewGuid(),
                     DocumentTitle: "Test Document",
-                    DocumentType: "AnnualReport",
+                    DocumentType: documentType,
                     SourceUrl: null,
                     ChunkIndex: 1,
                     PageNumber: pageNumber,
@@ -170,7 +233,7 @@ public sealed class RetrievalPipelineComponentTests
                     Ticker: "2330",
                     Exchange: "TWSE",
                     SecurityName: "Test"),
-                SourceRole: "Primary",
+                SourceRole: sourceRole,
                 SearchId: "search-1",
                 Query: "test");
         }
