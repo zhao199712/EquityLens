@@ -8,7 +8,7 @@
 - Frontend: `src/EquityLens.Web` (Vue 3 + Vite + TypeScript). Entrypoints: `src/main.ts`, `src/App.vue`, `src/router/index.ts`.
 - Prototype: `Kimi_Agent_科技感投資前端/` and `Kimi_Agent_资产组合压力测试Vue v2/` are separate Vite prototypes, not the main app.
 - Data-pipeline scripts: `scripts/` contains shell/Python/.NET helpers and SQL migration scripts used by the annual-report / financial-statement ingestion flow.
-- Local infra: `docker-compose.yml` — primary DB is **ParadeDB (pg18)** (`postgres` service, port 5432), with a TimescaleDB pg16 sidecar (`timescale` service, port 5433). Also runs Redis and Garage S3.
+- Local infra: `docker-compose.yml` — primary DB is **ParadeDB (pg18)** (`postgres` service, port 5432). Also runs Redis and Garage S3.
 
 ## Commands
 - Start infra: `docker compose up -d`

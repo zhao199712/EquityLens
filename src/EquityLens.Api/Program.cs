@@ -42,6 +42,7 @@ using EquityLens.Api.Services.FinancialData;
 using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Ai.Retrieval;
 using EquityLens.Api.Services.Chat;
+using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Research;
 using EquityLens.Api.Observability;
 using Microsoft.Extensions.Options;
@@ -201,17 +202,20 @@ switch (chatProvider?.ToUpperInvariant())
 {
     case null or "" or "DEEPSEEK":
         builder.Services.AddHttpClient<IChatCompletionService, DeepSeekChatCompletionService>();
-        builder.Services.AddHttpClient<IChatAgentService, DeepSeekChatAgentService>();
         break;
     case "GEMINI":
         builder.Services.AddHttpClient<IChatCompletionService, GeminiChatCompletionService>();
-        builder.Services.AddHttpClient<IChatAgentService, ChatAgentService>();
         break;
     default:
         throw new InvalidOperationException(
             $"Unsupported AI:ChatProvider '{chatProvider}'. Supported values: DeepSeek, Gemini.");
 }
 builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
+
+// Multi-Agent 架構：Agent 抽象層 + Supervisor + AgentRegistry
+builder.Services.AddScoped<IAgent, ResearchAgent>();
+builder.Services.AddScoped<AgentRegistry>();
+builder.Services.AddHttpClient<IChatAgentService, SupervisorAgent>();
 
 // Agentic RAG Chat 服務
 builder.Services.AddScoped<IFinancialDataService, FinancialDataService>();
