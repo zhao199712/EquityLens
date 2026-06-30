@@ -602,3 +602,29 @@ POST   /api/agent-runs/{runId}/cancel    — 取消 run
 **注意事項：**
 - 192 tests 全部通過
 - LoadResearchRunNode 假設 researchRunId 指向一個已存在的 AgentRun
+
+### Step 4: Frontend [DONE]
+
+**新增檔案：**
+- `src/EquityLens.Web/src/services/agentRuns.ts` — API service (list, detail, create, retry, cancel)
+- `src/EquityLens.Web/src/views/agent-runs/AgentRunListView.vue` — 列表頁（搜尋、篩選 workflow/status）
+- `src/EquityLens.Web/src/views/agent-runs/AgentRunDetailView.vue` — 詳情頁（4 個 tab：Timeline / Nodes / ToolCalls / Blackboard）
+
+**修改檔案：**
+- `src/EquityLens.Web/src/router/index.ts` — 新增 `/agent-runs` 和 `/agent-runs/:id` 路由
+- `src/EquityLens.Web/src/App.vue` — 新增 nav item「Agent Runs」+ activeMenuKey 對應
+
+**Frontend 功能：**
+- **列表頁**：卡片式列表，顯示 workflowType、agentType、status（彩色）、nodeCount/eventCount/toolCallCount、createdAt。支援搜尋和 workflow/status 篩選。
+- **詳情頁**：
+  - Header：workflowType、agentType、status、duration、timestamps
+  - 操作按鈕：Failed → 重試，Running/Pending → 取消
+  - Tab 1 - Timeline：垂直時間線，每個 event 有圓點圖示（綠=成功、紅=失敗、藍=開始）、eventType、message、payload、timestamp
+  - Tab 2 - Nodes：每個 node 的狀態、錯誤、開始/完成時間、duration
+  - Tab 3 - ToolCalls：每個 tool call 的 toolName、nodeKey、status、resultPreview、duration
+  - Tab 4 - Blackboard：raw JSON viewer for blackboardJson + outputJson
+
+**注意事項：**
+- vue-tsc + vite build 通過
+- 192 backend tests 通過
+- 使用現有 Kimi design system（.kimi-page-dark, .kimi-panel-dark, .kimi-tag-dark 等）

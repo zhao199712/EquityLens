@@ -18,6 +18,8 @@ import PriceManagementView from '../views/admin/PriceManagementView.vue'
 import ReportManagementView from '../views/admin/ReportManagementView.vue'
 import RiskModelManagementView from '../views/admin/RiskModelManagementView.vue'
 import AISettingsView from '../views/admin/AISettingsView.vue'
+import AgentRunListView from '../views/agent-runs/AgentRunListView.vue'
+import AgentRunDetailView from '../views/agent-runs/AgentRunDetailView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -69,6 +71,16 @@ export const router = createRouter({
       path: '/financial-reports/:id',
       name: 'financial-report-detail',
       component: FinancialReportDetailView,
+    },
+    {
+      path: '/agent-runs',
+      name: 'agent-runs',
+      component: AgentRunListView,
+    },
+    {
+      path: '/agent-runs/:id',
+      name: 'agent-run-detail',
+      component: AgentRunDetailView,
     },
     {
       path: '/settings',
