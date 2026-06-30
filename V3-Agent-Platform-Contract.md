@@ -500,3 +500,40 @@ public interface IAgentWorkflowRunner
 3. 圖上的 Planner 節點在合約 DAG 中不存在，v0 要不要加？
 4. 信心指標（Confidence）在 v0 最終答案中是否需要輸出？
 5. 現有 chat 的 `research_stock_analysis` tool 跟 CriticReview 的 `getResearchRun` tool 是什麼關係？共用還是分開？
+
+---
+
+## 六、進度記錄
+
+### Step 1: Entities + Migration [DONE]
+
+**新增檔案：**
+- `src/EquityLens.Api/Data/Entities/AgentRun.cs`
+- `src/EquityLens.Api/Data/Entities/AgentRunNode.cs`
+- `src/EquityLens.Api/Data/Entities/AgentRunEvent.cs`
+- `src/EquityLens.Api/Data/Entities/AgentToolCall.cs`
+- `src/EquityLens.Api/Data/Entities/AgentFeedback.cs`
+- `src/EquityLens.Api/Data/Configurations/AgentRunConfiguration.cs`
+- `src/EquityLens.Api/Data/Configurations/AgentRunNodeConfiguration.cs`
+- `src/EquityLens.Api/Data/Configurations/AgentRunEventConfiguration.cs`
+- `src/EquityLens.Api/Data/Configurations/AgentToolCallConfiguration.cs`
+- `src/EquityLens.Api/Data/Configurations/AgentFeedbackConfiguration.cs`
+
+**修改檔案：**
+- `src/EquityLens.Api/Data/Entities/AppUser.cs` — 新增 `ICollection<AgentRun> AgentRuns`
+- `src/EquityLens.Api/Data/EquityLensDbContext.cs` — 新增 5 個 DbSet
+
+**Migration：**
+- 名稱：`20260630013427_AddAgentRunTables`
+- 已 apply 到本地 ParadeDB (equitylens)
+
+**決策紀錄：**
+- AgentRun → User 用 `Cascade`（删除 run 时一起删），不是 `SetNull`
+- AgentRunNode/Event/ToolCall/Feedback → AgentRun 都是 `Cascade`
+- AgentRunEvent/ToolCall/Feedback → AgentRunNode 都是 `SetNull`（node 可选）
+- Status 默认值用字符串 `"Pending"` / `"Running"` / `"Requested"`，跟现有 JobRun / RiskRun 模式一致
+- BlackboardJson 默认值 `"{}"` 在 C# 端设定，DB 层面是 NOT NULL jsonb
+
+**注意事項：**
+- 192 tests 全部通过
+- DB 连接串用 Docker 内的 `equitylens/equitylens_dev_password`，不是 `ymsh20220`

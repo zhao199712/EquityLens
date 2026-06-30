@@ -16,4 +16,5 @@ public class AppUser
     public ICollection<UploadedFile> UploadedFiles { get; set; } = [];
     public ICollection<FinancialFiling> FinancialFilings { get; set; } = [];
     public ICollection<JobRun> JobRuns { get; set; } = [];
+    public ICollection<AgentRun> AgentRuns { get; set; } = [];
 }
