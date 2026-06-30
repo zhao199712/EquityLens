@@ -168,6 +168,11 @@ builder.Services.AddScoped<IEmbeddingExportService, EmbeddingExportService>();
 builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 builder.Services.AddScoped<IResearchPreflightService, ResearchPreflightService>();
 builder.Services.AddScoped<IAgentRunService, AgentRunService>();
+builder.Services.AddScoped<AgentWorkflowRunner>();
+builder.Services.AddScoped<IWorkflowNode, LoadResearchRunNode>();
+builder.Services.AddScoped<IWorkflowNode, CheckEvidenceNode>();
+builder.Services.AddScoped<IWorkflowNode, CritiqueAnswerNode>();
+builder.Services.AddScoped<IWorkflowNode, FinalizeCriticReportNode>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務

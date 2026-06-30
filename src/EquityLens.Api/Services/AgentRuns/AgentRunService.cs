@@ -12,11 +12,13 @@ public sealed class AgentRunService : IAgentRunService
 {
     private readonly EquityLensDbContext _db;
     private readonly ICurrentUserContext _currentUser;
+    private readonly AgentWorkflowRunner _runner;
 
-    public AgentRunService(EquityLensDbContext db, ICurrentUserContext currentUser)
+    public AgentRunService(EquityLensDbContext db, ICurrentUserContext currentUser, AgentWorkflowRunner runner)
     {
         _db = db;
         _currentUser = currentUser;
+        _runner = runner;
     }
 
     /// <inheritdoc />
@@ -42,6 +44,23 @@ public sealed class AgentRunService : IAgentRunService
 
         _db.AgentRuns.Add(run);
         await _db.SaveChangesAsync(ct);
+
+        // Start workflow execution in background
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _runner.ExecuteAsync(run, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                // Runner handles its own error logging; this is a safety net
+                run.Status = "Failed";
+                run.ErrorMessage = $"Unhandled workflow error: {ex.Message}";
+                run.CompletedAtUtc = DateTime.UtcNow;
+                await _db.SaveChangesAsync(CancellationToken.None);
+            }
+        }, CancellationToken.None);
 
         return Result<AgentRunCreatedResponse>.Success(
             new AgentRunCreatedResponse(run.Id, run.Status));

@@ -569,3 +569,36 @@ POST   /api/agent-runs/{runId}/cancel    — 取消 run
 **注意事項：**
 - 192 tests 全部通過
 - Workflow runner（Step 3）尚未實作，目前只是 CRUD 層
+
+### Step 3: CriticReview Runner [DONE]
+
+**新增檔案：**
+- `src/EquityLens.Api/Services/AgentRuns/IWorkflowNode.cs` — Node interface + context + result
+- `src/EquityLens.Api/Services/AgentRuns/AgentWorkflowRunner.cs` — Deterministic DAG executor
+- `src/EquityLens.Api/Services/AgentRuns/LoadResearchRunNode.cs` — Load research run into blackboard
+- `src/EquityLens.Api/Services/AgentRuns/CheckEvidenceNode.cs` — Check citation coverage & evidence quality
+- `src/EquityLens.Api/Services/AgentRuns/CritiqueAnswerNode.cs` — LLM-based critique (DeepSeek/Gemini)
+- `src/EquityLens.Api/Services/AgentRuns/FinalizeCriticReportNode.cs` — Final report generation
+
+**修改檔案：**
+- `src/EquityLens.Api/Program.cs` — DI 註冊 AgentWorkflowRunner + 4 個 IWorkflowNode
+- `src/EquityLens.Api/Services/AgentRuns/AgentRunService.cs` — 注入 runner，建立 run 後背景執行
+
+**架構說明：**
+- `AgentWorkflowRunner` 用 Kahn's algorithm 做 topological sort，依 DAG 依賴順序執行 node
+- 每個 node 執行前後都寫 `agent_run_event`（NodeStarted/NodeCompleted/NodeFailed）
+- Node 失敗時 run 標記為 Failed，停止後續 node
+- `CheckEvidenceNode` 是純規則式（rule-based），不呼叫 LLM
+- `CritiqueAnswerNode` 呼叫 `IChatCompletionService`，解析 LLM 回傳的 JSON findings
+- `FinalizeCriticReportNode` 計算 overallSeverity、生成 summary 和 suggestedRevision
+- CreateCriticReview API 回傳 Pending 後，背景 `Task.Run` 立即啟動 workflow
+
+**決策紀錄：**
+- Workflow execution 用 `Task.Run` 而不是 Hangfire/background service，保持 v0 簡單
+- Node registration 用 `IWorkflowNode` interface + DI，方便後續新增 node 類型
+- CheckEvidence 用簡單 heuristic（數字 vs 引用），不做複雜 NLP
+- CritiqueAnswer 的 LLM prompt 全中文，跟現有 codebase 一致
+
+**注意事項：**
+- 192 tests 全部通過
+- LoadResearchRunNode 假設 researchRunId 指向一個已存在的 AgentRun
