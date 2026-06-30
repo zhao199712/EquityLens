@@ -537,3 +537,35 @@ public interface IAgentWorkflowRunner
 **注意事項：**
 - 192 tests 全部通过
 - DB 连接串用 Docker 内的 `equitylens/equitylens_dev_password`，不是 `ymsh20220`
+
+### Step 2: Service + Controller [DONE]
+
+**新增檔案：**
+- `src/EquityLens.Api/Contracts/AgentRun/AgentRunContracts.cs` — DTOs
+- `src/EquityLens.Api/Services/AgentRuns/IAgentRunService.cs` — Interface
+- `src/EquityLens.Api/Services/AgentRuns/AgentRunService.cs` — Implementation
+- `src/EquityLens.Api/Services/AgentRuns/CriticReviewWorkflow.cs` — Workflow 定義 + Blackboard helpers
+- `src/EquityLens.Api/Controllers/AgentRunsController.cs` — 5 個 API endpoints
+
+**修改檔案：**
+- `src/EquityLens.Api/Program.cs` — 加 `IAgentRunService` / `AgentRunService` DI 註冊
+
+**API Endpoints：**
+```
+POST   /api/agent-runs/critic-review     — 建立 CriticReview run
+GET    /api/agent-runs?limit=&workflowType=&status= — 列出 runs
+GET    /api/agent-runs/{runId}           — run detail（含 nodes/events/toolCalls）
+POST   /api/agent-runs/{runId}/retry     — retry failed run
+POST   /api/agent-runs/{runId}/cancel    — 取消 run
+```
+
+**決策紀錄：**
+- Controller 繼承 `ApiControllerBase`，用 `ToActionResult(Result<T>)` 統一錯誤處理
+- Service 用 `ICurrentUserContext` 取得登入使用者 ID
+- Retry 只允許 `Failed` → `Pending`，會清掉 nodes/events/toolCalls 並重置 blackboard
+- Cancel 只允許非終態（`Succeeded`/`Failed`/`Cancelled` 不能取消）
+- CriticReviewWorkflow 是 static class，定義 DAG definition 和 initial blackboard
+
+**注意事項：**
+- 192 tests 全部通過
+- Workflow runner（Step 3）尚未實作，目前只是 CRUD 層

@@ -43,6 +43,7 @@ using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Ai.Retrieval;
 using EquityLens.Api.Services.Chat;
 using EquityLens.Api.Services.Agents;
+using EquityLens.Api.Services.AgentRuns;
 using EquityLens.Api.Services.Research;
 using EquityLens.Api.Observability;
 using Microsoft.Extensions.Options;
@@ -166,6 +167,7 @@ builder.Services.AddScoped<IChunkEmbeddingService, ChunkEmbeddingService>();
 builder.Services.AddScoped<IEmbeddingExportService, EmbeddingExportService>();
 builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 builder.Services.AddScoped<IResearchPreflightService, ResearchPreflightService>();
+builder.Services.AddScoped<IAgentRunService, AgentRunService>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務
