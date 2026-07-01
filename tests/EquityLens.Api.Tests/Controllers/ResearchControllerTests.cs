@@ -2,6 +2,7 @@ using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Controllers;
 using EquityLens.Api.Services.Ai;
+using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Services.Documents;
 using EquityLens.Api.Services.Research;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +22,8 @@ public sealed class ResearchControllerTests
                 "ticker_not_supported",
                 "目前僅支援 0050 成分股。")),
             answerService,
+            new FakeResearchRunTraceService(),
+            new FakeCurrentUserContext(),
             NullLogger<ResearchController>.Instance);
 
         var result = await controller.Ask(new ResearchAskRequest("AAPL", "主要風險是什麼？"), CancellationToken.None);
@@ -46,6 +49,8 @@ public sealed class ResearchControllerTests
                 3,
                 3))),
             answerService,
+            new FakeResearchRunTraceService(),
+            new FakeCurrentUserContext(),
             NullLogger<ResearchController>.Instance);
 
         var result = await controller.Ask(new ResearchAskRequest("2330", "主要風險是什麼？"), CancellationToken.None);
@@ -107,5 +112,25 @@ public sealed class ResearchControllerTests
         {
             throw new NotImplementedException();
         }
+    }
+
+    private sealed class FakeResearchRunTraceService : IResearchRunTraceService
+    {
+        public Task<Guid> PersistAskAsync(Guid userId, ResearchAskRequest request, ResearchAskResponse response, IReadOnlyList<StepInput>? steps = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(Guid.Empty);
+
+        public Task<IReadOnlyList<ResearchRunSummaryDto>> ListAsync(Guid? userId, int limit = 50, string? ticker = null, string? status = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<ResearchRunSummaryDto>>([]);
+
+        public Task<ResearchRunDetailDto?> GetByIdAsync(Guid id, Guid? userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<ResearchRunDetailDto?>(null);
+    }
+
+    private sealed class FakeCurrentUserContext : ICurrentUserContext
+    {
+        public Guid UserId => Guid.NewGuid();
+        public string Email => "test@example.test";
+        public string DisplayName => "Test User";
+        public bool IsAuthenticated => true;
     }
 }

@@ -39,6 +39,17 @@ public sealed class ResearchPreflightService : IResearchPreflightService
                 "目前僅支援 0050 成分股。");
         }
 
+        // WebOnly and LocalThenWeb do not require local documents to proceed
+        if (request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalThenWeb)
+        {
+            return Result<ResearchPreflightResult>.Success(new ResearchPreflightResult(
+                security.Id,
+                security.Ticker,
+                security.Exchange,
+                security.Name,
+                0, 0, 0));
+        }
+
         var documentIds = await GetDocumentIdsAsync(security.Id, request.DocumentType, request.RetrievalMode, cancellationToken);
         if (documentIds.Count == 0)
         {

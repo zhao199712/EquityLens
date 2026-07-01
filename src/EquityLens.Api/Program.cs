@@ -40,6 +40,7 @@ using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Services.InvestorConferences;
 using EquityLens.Api.Services.FinancialData;
 using EquityLens.Api.Services.Ai;
+using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Ai.Retrieval;
 using EquityLens.Api.Services.Chat;
 using EquityLens.Api.Services.Research;
@@ -165,6 +166,20 @@ builder.Services.AddScoped<IChunkEmbeddingService, ChunkEmbeddingService>();
 builder.Services.AddScoped<IEmbeddingExportService, EmbeddingExportService>();
 builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 builder.Services.AddScoped<IResearchPreflightService, ResearchPreflightService>();
+builder.Services.AddScoped<IResearchRunTraceService, ResearchRunTraceService>();
+builder.Services.AddScoped<ICriticReviewAgent, DeterministicCriticReviewAgent>();
+builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, CriticReviewWorkflowDefinitionProvider>();
+builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, DraftRevisionWorkflowDefinitionProvider>();
+builder.Services.AddScoped<IAgentWorkflowPlanner, AgentWorkflowPlanner>();
+builder.Services.AddScoped<IAgentRunGraphValidator, AgentRunGraphValidator>();
+builder.Services.AddScoped<IAgentNodeHandler, LoadResearchRunNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, CheckEvidenceNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, CritiqueAnswerNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, FinalizeCriticReportNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, LoadCriticReviewRunNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, DraftRevisedAnswerNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, FinalizeRevisionNodeHandler>();
+builder.Services.AddScoped<IAgentRunService, AgentRunService>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務

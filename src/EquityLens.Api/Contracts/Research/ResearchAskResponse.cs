@@ -7,7 +7,8 @@ public sealed record ResearchAskResponse(
     ResearchRetrievalStrategy RetrievalStrategy,
     IReadOnlyList<ResearchCitation> Citations,
     ResearchTrace? Trace = null,
-    string Status = "Answered");
+    string Status = "Answered",
+    Guid? ResearchRunId = null);
 
 public sealed record ResearchRetrievalStrategy(
     string Mode,
@@ -54,6 +55,7 @@ public sealed record ResearchTraceRetrievalSummary(
     int CandidateCount,
     int SelectedCount,
     int DiscardedCount,
+    int FinalCitationCount,
     IReadOnlyDictionary<string, int> DiscardedByReason);
 
 public sealed record ResearchTraceTokenUsage(

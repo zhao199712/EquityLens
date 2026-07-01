@@ -23,6 +23,315 @@ namespace EquityLens.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentFeedback", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("AgentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_id");
+
+                    b.Property<Guid?>("AgentRunNodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_node_id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("FeedbackType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("feedback_type");
+
+                    b.Property<string>("Prompt")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("prompt");
+
+                    b.Property<DateTime?>("RespondedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("responded_at_utc");
+
+                    b.Property<string>("ResponseJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("response_json");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentRunNodeId");
+
+                    b.HasIndex("AgentRunId", "CreatedAtUtc");
+
+                    b.ToTable("agent_feedback", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AgentType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("agent_type");
+
+                    b.Property<string>("BlackboardJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("blackboard_json");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("InputJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("input_json");
+
+                    b.Property<string>("OutputJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("output_json");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("WorkflowDefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("workflow_definition_json");
+
+                    b.Property<string>("WorkflowType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("workflow_type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "CreatedAtUtc");
+
+                    b.HasIndex("UserId", "CreatedAtUtc");
+
+                    b.HasIndex("WorkflowType", "CreatedAtUtc");
+
+                    b.ToTable("agent_run", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRunEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("AgentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_id");
+
+                    b.Property<Guid?>("AgentRunNodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_node_id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("text")
+                        .HasColumnName("message");
+
+                    b.Property<string>("PayloadJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload_json");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentRunNodeId");
+
+                    b.HasIndex("AgentRunId", "CreatedAtUtc");
+
+                    b.ToTable("agent_run_event", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRunNode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("AgentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_id");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("InputJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("input_json");
+
+                    b.Property<string>("NodeKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("node_key");
+
+                    b.Property<string>("NodeType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("node_type");
+
+                    b.Property<string>("OutputJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("output_json");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentRunId");
+
+                    b.HasIndex("AgentRunId", "NodeKey")
+                        .IsUnique();
+
+                    b.ToTable("agent_run_node", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentToolCall", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("AgentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_id");
+
+                    b.Property<Guid?>("AgentRunNodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_node_id");
+
+                    b.Property<string>("ArgumentsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("arguments_json");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result_json");
+
+                    b.Property<string>("ResultPreview")
+                        .HasColumnType("text")
+                        .HasColumnName("result_preview");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("ToolName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("tool_name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentRunNodeId");
+
+                    b.HasIndex("AgentRunId", "StartedAtUtc");
+
+                    b.ToTable("agent_tool_call", (string)null);
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AiMemo", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1311,6 +1620,307 @@ namespace EquityLens.Api.Migrations
                     b.ToTable("refresh_token", (string)null);
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Answer")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("answer");
+
+                    b.Property<int>("CitationCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("citation_count");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DocumentType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("document_type");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<long>("LatencyMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("latency_ms");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("model");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("question");
+
+                    b.Property<string>("RetrievalMode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("retrieval_mode");
+
+                    b.Property<string>("SourcePolicy")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_policy");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("status");
+
+                    b.Property<double>("Temperature")
+                        .HasColumnType("double precision")
+                        .HasColumnName("temperature");
+
+                    b.Property<string>("Ticker")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("ticker");
+
+                    b.Property<int>("TopK")
+                        .HasColumnType("integer")
+                        .HasColumnName("top_k");
+
+                    b.Property<string>("TraceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("trace_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TraceId");
+
+                    b.HasIndex("Status", "CreatedAtUtc");
+
+                    b.HasIndex("Ticker", "CreatedAtUtc");
+
+                    b.HasIndex("UserId", "CreatedAtUtc");
+
+                    b.ToTable("research_run", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRunCandidate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<double?>("AdjustedScore")
+                        .HasColumnType("double precision")
+                        .HasColumnName("adjusted_score");
+
+                    b.Property<string>("ContentPreview")
+                        .HasColumnType("text")
+                        .HasColumnName("content_preview");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("decision");
+
+                    b.Property<string>("DiscardReason")
+                        .HasColumnType("text")
+                        .HasColumnName("discard_reason");
+
+                    b.Property<Guid>("DocumentChunkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_chunk_id");
+
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<string>("DocumentType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("document_type");
+
+                    b.Property<int?>("PageNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("page_number");
+
+                    b.Property<string>("Query")
+                        .HasColumnType("text")
+                        .HasColumnName("query");
+
+                    b.Property<int?>("RankAfterRerank")
+                        .HasColumnType("integer")
+                        .HasColumnName("rank_after_rerank");
+
+                    b.Property<int?>("RankBeforeRerank")
+                        .HasColumnType("integer")
+                        .HasColumnName("rank_before_rerank");
+
+                    b.Property<double>("RelevanceScore")
+                        .HasColumnType("double precision")
+                        .HasColumnName("relevance_score");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<string>("SearchId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("search_id");
+
+                    b.Property<string>("SourceRole")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_role");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentChunkId");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("research_run_candidate", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRunCitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int>("CitationIndex")
+                        .HasColumnType("integer")
+                        .HasColumnName("citation_index");
+
+                    b.Property<Guid?>("DocumentChunkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_chunk_id");
+
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<string>("DocumentType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("document_type");
+
+                    b.Property<int?>("PageNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("page_number");
+
+                    b.Property<string>("QuoteText")
+                        .HasColumnType("text")
+                        .HasColumnName("quote_text");
+
+                    b.Property<double>("RelevanceScore")
+                        .HasColumnType("double precision")
+                        .HasColumnName("relevance_score");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<string>("SourceRole")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_role");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_type");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentChunkId");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("research_run_citation", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRunStep", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("InputJson")
+                        .HasColumnType("text")
+                        .HasColumnName("input_json");
+
+                    b.Property<string>("OutputJson")
+                        .HasColumnType("text")
+                        .HasColumnName("output_json");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("StepType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("step_type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("research_run_step", (string)null);
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskMetric", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1728,6 +2338,71 @@ namespace EquityLens.Api.Migrations
                     b.ToTable("uploaded_file", (string)null);
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentFeedback", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "Run")
+                        .WithMany("Feedback")
+                        .HasForeignKey("AgentRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRunNode", "Node")
+                        .WithMany("Feedback")
+                        .HasForeignKey("AgentRunNodeId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Node");
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRunEvent", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "Run")
+                        .WithMany("Events")
+                        .HasForeignKey("AgentRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRunNode", "Node")
+                        .WithMany("Events")
+                        .HasForeignKey("AgentRunNodeId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Node");
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRunNode", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "Run")
+                        .WithMany("Nodes")
+                        .HasForeignKey("AgentRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentToolCall", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "Run")
+                        .WithMany("ToolCalls")
+                        .HasForeignKey("AgentRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRunNode", "Node")
+                        .WithMany("ToolCalls")
+                        .HasForeignKey("AgentRunNodeId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Node");
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AiMemo", b =>
                 {
                     b.HasOne("EquityLens.Api.Data.Entities.FinancialReport", "FinancialReport")
@@ -2033,6 +2708,39 @@ namespace EquityLens.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRunCandidate", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.ResearchRun", "Run")
+                        .WithMany("Candidates")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRunCitation", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.ResearchRun", "Run")
+                        .WithMany("Citations")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRunStep", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.ResearchRun", "Run")
+                        .WithMany("Steps")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskMetric", b =>
                 {
                     b.HasOne("EquityLens.Api.Data.Entities.RiskRun", "RiskRun")
@@ -2092,6 +2800,26 @@ namespace EquityLens.Api.Migrations
                     b.Navigation("UploadedByUser");
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRun", b =>
+                {
+                    b.Navigation("Events");
+
+                    b.Navigation("Feedback");
+
+                    b.Navigation("Nodes");
+
+                    b.Navigation("ToolCalls");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRunNode", b =>
+                {
+                    b.Navigation("Events");
+
+                    b.Navigation("Feedback");
+
+                    b.Navigation("ToolCalls");
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AiMemo", b =>
                 {
                     b.Navigation("Citations");
@@ -2148,6 +2876,15 @@ namespace EquityLens.Api.Migrations
                     b.Navigation("RiskRuns");
 
                     b.Navigation("Snapshots");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRun", b =>
+                {
+                    b.Navigation("Candidates");
+
+                    b.Navigation("Citations");
+
+                    b.Navigation("Steps");
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskModelSetting", b =>

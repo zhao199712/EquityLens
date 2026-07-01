@@ -50,6 +50,19 @@ public class EquityLensDbContext : DbContext
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
+    // Research trace
+    public DbSet<ResearchRun> ResearchRuns => Set<ResearchRun>();
+    public DbSet<ResearchRunStep> ResearchRunSteps => Set<ResearchRunStep>();
+    public DbSet<ResearchRunCandidate> ResearchRunCandidates => Set<ResearchRunCandidate>();
+    public DbSet<ResearchRunCitation> ResearchRunCitations => Set<ResearchRunCitation>();
+
+    // Agent workflows
+    public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
+    public DbSet<AgentRunNode> AgentRunNodes => Set<AgentRunNode>();
+    public DbSet<AgentRunEvent> AgentRunEvents => Set<AgentRunEvent>();
+    public DbSet<AgentToolCall> AgentToolCalls => Set<AgentToolCall>();
+    public DbSet<AgentFeedback> AgentFeedback => Set<AgentFeedback>();
+
     // Exchange Rates
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
 

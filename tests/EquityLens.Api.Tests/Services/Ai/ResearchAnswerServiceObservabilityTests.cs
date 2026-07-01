@@ -4,7 +4,9 @@ using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Observability;
 using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Ai.Retrieval;
+using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Services.Documents;
+using EquityLens.Api.Services.Research;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -33,6 +35,7 @@ public sealed class ResearchAnswerServiceObservabilityTests
         Assert.Equal(
             response.Trace.Retrieval.CandidateCount,
             response.Trace.Retrieval.SelectedCount + response.Trace.Retrieval.DiscardedCount);
+        Assert.Equal(response.Citations.Count, response.Trace.Retrieval.FinalCitationCount);
 
         var names = activities.Select(activity => activity.OperationName).ToHashSet();
         Assert.Contains("intent.detect", names);
@@ -110,6 +113,8 @@ public sealed class ResearchAnswerServiceObservabilityTests
             new ChunkContentCleaner(),
             answerGenerator,
             options,
+            new FakeResearchRunTraceService(),
+            new FakeCurrentUserContext(),
             NullLogger<ResearchAnswerService>.Instance);
     }
 
@@ -203,5 +208,25 @@ public sealed class ResearchAnswerServiceObservabilityTests
         {
             throw new InvalidOperationException("simulated failure");
         }
+    }
+
+    private sealed class FakeResearchRunTraceService : IResearchRunTraceService
+    {
+        public Task<Guid> PersistAskAsync(Guid userId, ResearchAskRequest request, ResearchAskResponse response, IReadOnlyList<StepInput>? steps = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(Guid.Empty);
+
+        public Task<IReadOnlyList<ResearchRunSummaryDto>> ListAsync(Guid? userId, int limit = 50, string? ticker = null, string? status = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<ResearchRunSummaryDto>>([]);
+
+        public Task<ResearchRunDetailDto?> GetByIdAsync(Guid id, Guid? userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<ResearchRunDetailDto?>(null);
+    }
+
+    private sealed class FakeCurrentUserContext : ICurrentUserContext
+    {
+        public Guid UserId => Guid.Empty;
+        public string Email => "test@example.test";
+        public string DisplayName => "Test User";
+        public bool IsAuthenticated => true;
     }
 }

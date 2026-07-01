@@ -208,6 +208,64 @@ public sealed class RetrievalPipelineComponentTests
             Assert.Equal("Selected", Assert.Single(result.Decisions).Decision);
         }
 
+        [Fact]
+        public async Task Rank_FinancialIntent_CashFlowChunkGetsBonus()
+        {
+            var chunks = new[]
+            {
+                CreateChunk("營運活動之現金流入 698.97 資本支出 350.76 自由現金流量 348.21", 0.80, documentType: "EarningsPresentation"),
+                CreateChunk("General company information about products", 0.80, documentType: "EarningsPresentation")
+            };
+
+            var result = await _reranker.Rank(chunks, ResearchQuestionIntent.Financial, topK: 2);
+
+            Assert.Equal(2, result.SelectedResults.Count);
+            var cashFlow = result.SelectedResults.First(c => c.Result.Content.Contains("現金流入"));
+            var general = result.SelectedResults.First(c => c.Result.Content.Contains("General"));
+            var cashFlowScore = result.Decisions.First(d => d.Chunk.Result.DocumentChunkId == cashFlow.Result.DocumentChunkId);
+            var generalScore = result.Decisions.First(d => d.Chunk.Result.DocumentChunkId == general.Result.DocumentChunkId);
+            Assert.True(cashFlowScore.AdjustedScore > generalScore.AdjustedScore,
+                "Cash-flow chunk should outrank general chunk for Financial intent");
+        }
+
+        [Fact]
+        public async Task Rank_FinancialIntent_WeakFinancialPageGetsPenalty()
+        {
+            var chunks = new[]
+            {
+                CreateChunk("資金貸與他人 本公司資金貸與他人民國114年1月1日至12月31日", 0.95, documentType: "AnnualReport"),
+                CreateChunk("現金流量表 營運活動之現金流入 698.97 資本支出 350.76", 0.90, documentType: "AnnualReport")
+            };
+
+            var result = await _reranker.Rank(chunks, ResearchQuestionIntent.Financial, topK: 2);
+
+            Assert.Equal(2, result.SelectedResults.Count);
+            var cashFlowChunk = result.SelectedResults.First(c => c.Result.Content.Contains("現金流量表"));
+            var loanChunk = result.SelectedResults.First(c => c.Result.Content.Contains("資金貸與"));
+            var cashFlowDecision = result.Decisions.First(d => d.Chunk.Result.DocumentChunkId == cashFlowChunk.Result.DocumentChunkId);
+            var loanDecision = result.Decisions.First(d => d.Chunk.Result.DocumentChunkId == loanChunk.Result.DocumentChunkId);
+            Assert.True(cashFlowDecision.AdjustedScore > loanDecision.AdjustedScore,
+                "Cash-flow chunk should rank higher than weak financial page for Financial intent");
+        }
+
+        [Fact]
+        public async Task Rank_FinalScoreBelowMinimum_DiscardsCandidate()
+        {
+            var reranker = new ResultReranker(
+                Options.Create(new RetrievalOptions { MinimumFinalScore = 0.9 }),
+                new ChunkContentCleaner());
+            var chunks = new[]
+            {
+                CreateChunk("Risk factor discussed with uncertainty and market risk.", 0.50)
+            };
+
+            var result = await reranker.Rank(chunks, ResearchQuestionIntent.Risk, topK: 5);
+
+            Assert.Empty(result.SelectedResults);
+            Assert.Contains(result.Decisions, d => d.Decision == "DiscardedByMinimumFinalScore");
+        }
+
+
         private static RetrievedDocumentChunk CreateChunk(
             string content,
             double relevance,
@@ -289,6 +347,38 @@ public sealed class RetrievalPipelineComponentTests
         public void Read_InvalidOrNumber_ThrowsJsonException(string json)
         {
             Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<RetrievalMode>(json, _options));
+        }
+    }
+
+    public class SourcePolicyJsonConverterTests
+    {
+        private readonly JsonSerializerOptions _options = new(JsonSerializerDefaults.Web);
+
+        [Theory]
+        [InlineData("\"LocalOnly\"", SourcePolicy.LocalOnly)]
+        [InlineData("\"LocalThenWeb\"", SourcePolicy.LocalThenWeb)]
+        [InlineData("\"LocalAndWeb\"", SourcePolicy.LocalAndWeb)]
+        [InlineData("\"WebOnly\"", SourcePolicy.WebOnly)]
+        [InlineData("\"localOnly\"", SourcePolicy.LocalOnly)]
+        public void Read_ValidString_ReturnsExpectedPolicy(string json, SourcePolicy expected)
+        {
+            var policy = JsonSerializer.Deserialize<SourcePolicy>(json, _options);
+            Assert.Equal(expected, policy);
+        }
+
+        [Theory]
+        [InlineData("999")]
+        [InlineData("\"InvalidPolicy\"")]
+        public void Read_InvalidStringOrNumber_ThrowsJsonException(string json)
+        {
+            Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<SourcePolicy>(json, _options));
+        }
+
+        [Fact]
+        public void Read_Null_ReturnsLocalOnly()
+        {
+            var policy = JsonSerializer.Deserialize<SourcePolicy>("null", _options);
+            Assert.Equal(SourcePolicy.LocalOnly, policy);
         }
     }
 }

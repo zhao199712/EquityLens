@@ -28,7 +28,7 @@ public sealed class WebRetriever : IWebRetriever
         CancellationToken cancellationToken = default)
     {
         using var webActivity = EquityLensTelemetry.ActivitySource.StartActivity("web.search");
-        webActivity?.SetTag("web.query", query);
+        webActivity?.SetTag("web.query_length", query.Length);
         webActivity?.SetTag("web.count", count);
 
         var response = await _braveSearch.SearchAsync(query, count, freshness, cancellationToken);
@@ -37,7 +37,7 @@ public sealed class WebRetriever : IWebRetriever
         {
             webActivity?.SetTag("web.result_count", 0);
             webActivity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
-            _logger.LogInformation("Brave search returned 0 results for query: {Query}", query);
+            _logger.LogInformation("Brave search returned 0 results (query length: {QueryLength})", query.Length);
             return [];
         }
 
@@ -85,7 +85,7 @@ public sealed class WebRetriever : IWebRetriever
                 RetrievedAt: now);
         }).ToList();
 
-        _logger.LogInformation("Brave search returned {Count} results for query: {Query}", results.Count, query);
+        _logger.LogInformation("Brave search returned {Count} results (query length: {QueryLength})", results.Count, query.Length);
         return results;
     }
 }

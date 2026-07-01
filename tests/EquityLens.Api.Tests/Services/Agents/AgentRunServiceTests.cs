@@ -1,0 +1,757 @@
+using System.Text.Json;
+using EquityLens.Api.Contracts.Agents;
+using EquityLens.Api.Contracts.Research;
+using EquityLens.Api.Data;
+using EquityLens.Api.Data.Entities;
+using EquityLens.Api.Services.Agents;
+using EquityLens.Api.Services.Research;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace EquityLens.Api.Tests.Services.Agents;
+
+public sealed class AgentRunServiceTests
+{
+    [Fact]
+    public async Task CreateCriticReviewAsync_ValidResearchRun_CompletesWorkflowAndPersistsTrace()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+            new DeterministicCriticReviewAgent());
+
+        var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Succeeded, summary.Status);
+        var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
+        Assert.NotNull(detail);
+        Assert.Equal(4, detail.Nodes.Count);
+        Assert.Contains(detail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Succeeded);
+        AssertCriticReviewWorkflowDefinition(detail.WorkflowDefinitionJson);
+        Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunStarted);
+        Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunSucceeded);
+        Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.NodeCompleted);
+        var toolCall = Assert.Single(detail.ToolCalls);
+        Assert.Equal("getResearchRun", toolCall.ToolName);
+        Assert.Equal(AgentToolCallStatuses.Succeeded, toolCall.Status);
+        Assert.NotNull(detail.OutputJson);
+
+        using var blackboard = JsonDocument.Parse(detail.BlackboardJson);
+        Assert.Equal("2330", blackboard.RootElement.GetProperty(AgentBlackboardKeys.Ticker).GetString());
+        Assert.Equal("answer [1]", blackboard.RootElement.GetProperty(AgentBlackboardKeys.Answer).GetString());
+        AssertCriticReviewBlackboardContract(detail);
+
+        using var output = JsonDocument.Parse(detail.OutputJson);
+        Assert.Equal("Medium", output.RootElement.GetProperty(CriticReviewFields.OverallSeverity).GetString());
+        Assert.True(output.RootElement.GetProperty(CriticReviewFields.RequiresRevision).GetBoolean());
+        Assert.True(output.RootElement.GetProperty(CriticReviewFields.RequiresMoreEvidence).GetBoolean());
+        Assert.Equal("ResearchRetrieval", output.RootElement.GetProperty(CriticReviewFields.RouteBackTo).GetString());
+        Assert.Equal("CollectMoreEvidenceThenReviseAnswer", output.RootElement.GetProperty(CriticReviewFields.RecommendedNextAction).GetString());
+    }
+
+    [Fact]
+    public async Task CreateCriticReviewAsync_StrongEvidence_RecommendsAcceptAnswer()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3)),
+            new DeterministicCriticReviewAgent());
+
+        var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Succeeded, summary.Status);
+        var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
+        Assert.NotNull(detail);
+        Assert.NotNull(detail.OutputJson);
+        using var output = JsonDocument.Parse(detail.OutputJson);
+        Assert.Equal("None", output.RootElement.GetProperty(CriticReviewFields.OverallSeverity).GetString());
+        Assert.False(output.RootElement.GetProperty(CriticReviewFields.RequiresRevision).GetBoolean());
+        Assert.False(output.RootElement.GetProperty(CriticReviewFields.RequiresMoreEvidence).GetBoolean());
+        Assert.Equal(JsonValueKind.Null, output.RootElement.GetProperty(CriticReviewFields.RouteBackTo).ValueKind);
+        Assert.Equal("AcceptAnswer", output.RootElement.GetProperty(CriticReviewFields.RecommendedNextAction).GetString());
+    }
+
+    [Fact]
+    public async Task CreateCriticReviewAsync_MissingResearchRun_MarksRunFailed()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(null),
+            new DeterministicCriticReviewAgent());
+
+        var summary = await service.CreateCriticReviewAsync(userId, Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Failed, summary.Status);
+        Assert.Equal("Research run not found.", summary.ErrorMessage);
+        var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
+        Assert.NotNull(detail);
+        Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunFailed);
+        Assert.Contains(detail.ToolCalls, t => t.ToolName == "getResearchRun" && t.Status == AgentToolCallStatuses.Failed);
+    }
+
+    [Fact]
+    public async Task RetryAsync_CriticReviewAgentFailure_ReplaysWorkflowAndSucceeds()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var criticAgent = new FlakyCriticReviewAgent();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3)),
+            criticAgent);
+
+        var failed = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Failed, failed.Status);
+        Assert.Equal("critic unavailable", failed.ErrorMessage);
+        var failedDetail = await service.GetByIdAsync(failed.Id, userId, CancellationToken.None);
+        Assert.NotNull(failedDetail);
+        Assert.Contains(failedDetail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Failed);
+        Assert.Contains(failedDetail.Events, e => e.EventType == AgentEventTypes.NodeFailed);
+        Assert.Null(failedDetail.OutputJson);
+
+        var retried = await service.RetryAsync(failed.Id, userId, CancellationToken.None);
+
+        Assert.NotNull(retried);
+        Assert.Equal(AgentRunStatuses.Succeeded, retried.Status);
+        var retriedDetail = await service.GetByIdAsync(failed.Id, userId, CancellationToken.None);
+        Assert.NotNull(retriedDetail);
+        Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(retriedDetail.Events, e => e.EventType == AgentEventTypes.RunFailed);
+        Assert.Contains(retriedDetail.Events, e => e.EventType == AgentEventTypes.RunSucceeded);
+        Assert.NotNull(retriedDetail.OutputJson);
+        using var output = JsonDocument.Parse(retriedDetail.OutputJson);
+        Assert.Equal("AcceptAnswer", output.RootElement.GetProperty(CriticReviewFields.RecommendedNextAction).GetString());
+        Assert.Equal(2, criticAgent.CallCount);
+    }
+
+    [Fact]
+    public async Task CreateCriticReviewAsync_PersistsExpectedWorkflowDefinition()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3)),
+            new DeterministicCriticReviewAgent());
+
+        var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+
+        var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
+        Assert.NotNull(detail);
+        AssertCriticReviewWorkflowDefinition(detail.WorkflowDefinitionJson);
+    }
+
+    [Fact]
+    public async Task RetryAsync_DoesNotChangeWorkflowDefinition()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var criticAgent = new FlakyCriticReviewAgent();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3)),
+            criticAgent);
+
+        var failed = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+        var failedDetail = await service.GetByIdAsync(failed.Id, userId, CancellationToken.None);
+        Assert.NotNull(failedDetail);
+        var originalDefinition = failedDetail.WorkflowDefinitionJson;
+
+        var retried = await service.RetryAsync(failed.Id, userId, CancellationToken.None);
+
+        Assert.NotNull(retried);
+        Assert.Equal(AgentRunStatuses.Succeeded, retried.Status);
+        var retriedDetail = await service.GetByIdAsync(failed.Id, userId, CancellationToken.None);
+        Assert.NotNull(retriedDetail);
+        Assert.Equal(originalDefinition, retriedDetail.WorkflowDefinitionJson);
+        AssertCriticReviewWorkflowDefinition(retriedDetail.WorkflowDefinitionJson);
+    }
+
+    [Fact]
+    public async Task RetryAndCancelAsync_DifferentUser_ReturnNullAndDoNotMutateRun()
+    {
+        await using var db = CreateDbContext();
+        var ownerId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid(), candidateCount: 3)),
+            new DeterministicCriticReviewAgent());
+        var summary = await service.CreateCriticReviewAsync(ownerId, Guid.NewGuid(), CancellationToken.None);
+
+        var retryResponse = await service.RetryAsync(summary.Id, otherUserId, CancellationToken.None);
+        var cancelResponse = await service.CancelAsync(summary.Id, otherUserId, CancellationToken.None);
+
+        Assert.Null(retryResponse);
+        Assert.Null(cancelResponse);
+        var detail = await service.GetByIdAsync(summary.Id, ownerId, CancellationToken.None);
+        Assert.NotNull(detail);
+        Assert.Equal(AgentRunStatuses.Succeeded, detail.Run.Status);
+        Assert.DoesNotContain(detail.Events, e => e.EventType == AgentEventTypes.RunCancelled);
+    }
+
+    [Fact]
+    public async Task CreateDraftRevisionAsync_CompletedCriticReview_CreatesRevisionWorkflow()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+            new DeterministicCriticReviewAgent());
+        var criticReview = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+
+        var draftRevision = await service.CreateDraftRevisionAsync(userId, criticReview.Id, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Succeeded, draftRevision.Status);
+        Assert.Equal(AgentWorkflowTypes.DraftRevision, draftRevision.WorkflowType);
+        Assert.Equal(AgentTypes.Draft, draftRevision.AgentType);
+        var detail = await service.GetByIdAsync(draftRevision.Id, userId, CancellationToken.None);
+        Assert.NotNull(detail);
+        Assert.Equal(3, detail.Nodes.Count);
+        Assert.Contains(detail.Nodes, n => n.NodeKey == DraftRevisionNodeKeys.LoadCriticReviewRun && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(detail.Nodes, n => n.NodeKey == DraftRevisionNodeKeys.DraftRevisedAnswer && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(detail.Nodes, n => n.NodeKey == DraftRevisionNodeKeys.FinalizeRevision && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.NotNull(detail.OutputJson);
+        using var output = JsonDocument.Parse(detail.OutputJson);
+        Assert.True(output.RootElement.GetProperty(DraftRevisionFields.RevisionRequired).GetBoolean());
+        Assert.Equal("建議補強引用支撐後再重寫回答，並避免超出來源證據的推論。", output.RootElement.GetProperty(DraftRevisionFields.RevisedAnswer).GetString());
+        using var blackboard = JsonDocument.Parse(detail.BlackboardJson);
+        Assert.Equal(criticReview.Id, blackboard.RootElement.GetProperty(AgentBlackboardKeys.CriticReviewRunId).GetGuid());
+        Assert.Equal("answer [1]", blackboard.RootElement.GetProperty(AgentBlackboardKeys.Answer).GetString());
+        Assert.Equal("建議補強引用支撐後再重寫回答，並避免超出來源證據的推論。", blackboard.RootElement.GetProperty(AgentBlackboardKeys.RevisedAnswer).GetString());
+    }
+
+    [Fact]
+    public async Task CreateDraftRevisionAsync_MissingCriticReviewRun_MarksRunFailed()
+    {
+        await using var db = CreateDbContext();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid())),
+            new DeterministicCriticReviewAgent());
+
+        var summary = await service.CreateDraftRevisionAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Failed, summary.Status);
+        Assert.Equal("Critic review run not found.", summary.ErrorMessage);
+        var detail = await service.GetByIdAsync(summary.Id, null, CancellationToken.None);
+        Assert.NotNull(detail);
+        Assert.Contains(detail.Nodes, n => n.NodeKey == DraftRevisionNodeKeys.LoadCriticReviewRun && n.Status == AgentNodeStatuses.Failed);
+        Assert.Null(detail.OutputJson);
+    }
+
+    [Fact]
+    public async Task RetryAsync_DraftRevisionHandlerFailure_ReplaysWorkflowAndSucceeds()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var sourceService = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+            new DeterministicCriticReviewAgent());
+        var criticReview = await sourceService.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+        var failingHandlers = CreateAllHandlers(
+                new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+                new DeterministicCriticReviewAgent())
+            .Where(handler => handler.NodeType != DraftRevisionNodeTypes.DraftRevisedAnswer)
+            .ToArray();
+        var failingService = new AgentRunService(
+            db,
+            [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider()],
+            new AgentWorkflowPlanner(),
+            new AgentRunGraphValidator(),
+            failingHandlers,
+            NullLogger<AgentRunService>.Instance);
+
+        var failed = await failingService.CreateDraftRevisionAsync(userId, criticReview.Id, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Failed, failed.Status);
+        Assert.Equal($"Unsupported node type '{DraftRevisionNodeTypes.DraftRevisedAnswer}'.", failed.ErrorMessage);
+        var failedDetail = await failingService.GetByIdAsync(failed.Id, userId, CancellationToken.None);
+        Assert.NotNull(failedDetail);
+        var originalDefinition = failedDetail.WorkflowDefinitionJson;
+        Assert.Contains(failedDetail.Nodes, n => n.NodeKey == DraftRevisionNodeKeys.DraftRevisedAnswer && n.Status == AgentNodeStatuses.Failed);
+        Assert.Null(failedDetail.OutputJson);
+
+        var retryService = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+            new DeterministicCriticReviewAgent());
+        var retried = await retryService.RetryAsync(failed.Id, userId, CancellationToken.None);
+
+        Assert.NotNull(retried);
+        Assert.Equal(AgentRunStatuses.Succeeded, retried.Status);
+        var retriedDetail = await retryService.GetByIdAsync(failed.Id, userId, CancellationToken.None);
+        Assert.NotNull(retriedDetail);
+        Assert.Equal(originalDefinition, retriedDetail.WorkflowDefinitionJson);
+        Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == DraftRevisionNodeKeys.DraftRevisedAnswer && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(retriedDetail.Events, e => e.EventType == AgentEventTypes.RunFailed);
+        Assert.Contains(retriedDetail.Events, e => e.EventType == AgentEventTypes.RunSucceeded);
+        Assert.NotNull(retriedDetail.OutputJson);
+        using var blackboard = JsonDocument.Parse(retriedDetail.BlackboardJson);
+        Assert.Equal(criticReview.Id, blackboard.RootElement.GetProperty(AgentBlackboardKeys.CriticReviewRunId).GetGuid());
+    }
+
+    [Fact]
+    public async Task CreateDraftRevisionAsync_DifferentUserCriticReviewRun_MarksRunFailed()
+    {
+        await using var db = CreateDbContext();
+        var ownerId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+            new DeterministicCriticReviewAgent());
+        var criticReview = await service.CreateCriticReviewAsync(ownerId, researchRunId, CancellationToken.None);
+
+        var summary = await service.CreateDraftRevisionAsync(otherUserId, criticReview.Id, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Failed, summary.Status);
+        Assert.Equal("Critic review run not found.", summary.ErrorMessage);
+        var otherUserDetail = await service.GetByIdAsync(summary.Id, otherUserId, CancellationToken.None);
+        Assert.NotNull(otherUserDetail);
+        Assert.Contains(otherUserDetail.Nodes, n => n.NodeKey == DraftRevisionNodeKeys.LoadCriticReviewRun && n.Status == AgentNodeStatuses.Failed);
+        Assert.Null(otherUserDetail.OutputJson);
+        var ownerSourceDetail = await service.GetByIdAsync(criticReview.Id, ownerId, CancellationToken.None);
+        Assert.NotNull(ownerSourceDetail);
+        Assert.Equal(AgentRunStatuses.Succeeded, ownerSourceDetail.Run.Status);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_DifferentUser_ReturnsNull()
+    {
+        await using var db = CreateDbContext();
+        var ownerId = Guid.NewGuid();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid())),
+            new DeterministicCriticReviewAgent());
+        var summary = await service.CreateCriticReviewAsync(ownerId, Guid.NewGuid(), CancellationToken.None);
+
+        var detail = await service.GetByIdAsync(summary.Id, Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(detail);
+    }
+
+    [Fact]
+    public void CriticReviewNodeHandlers_CoverEveryWorkflowNodeType()
+    {
+        var handlers = CreateCriticReviewHandlers(
+            new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid())),
+            new DeterministicCriticReviewAgent());
+
+        var nodeTypes = new[]
+        {
+            CriticReviewNodeTypes.LoadResearchRun,
+            CriticReviewNodeTypes.CheckEvidence,
+            CriticReviewNodeTypes.CritiqueAnswer,
+            CriticReviewNodeTypes.FinalizeCriticReport
+        };
+
+        Assert.All(nodeTypes, nodeType => Assert.Contains(handlers, handler => handler.NodeType == nodeType));
+        Assert.Equal(nodeTypes.Length, handlers.Select(handler => handler.NodeType).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void DraftRevisionNodeHandlers_CoverEveryWorkflowNodeType()
+    {
+        var handlers = CreateAllHandlers(
+            new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid())),
+            new DeterministicCriticReviewAgent());
+
+        var nodeTypes = new[]
+        {
+            DraftRevisionNodeTypes.LoadCriticReviewRun,
+            DraftRevisionNodeTypes.DraftRevisedAnswer,
+            DraftRevisionNodeTypes.FinalizeRevision
+        };
+
+        Assert.All(nodeTypes, nodeType => Assert.Contains(handlers, handler => handler.NodeType == nodeType));
+    }
+
+    [Fact]
+    public async Task CreateCriticReviewAsync_MissingWorkflowProvider_Throws()
+    {
+        await using var db = CreateDbContext();
+        var service = new AgentRunService(
+            db,
+            [],
+            new AgentWorkflowPlanner(),
+            new AgentRunGraphValidator(),
+            CreateCriticReviewHandlers(
+                new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid(), candidateCount: 3)),
+                new DeterministicCriticReviewAgent()),
+            NullLogger<AgentRunService>.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateCriticReviewAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None));
+
+        Assert.Equal($"Workflow provider '{AgentWorkflowTypes.CriticReview}' is not registered.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Constructor_DuplicateWorkflowProvider_Throws()
+    {
+        await using var db = CreateDbContext();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => new AgentRunService(
+            db,
+            [new CriticReviewWorkflowDefinitionProvider(), new CriticReviewWorkflowDefinitionProvider()],
+            new AgentWorkflowPlanner(),
+            new AgentRunGraphValidator(),
+            CreateCriticReviewHandlers(
+                new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid(), candidateCount: 3)),
+                new DeterministicCriticReviewAgent()),
+            NullLogger<AgentRunService>.Instance));
+
+        Assert.Equal($"Workflow provider '{AgentWorkflowTypes.CriticReview}' is registered more than once.", exception.Message);
+    }
+
+    [Fact]
+    public async Task CreateCriticReviewAsync_MissingNodeHandler_MarksRunFailed()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        IAgentNodeHandler[] handlers =
+        [
+            new LoadResearchRunNodeHandler(new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3))),
+            new CheckEvidenceNodeHandler(),
+            new CritiqueAnswerNodeHandler(new DeterministicCriticReviewAgent())
+        ];
+        var service = new AgentRunService(db, [new CriticReviewWorkflowDefinitionProvider()], new AgentWorkflowPlanner(), new AgentRunGraphValidator(), handlers, NullLogger<AgentRunService>.Instance);
+
+        var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Failed, summary.Status);
+        Assert.Equal($"Unsupported node type '{CriticReviewNodeTypes.FinalizeCriticReport}'.", summary.ErrorMessage);
+        var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
+        Assert.NotNull(detail);
+        Assert.Contains(detail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.FinalizeCriticReport && n.Status == AgentNodeStatuses.Failed);
+        Assert.Null(detail.OutputJson);
+    }
+
+    [Fact]
+    public async Task CreateCriticReviewAsync_MissingPersistedNode_MarksRunFailed()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var service = new AgentRunService(
+            db,
+            [new MissingFinalizeNodeWorkflowDefinitionProvider()],
+            new AgentWorkflowPlanner(),
+            new AgentRunGraphValidator(),
+            CreateCriticReviewHandlers(
+                new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3)),
+                new DeterministicCriticReviewAgent()),
+            NullLogger<AgentRunService>.Instance);
+
+        var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Failed, summary.Status);
+        Assert.Equal($"Agent run is missing node '{CriticReviewNodeKeys.FinalizeCriticReport}'.", summary.ErrorMessage);
+        var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
+        Assert.NotNull(detail);
+        Assert.Equal(3, detail.Nodes.Count);
+        Assert.Null(detail.OutputJson);
+    }
+
+    private static void AssertCriticReviewBlackboardContract(AgentRunDetailResponse detail)
+    {
+        Assert.NotNull(detail.OutputJson);
+        using var document = JsonDocument.Parse(detail.BlackboardJson);
+        var root = document.RootElement;
+
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.Ticker, out var ticker));
+        Assert.Equal("2330", ticker.GetString());
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.Question, out var question));
+        Assert.Equal("question?", question.GetString());
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.ResearchRunId, out var researchRunId));
+        Assert.Equal(JsonValueKind.String, researchRunId.ValueKind);
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.ResearchRun, out var researchRun));
+        Assert.Equal(JsonValueKind.Object, researchRun.ValueKind);
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.Answer, out var answer));
+        Assert.Equal("answer [1]", answer.GetString());
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.Citations, out var citations));
+        Assert.Equal(JsonValueKind.Array, citations.ValueKind);
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.Steps, out var steps));
+        Assert.Equal(JsonValueKind.Array, steps.ValueKind);
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.Candidates, out var candidates));
+        Assert.Equal(JsonValueKind.Array, candidates.ValueKind);
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.SupervisorDecisions, out var supervisorDecisions));
+        Assert.Equal(JsonValueKind.Array, supervisorDecisions.ValueKind);
+
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.EvidenceChecks, out var evidenceChecks));
+        Assert.Equal(JsonValueKind.Object, evidenceChecks.ValueKind);
+        Assert.Equal(1, evidenceChecks.GetProperty(EvidenceCheckFields.CitationCount).GetInt32());
+        Assert.Equal(1, evidenceChecks.GetProperty(EvidenceCheckFields.CandidateCount).GetInt32());
+        Assert.Equal("Answered", evidenceChecks.GetProperty(EvidenceCheckFields.SourceStatus).GetString());
+        Assert.True(evidenceChecks.GetProperty(EvidenceCheckFields.FindingCount).GetInt32() > 0);
+        Assert.Equal(JsonValueKind.Array, evidenceChecks.GetProperty(EvidenceCheckFields.Findings).ValueKind);
+
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.CriticFindings, out var criticFindings));
+        Assert.Equal(JsonValueKind.Array, criticFindings.ValueKind);
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.CriticReview, out var criticReview));
+        Assert.Equal(JsonValueKind.Object, criticReview.ValueKind);
+        Assert.Equal("Medium", criticReview.GetProperty(CriticReviewFields.OverallSeverity).GetString());
+        Assert.True(criticReview.GetProperty(CriticReviewFields.RequiresRevision).GetBoolean());
+        Assert.True(criticReview.GetProperty(CriticReviewFields.RequiresMoreEvidence).GetBoolean());
+
+        Assert.True(root.TryGetProperty(AgentBlackboardKeys.FinalOutput, out var finalOutput));
+        Assert.Equal(JsonValueKind.Object, finalOutput.ValueKind);
+        Assert.Equal(NormalizeJson(detail.OutputJson), JsonSerializer.Serialize(finalOutput));
+
+        var loadNode = detail.Nodes.Single(n => n.NodeKey == CriticReviewNodeKeys.LoadResearchRun);
+        Assert.NotNull(loadNode.InputJson);
+        using var loadInput = JsonDocument.Parse(loadNode.InputJson);
+        Assert.Equal(JsonValueKind.String, loadInput.RootElement.GetProperty("researchRunId").ValueKind);
+        Assert.NotNull(loadNode.OutputJson);
+        using var loadOutput = JsonDocument.Parse(loadNode.OutputJson);
+        Assert.Equal("2330", loadOutput.RootElement.GetProperty(AgentBlackboardKeys.Ticker).GetString());
+        Assert.Equal("Answered", loadOutput.RootElement.GetProperty("status").GetString());
+        Assert.Equal(1, loadOutput.RootElement.GetProperty(EvidenceCheckFields.CitationCount).GetInt32());
+        Assert.Equal(1, loadOutput.RootElement.GetProperty(EvidenceCheckFields.CandidateCount).GetInt32());
+        Assert.True(loadOutput.RootElement.GetProperty("hasAnswer").GetBoolean());
+
+        var checkEvidenceNode = detail.Nodes.Single(n => n.NodeKey == CriticReviewNodeKeys.CheckEvidence);
+        Assert.NotNull(checkEvidenceNode.InputJson);
+        using var checkEvidenceInput = JsonDocument.Parse(checkEvidenceNode.InputJson);
+        Assert.Equal("2330", checkEvidenceInput.RootElement.GetProperty(AgentBlackboardKeys.Ticker).GetString());
+        Assert.Equal("Answered", checkEvidenceInput.RootElement.GetProperty(EvidenceCheckFields.SourceStatus).GetString());
+        Assert.Equal(1, checkEvidenceInput.RootElement.GetProperty(EvidenceCheckFields.CitationCount).GetInt32());
+        Assert.Equal(1, checkEvidenceInput.RootElement.GetProperty(EvidenceCheckFields.CandidateCount).GetInt32());
+        Assert.NotNull(checkEvidenceNode.OutputJson);
+        using var checkEvidenceOutput = JsonDocument.Parse(checkEvidenceNode.OutputJson);
+        Assert.Equal(1, checkEvidenceOutput.RootElement.GetProperty(EvidenceCheckFields.CitationCount).GetInt32());
+        Assert.Equal(1, checkEvidenceOutput.RootElement.GetProperty(EvidenceCheckFields.CandidateCount).GetInt32());
+        Assert.Equal("Answered", checkEvidenceOutput.RootElement.GetProperty(EvidenceCheckFields.SourceStatus).GetString());
+        Assert.True(checkEvidenceOutput.RootElement.GetProperty(EvidenceCheckFields.FindingCount).GetInt32() > 0);
+        Assert.Equal(JsonValueKind.Array, checkEvidenceOutput.RootElement.GetProperty(EvidenceCheckFields.Findings).ValueKind);
+
+        var critiqueNode = detail.Nodes.Single(n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer);
+        Assert.NotNull(critiqueNode.InputJson);
+        Assert.NotNull(critiqueNode.OutputJson);
+        using var critiqueInput = JsonDocument.Parse(critiqueNode.InputJson);
+        Assert.Equal("2330", critiqueInput.RootElement.GetProperty(AgentBlackboardKeys.Ticker).GetString());
+        Assert.Equal("answer [1]", critiqueInput.RootElement.GetProperty(AgentBlackboardKeys.Answer).GetString());
+        using var critiqueOutput = JsonDocument.Parse(critiqueNode.OutputJson);
+        Assert.Equal("Medium", critiqueOutput.RootElement.GetProperty(CriticReviewFields.OverallSeverity).GetString());
+        Assert.Equal(JsonValueKind.Array, critiqueOutput.RootElement.GetProperty(CriticReviewFields.Findings).ValueKind);
+
+        var finalizeNode = detail.Nodes.Single(n => n.NodeKey == CriticReviewNodeKeys.FinalizeCriticReport);
+        Assert.NotNull(finalizeNode.InputJson);
+        using var finalizeInput = JsonDocument.Parse(finalizeNode.InputJson);
+        Assert.Equal("Medium", finalizeInput.RootElement.GetProperty(CriticReviewFields.OverallSeverity).GetString());
+        Assert.True(finalizeInput.RootElement.GetProperty(CriticReviewFields.RequiresRevision).GetBoolean());
+        Assert.True(finalizeInput.RootElement.GetProperty(CriticReviewFields.RequiresMoreEvidence).GetBoolean());
+        Assert.Equal("ResearchRetrieval", finalizeInput.RootElement.GetProperty(CriticReviewFields.RouteBackTo).GetString());
+        Assert.Equal("CollectMoreEvidenceThenReviseAnswer", finalizeInput.RootElement.GetProperty(CriticReviewFields.RecommendedNextAction).GetString());
+        Assert.NotNull(finalizeNode.OutputJson);
+        Assert.Equal(NormalizeJson(detail.OutputJson), NormalizeJson(finalizeNode.OutputJson));
+    }
+
+    private static string NormalizeJson(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return JsonSerializer.Serialize(document.RootElement);
+    }
+
+    private static void AssertCriticReviewWorkflowDefinition(string workflowDefinitionJson)
+    {
+        using var document = JsonDocument.Parse(workflowDefinitionJson);
+        var root = document.RootElement;
+        Assert.Equal(AgentWorkflowTypes.CriticReview, root.GetProperty("workflowType").GetString());
+        Assert.Equal(CriticReviewWorkflow.Version, root.GetProperty("version").GetInt32());
+
+        var nodes = root.GetProperty("nodes").EnumerateArray().ToArray();
+        Assert.Equal(4, nodes.Length);
+        Assert.Equal(CriticReviewNodeKeys.LoadResearchRun, nodes[0].GetProperty("id").GetString());
+        Assert.Equal(CriticReviewNodeTypes.LoadResearchRun, nodes[0].GetProperty("type").GetString());
+        Assert.True(nodes[0].GetProperty("required").GetBoolean());
+        Assert.Equal(CriticReviewNodeKeys.CheckEvidence, nodes[1].GetProperty("id").GetString());
+        Assert.Equal(CriticReviewNodeTypes.CheckEvidence, nodes[1].GetProperty("type").GetString());
+        Assert.True(nodes[1].GetProperty("required").GetBoolean());
+        Assert.Equal(CriticReviewNodeKeys.CritiqueAnswer, nodes[2].GetProperty("id").GetString());
+        Assert.Equal(CriticReviewNodeTypes.CritiqueAnswer, nodes[2].GetProperty("type").GetString());
+        Assert.True(nodes[2].GetProperty("required").GetBoolean());
+        Assert.Equal(CriticReviewNodeKeys.FinalizeCriticReport, nodes[3].GetProperty("id").GetString());
+        Assert.Equal(CriticReviewNodeTypes.FinalizeCriticReport, nodes[3].GetProperty("type").GetString());
+        Assert.True(nodes[3].GetProperty("required").GetBoolean());
+
+        var edges = root.GetProperty("edges").EnumerateArray().ToArray();
+        Assert.Equal(3, edges.Length);
+        Assert.Equal(CriticReviewNodeKeys.LoadResearchRun, edges[0].GetProperty("from").GetString());
+        Assert.Equal(CriticReviewNodeKeys.CheckEvidence, edges[0].GetProperty("to").GetString());
+        Assert.Equal(CriticReviewNodeKeys.CheckEvidence, edges[1].GetProperty("from").GetString());
+        Assert.Equal(CriticReviewNodeKeys.CritiqueAnswer, edges[1].GetProperty("to").GetString());
+        Assert.Equal(CriticReviewNodeKeys.CritiqueAnswer, edges[2].GetProperty("from").GetString());
+        Assert.Equal(CriticReviewNodeKeys.FinalizeCriticReport, edges[2].GetProperty("to").GetString());
+    }
+
+    private static AgentRunService CreateService(
+        EquityLensDbContext db,
+        IResearchRunTraceService researchTraceService,
+        ICriticReviewAgent criticReviewAgent)
+    {
+        var handlers = CreateAllHandlers(researchTraceService, criticReviewAgent);
+        return new AgentRunService(
+            db,
+            [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider()],
+            new AgentWorkflowPlanner(),
+            new AgentRunGraphValidator(),
+            handlers,
+            NullLogger<AgentRunService>.Instance);
+    }
+
+    private static IAgentNodeHandler[] CreateCriticReviewHandlers(
+        IResearchRunTraceService researchTraceService,
+        ICriticReviewAgent criticReviewAgent) =>
+    [
+        new LoadResearchRunNodeHandler(researchTraceService),
+        new CheckEvidenceNodeHandler(),
+        new CritiqueAnswerNodeHandler(criticReviewAgent),
+        new FinalizeCriticReportNodeHandler()
+    ];
+
+    private static IAgentNodeHandler[] CreateAllHandlers(
+        IResearchRunTraceService researchTraceService,
+        ICriticReviewAgent criticReviewAgent) =>
+    [
+        new LoadResearchRunNodeHandler(researchTraceService),
+        new CheckEvidenceNodeHandler(),
+        new CritiqueAnswerNodeHandler(criticReviewAgent),
+        new FinalizeCriticReportNodeHandler(),
+        new LoadCriticReviewRunNodeHandler(),
+        new DraftRevisedAnswerNodeHandler(),
+        new FinalizeRevisionNodeHandler()
+    ];
+
+    private static EquityLensDbContext CreateDbContext()
+    {
+        var options = new DbContextOptionsBuilder<EquityLensDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new TestEquityLensDbContext(options);
+    }
+
+    private sealed class MissingFinalizeNodeWorkflowDefinitionProvider : IAgentWorkflowDefinitionProvider
+    {
+        private readonly CriticReviewWorkflowDefinitionProvider _inner = new();
+
+        public string WorkflowType => _inner.WorkflowType;
+
+        public AgentRun CreateRun(Guid userId, Guid researchRunId)
+        {
+            var run = _inner.CreateRun(userId, researchRunId);
+            run.Nodes = run.Nodes
+                .Where(node => node.NodeKey != CriticReviewNodeKeys.FinalizeCriticReport)
+                .ToList();
+            return run;
+        }
+
+        public string CreateInitialBlackboardJson(Guid researchRunId) => _inner.CreateInitialBlackboardJson(researchRunId);
+    }
+
+    private sealed class TestEquityLensDbContext : EquityLensDbContext
+    {
+        public TestEquityLensDbContext(DbContextOptions<EquityLensDbContext> options) : base(options)
+        {
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Ignore<DocumentEmbedding>();
+            modelBuilder.Entity<AgentRun>().Property(x => x.Id).ValueGeneratedNever();
+            modelBuilder.Entity<AgentRunNode>().Property(x => x.Id).ValueGeneratedNever();
+            modelBuilder.Entity<AgentRunEvent>().Property(x => x.Id).ValueGeneratedNever();
+            modelBuilder.Entity<AgentToolCall>().Property(x => x.Id).ValueGeneratedNever();
+            modelBuilder.Entity<AgentFeedback>().Property(x => x.Id).ValueGeneratedNever();
+        }
+    }
+
+    private static ResearchRunDetailDto BuildResearchRunDetail(Guid id, int candidateCount = 1)
+    {
+        var chunkId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        var candidates = Enumerable.Range(1, candidateCount)
+            .Select(rank => new ResearchRunCandidateDto(
+                Guid.NewGuid(),
+                rank == 1 ? chunkId : Guid.NewGuid(),
+                rank == 1 ? documentId : Guid.NewGuid(),
+                "年報",
+                "AnnualReport",
+                null,
+                rank,
+                0.9,
+                null,
+                1,
+                rank,
+                "Selected",
+                null,
+                "content"))
+            .ToArray();
+
+        return new ResearchRunDetailDto(
+            new ResearchRunSummaryDto(id, "2330", "question?", "Answered", 1, "Auto", 123, DateTime.UtcNow),
+            "answer [1]",
+            [new ResearchRunStepDto(Guid.NewGuid(), "AnswerGeneration", null, null, 10, DateTime.UtcNow, DateTime.UtcNow, null)],
+            candidates,
+            [new ResearchRunCitationDto(Guid.NewGuid(), 1, "LocalDocument", chunkId, documentId, "年報", "AnnualReport", null, 1, "quote", 0.9)])
+        { };
+    }
+
+    private sealed class FlakyCriticReviewAgent : ICriticReviewAgent
+    {
+        private readonly DeterministicCriticReviewAgent _inner = new();
+
+        public int CallCount { get; private set; }
+
+        public Task<CriticReviewResult> CritiqueAsync(CriticReviewInput input, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            if (CallCount == 1)
+            {
+                throw new InvalidOperationException("critic unavailable");
+            }
+
+            return _inner.CritiqueAsync(input, cancellationToken);
+        }
+    }
+
+    private sealed class FakeResearchRunTraceService : IResearchRunTraceService
+    {
+        private readonly ResearchRunDetailDto? _detail;
+
+        public FakeResearchRunTraceService(ResearchRunDetailDto? detail)
+        {
+            _detail = detail;
+        }
+
+        public Task<Guid> PersistAskAsync(Guid userId, ResearchAskRequest request, ResearchAskResponse response, IReadOnlyList<StepInput>? steps = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(Guid.Empty);
+
+        public Task<IReadOnlyList<ResearchRunSummaryDto>> ListAsync(Guid? userId, int limit = 50, string? ticker = null, string? status = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<ResearchRunSummaryDto>>([]);
+
+        public Task<ResearchRunDetailDto?> GetByIdAsync(Guid id, Guid? userId, CancellationToken cancellationToken = default)
+            => Task.FromResult(_detail);
+    }
+}

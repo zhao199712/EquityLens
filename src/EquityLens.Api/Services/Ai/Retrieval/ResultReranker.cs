@@ -24,8 +24,9 @@ public sealed class ResultReranker : IResultReranker
     public async Task<RankedSelection> Rank(IReadOnlyList<RetrievedDocumentChunk> chunks, ResearchQuestionIntent intent, int topK)
     {
         IReadOnlyList<RetrievedDocumentChunk> rerankedChunks = chunks;
+        var externalRerank = _options.RerankProvider != "None" && _reranker is not null;
 
-        if (_options.RerankProvider != "None" && _reranker is not null)
+        if (externalRerank && _reranker is not null)
         {
             var query = chunks.FirstOrDefault()?.Query ?? "";
             rerankedChunks = await _reranker.RerankAsync(query, chunks, Math.Max(topK * 2, _options.LocalCandidateCountForRerank));
@@ -41,16 +42,17 @@ public sealed class ResultReranker : IResultReranker
         using (var rerankActivity = EquityLensTelemetry.ActivitySource.StartActivity("rerank"))
         {
             rerankActivity?.SetTag("candidate.count", rerankedChunks.Count);
+            rerankActivity?.SetTag("rerank.external", externalRerank);
             var rankBeforeRerank = rerankedChunks
                 .OrderByDescending(chunk => chunk.Result.RelevanceScore)
                 .Select((chunk, index) => new { chunk.Result.DocumentChunkId, Rank = index + 1 })
                 .ToDictionary(x => x.DocumentChunkId, x => x.Rank);
 
             ranked = rerankedChunks
-                .Select(chunk => new
+                .Select((chunk, index) => new
                 {
                     Chunk = chunk,
-                    ScoreBreakdown = ScoreChunk(chunk, intent),
+                    ScoreBreakdown = ScoreChunk(chunk, intent, externalRerank ? index : (int?)null, rerankedChunks.Count),
                     RankBeforeRerank = rankBeforeRerank[chunk.Result.DocumentChunkId]
                 })
                 .OrderByDescending(x => x.ScoreBreakdown.Final)
@@ -77,6 +79,20 @@ public sealed class ResultReranker : IResultReranker
                     item.RankAfterRerank,
                     "DiscardedByRiskEvidenceFilter",
                     "Risk intent but chunk does not contain explicit risk evidence.",
+                    null));
+                continue;
+            }
+
+            if (item.ScoreBreakdown.Final < _options.MinimumFinalScore)
+            {
+                decisions.Add(new RankingDecision(
+                    item.Chunk,
+                    item.ScoreBreakdown.Final,
+                    item.ScoreBreakdown,
+                    item.RankBeforeRerank,
+                    item.RankAfterRerank,
+                    "DiscardedByMinimumFinalScore",
+                    $"Chunk final score was below MinimumFinalScore {_options.MinimumFinalScore}.",
                     null));
                 continue;
             }
@@ -176,12 +192,14 @@ public sealed class ResultReranker : IResultReranker
         return new RankedSelection(selectedCandidates, decisions);
     }
 
-    private ResearchTraceScoreBreakdown ScoreChunk(RetrievedDocumentChunk chunk, ResearchQuestionIntent intent)
+    private ResearchTraceScoreBreakdown ScoreChunk(RetrievedDocumentChunk chunk, ResearchQuestionIntent intent, int? rerankPosition = null, int totalCount = 0)
     {
         var result = chunk.Result;
         var content = result.Content;
-        var embedding = result.RelevanceScore;
         var externalRerank = !string.Equals(_options.RerankProvider, "None", StringComparison.OrdinalIgnoreCase);
+        var embedding = externalRerank && rerankPosition.HasValue
+            ? 1.0 - (rerankPosition.Value / (double)Math.Max(totalCount, 1)) * 0.5
+            : result.RelevanceScore;
         var primaryBonus = externalRerank ? 0 : (chunk.SourceRole == "Primary" ? _options.PrimarySourceBonus : 0);
         var riskEvidenceBonus = 0d;
         var financialEvidenceBonus = 0d;
@@ -200,6 +218,11 @@ public sealed class ResultReranker : IResultReranker
                 case ResearchQuestionIntent.Financial:
                     financialEvidenceBonus = ContainsAny(content, ["revenue", "gross margin", "operating margin", "eps", "income statement", "balance sheet", "cash flow", "營收", "毛利", "營業利益率", "每股盈餘", "現金流", "綜合損益表", "資產負債表"]) ? _options.FinancialEvidenceBonus : 0;
                     outlookEvidenceBonus = ContainsAny(content, ["outlook", "guidance", "demand", "margin", "展望", "業績展望", "管理層"]) ? _options.OutlookEvidenceBonus * 0.67 : 0;
+                    // cash-flow / capex extra bonus for financial questions
+                    if (ContainsAny(content, ["現金流量表", "statement of cash flows", "cash flow", "自由現金流量", "capital expenditure", "資本支出", "operating activities", "營運活動"]))
+                    {
+                        financialEvidenceBonus = Math.Max(financialEvidenceBonus, _options.FinancialEvidenceBonus);
+                    }
                     break;
                 case ResearchQuestionIntent.Outlook:
                     outlookEvidenceBonus = ContainsAny(content, ["outlook", "guidance", "future outlook", "business outlook", "management expects", "management expect", "demand", "key messages", "展望", "業績展望", "管理層預期", "管理層展望", "需求", "重點訊息"]) ? _options.OutlookEvidenceBonus : 0;
@@ -217,6 +240,10 @@ public sealed class ResultReranker : IResultReranker
                 break;
             case ResearchQuestionIntent.Financial:
                 agendaPenalty = ContainsAny(content, ["Agenda", "會議議程"]) ? -_options.AgendaPenalty : 0;
+                if (agendaPenalty == 0 && ContainsAny(content, ["資金貸與", "盈餘分派", "股利政策", "資金貸與他人"]))
+                {
+                    agendaPenalty = -_options.AgendaPenalty * 0.6;
+                }
                 safeHarborPenalty = IsSafeHarbor(content) ? -_options.SafeHarborPenalty : 0;
                 break;
             case ResearchQuestionIntent.Outlook:

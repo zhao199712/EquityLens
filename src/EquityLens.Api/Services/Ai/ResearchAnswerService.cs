@@ -2,6 +2,8 @@ using System.Diagnostics;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Observability;
 using EquityLens.Api.Services.Ai.Retrieval;
+using EquityLens.Api.Services.CurrentUser;
+using EquityLens.Api.Services.Research;
 using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Services.Ai;
@@ -9,6 +11,18 @@ namespace EquityLens.Api.Services.Ai;
 public sealed class ResearchAnswerService : IResearchAnswerService
 {
     private const string InsufficientEvidenceAnswer = "目前提供的資料不足以回答此問題。";
+    private static readonly string[] InsufficientEvidencePatterns =
+    [
+        "資料不足以回答",
+        "無法回答",
+        "資料中沒有",
+        "文件中沒有",
+        "文件均未提及",
+        "not enough information",
+        "cannot answer",
+        "do not have enough information"
+    ];
+    private static readonly char[] SentenceSeparators = ['。', '！', '？', '\n', '；'];
     private readonly IIntentDetector _intentDetector;
     private readonly IRetrievalPlanner _retrievalPlanner;
     private readonly IDocumentRetriever _documentRetriever;
@@ -19,6 +33,8 @@ public sealed class ResearchAnswerService : IResearchAnswerService
     private readonly IChunkContentCleaner _contentCleaner;
     private readonly IAnswerGenerator _answerGenerator;
     private readonly RetrievalOptions _options;
+    private readonly IResearchRunTraceService _traceService;
+    private readonly ICurrentUserContext _currentUser;
     private readonly ILogger<ResearchAnswerService> _logger;
 
     public ResearchAnswerService(
@@ -32,6 +48,8 @@ public sealed class ResearchAnswerService : IResearchAnswerService
         IChunkContentCleaner contentCleaner,
         IAnswerGenerator answerGenerator,
         IOptions<RetrievalOptions> options,
+        IResearchRunTraceService traceService,
+        ICurrentUserContext currentUser,
         ILogger<ResearchAnswerService> logger)
     {
         _intentDetector = intentDetector;
@@ -44,6 +62,8 @@ public sealed class ResearchAnswerService : IResearchAnswerService
         _contentCleaner = contentCleaner;
         _answerGenerator = answerGenerator;
         _options = options.Value;
+        _traceService = traceService;
+        _currentUser = currentUser;
         _logger = logger;
     }
 
@@ -52,21 +72,30 @@ public sealed class ResearchAnswerService : IResearchAnswerService
         using var askActivity = EquityLensTelemetry.ActivitySource.StartActivity("research.ask");
         var totalStopwatch = Stopwatch.StartNew();
         var outcome = "error";
+        var steps = new List<StepInput>();
 
         try
         {
             var searchStopwatch = Stopwatch.StartNew();
             var topK = Math.Clamp(request.TopK <= 0 ? _options.DefaultTopK : request.TopK, 1, _options.MaxTopK);
+            var temperature = Math.Clamp(request.Temperature, 0.0, 1.0);
 
             IntentDetectionResult intentDetection;
+            var intentStart = DateTime.UtcNow;
             using (var intentActivity = EquityLensTelemetry.ActivitySource.StartActivity("intent.detect"))
             {
                 intentDetection = _intentDetector.Detect(request.Question);
                 intentActivity?.SetTag("intent", intentDetection.Selected.ToString());
                 intentActivity?.SetStatus(ActivityStatusCode.Ok);
             }
+            steps.Add(new StepInput("IntentDetection",
+                $"{{\"questionLength\":{request.Question.Length}}}",
+                $"{{\"intent\":\"{intentDetection.Selected}\",\"confidence\":{intentDetection.Confidence}}}",
+                (long)(DateTime.UtcNow - intentStart).TotalMilliseconds,
+                intentStart, DateTime.UtcNow, null));
 
             ResearchRetrievalStrategy strategy;
+            var planStart = DateTime.UtcNow;
             using (var planActivity = EquityLensTelemetry.ActivitySource.StartActivity("retrieval.plan"))
             {
                 strategy = _retrievalPlanner.BuildPlan(request.Question, request.RetrievalMode, request.DocumentType, topK);
@@ -74,17 +103,29 @@ public sealed class ResearchAnswerService : IResearchAnswerService
                 planActivity?.SetTag("retrieval.search_count", strategy.Searches.Count);
                 planActivity?.SetStatus(ActivityStatusCode.Ok);
             }
+            steps.Add(new StepInput("RetrievalPlanning",
+                $"{{\"mode\":\"{request.RetrievalMode}\",\"documentType\":\"{request.DocumentType}\",\"topK\":{topK}}}",
+                $"{{\"mode\":\"{strategy.Mode}\",\"searchCount\":{strategy.Searches.Count}}}",
+                (long)(DateTime.UtcNow - planStart).TotalMilliseconds,
+                planStart, DateTime.UtcNow, null));
 
             var chunks = new List<RetrievedDocumentChunk>();
             var webChunks = new List<RetrievedDocumentChunk>();
             var shouldSearchWeb = request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalAndWeb;
 
+            var localRetrievalStart = DateTime.UtcNow;
             if (request.SourcePolicy is SourcePolicy.LocalOnly or SourcePolicy.LocalThenWeb or SourcePolicy.LocalAndWeb)
             {
                 var localChunks = await _documentRetriever.RetrieveAsync(strategy, request.Ticker, cancellationToken);
                 chunks.AddRange(localChunks);
             }
+            steps.Add(new StepInput("LocalRetrieval",
+                $"{{\"ticker\":\"{request.Ticker}\",\"searches\":{strategy.Searches.Count}}}",
+                $"{{\"candidateCount\":{chunks.Count}}}",
+                (long)(DateTime.UtcNow - localRetrievalStart).TotalMilliseconds,
+                localRetrievalStart, DateTime.UtcNow, null));
 
+            var webRetrievalStart = DateTime.UtcNow;
             if (shouldSearchWeb)
             {
                 var braveResults = await _webRetriever.RetrieveWebAsync(
@@ -94,13 +135,23 @@ public sealed class ResearchAnswerService : IResearchAnswerService
                     cancellationToken);
                 webChunks.AddRange(braveResults);
             }
+            if (shouldSearchWeb)
+            {
+                steps.Add(new StepInput("WebRetrieval",
+                    $"{{\"candidateCount\":{_options.WebSearchCandidateCount}}}",
+                    $"{{\"resultCount\":{webChunks.Count}}}",
+                    (long)(DateTime.UtcNow - webRetrievalStart).TotalMilliseconds,
+                    webRetrievalStart, DateTime.UtcNow, null));
+            }
 
             searchStopwatch.Stop();
 
-            LogCandidateThreshold(chunks);
+            var candidateGateDecisions = new List<RankingDecision>();
+            var eligibleChunks = ApplyCandidateScoreGate(chunks, candidateGateDecisions);
 
             var rerankStopwatch = Stopwatch.StartNew();
-            var rankedLocal = await RankLocalBySearchPathAsync(chunks, strategy, intentDetection.Selected, request.Question, topK);
+            var rankStart = DateTime.UtcNow;
+            var rankedLocal = await RankLocalBySearchPathAsync(eligibleChunks, strategy, intentDetection.Selected, request.Question, topK);
 
             if (request.SourcePolicy == SourcePolicy.LocalThenWeb && rankedLocal.SelectedResults.Count == 0 && webChunks.Count == 0)
             {
@@ -119,12 +170,18 @@ public sealed class ResearchAnswerService : IResearchAnswerService
             }
 
             var mergedChunks = MergeLocalAndWeb(rankedLocal.SelectedResults, selectedWeb, topK);
-            var mergedDecisions = rankedLocal.Decisions
+            var mergedDecisions = candidateGateDecisions
+                .Concat(rankedLocal.Decisions)
                 .Concat(selectedWeb.Select(w => new RankingDecision(
                     w, null, null, null, null, "Selected", "Web search result selected into context.", null)))
                 .ToList();
 
             rerankStopwatch.Stop();
+            steps.Add(new StepInput("Rerank",
+                $"{{\"candidateCount\":{eligibleChunks.Count},\"webCandidateCount\":{webChunks.Count},\"topK\":{topK}}}",
+                $"{{\"selectedCount\":{rankedLocal.SelectedResults.Count},\"mergedCount\":{mergedChunks.Count}}}",
+                rerankStopwatch.ElapsedMilliseconds,
+                rankStart, DateTime.UtcNow, null));
 
             if (mergedChunks.Count == 0)
             {
@@ -136,21 +193,34 @@ public sealed class ResearchAnswerService : IResearchAnswerService
                     searchStopwatch.ElapsedMilliseconds,
                     rerankStopwatch.ElapsedMilliseconds,
                     totalStopwatch,
-                    askActivity);
+                    askActivity,
+                    steps);
             }
 
-            var selectedChunks = mergedChunks.Select((chunk, index) => new SelectedChunk(chunk, index + 1)).ToList();
+            var contextSelection = _contextSelector.Select(
+                new RankedSelection(mergedChunks, mergedDecisions),
+                intentDetection.Selected,
+                strategy);
+            var selectedChunks = contextSelection.Chunks;
             var contextText = _contextFormatter.Format(selectedChunks);
 
             var generationStopwatch = Stopwatch.StartNew();
+            var genStart = DateTime.UtcNow;
             var answerResult = await _answerGenerator.GenerateAsync(
                 request.Question,
                 contextText,
-                null,
-                request.Temperature,
+                contextSelection.RetrievalNote,
+                temperature,
                 selectedChunks.Count,
                 cancellationToken);
             generationStopwatch.Stop();
+
+            var hasCitationIssue = answerResult.CitationValidationFailed || answerResult.RetryCount > 0;
+            steps.Add(new StepInput("AnswerGeneration",
+                $"{{\"chunkCount\":{selectedChunks.Count},\"temperature\":{temperature},\"hasRetrievalNote\":{contextSelection.RetrievalNote is not null}}}",
+                $"{{\"model\":\"{answerResult.Model}\",\"promptTokens\":{answerResult.PromptTokens},\"completionTokens\":{answerResult.CompletionTokens},\"retryCount\":{answerResult.RetryCount},\"citationFailed\":{answerResult.CitationValidationFailed}}}",
+                generationStopwatch.ElapsedMilliseconds,
+                genStart, DateTime.UtcNow, null));
 
             var now = DateTimeOffset.UtcNow;
             var citations = selectedChunks
@@ -166,12 +236,13 @@ public sealed class ResearchAnswerService : IResearchAnswerService
                     Url: selected.Chunk.Url,
                     PublishedAt: selected.Chunk.PublishedAt,
                     RetrievedAt: selected.Chunk.RetrievedAt ?? now,
-                    QuoteText: BuildQuoteText(selected.Chunk.Result.Content),
+                    QuoteText: BuildRelevantQuoteText(selected.Chunk.Result.Content, request.Question, intentDetection.Selected),
                     RelevanceScore: selected.Chunk.Result.RelevanceScore))
                 .ToList();
 
             totalStopwatch.Stop();
 
+            var status = DetermineAnswerStatus(answerResult.Answer, answerResult.CitationValidationFailed);
             var rankingDecisions = mergedDecisions;
             var trace = request.Debug
                 ? BuildTrace(
@@ -183,7 +254,8 @@ public sealed class ResearchAnswerService : IResearchAnswerService
                     rerankStopwatch.ElapsedMilliseconds,
                     generationStopwatch.ElapsedMilliseconds,
                     totalStopwatch.ElapsedMilliseconds,
-                    null)
+                    contextSelection.RetrievalNote,
+                    finalCitationCount: citations.Count)
                 : null;
 
             var allDecisions = rankingDecisions.Count;
@@ -193,27 +265,32 @@ public sealed class ResearchAnswerService : IResearchAnswerService
             askActivity?.SetTag("source_policy", request.SourcePolicy.ToString());
             askActivity?.SetTag("candidate.count", allDecisions);
             askActivity?.SetTag("selected.count", selectedCount);
+            askActivity?.SetTag("final.citation_count", citations.Count);
             askActivity?.SetTag("llm.provider", _answerGenerator.Provider);
             askActivity?.SetTag("llm.model", answerResult.Model);
             askActivity?.SetStatus(ActivityStatusCode.Ok);
-            outcome = "success";
+            outcome = $"success_{status}";
 
             _logger.LogInformation(
-                "Research ask completed with {CandidateCount} candidates, {SelectedCount} selected, source policy {SourcePolicy}, model {Model}, duration {DurationMs} ms",
+                "Research ask completed with {CandidateCount} candidates, {SelectedCount} selected, {FinalCount} citations, source policy {SourcePolicy}, model {Model}, status {Status}, duration {DurationMs} ms",
                 allDecisions,
                 selectedCount,
+                citations.Count,
                 request.SourcePolicy,
                 answerResult.Model,
+                status,
                 totalStopwatch.ElapsedMilliseconds);
 
-            return new ResearchAskResponse(
+            var response = new ResearchAskResponse(
                 Question: request.Question,
                 Answer: answerResult.Answer,
                 Model: answerResult.Model,
                 RetrievalStrategy: strategy,
                 Citations: citations,
                 Trace: trace,
-                Status: answerResult.CitationValidationFailed ? "CitationValidationFailed" : "Answered");
+                Status: status);
+
+            return await PersistTraceAndReturnAsync(request, response, cancellationToken, askActivity, steps);
         }
         catch (Exception exception)
         {
@@ -230,10 +307,180 @@ public sealed class ResearchAnswerService : IResearchAnswerService
         }
     }
 
-    private string BuildQuoteText(string content)
+    private string BuildRelevantQuoteText(string content, string question, ResearchQuestionIntent intent)
     {
         var cleaned = _contentCleaner.Clean(content);
-        return cleaned.Length <= 300 ? cleaned : cleaned[..300] + "...";
+        var sentences = SplitSentences(cleaned);
+        if (sentences.Count <= 2)
+        {
+            return cleaned.Length <= 300 ? cleaned : cleaned[..300] + "...";
+        }
+
+        var relevanceKeywords = GetRelevanceKeywords(question, intent);
+        var scoredSentences = sentences
+            .Select((s, i) => (Text: s, Index: i, Score: relevanceKeywords.Count(k => s.Contains(k, StringComparison.OrdinalIgnoreCase))))
+            .ToList();
+
+        var maxScore = scoredSentences.Max(s => s.Score);
+        if (maxScore == 0)
+        {
+            return cleaned.Length <= 300 ? cleaned : cleaned[..300] + "...";
+        }
+
+        var high = scoredSentences
+            .Where(s => s.Score == maxScore)
+            .OrderBy(s => s.Index)
+            .ToList();
+
+        var result = string.Join("", high.Select(s => s.Text));
+        if (result.Length < 80 && high.Count >= 1)
+        {
+            var spanStart = Math.Max(0, high[0].Index - 1);
+            var spanEnd = Math.Min(sentences.Count - 1, high[^1].Index + 1);
+            result = string.Join("", sentences.Skip(spanStart).Take(spanEnd - spanStart + 1));
+        }
+
+        result = result.Trim();
+        return result.Length <= 300 ? result : result[..300] + "...";
+    }
+
+    private static List<string> SplitSentences(string text)
+    {
+        var sentences = new List<string>();
+        var start = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (SentenceSeparators.Contains(text[i]))
+            {
+                var sentence = text[start..(i + 1)].Trim();
+                if (sentence.Length > 0)
+                {
+                    sentences.Add(sentence);
+                }
+                start = i + 1;
+            }
+        }
+        if (start < text.Length)
+        {
+            var remaining = text[start..].Trim();
+            if (remaining.Length > 0)
+            {
+                sentences.Add(remaining);
+            }
+        }
+        return sentences;
+    }
+
+    private static IReadOnlyList<string> GetRelevanceKeywords(string question, ResearchQuestionIntent intent)
+    {
+        var keywords = new List<string>();
+        var normalized = question.ToLowerInvariant();
+        if (normalized.Contains("風險") || normalized.Contains("risk"))
+            keywords.AddRange(["風險", "risk", "不確定", "uncertainty", "challenge", "headwind"]);
+        if (normalized.Contains("營收") || normalized.Contains("revenue"))
+            keywords.AddRange(["營收", "revenue", "收入", "毛利", "gross margin"]);
+        if (normalized.Contains("毛利") || normalized.Contains("margin"))
+            keywords.AddRange(["毛利率", "margin", "毛利"]);
+        if (normalized.Contains("現金") || normalized.Contains("cash"))
+            keywords.AddRange(["現金", "cash", "capital", "資本"]);
+        if (normalized.Contains("展望") || normalized.Contains("outlook") || normalized.Contains("guidance"))
+            keywords.AddRange(["展望", "outlook", "guidance", "預期", "expect"]);
+        if (normalized.Contains("匯率") || normalized.Contains("外幣") || normalized.Contains("foreign exchange"))
+            keywords.AddRange(["匯率", "外幣", "foreign exchange", "FX"]);
+        if (keywords.Count == 0)
+        {
+            switch (intent)
+            {
+                case ResearchQuestionIntent.Risk:
+                    keywords.AddRange(["風險", "risk", "不確定", "challenge"]);
+                    break;
+                case ResearchQuestionIntent.Financial:
+                    keywords.AddRange(["營收", "revenue", "毛利", "margin", "現金流", "cash flow"]);
+                    break;
+                case ResearchQuestionIntent.Outlook:
+                    keywords.AddRange(["展望", "outlook", "guidance", "預期"]);
+                    break;
+            }
+        }
+        return keywords.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static string DetermineAnswerStatus(string answer, bool citationValidationFailed)
+    {
+        if (citationValidationFailed)
+        {
+            return "CitationValidationFailed";
+        }
+
+        if (InsufficientEvidencePatterns.Any(p => answer.Contains(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "InsufficientEvidence";
+        }
+
+        return "Answered";
+    }
+
+    private async Task<ResearchAskResponse> PersistTraceAndReturnAsync(
+        ResearchAskRequest request,
+        ResearchAskResponse response,
+        CancellationToken cancellationToken,
+        Activity? activity = null,
+        IReadOnlyList<StepInput>? steps = null)
+    {
+        try
+        {
+            var runId = await _traceService.PersistAskAsync(
+                _currentUser.UserId, request, response, steps, cancellationToken);
+            activity?.SetTag("research.run_id", runId.ToString());
+            return response with { ResearchRunId = runId };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to persist research ask trace for ticker {Ticker}", request.Ticker);
+            activity?.SetTag("trace.persistence_failed", true);
+            return response;
+        }
+    }
+
+    private IReadOnlyList<RetrievedDocumentChunk> ApplyCandidateScoreGate(
+        IReadOnlyList<RetrievedDocumentChunk> chunks,
+        List<RankingDecision> decisions)
+    {
+        if (chunks.Count == 0)
+        {
+            return chunks;
+        }
+
+        var eligible = new List<RetrievedDocumentChunk>();
+        foreach (var chunk in chunks)
+        {
+            if (chunk.Result.RelevanceScore < _options.MinimumCandidateScore)
+            {
+                decisions.Add(new RankingDecision(
+                    chunk,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "DiscardedByMinimumCandidateScore",
+                    $"Chunk relevance score was below MinimumCandidateScore {_options.MinimumCandidateScore}.",
+                    null));
+                continue;
+            }
+
+            eligible.Add(chunk);
+        }
+
+        if (decisions.Count > 0)
+        {
+            _logger.LogInformation(
+                "{BelowThresholdCount} of {CandidateCount} candidates discarded by MinimumCandidateScore {MinimumCandidateScore}",
+                decisions.Count,
+                chunks.Count,
+                _options.MinimumCandidateScore);
+        }
+
+        return eligible;
     }
 
     private async Task<RankedSelection> RankLocalBySearchPathAsync(
@@ -483,31 +730,57 @@ public sealed class ResearchAnswerService : IResearchAnswerService
         return "unknown";
     }
 
-    private static IReadOnlyList<RetrievedDocumentChunk> MergeLocalAndWeb(
+    private IReadOnlyList<RetrievedDocumentChunk> MergeLocalAndWeb(
         IReadOnlyList<RetrievedDocumentChunk> local,
         IReadOnlyList<RetrievedDocumentChunk> web,
         int topK)
     {
-        if (web.Count == 0) return local;
-        if (local.Count == 0) return web;
-
         var merged = new List<RetrievedDocumentChunk>();
-        merged.AddRange(local);
-        merged.AddRange(web);
-        return merged;
-    }
+        var seenChunkIds = new HashSet<Guid>();
+        var seenContent = new HashSet<string>(StringComparer.Ordinal);
 
-    private void LogCandidateThreshold(IReadOnlyList<RetrievedDocumentChunk> chunks)
-    {
-        var belowCandidateThreshold = chunks.Count(chunk => chunk.Result.RelevanceScore < _options.MinimumCandidateScore);
-        if (belowCandidateThreshold > 0)
+        void AddIfUnique(RetrievedDocumentChunk chunk)
         {
-            _logger.LogInformation(
-                "{BelowThresholdCount} of {CandidateCount} candidates below MinimumCandidateScore {MinimumCandidateScore}; logged only",
-                belowCandidateThreshold,
-                chunks.Count,
-                _options.MinimumCandidateScore);
+            if (merged.Count >= topK)
+            {
+                return;
+            }
+
+            if (!seenChunkIds.Add(chunk.Result.DocumentChunkId))
+            {
+                return;
+            }
+
+            if (!seenContent.Add(chunk.Result.Content))
+            {
+                return;
+            }
+
+            merged.Add(chunk);
         }
+
+        foreach (var chunk in local)
+        {
+            AddIfUnique(chunk);
+        }
+
+        var webAdded = 0;
+        foreach (var chunk in web)
+        {
+            if (webAdded >= _options.WebContextLimit)
+            {
+                break;
+            }
+
+            var before = merged.Count;
+            AddIfUnique(chunk);
+            if (merged.Count > before)
+            {
+                webAdded++;
+            }
+        }
+
+        return merged;
     }
 
     private async Task<ResearchAskResponse> BuildInsufficientEvidenceResponseAsync(
@@ -518,7 +791,8 @@ public sealed class ResearchAnswerService : IResearchAnswerService
         long searchMs,
         long rerankMs,
         Stopwatch totalStopwatch,
-        Activity? askActivity)
+        Activity? askActivity,
+        IReadOnlyList<StepInput>? steps = null)
     {
         await Task.CompletedTask;
         totalStopwatch.Stop();
@@ -545,10 +819,11 @@ public sealed class ResearchAnswerService : IResearchAnswerService
                 rerankMs,
                 0,
                 totalStopwatch.ElapsedMilliseconds,
-                null)
+                null,
+                finalCitationCount: 0)
             : null;
 
-        return new ResearchAskResponse(
+        var response = new ResearchAskResponse(
             Question: request.Question,
             Answer: InsufficientEvidenceAnswer,
             Model: string.Empty,
@@ -556,6 +831,8 @@ public sealed class ResearchAnswerService : IResearchAnswerService
             Citations: [],
             Trace: trace,
             Status: "InsufficientEvidence");
+
+        return await PersistTraceAndReturnAsync(request, response, CancellationToken.None, askActivity, steps);
     }
 
     private static ResearchTrace BuildTrace(
@@ -567,7 +844,8 @@ public sealed class ResearchAnswerService : IResearchAnswerService
         long rerankMs,
         long generationMs,
         long totalMs,
-        string? retrievalNote)
+        string? retrievalNote,
+        int finalCitationCount = 0)
     {
         var candidateCount = decisions.Count;
         var selectedCount = decisions.Count(d => d.Decision == "Selected");
@@ -604,7 +882,7 @@ public sealed class ResearchAnswerService : IResearchAnswerService
             TraceId: Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N"),
             Intent: new ResearchTraceIntent(intent.Selected.ToString(), intent.MatchedKeywords, intent.Confidence),
             RetrievalStrategy: strategy,
-            Retrieval: new ResearchTraceRetrievalSummary(candidateCount, selectedCount, candidateCount - selectedCount, discardedByReason),
+            Retrieval: new ResearchTraceRetrievalSummary(candidateCount, selectedCount, candidateCount - selectedCount, finalCitationCount, discardedByReason),
             TokenUsage: new ResearchTraceTokenUsage(answerResult.Model, answerResult.PromptTokens, answerResult.CompletionTokens, answerResult.PromptTokens + answerResult.CompletionTokens),
             Results: traceResults,
             LatencyMs: new ResearchTraceLatency(searchMs, rerankMs, generationMs, totalMs),

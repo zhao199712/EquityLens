@@ -452,3 +452,355 @@ When adding a new DAG node:
 
 When only changing an agent implementation behind an existing interface, workflow contract usually does not need to change.
 
+
+---
+
+## Session Update - 2026-07-01 Continued
+
+This update summarizes the follow-up V3 Agent Platform work completed after the original handoff. The runtime has moved from a CriticReview-only vertical slice toward a reusable persisted DAG workflow skeleton with a second workflow proving extension works.
+
+## Runtime Skeleton Now Implemented
+
+The V3 Agent Platform backend now has these runtime layers:
+
+```text
+AgentRunsController
+ -> AgentRunService
+    -> workflow provider registry
+    -> AgentWorkflowPlanner
+    -> AgentRunGraphValidator
+    -> IAgentNodeHandler.ExecuteAsync(...)
+    -> BlackboardJson / OutputJson / AgentRunEvent / AgentToolCall persistence
+```
+
+Core concepts:
+
+- Workflow: task flow definition, persisted as `WorkflowDefinitionJson` with `workflowType`, `version`, `nodes`, and `edges`.
+- Provider: creates initial `AgentRun`, `AgentRunNode` list, workflow definition JSON, and initial blackboard JSON.
+- Planner: reads persisted workflow definition nodes/edges and derives execution order via topological sort.
+- Validator: checks planned node keys match persisted `AgentRun.Nodes` exactly before execution.
+- Handler: executes one node and writes node output / blackboard updates.
+- BlackboardJson: shared state between nodes.
+- OutputJson: final workflow output.
+
+## Important New / Changed Files
+
+```text
+src/EquityLens.Api/Services/Agents/IAgentNodeHandler.cs
+src/EquityLens.Api/Services/Agents/AgentNodeExecutionContext.cs
+src/EquityLens.Api/Services/Agents/AgentNodeJson.cs
+src/EquityLens.Api/Services/Agents/CriticReviewNodeHandlers.cs
+src/EquityLens.Api/Services/Agents/DraftRevisionNodeHandlers.cs
+src/EquityLens.Api/Services/Agents/AgentWorkflowDefinitionProvider.cs
+src/EquityLens.Api/Services/Agents/AgentWorkflowPlanner.cs
+src/EquityLens.Api/Services/Agents/AgentRunGraphValidator.cs
+```
+
+Updated existing files:
+
+```text
+src/EquityLens.Api/Services/Agents/AgentRunService.cs
+src/EquityLens.Api/Services/Agents/IAgentRunService.cs
+src/EquityLens.Api/Services/Agents/AgentWorkflowConstants.cs
+src/EquityLens.Api/Services/Agents/AgentBlackboardContracts.cs
+src/EquityLens.Api/Services/Agents/AgentNodeContracts.cs
+src/EquityLens.Api/Contracts/Agents/AgentRunContracts.cs
+src/EquityLens.Api/Controllers/AgentRunsController.cs
+src/EquityLens.Api/Program.cs
+AGENTS.md
+```
+
+## Handler Extraction Completed
+
+`AgentRunService` no longer contains CriticReview node business logic. Node execution is delegated through:
+
+```csharp
+public interface IAgentNodeHandler
+{
+    string NodeType { get; }
+    Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default);
+}
+```
+
+Current CriticReview handlers:
+
+```text
+LoadResearchRunNodeHandler
+CheckEvidenceNodeHandler
+CritiqueAnswerNodeHandler
+FinalizeCriticReportNodeHandler
+```
+
+Current DraftRevision handlers:
+
+```text
+LoadCriticReviewRunNodeHandler
+DraftRevisedAnswerNodeHandler
+FinalizeRevisionNodeHandler
+```
+
+`AgentRunService` still owns orchestration concerns:
+
+- run creation
+- run/node status transitions
+- event timeline
+- retry/cancel
+- handler lookup
+- failure capture
+- output persistence orchestration
+
+## Workflow Provider Registry Completed
+
+`AgentRunService` now receives all workflow providers:
+
+```csharp
+IEnumerable<IAgentWorkflowDefinitionProvider>
+```
+
+and builds an in-memory registry keyed by `WorkflowType`:
+
+```text
+CriticReview  -> CriticReviewWorkflowDefinitionProvider
+DraftRevision -> DraftRevisionWorkflowDefinitionProvider
+```
+
+Provider duplicate registration fails with a clear error:
+
+```text
+Workflow provider '{workflowType}' is registered more than once.
+```
+
+Missing provider fails with:
+
+```text
+Workflow provider '{workflowType}' is not registered.
+```
+
+## Workflow Planner Completed
+
+`AgentWorkflowPlanner` derives execution order from persisted workflow definition JSON:
+
+```json
+{
+  "nodes": [...],
+  "edges": [...]
+}
+```
+
+It performs topological sort and validates:
+
+- empty nodes
+- duplicate node ids
+- edges referencing unknown `from` node
+- edges referencing unknown `to` node
+- cycles
+
+`AgentRunService` no longer hardcodes node order.
+
+## Run Graph Validator Completed
+
+`AgentRunGraphValidator` validates consistency between:
+
+```text
+workflowDefinitionJson planned node keys
+<-> persisted AgentRun.Nodes
+```
+
+It fails clearly when:
+
+- a persisted run is missing a planned node
+- persisted nodes contain duplicate `NodeKey`
+- persisted nodes contain an extra node not present in workflow definition
+
+This prevents provider/migration/runtime bugs from surfacing as vague `First(...)` failures.
+
+## Current Workflows
+
+### 1. CriticReview
+
+```text
+loadResearchRun
+ -> checkEvidence
+ -> critiqueAnswer
+ -> finalizeCriticReport
+```
+
+Purpose: review an existing V2 `ResearchRun` answer and evidence quality.
+
+Still deterministic. No LLM / MAF integration yet.
+
+### 2. DraftRevision
+
+```text
+loadCriticReviewRun
+ -> draftRevisedAnswer
+ -> finalizeRevision
+```
+
+Purpose: prove the runtime supports a second workflow and a second agent type.
+
+Input:
+
+```text
+criticReviewRunId
+```
+
+Behavior:
+
+- loads a completed owner-visible CriticReview `AgentRun`
+- reads source answer and critic output from the source run blackboard/output
+- produces deterministic revised answer output
+- finalizes `OutputJson`
+
+Current output shape:
+
+```json
+{
+  "sourceAnswer": "...",
+  "revisedAnswer": "...",
+  "revisionSummary": "...",
+  "revisionRequired": true,
+  "appliedRecommendation": "..."
+}
+```
+
+Current endpoint:
+
+```text
+POST /api/agent-runs/draft-revision
+```
+
+Request contract:
+
+```csharp
+public sealed record CreateDraftRevisionRequest(Guid CriticReviewRunId);
+```
+
+## API Surface
+
+Current AgentRuns endpoints:
+
+```text
+POST /api/agent-runs/critic-review
+POST /api/agent-runs/draft-revision
+GET  /api/agent-runs
+GET  /api/agent-runs/{runId}
+POST /api/agent-runs/{runId}/retry
+POST /api/agent-runs/{runId}/cancel
+```
+
+## Retry Behavior Update
+
+Retry reset is now provider-driven. `AgentRunService` no longer assumes all workflows use `researchRunId`.
+
+Current reset path:
+
+```text
+run.WorkflowType -> provider registry -> provider.CreateInitialBlackboardJson(sourceId)
+```
+
+`GetSourceRunId(...)` currently supports:
+
+```text
+researchRunId
+criticReviewRunId
+```
+
+## AGENTS.md Updated
+
+`AGENTS.md` now includes a `V3 Agent Platform Skeleton` section with:
+
+- core runtime files
+- concepts
+- current workflows
+- execution path
+- extension rules
+
+Future agents should read that section before changing the V3 runtime.
+
+## Current Test Status
+
+Command run:
+
+```text
+dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
+```
+
+Latest result:
+
+```text
+Passed: 243
+Failed: 0
+Skipped: 0
+```
+
+Known warning still present:
+
+```text
+NU1510 System.Text.Encoding.CodePages
+```
+
+This warning pre-existed this work.
+
+## New Test Coverage Added
+
+Agent runtime tests now cover:
+
+- handler coverage for CriticReview node types
+- handler coverage for DraftRevision node types
+- missing node handler fails the run
+- provider registry missing provider error
+- provider registry duplicate provider error
+- workflow planner topological ordering
+- workflow planner malformed edge errors
+- workflow planner cycle detection
+- run graph validator matching/missing/duplicate/extra nodes
+- service-level missing persisted node failure
+- DraftRevision successful workflow execution from completed CriticReview
+- DraftRevision missing source CriticReview failure
+- controller validation for DraftRevision request
+
+Existing CriticReview tests remain green.
+
+## Rules For Future Expansion
+
+When adding a workflow:
+
+1. Add workflow/agent/node constants in `AgentWorkflowConstants.cs`.
+2. Add blackboard keys/fields if shared state changes.
+3. Add node input/output contracts in `AgentNodeContracts.cs`.
+4. Add an `IAgentWorkflowDefinitionProvider` implementation.
+5. Add one `IAgentNodeHandler` per node.
+6. Register provider and handlers in `Program.cs`.
+7. Add service/API method or generic create endpoint.
+8. Add tests for workflow definition contract, planner order, handler coverage, blackboard/output contract, failure/retry behavior, and user isolation.
+
+Do not hardcode execution order in `AgentRunService`; represent order with DAG edges in `WorkflowDefinitionJson` and let `AgentWorkflowPlanner` sort.
+
+Keep deterministic implementations for tests. Add LLM or MAF behind interfaces after runtime contracts are stable.
+
+## Next Recommended Backend Steps
+
+### 1. Add DraftRevision Retry Test
+
+Retry was generalized to provider-driven blackboard reset, but the strongest explicit test is still for CriticReview failure retry. Add a DraftRevision-specific retry test, ideally using a flaky DraftRevision handler or a source state that fails then succeeds.
+
+### 2. Add DraftRevision User Isolation Tests
+
+`LoadCriticReviewRunNodeHandler` filters source run by `run.UserId`. Add explicit tests confirming a user cannot draft-revise another user's CriticReview run.
+
+### 3. Consider Generic Create Workflow API Later
+
+Current API exposes explicit endpoints:
+
+```text
+critic-review
+draft-revision
+```
+
+This is acceptable for now. A generic create endpoint can come later after more workflows exist.
+
+### 4. Add LLM Draft/Critic Behind Interfaces Later
+
+Do not introduce MAF or LLM yet unless explicitly requested. The next clean LLM seam is still behind agent/handler interfaces, with deterministic implementations retained for tests.
+

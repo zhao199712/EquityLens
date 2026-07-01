@@ -1,0 +1,74 @@
+namespace EquityLens.Api.Services.Agents;
+
+public sealed record LoadResearchRunNodeInput(Guid ResearchRunId);
+
+public sealed record LoadResearchRunNodeOutput(
+    string Ticker,
+    string Status,
+    int CitationCount,
+    int CandidateCount,
+    bool HasAnswer);
+
+public sealed record CheckEvidenceNodeInput(
+    string? Ticker,
+    string SourceStatus,
+    int CitationCount,
+    int CandidateCount);
+
+public sealed record CheckEvidenceNodeOutput(
+    int CitationCount,
+    int CandidateCount,
+    string SourceStatus,
+    int FindingCount,
+    IReadOnlyList<CriticFinding> Findings);
+
+public sealed record FinalizeCriticReportNodeInput(
+    string OverallSeverity,
+    bool RequiresRevision,
+    bool RequiresMoreEvidence,
+    string? RouteBackTo,
+    string RecommendedNextAction);
+
+public sealed record FinalizeCriticReportNodeOutput(
+    string Summary,
+    string OverallSeverity,
+    IReadOnlyList<CriticFinding> Findings,
+    bool RequiresRevision,
+    bool RequiresMoreEvidence,
+    string? RouteBackTo,
+    string RecommendedNextAction,
+    string? SuggestedAnswerRevision);
+
+public sealed record LoadCriticReviewRunNodeInput(Guid CriticReviewRunId);
+
+public sealed record LoadCriticReviewRunNodeOutput(
+    Guid CriticReviewRunId,
+    string SourceWorkflowType,
+    string SourceStatus,
+    bool HasOutput,
+    bool RequiresRevision);
+
+public sealed record DraftRevisedAnswerNodeInput(
+    string? Ticker,
+    string? Question,
+    string? SourceAnswer,
+    bool RequiresRevision,
+    string? SuggestedAnswerRevision);
+
+public sealed record DraftRevisedAnswerNodeOutput(
+    string? SourceAnswer,
+    string RevisedAnswer,
+    string RevisionSummary,
+    bool RevisionRequired,
+    string? AppliedRecommendation);
+
+public sealed record FinalizeRevisionNodeInput(
+    bool RevisionRequired,
+    string RevisionSummary);
+
+public sealed record FinalizeRevisionNodeOutput(
+    string? SourceAnswer,
+    string RevisedAnswer,
+    string RevisionSummary,
+    bool RevisionRequired,
+    string? AppliedRecommendation);

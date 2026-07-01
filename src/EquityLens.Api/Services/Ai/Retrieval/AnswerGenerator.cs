@@ -79,7 +79,8 @@ public sealed class AnswerGenerator : IAnswerGenerator
                 context,
                 chatResult.Content,
                 invalidCitationIndices,
-                retrievalNote);
+                retrievalNote,
+                maxValidCitationIndex);
 
             using var retryActivity = EquityLensTelemetry.ActivitySource.StartActivity("llm.complete.retry");
             retryActivity?.SetTag("llm.provider", _chatCompletion.Provider);
@@ -202,7 +203,8 @@ Rules:
         string context,
         string previousAnswer,
         IReadOnlyList<int> invalidIndices,
-        string? retrievalNote)
+        string? retrievalNote,
+        int maxValidCitationIndex)
     {
         var noteSection = string.IsNullOrWhiteSpace(retrievalNote)
             ? ""
@@ -225,7 +227,7 @@ Rules:
 
 問題：{question}
 
-你剛才的回答引用了不存在的編號 {invalidList}。請根據以上文件重新回答，並確保只使用編號 [1] 到 [{invalidIndices.Max()}] 之間的引用。如果文件中沒有相關資訊，請明確說明。
+你剛才的回答引用了不存在的編號 {invalidList}。請根據以上文件重新回答，並確保只使用編號 [1] 到 [{maxValidCitationIndex}] 之間的引用。如果文件中沒有相關資訊，請明確說明。
 """;
     }
 }

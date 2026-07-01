@@ -69,3 +69,6 @@ src/EquityLens.Api/exports/
 
 # Playwright MCP
 .playwright-mcp/
+
+# Local opencode session notes
+.opencode-sessions/

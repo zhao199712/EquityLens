@@ -24,13 +24,12 @@ public sealed class ContextSelector : IContextSelector
         ResearchRetrievalStrategy strategy)
     {
         var belowFinalThreshold = ranked.Decisions.Count(d =>
-            d.Decision == "Selected" && d.AdjustedScore < _options.MinimumFinalScore);
+            d.Decision == "DiscardedByMinimumFinalScore");
         if (belowFinalThreshold > 0)
         {
             _logger.LogInformation(
-                "{BelowThresholdCount} of {SelectedCount} selected results are below MinimumFinalScore {MinimumFinalScore}; currently logged only",
+                "{BelowThresholdCount} candidates discarded by MinimumFinalScore {MinimumFinalScore}",
                 belowFinalThreshold,
-                ranked.SelectedResults.Count,
                 _options.MinimumFinalScore);
         }
 

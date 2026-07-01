@@ -2,6 +2,7 @@ using System.Diagnostics;
 using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Services.Ai;
+using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Services.Documents;
 using EquityLens.Api.Services.Research;
 using Microsoft.AspNetCore.Authorization;
@@ -20,22 +21,23 @@ public sealed class ResearchController : ControllerBase
     private readonly IDocumentSearchService _documentSearchService;
     private readonly IResearchPreflightService _researchPreflightService;
     private readonly IResearchAnswerService _researchAnswerService;
+    private readonly IResearchRunTraceService _traceService;
+    private readonly ICurrentUserContext _currentUser;
     private readonly ILogger<ResearchController> _logger;
 
-    /// <summary>
-    /// 初始化研究資料控制器。
-    /// </summary>
-    /// <param name="documentSearchService">文件語意檢索服務。</param>
-    /// <param name="researchAnswerService">AI 問答服務。</param>
     public ResearchController(
         IDocumentSearchService documentSearchService,
         IResearchPreflightService researchPreflightService,
         IResearchAnswerService researchAnswerService,
+        IResearchRunTraceService traceService,
+        ICurrentUserContext currentUser,
         ILogger<ResearchController> logger)
     {
         _documentSearchService = documentSearchService;
         _researchPreflightService = researchPreflightService;
         _researchAnswerService = researchAnswerService;
+        _traceService = traceService;
+        _currentUser = currentUser;
         _logger = logger;
     }
 
@@ -107,6 +109,27 @@ public sealed class ResearchController : ControllerBase
 
         var response = await _researchAnswerService.AskAsync(request, cancellationToken);
         return Ok(response);
+    }
+
+    [HttpGet("runs")]
+    public async Task<ActionResult<IReadOnlyList<ResearchRunSummaryDto>>> ListRuns(
+        [FromQuery] int limit = 50,
+        [FromQuery] string? ticker = null,
+        [FromQuery] string? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var runs = await _traceService.ListAsync(_currentUser.UserId, limit, ticker, status, cancellationToken);
+        return Ok(runs);
+    }
+
+    [HttpGet("runs/{runId:guid}")]
+    public async Task<ActionResult<ResearchRunDetailDto>> GetRunDetail(
+        Guid runId,
+        CancellationToken cancellationToken = default)
+    {
+        var detail = await _traceService.GetByIdAsync(runId, _currentUser.UserId, cancellationToken);
+        if (detail is null) return NotFound();
+        return Ok(detail);
     }
 
     private static bool IsValidDocumentType(string? documentType, bool allowAuto)

@@ -8,7 +8,7 @@ public sealed class IntentDetector : IIntentDetector
     {
         var normalized = question.ToLowerInvariant();
         var riskKeywords = new[] { "風險", "risk", "challenge", "uncertainty", "headwind", "不確定", "挑戰" };
-        var financialKeywords = new[] { "營收", "revenue", "毛利", "gross margin", "operating margin", "eps", "每股盈餘", "現金流", "cash flow", "income statement", "balance sheet", "損益", "資產負債", "財務" };
+        var financialKeywords = new[] { "營收", "revenue", "毛利", "gross margin", "operating margin", "eps", "每股盈餘", "現金流", "cash flow", "資本支出", "capital expenditure", "capex", "income statement", "balance sheet", "損益", "資產負債", "財務" };
         var outlookKeywords = new[] { "展望", "outlook", "guidance", "forecast", "management expects", "management expect", "future outlook", "business outlook", "管理層預期", "管理層展望" };
 
         var matchedRiskKeywords = FindMatches(normalized, riskKeywords);

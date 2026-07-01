@@ -23,6 +23,8 @@ public sealed class SourcePolicyJsonConverter : JsonConverter<SourcePolicy>
             {
                 return mode;
             }
+
+            throw new JsonException($"Invalid sourcePolicy '{value}'. Allowed values: {string.Join(", ", Enum.GetNames<SourcePolicy>())}.");
         }
 
         if (reader.TokenType == JsonTokenType.Number)
@@ -30,7 +32,7 @@ public sealed class SourcePolicyJsonConverter : JsonConverter<SourcePolicy>
             throw new JsonException("sourcePolicy must be a string, not a number.");
         }
 
-        return SourcePolicy.LocalOnly;  // default for null
+        return SourcePolicy.LocalOnly;
     }
 
     public override void Write(Utf8JsonWriter writer, SourcePolicy value, JsonSerializerOptions options)
