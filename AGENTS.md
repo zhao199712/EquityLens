@@ -32,6 +32,10 @@
 - XML doc comments in controllers/services are in Traditional Chinese; keep that style for new public API comments.
 - `Program.cs` registers `Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)` at the top because TWSE/MOPS sources use Big5 on Linux.
 - Do not edit `bin`, `obj`, build output, or generated EF snapshot content except through migrations.
+- **Before writing code that reads or writes data**, grep for existing entities, services, and DTOs that touch the same domain. Understand how data flows through the system before adding new code. Do not assume data structures exist without verification.
+- **Background tasks must create new DI scopes.** When using `Task.Run`, `BackgroundService`, or any off-request-scope execution with scoped services (`DbContext`, `ICurrentUserContext`, etc.), always inject `IServiceScopeFactory` and create a new scope. Never capture scoped DI services in closures or lambdas that outlive the request.
+- **User isolation is mandatory.** Every database query that reads or writes user-scoped data MUST include a `UserId` filter. This applies to List, Detail, Update, Delete, Retry, Cancel — no exceptions. Use error code `"forbidden"` with 403 status for unauthorized access.
+- **Retry/Cancel must verify full lifecycle.** When implementing retry or cancel for background operations, verify the complete flow: state reset + action trigger (retry must re-execute the workflow, cancel must stop the runner). For cancel, use `CancellationTokenSource` and check cancellation between each unit of work. Test the happy path end-to-end before shipping.
 
 ## Document Search / Retrieval
 - Backend calls a **DB function** `search_document_chunks(...)`, not inline LINQ. The function is defined in an EF migration (`Migrations/20260624164307_*`) and lives on the ParadeDB instance.
@@ -92,6 +96,7 @@ dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --chunk-confere
 - `.playwright-mcp/`
 - PDF originals unless explicitly intended as fixtures
 - Benchmark output in `exports/benchmark/`
+- **Before every `git add`**, run `git diff --cached --name-only` and verify no file matches this list. If a forbidden file is staged, unstage it with `git restore --staged <file>`.
 
 ## Verification
 - Backend build: `dotnet build src/EquityLens.Api/EquityLens.Api.csproj`
