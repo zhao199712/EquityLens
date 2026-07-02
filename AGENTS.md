@@ -8,7 +8,7 @@
 - Backend API: `src/EquityLens.Api` (net10.0, nullable enabled, implicit usings). DI in `Program.cs:540` lines.
 - Frontend: `src/EquityLens.Web` (Vue 3 + Vite + TypeScript). Entrypoints: `src/main.ts`, `src/App.vue`, `src/router/index.ts`.
 - Three separate Vite prototypes in `Kimi_Agent_*/` — not the main app, do not touch.
-- Infra: `docker compose up -d` — ParadeDB (pg18, port 5432), TimescaleDB pg16 sidecar (5433), Redis, Garage S3.
+- Infra: `docker compose up -d` — ParadeDB (pg18, port 5432), Redis, Garage S3, and Garage WebUI.
 - Data-pipeline scripts: `scripts/` has shell/Python/.NET helpers for annual-report ingestion.
 - No integration tests; all tests are xUnit unit tests with hand-written fakes (no Moq/NSubstitute).
 

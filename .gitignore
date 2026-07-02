@@ -62,6 +62,7 @@ annual-report-chunks*.jsonl
 0050_prices.csv
 mops_response_full.html
 法說會/
+src/EquityLens.Api/filings/**/*.pdf
 
 # Exports
 exports/
