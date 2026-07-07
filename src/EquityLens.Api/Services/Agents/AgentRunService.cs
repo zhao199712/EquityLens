@@ -15,6 +15,8 @@ public sealed class AgentRunService : IAgentRunService
     private readonly IReadOnlyDictionary<string, IAgentWorkflowDefinitionProvider> _workflowProviders;
     private readonly IAgentWorkflowPlanner _workflowPlanner;
     private readonly IAgentRunGraphValidator _runGraphValidator;
+    private readonly IAgentRunStateMachine _runStateMachine;
+    private readonly IAgentNodeStateMachine _nodeStateMachine;
     private readonly IReadOnlyDictionary<string, IAgentNodeHandler> _nodeHandlers;
     private readonly ILogger<AgentRunService> _logger;
 
@@ -23,6 +25,8 @@ public sealed class AgentRunService : IAgentRunService
         IEnumerable<IAgentWorkflowDefinitionProvider> workflowProviders,
         IAgentWorkflowPlanner workflowPlanner,
         IAgentRunGraphValidator runGraphValidator,
+        IAgentRunStateMachine runStateMachine,
+        IAgentNodeStateMachine nodeStateMachine,
         IEnumerable<IAgentNodeHandler> nodeHandlers,
         ILogger<AgentRunService> logger)
     {
@@ -30,6 +34,8 @@ public sealed class AgentRunService : IAgentRunService
         _workflowProviders = CreateWorkflowProviderRegistry(workflowProviders);
         _workflowPlanner = workflowPlanner;
         _runGraphValidator = runGraphValidator;
+        _runStateMachine = runStateMachine;
+        _nodeStateMachine = nodeStateMachine;
         _nodeHandlers = nodeHandlers.ToDictionary(x => x.NodeType, StringComparer.Ordinal);
         _logger = logger;
     }
@@ -148,7 +154,7 @@ public sealed class AgentRunService : IAgentRunService
         if (run is null) return null;
         if (run.Status != AgentRunStatuses.Failed) return MapSummary(run);
 
-        run.Status = AgentRunStatuses.Pending;
+        _runStateMachine.ResetForRetry(run);
         run.ErrorMessage = null;
         run.OutputJson = null;
         var provider = GetWorkflowProvider(run.WorkflowType);
@@ -157,7 +163,7 @@ public sealed class AgentRunService : IAgentRunService
         run.CompletedAtUtc = null;
         foreach (var node in run.Nodes)
         {
-            node.Status = AgentNodeStatuses.Pending;
+            _nodeStateMachine.ResetForRetry(node);
             node.InputJson = null;
             node.OutputJson = null;
             node.ErrorMessage = null;
@@ -183,7 +189,7 @@ public sealed class AgentRunService : IAgentRunService
         if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Cancelled)
             return MapSummary(run);
 
-        run.Status = AgentRunStatuses.Cancelled;
+        _runStateMachine.Transition(run, AgentRunStatuses.Cancelled);
         run.CompletedAtUtc = DateTime.UtcNow;
         AddEvent(run, null, AgentEventTypes.RunCancelled, "Run cancelled by user.", null);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -200,7 +206,7 @@ public sealed class AgentRunService : IAgentRunService
 
         try
         {
-            run.Status = AgentRunStatuses.Running;
+            _runStateMachine.Transition(run, AgentRunStatuses.Running);
             run.StartedAtUtc ??= DateTime.UtcNow;
             AddEvent(run, null, AgentEventTypes.RunStarted, $"{run.WorkflowType} run started.", null);
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -212,7 +218,7 @@ public sealed class AgentRunService : IAgentRunService
                 await RunNodeAsync(run, nodeKey, cancellationToken);
             }
 
-            run.Status = AgentRunStatuses.Succeeded;
+            _runStateMachine.Transition(run, AgentRunStatuses.Succeeded);
             run.CompletedAtUtc = DateTime.UtcNow;
             AddEvent(run, null, AgentEventTypes.RunSucceeded, $"{run.WorkflowType} run succeeded.", null);
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -220,7 +226,10 @@ public sealed class AgentRunService : IAgentRunService
         catch (Exception exception)
         {
             _logger.LogError(exception, "Agent run {AgentRunId} failed", runId);
-            run.Status = AgentRunStatuses.Failed;
+            if (run.Status != AgentRunStatuses.Failed)
+            {
+                _runStateMachine.Transition(run, AgentRunStatuses.Failed);
+            }
             run.ErrorMessage = exception.Message;
             run.CompletedAtUtc = DateTime.UtcNow;
             AddEvent(run, null, AgentEventTypes.RunFailed, $"{run.WorkflowType} run failed.", new { error = exception.Message });
@@ -234,9 +243,9 @@ public sealed class AgentRunService : IAgentRunService
         var decisionPayload = new { decision = "RunNode", nextNodeId = nodeKey, reason = "Previous dependencies are satisfied.", mode = "Deterministic" };
         AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Supervisor selected {nodeKey}.", decisionPayload);
 
-        node.Status = AgentNodeStatuses.Ready;
+        _nodeStateMachine.Transition(node, AgentNodeStatuses.Ready);
         AddEvent(run, node, AgentEventTypes.NodeReady, $"Node {nodeKey} is ready.", null);
-        node.Status = AgentNodeStatuses.Running;
+        _nodeStateMachine.Transition(node, AgentNodeStatuses.Running);
         node.StartedAtUtc = DateTime.UtcNow;
         AddEvent(run, node, AgentEventTypes.NodeStarted, $"Node {nodeKey} started.", null);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -252,7 +261,7 @@ public sealed class AgentRunService : IAgentRunService
             await handler.ExecuteAsync(new AgentNodeExecutionContext(_dbContext, run, node, AddEvent), cancellationToken);
 
             stopwatch.Stop();
-            node.Status = AgentNodeStatuses.Succeeded;
+            _nodeStateMachine.Transition(node, AgentNodeStatuses.Succeeded);
             node.CompletedAtUtc = DateTime.UtcNow;
             node.DurationMs = stopwatch.ElapsedMilliseconds;
             AddEvent(run, node, AgentEventTypes.NodeCompleted, $"Node {nodeKey} completed.", new { durationMs = node.DurationMs });
@@ -261,7 +270,7 @@ public sealed class AgentRunService : IAgentRunService
         catch (Exception exception)
         {
             stopwatch.Stop();
-            node.Status = AgentNodeStatuses.Failed;
+            _nodeStateMachine.Transition(node, AgentNodeStatuses.Failed);
             node.ErrorMessage = exception.Message;
             node.CompletedAtUtc = DateTime.UtcNow;
             node.DurationMs = stopwatch.ElapsedMilliseconds;

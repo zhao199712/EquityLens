@@ -173,6 +173,8 @@ builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, CriticReviewWorkflo
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, DraftRevisionWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowPlanner, AgentWorkflowPlanner>();
 builder.Services.AddScoped<IAgentRunGraphValidator, AgentRunGraphValidator>();
+builder.Services.AddSingleton<IAgentRunStateMachine, AgentRunStateMachine>();
+builder.Services.AddSingleton<IAgentNodeStateMachine, AgentNodeStateMachine>();
 builder.Services.AddScoped<IWorkflowPolicyEvaluator, CriticReviewPolicyEvaluator>();
 builder.Services.AddScoped<IAgentNodeHandler, LoadResearchRunNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, BuildEvidencePacketNodeHandler>();

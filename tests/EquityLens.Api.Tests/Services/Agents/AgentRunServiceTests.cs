@@ -392,6 +392,8 @@ public sealed class AgentRunServiceTests
             [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider()],
             new AgentWorkflowPlanner(),
             new AgentRunGraphValidator(),
+            new AgentRunStateMachine(),
+            new AgentNodeStateMachine(),
             failingHandlers,
             NullLogger<AgentRunService>.Instance);
 
@@ -512,6 +514,8 @@ public sealed class AgentRunServiceTests
             [],
             new AgentWorkflowPlanner(),
             new AgentRunGraphValidator(),
+            new AgentRunStateMachine(),
+            new AgentNodeStateMachine(),
             CreateCriticReviewHandlers(
                 new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid(), candidateCount: 3)),
                 new DeterministicCriticReviewAgent()),
@@ -533,6 +537,8 @@ public sealed class AgentRunServiceTests
             [new CriticReviewWorkflowDefinitionProvider(), new CriticReviewWorkflowDefinitionProvider()],
             new AgentWorkflowPlanner(),
             new AgentRunGraphValidator(),
+            new AgentRunStateMachine(),
+            new AgentNodeStateMachine(),
             CreateCriticReviewHandlers(
                 new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid(), candidateCount: 3)),
                 new DeterministicCriticReviewAgent()),
@@ -554,7 +560,7 @@ public sealed class AgentRunServiceTests
             new CheckEvidenceNodeHandler(),
             new CritiqueAnswerNodeHandler(new DeterministicCriticReviewAgent())
         ];
-        var service = new AgentRunService(db, [new CriticReviewWorkflowDefinitionProvider()], new AgentWorkflowPlanner(), new AgentRunGraphValidator(), handlers, NullLogger<AgentRunService>.Instance);
+        var service = new AgentRunService(db, [new CriticReviewWorkflowDefinitionProvider()], new AgentWorkflowPlanner(), new AgentRunGraphValidator(), new AgentRunStateMachine(), new AgentNodeStateMachine(), handlers, NullLogger<AgentRunService>.Instance);
 
         var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
 
@@ -577,6 +583,8 @@ public sealed class AgentRunServiceTests
             [new MissingFinalizeNodeWorkflowDefinitionProvider()],
             new AgentWorkflowPlanner(),
             new AgentRunGraphValidator(),
+            new AgentRunStateMachine(),
+            new AgentNodeStateMachine(),
             CreateCriticReviewHandlers(
                 new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3)),
                 new DeterministicCriticReviewAgent()),
@@ -773,6 +781,8 @@ public sealed class AgentRunServiceTests
             [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider()],
             new AgentWorkflowPlanner(),
             new AgentRunGraphValidator(),
+            new AgentRunStateMachine(),
+            new AgentNodeStateMachine(),
             handlers,
             NullLogger<AgentRunService>.Instance);
     }
