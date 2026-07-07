@@ -28,6 +28,7 @@ public class AgentRunConfiguration : IEntityTypeConfiguration<AgentRun>
         builder.HasMany(x => x.Events).WithOne(e => e.Run).HasForeignKey(e => e.AgentRunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(x => x.ToolCalls).WithOne(t => t.Run).HasForeignKey(t => t.AgentRunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(x => x.Feedback).WithOne(f => f.Run).HasForeignKey(f => f.AgentRunId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<AppUser>().WithMany(u => u.AgentRuns).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.WorkflowType, x.CreatedAtUtc });

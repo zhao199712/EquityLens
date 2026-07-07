@@ -1,151 +1,243 @@
-# EquityLens V3 Agent Platform Handoff - 2026-07-01
+# EquityLens V3 Agent Platform Handoff - Updated 2026-07-07
 
 ## Purpose
 
-This handoff summarizes the V3 Agent Platform backend skeleton work completed on 2026-07-01. It is intended as compressed context for opening a fresh coding session without losing the decisions, implementation state, and next steps.
+This handoff is compressed context for the current V3 Agent Platform state. The original 2026-07-01 skeleton has been advanced into a backend-only product chain with persisted DAG runtime, LLM CriticReview, LLM DraftRevision, policy routing, tool-call observability, and E2E validation.
 
 ## Current Goal
 
-Build the V3 Agent Platform incrementally. The first slice intentionally uses only a `CriticAgent` workflow to validate the platform runtime before expanding to full multi-agent orchestration.
-
-The first backend workflow is:
+Build V3 Agent Platform incrementally while keeping the runtime debuggable and testable. The current backend chain validates:
 
 ```text
-loadResearchRun
- -> checkEvidence
- -> critiqueAnswer
- -> finalizeCriticReport
+ResearchRun
+ -> CriticReview
+ -> policy decision
+ -> DraftRevision
 ```
 
-This is a DAG/workflow graph definition implemented by the product runtime, not by MAF.
+MAF is still deferred. The product runtime owns persisted DAG execution for now.
 
-## Key Architecture Decision
-
-The first version does not use the MAF runtime yet.
+## Runtime Architecture
 
 Current execution path:
 
 ```text
 AgentRunsController
  -> AgentRunService
-    -> loadResearchRun
-    -> checkEvidence
-    -> ICriticReviewAgent.CritiqueAsync
-    -> finalizeCriticReport
+    -> workflow provider registry
+    -> AgentWorkflowPlanner
+    -> AgentRunGraphValidator
+    -> IAgentNodeHandler.ExecuteAsync(...)
+    -> BlackboardJson / OutputJson / AgentRunEvent / AgentToolCall persistence
 ```
 
-MAF is intentionally deferred. The current purpose is to validate our own product runtime first:
+Core runtime concepts:
 
-- `AgentRun`
-- `AgentRunNode`
-- `AgentRunEvent`
-- `AgentToolCall`
-- `BlackboardJson`
-- `OutputJson`
-- workflow definition persistence
-- retry/cancel semantics
-- user isolation
-- node timeline/debuggability
+- Workflow: persisted task graph definition in `WorkflowDefinitionJson`.
+- Provider: creates initial `AgentRun`, `AgentRunNode` list, workflow definition JSON, and initial blackboard JSON.
+- Planner: derives execution order from DAG edges via topological sort.
+- Validator: verifies persisted node keys match planned node keys exactly.
+- Handler: executes one node and writes node output / blackboard updates.
+- Blackboard: shared JSON state between nodes.
+- Policy evaluator: deterministic backend routing decision seam.
+- Tool call: persisted external/tool/model call observability.
 
-Future MAF integration should happen behind seams, for example:
+## Current Workflows
+
+### CriticReview
 
 ```text
-ICriticReviewAgent -> MafCriticReviewAgent
+loadResearchRun
+ -> buildEvidencePacket
+ -> checkEvidence
+ -> critiqueAnswer
+ -> finalizeCriticReport
 ```
 
-or later:
+Purpose: review an existing V2 `ResearchRun` answer and evidence quality.
+
+Current behavior:
+
+- `loadResearchRun`: loads V2 `ResearchRunDetailDto` via `IResearchRunTraceService` and writes `researchRun`, `answer`, `citations`, `steps`, and `candidates` to blackboard.
+- `buildEvidencePacket`: converts raw trace shape into stable `evidencePacket` contract.
+- `checkEvidence`: deterministic evidence/citation checks from `evidencePacket`.
+- `critiqueAnswer`: calls `ICriticReviewAgent`; production DI uses `LlmCriticReviewAgent`.
+- `finalizeCriticReport`: combines critic result with `CriticReviewPolicyEvaluator` decision.
+
+### DraftRevision
 
 ```text
-IAgentWorkflowRunner -> MafAgentWorkflowRunner
+loadCriticReviewRun
+ -> draftRevisedAnswer
+ -> finalizeRevision
 ```
 
-## Why Start With Only CriticAgent
+Purpose: revise an answer based on a completed owner-visible CriticReview run.
 
-The complete V3 vision includes Supervisor, state machine, MoE routing, DAG execution, blackboard, multiple agents, critic loop, and final answer generation. Implementing all of that at once makes failures hard to isolate.
+Current behavior:
 
-The `CriticReview` workflow is a vertical slice. It consumes existing V2 `ResearchRun` data and validates whether the V3 runtime can persist, execute, observe, fail, retry, and produce a stable output contract.
+- `loadCriticReviewRun`: loads completed CriticReview `AgentRun` for the same user.
+- `draftRevisedAnswer`: calls `IDraftRevisionAgent`; production DI uses `LlmDraftRevisionAgent` when revision is required.
+- `finalizeRevision`: writes final DraftRevision output.
 
-It validates:
+## Agent Implementations
 
-- run creation
-- node execution
-- node status/timing/error capture
-- event timeline
-- tool call logging
-- blackboard read/write
-- output contract
-- failure handling
-- retry handling
-- user isolation
+### Critic Agent
 
-## Contract Layers
-
-Three contract layers are now separated.
-
-### 1. Workflow / DAG Contract
-
-Defines graph structure: workflow type, version, nodes, and edges.
-
-Main file:
-
-```text
-src/EquityLens.Api/Services/Agents/AgentWorkflowConstants.cs
-```
-
-Important constants:
+Production:
 
 ```csharp
-AgentWorkflowTypes.CriticReview
-AgentTypes.Critic
-CriticReviewWorkflow.Version
-CriticReviewNodeKeys.*
-CriticReviewNodeTypes.*
+ICriticReviewAgent -> LlmCriticReviewAgent
 ```
 
-Current DAG:
+Tests:
+
+```csharp
+ICriticReviewAgent -> DeterministicCriticReviewAgent / fakes
+```
+
+`LlmCriticReviewAgent` uses `IChatCompletionService` with:
+
+```text
+ResponseFormat = JsonObject
+Temperature = 0.1
+MaxTokens = 4096
+```
+
+LLM output schema:
 
 ```json
 {
-  "workflowType": "CriticReview",
-  "version": 1,
-  "nodes": [
-    { "id": "loadResearchRun", "type": "LoadResearchRun", "required": true },
-    { "id": "checkEvidence", "type": "CheckEvidence", "required": true },
-    { "id": "critiqueAnswer", "type": "CritiqueAnswer", "required": true },
-    { "id": "finalizeCriticReport", "type": "FinalizeCriticReport", "required": true }
+  "summary": "string",
+  "overallSeverity": "None|Low|Medium|High|Critical",
+  "findings": [
+    {
+      "severity": "Low|Medium|High|Critical",
+      "category": "UnsupportedClaim|WeakCitation|MissingCitation|InsufficientEvidence|Contradiction|Overclaim|MissingAnswer|General",
+      "message": "string",
+      "relatedCitationIndexes": [1],
+      "recommendation": "string"
+    }
   ],
-  "edges": [
-    { "from": "loadResearchRun", "to": "checkEvidence" },
-    { "from": "checkEvidence", "to": "critiqueAnswer" },
-    { "from": "critiqueAnswer", "to": "finalizeCriticReport" }
-  ]
+  "suggestedAnswerRevision": "string|null"
 }
 ```
 
-### 2. Blackboard Contract
+The LLM does not decide platform routing. Routing fields are produced by policy evaluator.
 
-Defines the shared JSON artifacts nodes read/write.
+Important hardening: deterministic evidence findings from `checkEvidence` are merged into the LLM result and cannot be dropped by the LLM.
 
-Main file:
+### Draft Agent
 
-```text
-src/EquityLens.Api/Services/Agents/AgentBlackboardContracts.cs
-```
-
-Includes:
+Production:
 
 ```csharp
-AgentBlackboardKeys
-EvidenceCheckFields
-CriticReviewFields
-CriticFindingFields
-AgentBlackboardContracts.CreateInitialCriticReviewBlackboard(...)
-AgentBlackboardContracts.CreateEvidenceChecks(...)
-AgentBlackboardContracts.CreateFinalOutput(...)
-AgentBlackboardContracts.CreateFinding(...)
+IDraftRevisionAgent -> LlmDraftRevisionAgent
 ```
 
-Core blackboard keys:
+Tests:
+
+```csharp
+IDraftRevisionAgent -> DeterministicDraftRevisionAgent
+```
+
+`LlmDraftRevisionAgent` uses `IChatCompletionService` with JSON output when `RequiresRevision=true`. It short-circuits without LLM when `RequiresRevision=false`.
+
+LLM output schema:
+
+```json
+{
+  "revisedAnswer": "string",
+  "revisionSummary": "string",
+  "appliedRecommendation": "string"
+}
+```
+
+## DeepSeek JSON Output
+
+`ChatCompletionRequest` now supports:
+
+```csharp
+public enum ChatResponseFormat
+{
+    Text,
+    JsonObject
+}
+```
+
+DeepSeek adapter sends:
+
+```json
+"response_format": { "type": "json_object" }
+```
+
+when `ResponseFormat == ChatResponseFormat.JsonObject`.
+
+Gemini currently throws `NotSupportedException` for `JsonObject`; do not silently ignore JSON mode.
+
+## Policy Decision Seam
+
+Added:
+
+```text
+WorkflowPolicyContext
+WorkflowPolicyDecision
+IWorkflowPolicyEvaluator
+CriticReviewPolicyEvaluator
+```
+
+Current CriticReview policy rules:
+
+- Evidence issue categories (`MissingCitation`, `InsufficientEvidence`, `WeakCitation`) route to `ResearchRetrieval`.
+- Other findings route to `AnswerGeneration`.
+- No findings route to `AcceptAnswer`.
+
+Final CriticReview output still contains:
+
+```json
+{
+  "summary": "...",
+  "overallSeverity": "High",
+  "findings": [],
+  "requiresRevision": true,
+  "requiresMoreEvidence": true,
+  "routeBackTo": "ResearchRetrieval",
+  "recommendedNextAction": "CollectMoreEvidenceThenReviseAnswer",
+  "suggestedAnswerRevision": null
+}
+```
+
+## Observability Contract
+
+AgentRun detail exposes:
+
+```text
+run
+nodes
+events
+toolCalls
+feedback
+blackboardJson
+outputJson
+workflowDefinitionJson
+```
+
+Important `agent_tool_call` records now include:
+
+```text
+getResearchRun
+criticReviewLLM
+```
+
+`criticReviewLLM` arguments include ticker, citation/candidate counts, source status, evidence finding count, and answer preview.
+
+`draftRevisionLLM` arguments include ticker, severity, finding count, source answer preview, and applied recommendation baseline.
+
+Both LLM tool calls persist status, duration, result preview, result JSON, and error message on failure.
+
+## Blackboard Contract
+
+Core CriticReview blackboard keys:
 
 ```json
 {
@@ -157,6 +249,7 @@ Core blackboard keys:
   "citations": [],
   "steps": [],
   "candidates": [],
+  "evidencePacket": null,
   "evidenceChecks": {
     "citationCount": 0,
     "candidateCount": 0,
@@ -171,60 +264,69 @@ Core blackboard keys:
 }
 ```
 
-### 3. Node Input/Output Contract
+Core DraftRevision blackboard keys:
 
-Defines the persisted `AgentRunNode.InputJson` and `AgentRunNode.OutputJson` shapes.
-
-Main file:
-
-```text
-src/EquityLens.Api/Services/Agents/AgentNodeContracts.cs
+```json
+{
+  "criticReviewRunId": null,
+  "criticReviewRun": null,
+  "ticker": null,
+  "question": null,
+  "answer": null,
+  "criticFindings": [],
+  "criticReview": null,
+  "revisedAnswer": null,
+  "revisionSummary": null,
+  "appliedRecommendation": null,
+  "finalOutput": null
+}
 ```
 
-Current contracts:
+## Important Files
 
-```csharp
-LoadResearchRunNodeInput
-LoadResearchRunNodeOutput
-CheckEvidenceNodeInput
-CheckEvidenceNodeOutput
-FinalizeCriticReportNodeInput
-FinalizeCriticReportNodeOutput
-```
-
-The `critiqueAnswer` node uses the existing agent-level contracts:
-
-```text
-src/EquityLens.Api/Services/Agents/CriticReviewAgent.cs
-```
-
-```csharp
-CriticReviewInput
-CriticReviewResult
-CriticFinding
-```
-
-## Important Implementation Files
-
-### Backend Runtime
+Runtime and contracts:
 
 ```text
 src/EquityLens.Api/Services/Agents/AgentRunService.cs
 src/EquityLens.Api/Services/Agents/IAgentRunService.cs
+src/EquityLens.Api/Services/Agents/IAgentNodeHandler.cs
+src/EquityLens.Api/Services/Agents/AgentNodeExecutionContext.cs
+src/EquityLens.Api/Services/Agents/AgentNodeJson.cs
 src/EquityLens.Api/Services/Agents/AgentWorkflowConstants.cs
+src/EquityLens.Api/Services/Agents/AgentWorkflowDefinitionProvider.cs
+src/EquityLens.Api/Services/Agents/AgentWorkflowPlanner.cs
+src/EquityLens.Api/Services/Agents/AgentRunGraphValidator.cs
 src/EquityLens.Api/Services/Agents/AgentBlackboardContracts.cs
 src/EquityLens.Api/Services/Agents/AgentNodeContracts.cs
-src/EquityLens.Api/Services/Agents/CriticReviewAgent.cs
+src/EquityLens.Api/Services/Agents/WorkflowPolicyEvaluator.cs
 ```
 
-### API
+Agents and node handlers:
+
+```text
+src/EquityLens.Api/Services/Agents/CriticReviewAgent.cs
+src/EquityLens.Api/Services/Agents/LlmCriticReviewAgent.cs
+src/EquityLens.Api/Services/Agents/DraftRevisionAgent.cs
+src/EquityLens.Api/Services/Agents/CriticReviewNodeHandlers.cs
+src/EquityLens.Api/Services/Agents/DraftRevisionNodeHandlers.cs
+```
+
+Chat JSON mode:
+
+```text
+src/EquityLens.Api/Services/Ai/IChatCompletionService.cs
+src/EquityLens.Api/Services/Ai/DeepSeekChatCompletionService.cs
+src/EquityLens.Api/Services/Ai/GeminiChatCompletionService.cs
+```
+
+API:
 
 ```text
 src/EquityLens.Api/Controllers/AgentRunsController.cs
 src/EquityLens.Api/Contracts/Agents/AgentRunContracts.cs
 ```
 
-### Persistence
+Persistence:
 
 ```text
 src/EquityLens.Api/Data/Entities/AgentRun.cs
@@ -233,452 +335,23 @@ src/EquityLens.Api/Data/Entities/AgentRunEvent.cs
 src/EquityLens.Api/Data/Entities/AgentToolCall.cs
 src/EquityLens.Api/Data/Entities/AgentFeedback.cs
 src/EquityLens.Api/Data/Configurations/AgentRunConfiguration.cs
-src/EquityLens.Api/Data/Configurations/AgentRunNodeConfiguration.cs
-src/EquityLens.Api/Data/Configurations/AgentRunEventConfiguration.cs
 src/EquityLens.Api/Data/Configurations/AgentToolCallConfiguration.cs
-src/EquityLens.Api/Data/Configurations/AgentFeedbackConfiguration.cs
 src/EquityLens.Api/Migrations/20260630071302_AddAgentRunTables.cs
+src/EquityLens.Api/Migrations/20260707091108_FixAgentRunUserRelationship.cs
 ```
 
-### ResearchRun Trace Dependency
-
-```text
-src/EquityLens.Api/Services/Research/IResearchRunTraceService.cs
-src/EquityLens.Api/Services/Research/ResearchRunTraceService.cs
-```
-
-`ResearchRunDetailDto` now exposes `Answer`, and `AgentRunService` writes it to `blackboard["answer"]`.
-
-### Tests
+Tests:
 
 ```text
 tests/EquityLens.Api.Tests/Services/Agents/AgentRunServiceTests.cs
-tests/EquityLens.Api.Tests/Controllers/AgentRunsControllerTests.cs
-```
-
-## What Was Implemented In This Session
-
-### CriticReview Fourth Node
-
-Added `critiqueAnswer` as a real DAG node:
-
-```text
-loadResearchRun -> checkEvidence -> critiqueAnswer -> finalizeCriticReport
-```
-
-`critiqueAnswer` calls:
-
-```csharp
-ICriticReviewAgent.CritiqueAsync(...)
-```
-
-First implementation:
-
-```csharp
-DeterministicCriticReviewAgent
-```
-
-It does not call an LLM yet.
-
-### Final Output Contract
-
-`finalOutput` now includes:
-
-```json
-{
-  "summary": "...",
-  "overallSeverity": "Medium",
-  "findings": [],
-  "requiresRevision": true,
-  "requiresMoreEvidence": true,
-  "routeBackTo": "ResearchRetrieval",
-  "recommendedNextAction": "CollectMoreEvidenceThenReviseAnswer",
-  "suggestedAnswerRevision": "..."
-}
-```
-
-### Workflow Contract Hardening
-
-Added constants and tests to lock:
-
-- workflow type
-- version
-- node list
-- node order
-- node types
-- edges
-- retry preserving workflow definition
-
-### Blackboard Contract Hardening
-
-Added centralized blackboard contract and tests to lock:
-
-- required top-level keys
-- `evidenceChecks` schema
-- `criticReview` schema
-- `finalOutput` schema
-- `blackboard.finalOutput == run.OutputJson`
-
-### Node Contract Hardening
-
-Added typed node contracts for:
-
-- `loadResearchRun` input/output
-- `checkEvidence` input/output
-- `finalizeCriticReport` input/output
-
-`critiqueAnswer` already uses typed agent contracts.
-
-### Failure And Retry Tests
-
-Added `FlakyCriticReviewAgent` test behavior:
-
-- first `critiqueAnswer` call throws `critic unavailable`
-- run becomes `Failed`
-- `critiqueAnswer` node becomes `Failed`
-- `OutputJson` remains null
-- retry replays workflow
-- retry succeeds
-- `WorkflowDefinitionJson` remains unchanged
-
-### Authorization / User Isolation Tests
-
-Added service tests confirming another user cannot:
-
-- retry someone else's run
-- cancel someone else's run
-
-Both return null and do not mutate the owner run.
-
-## Current Test Status
-
-Command run:
-
-```text
-dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
-```
-
-Result:
-
-```text
-Passed: 225
-Failed: 0
-Skipped: 0
-```
-
-Known warning still present:
-
-```text
-NU1510 System.Text.Encoding.CodePages
-```
-
-This warning existed before this slice and was not introduced by the V3 Agent Platform changes.
-
-## Current Git / Workspace State
-
-Branch at time of handoff:
-
-```text
-backend
-```
-
-Remote:
-
-```text
-origin git@github.com:zhao199712/EquityLens.git
-```
-
-Important note: the working tree contains many existing modified and untracked files from broader V3/research work. Do not blindly commit everything unless that is intentional.
-
-For the handoff commit, only this file should be staged/committed unless explicitly requested otherwise.
-
-## Next Recommended Backend Steps
-
-### 1. Extract Node Execution Handlers
-
-Current `AgentRunService` still dispatches nodes internally. Next step should be to move each node into a handler seam:
-
-```csharp
-IAgentNodeHandler
-LoadResearchRunNodeHandler
-CheckEvidenceNodeHandler
-CritiqueAnswerNodeHandler
-FinalizeCriticReportNodeHandler
-```
-
-Goal: prevent `AgentRunService` from becoming a large switch/case god service as more nodes/agents are added.
-
-### 2. Keep MAF Deferred
-
-Do not introduce MAF yet. The next clean MAF insertion point is likely:
-
-```csharp
-ICriticReviewAgent -> MafCriticReviewAgent
-```
-
-not replacing the whole runtime.
-
-### 3. Add Real LLM Critic Later
-
-Once node handlers are extracted and contracts remain green, add an LLM implementation behind:
-
-```csharp
-ICriticReviewAgent
-```
-
-Keep `DeterministicCriticReviewAgent` for tests.
-
-### 4. Then Add A Second Agent
-
-After `CriticReview` is stable, choose one:
-
-- `DraftAgent` for answer revision
-- `ResearchAgent` wrapper for evidence expansion
-
-Avoid adding Supervisor/MoE first. They should come after at least two agents can run independently.
-
-## Rules For Future Expansion
-
-When adding a new DAG node:
-
-1. Add node key/type constants.
-2. Update workflow definition nodes/edges.
-3. Update created `AgentRunNode` list.
-4. Add node input/output records.
-5. Add blackboard keys/fields if it writes shared artifacts.
-6. Add tests for workflow contract.
-7. Add tests for blackboard contract.
-8. Add tests for failure/retry behavior.
-
-When only changing an agent implementation behind an existing interface, workflow contract usually does not need to change.
-
-
----
-
-## Session Update - 2026-07-01 Continued
-
-This update summarizes the follow-up V3 Agent Platform work completed after the original handoff. The runtime has moved from a CriticReview-only vertical slice toward a reusable persisted DAG workflow skeleton with a second workflow proving extension works.
-
-## Runtime Skeleton Now Implemented
-
-The V3 Agent Platform backend now has these runtime layers:
-
-```text
-AgentRunsController
- -> AgentRunService
-    -> workflow provider registry
-    -> AgentWorkflowPlanner
-    -> AgentRunGraphValidator
-    -> IAgentNodeHandler.ExecuteAsync(...)
-    -> BlackboardJson / OutputJson / AgentRunEvent / AgentToolCall persistence
-```
-
-Core concepts:
-
-- Workflow: task flow definition, persisted as `WorkflowDefinitionJson` with `workflowType`, `version`, `nodes`, and `edges`.
-- Provider: creates initial `AgentRun`, `AgentRunNode` list, workflow definition JSON, and initial blackboard JSON.
-- Planner: reads persisted workflow definition nodes/edges and derives execution order via topological sort.
-- Validator: checks planned node keys match persisted `AgentRun.Nodes` exactly before execution.
-- Handler: executes one node and writes node output / blackboard updates.
-- BlackboardJson: shared state between nodes.
-- OutputJson: final workflow output.
-
-## Important New / Changed Files
-
-```text
-src/EquityLens.Api/Services/Agents/IAgentNodeHandler.cs
-src/EquityLens.Api/Services/Agents/AgentNodeExecutionContext.cs
-src/EquityLens.Api/Services/Agents/AgentNodeJson.cs
-src/EquityLens.Api/Services/Agents/CriticReviewNodeHandlers.cs
-src/EquityLens.Api/Services/Agents/DraftRevisionNodeHandlers.cs
-src/EquityLens.Api/Services/Agents/AgentWorkflowDefinitionProvider.cs
-src/EquityLens.Api/Services/Agents/AgentWorkflowPlanner.cs
-src/EquityLens.Api/Services/Agents/AgentRunGraphValidator.cs
-```
-
-Updated existing files:
-
-```text
-src/EquityLens.Api/Services/Agents/AgentRunService.cs
-src/EquityLens.Api/Services/Agents/IAgentRunService.cs
-src/EquityLens.Api/Services/Agents/AgentWorkflowConstants.cs
-src/EquityLens.Api/Services/Agents/AgentBlackboardContracts.cs
-src/EquityLens.Api/Services/Agents/AgentNodeContracts.cs
-src/EquityLens.Api/Contracts/Agents/AgentRunContracts.cs
-src/EquityLens.Api/Controllers/AgentRunsController.cs
-src/EquityLens.Api/Program.cs
-AGENTS.md
-```
-
-## Handler Extraction Completed
-
-`AgentRunService` no longer contains CriticReview node business logic. Node execution is delegated through:
-
-```csharp
-public interface IAgentNodeHandler
-{
-    string NodeType { get; }
-    Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default);
-}
-```
-
-Current CriticReview handlers:
-
-```text
-LoadResearchRunNodeHandler
-CheckEvidenceNodeHandler
-CritiqueAnswerNodeHandler
-FinalizeCriticReportNodeHandler
-```
-
-Current DraftRevision handlers:
-
-```text
-LoadCriticReviewRunNodeHandler
-DraftRevisedAnswerNodeHandler
-FinalizeRevisionNodeHandler
-```
-
-`AgentRunService` still owns orchestration concerns:
-
-- run creation
-- run/node status transitions
-- event timeline
-- retry/cancel
-- handler lookup
-- failure capture
-- output persistence orchestration
-
-## Workflow Provider Registry Completed
-
-`AgentRunService` now receives all workflow providers:
-
-```csharp
-IEnumerable<IAgentWorkflowDefinitionProvider>
-```
-
-and builds an in-memory registry keyed by `WorkflowType`:
-
-```text
-CriticReview  -> CriticReviewWorkflowDefinitionProvider
-DraftRevision -> DraftRevisionWorkflowDefinitionProvider
-```
-
-Provider duplicate registration fails with a clear error:
-
-```text
-Workflow provider '{workflowType}' is registered more than once.
-```
-
-Missing provider fails with:
-
-```text
-Workflow provider '{workflowType}' is not registered.
-```
-
-## Workflow Planner Completed
-
-`AgentWorkflowPlanner` derives execution order from persisted workflow definition JSON:
-
-```json
-{
-  "nodes": [...],
-  "edges": [...]
-}
-```
-
-It performs topological sort and validates:
-
-- empty nodes
-- duplicate node ids
-- edges referencing unknown `from` node
-- edges referencing unknown `to` node
-- cycles
-
-`AgentRunService` no longer hardcodes node order.
-
-## Run Graph Validator Completed
-
-`AgentRunGraphValidator` validates consistency between:
-
-```text
-workflowDefinitionJson planned node keys
-<-> persisted AgentRun.Nodes
-```
-
-It fails clearly when:
-
-- a persisted run is missing a planned node
-- persisted nodes contain duplicate `NodeKey`
-- persisted nodes contain an extra node not present in workflow definition
-
-This prevents provider/migration/runtime bugs from surfacing as vague `First(...)` failures.
-
-## Current Workflows
-
-### 1. CriticReview
-
-```text
-loadResearchRun
- -> checkEvidence
- -> critiqueAnswer
- -> finalizeCriticReport
-```
-
-Purpose: review an existing V2 `ResearchRun` answer and evidence quality.
-
-Still deterministic. No LLM / MAF integration yet.
-
-### 2. DraftRevision
-
-```text
-loadCriticReviewRun
- -> draftRevisedAnswer
- -> finalizeRevision
-```
-
-Purpose: prove the runtime supports a second workflow and a second agent type.
-
-Input:
-
-```text
-criticReviewRunId
-```
-
-Behavior:
-
-- loads a completed owner-visible CriticReview `AgentRun`
-- reads source answer and critic output from the source run blackboard/output
-- produces deterministic revised answer output
-- finalizes `OutputJson`
-
-Current output shape:
-
-```json
-{
-  "sourceAnswer": "...",
-  "revisedAnswer": "...",
-  "revisionSummary": "...",
-  "revisionRequired": true,
-  "appliedRecommendation": "..."
-}
-```
-
-Current endpoint:
-
-```text
-POST /api/agent-runs/draft-revision
-```
-
-Request contract:
-
-```csharp
-public sealed record CreateDraftRevisionRequest(Guid CriticReviewRunId);
+tests/EquityLens.Api.Tests/Services/Agents/AgentWorkflowPlannerTests.cs
+tests/EquityLens.Api.Tests/Services/Agents/AgentRunGraphValidatorTests.cs
+tests/EquityLens.Api.Tests/Services/Agents/LlmCriticReviewAgentTests.cs
+tests/EquityLens.Api.Tests/Services/Agents/LlmDraftRevisionAgentTests.cs
+tests/EquityLens.Api.Tests/Services/Ai/DeepSeekChatCompletionServiceTests.cs
 ```
 
 ## API Surface
-
-Current AgentRuns endpoints:
 
 ```text
 POST /api/agent-runs/critic-review
@@ -689,78 +362,105 @@ POST /api/agent-runs/{runId}/retry
 POST /api/agent-runs/{runId}/cancel
 ```
 
-## Retry Behavior Update
+All endpoints are authorized and use `ICurrentUserContext.UserId` for isolation.
 
-Retry reset is now provider-driven. `AgentRunService` no longer assumes all workflows use `researchRunId`.
+## Database / Migration Notes
 
-Current reset path:
+E2E exposed an EF shadow FK issue where EF tried to insert `AppUserId` into `agent_run`. Fixed by explicitly mapping:
 
-```text
-run.WorkflowType -> provider registry -> provider.CreateInitialBlackboardJson(sourceId)
+```csharp
+builder.HasOne<AppUser>()
+    .WithMany(u => u.AgentRuns)
+    .HasForeignKey(x => x.UserId)
+    .OnDelete(DeleteBehavior.Cascade);
 ```
 
-`GetSourceRunId(...)` currently supports:
+Migration added:
 
 ```text
-researchRunId
-criticReviewRunId
+20260707091108_FixAgentRunUserRelationship
 ```
 
-## AGENTS.md Updated
+It only adds:
 
-`AGENTS.md` now includes a `V3 Agent Platform Skeleton` section with:
+```text
+FK_agent_run_app_user_user_id
+agent_run.user_id -> app_user.id
+```
 
-- core runtime files
-- concepts
-- current workflows
-- execution path
-- extension rules
+No `AppUserId` column is added.
 
-Future agents should read that section before changing the V3 runtime.
+## E2E Validation Results
 
-## Current Test Status
+Happy path query:
 
-Command run:
+```text
+台積電最近年報提到哪些主要營運風險？
+```
+
+Result:
+
+```text
+ResearchRun: Answered
+CriticReview: Succeeded
+CriticReview policy: AcceptAnswer
+```
+
+Weak-evidence query:
+
+```text
+台積電年報是否提到火星殖民計畫以及相關資本支出金額？請列出具體金額。
+```
+
+Result:
+
+```text
+ResearchRun: InsufficientEvidence
+CriticReview: Succeeded
+CriticReview policy: CollectMoreEvidenceThenReviseAnswer
+DraftRevision: Succeeded
+```
+
+Latest DraftRevision E2E output:
+
+```json
+{
+  "sourceAnswer": "目前提供的資料不足以回答此問題。文件中未提及任何關於火星殖民計畫或相關資本支出金額的資訊。",
+  "revisedAnswer": "目前提供的資料中，台積電年報未提及任何關於火星殖民計畫或相關資本支出金額的資訊。",
+  "revisionSummary": "已確認原始回答的資料不足結論，未作實質修改。",
+  "revisionRequired": true,
+  "appliedRecommendation": "補強引用支撐並避免超出來源證據，回答已限制在無相關資訊的結論。"
+}
+```
+
+## Verification Status
+
+Latest commands:
 
 ```text
 dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
+dotnet build src/EquityLens.Api/EquityLens.Api.csproj
+npm run build
+~/.dotnet/tools/dotnet-ef migrations has-pending-model-changes --project src/EquityLens.Api --startup-project src/EquityLens.Api
 ```
 
-Latest result:
+Latest results:
 
 ```text
-Passed: 243
-Failed: 0
-Skipped: 0
+Tests: 262 passed, 0 failed
+Backend build: success
+Frontend build: success
+EF pending model changes: none after migration
 ```
 
-Known warning still present:
+Known warnings:
 
 ```text
 NU1510 System.Text.Encoding.CodePages
+Vite chunk size > 500 kB
 ```
 
-This warning pre-existed this work.
-
-## New Test Coverage Added
-
-Agent runtime tests now cover:
-
-- handler coverage for CriticReview node types
-- handler coverage for DraftRevision node types
-- missing node handler fails the run
-- provider registry missing provider error
-- provider registry duplicate provider error
-- workflow planner topological ordering
-- workflow planner malformed edge errors
-- workflow planner cycle detection
-- run graph validator matching/missing/duplicate/extra nodes
-- service-level missing persisted node failure
-- DraftRevision successful workflow execution from completed CriticReview
-- DraftRevision missing source CriticReview failure
-- controller validation for DraftRevision request
-
-Existing CriticReview tests remain green.
+Both warnings pre-existed this platform work.
 
 ## Rules For Future Expansion
 
@@ -771,36 +471,23 @@ When adding a workflow:
 3. Add node input/output contracts in `AgentNodeContracts.cs`.
 4. Add an `IAgentWorkflowDefinitionProvider` implementation.
 5. Add one `IAgentNodeHandler` per node.
-6. Register provider and handlers in `Program.cs`.
+6. Register provider, handlers, agents, and policy evaluators in `Program.cs`.
 7. Add service/API method or generic create endpoint.
-8. Add tests for workflow definition contract, planner order, handler coverage, blackboard/output contract, failure/retry behavior, and user isolation.
+8. Add tests for workflow definition, planner order, handler coverage, blackboard/output contract, failure/retry behavior, and user isolation.
 
-Do not hardcode execution order in `AgentRunService`; represent order with DAG edges in `WorkflowDefinitionJson` and let `AgentWorkflowPlanner` sort.
+Rules:
 
-Keep deterministic implementations for tests. Add LLM or MAF behind interfaces after runtime contracts are stable.
+- Do not hardcode execution order in `AgentRunService`; keep DAG edges in `WorkflowDefinitionJson`.
+- Keep deterministic implementations/fakes for tests.
+- Keep LLM implementations behind agent interfaces.
+- Do not let LLM decide platform route fields directly; use policy evaluators.
+- Persist every external/model call as `AgentToolCall`.
+- Keep MAF deferred behind seams until product runtime is stable.
 
 ## Next Recommended Backend Steps
 
-### 1. Add DraftRevision Retry Test
-
-Retry was generalized to provider-driven blackboard reset, but the strongest explicit test is still for CriticReview failure retry. Add a DraftRevision-specific retry test, ideally using a flaky DraftRevision handler or a source state that fails then succeeds.
-
-### 2. Add DraftRevision User Isolation Tests
-
-`LoadCriticReviewRunNodeHandler` filters source run by `run.UserId`. Add explicit tests confirming a user cannot draft-revise another user's CriticReview run.
-
-### 3. Consider Generic Create Workflow API Later
-
-Current API exposes explicit endpoints:
-
-```text
-critic-review
-draft-revision
-```
-
-This is acceptable for now. A generic create endpoint can come later after more workflows exist.
-
-### 4. Add LLM Draft/Critic Behind Interfaces Later
-
-Do not introduce MAF or LLM yet unless explicitly requested. The next clean LLM seam is still behind agent/handler interfaces, with deterministic implementations retained for tests.
-
+1. Add explicit `draftRevisionLLM` failure/retry service test with a flaky `IDraftRevisionAgent`.
+2. Add E2E or integration-style coverage for `requiresRevision=false` DraftRevision short-circuit with no LLM call.
+3. Consider introducing a generic workflow create endpoint only after another workflow is added.
+4. Consider scheduler-level conditional routing later: auto-start DraftRevision or ResearchRetrieval based on `WorkflowPolicyDecision`.
+5. Keep frontend work separate unless explicitly requested.

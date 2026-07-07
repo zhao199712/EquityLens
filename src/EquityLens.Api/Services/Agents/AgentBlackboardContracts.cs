@@ -14,12 +14,14 @@ public static class AgentBlackboardKeys
     public const string Citations = "citations";
     public const string Steps = "steps";
     public const string Candidates = "candidates";
+    public const string EvidencePacket = "evidencePacket";
     public const string EvidenceChecks = "evidenceChecks";
     public const string CriticFindings = "criticFindings";
     public const string CriticReview = "criticReview";
     public const string SupervisorDecisions = "supervisorDecisions";
     public const string RevisedAnswer = "revisedAnswer";
     public const string RevisionSummary = "revisionSummary";
+    public const string AppliedRecommendation = "appliedRecommendation";
     public const string FinalOutput = "finalOutput";
 }
 
@@ -75,6 +77,7 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.Citations] = new JsonArray(),
         [AgentBlackboardKeys.Steps] = new JsonArray(),
         [AgentBlackboardKeys.Candidates] = new JsonArray(),
+        [AgentBlackboardKeys.EvidencePacket] = null,
         [AgentBlackboardKeys.EvidenceChecks] = CreateEvidenceChecks(0, 0, string.Empty, new JsonArray()),
         [AgentBlackboardKeys.CriticFindings] = new JsonArray(),
         [AgentBlackboardKeys.CriticReview] = null,
@@ -94,6 +97,7 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.CriticReview] = null,
         [AgentBlackboardKeys.RevisedAnswer] = null,
         [AgentBlackboardKeys.RevisionSummary] = null,
+        [AgentBlackboardKeys.AppliedRecommendation] = null,
         [AgentBlackboardKeys.FinalOutput] = null
     };
 
@@ -110,7 +114,7 @@ public static class AgentBlackboardContracts
         [EvidenceCheckFields.Findings] = findings.DeepClone()
     };
 
-    public static JsonObject CreateFinalOutput(JsonObject criticReview)
+    public static JsonObject CreateFinalOutput(JsonObject criticReview, WorkflowPolicyDecision policyDecision)
     {
         var findings = criticReview[CriticReviewFields.Findings]?.AsArray() ?? [];
         return new JsonObject
@@ -118,10 +122,10 @@ public static class AgentBlackboardContracts
             [CriticReviewFields.Summary] = criticReview[CriticReviewFields.Summary]?.DeepClone(),
             [CriticReviewFields.OverallSeverity] = criticReview[CriticReviewFields.OverallSeverity]?.DeepClone(),
             [CriticReviewFields.Findings] = findings.DeepClone(),
-            [CriticReviewFields.RequiresRevision] = criticReview[CriticReviewFields.RequiresRevision]?.DeepClone(),
-            [CriticReviewFields.RequiresMoreEvidence] = criticReview[CriticReviewFields.RequiresMoreEvidence]?.DeepClone(),
-            [CriticReviewFields.RouteBackTo] = criticReview[CriticReviewFields.RouteBackTo]?.DeepClone(),
-            [CriticReviewFields.RecommendedNextAction] = criticReview[CriticReviewFields.RecommendedNextAction]?.DeepClone(),
+            [CriticReviewFields.RequiresRevision] = policyDecision.RequiresRevision,
+            [CriticReviewFields.RequiresMoreEvidence] = policyDecision.RequiresMoreEvidence,
+            [CriticReviewFields.RouteBackTo] = policyDecision.RouteBackTo,
+            [CriticReviewFields.RecommendedNextAction] = policyDecision.RecommendedNextAction,
             [CriticReviewFields.SuggestedAnswerRevision] = criticReview[CriticReviewFields.SuggestedAnswerRevision]?.DeepClone()
         };
     }

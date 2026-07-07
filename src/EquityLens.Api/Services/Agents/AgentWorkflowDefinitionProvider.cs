@@ -37,6 +37,7 @@ public sealed class CriticReviewWorkflowDefinitionProvider : IAgentWorkflowDefin
     private static List<AgentRunNode> CreateNodes() =>
     [
         new AgentRunNode { Id = Guid.NewGuid(), NodeKey = CriticReviewNodeKeys.LoadResearchRun, NodeType = CriticReviewNodeTypes.LoadResearchRun, Status = AgentNodeStatuses.Pending },
+        new AgentRunNode { Id = Guid.NewGuid(), NodeKey = CriticReviewNodeKeys.BuildEvidencePacket, NodeType = CriticReviewNodeTypes.BuildEvidencePacket, Status = AgentNodeStatuses.Pending },
         new AgentRunNode { Id = Guid.NewGuid(), NodeKey = CriticReviewNodeKeys.CheckEvidence, NodeType = CriticReviewNodeTypes.CheckEvidence, Status = AgentNodeStatuses.Pending },
         new AgentRunNode { Id = Guid.NewGuid(), NodeKey = CriticReviewNodeKeys.CritiqueAnswer, NodeType = CriticReviewNodeTypes.CritiqueAnswer, Status = AgentNodeStatuses.Pending },
         new AgentRunNode { Id = Guid.NewGuid(), NodeKey = CriticReviewNodeKeys.FinalizeCriticReport, NodeType = CriticReviewNodeTypes.FinalizeCriticReport, Status = AgentNodeStatuses.Pending }
@@ -49,13 +50,15 @@ public sealed class CriticReviewWorkflowDefinitionProvider : IAgentWorkflowDefin
         ["nodes"] = new JsonArray
         {
             new JsonObject { ["id"] = CriticReviewNodeKeys.LoadResearchRun, ["type"] = CriticReviewNodeTypes.LoadResearchRun, ["required"] = true },
+            new JsonObject { ["id"] = CriticReviewNodeKeys.BuildEvidencePacket, ["type"] = CriticReviewNodeTypes.BuildEvidencePacket, ["required"] = true },
             new JsonObject { ["id"] = CriticReviewNodeKeys.CheckEvidence, ["type"] = CriticReviewNodeTypes.CheckEvidence, ["required"] = true },
             new JsonObject { ["id"] = CriticReviewNodeKeys.CritiqueAnswer, ["type"] = CriticReviewNodeTypes.CritiqueAnswer, ["required"] = true },
             new JsonObject { ["id"] = CriticReviewNodeKeys.FinalizeCriticReport, ["type"] = CriticReviewNodeTypes.FinalizeCriticReport, ["required"] = true }
         },
         ["edges"] = new JsonArray
         {
-            new JsonObject { ["from"] = CriticReviewNodeKeys.LoadResearchRun, ["to"] = CriticReviewNodeKeys.CheckEvidence },
+            new JsonObject { ["from"] = CriticReviewNodeKeys.LoadResearchRun, ["to"] = CriticReviewNodeKeys.BuildEvidencePacket },
+            new JsonObject { ["from"] = CriticReviewNodeKeys.BuildEvidencePacket, ["to"] = CriticReviewNodeKeys.CheckEvidence },
             new JsonObject { ["from"] = CriticReviewNodeKeys.CheckEvidence, ["to"] = CriticReviewNodeKeys.CritiqueAnswer },
             new JsonObject { ["from"] = CriticReviewNodeKeys.CritiqueAnswer, ["to"] = CriticReviewNodeKeys.FinalizeCriticReport }
         }

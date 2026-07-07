@@ -94,16 +94,15 @@ public sealed class CheckEvidenceNodeHandler : IAgentNodeHandler
         var run = context.Run;
         var node = context.Node;
         var blackboard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
-        var researchRun = AgentNodeJson.GetRequiredBlackboardObject(blackboard, AgentBlackboardKeys.ResearchRun);
-        var runSummary = researchRun["run"]?.AsObject() ?? throw new InvalidOperationException("Research run summary is missing.");
-        var citations = researchRun["citations"]?.AsArray() ?? [];
-        var candidates = researchRun["candidates"]?.AsArray() ?? [];
-        var status = runSummary["status"]?.GetValue<string>() ?? string.Empty;
+        var evidencePacket = AgentNodeJson.GetRequiredBlackboardObject(blackboard, AgentBlackboardKeys.EvidencePacket);
+        var citations = evidencePacket["citations"]?.AsArray() ?? [];
+        var status = evidencePacket["sourceStatus"]?.GetValue<string>() ?? string.Empty;
+        var candidateCount = evidencePacket["candidateCount"]?.GetValue<int>() ?? 0;
         node.InputJson = AgentNodeJson.Serialize(new CheckEvidenceNodeInput(
-            AgentNodeJson.GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.Ticker),
+            evidencePacket[AgentBlackboardKeys.Ticker]?.GetValue<string>(),
             status,
             citations.Count,
-            candidates.Count));
+            candidateCount));
 
         var findings = new JsonArray();
         if (citations.Count == 0)
@@ -125,24 +124,101 @@ public sealed class CheckEvidenceNodeHandler : IAgentNodeHandler
         {
             findings.Add(AgentBlackboardContracts.CreateFinding("Medium", "WeakCitation", $"有 {emptyQuoteCount} 個 citation 缺少 quoteText。", "補齊句級引用內容，避免只引用文件標題。"));
         }
-        if (candidates.Count < 3)
+        if (candidateCount < 3)
         {
             findings.Add(AgentBlackboardContracts.CreateFinding("Medium", "InsufficientEvidence", "候選證據數量偏少。", "增加檢索 topK 或改用 web/local 混合來源。"));
         }
 
-        var evidenceChecks = AgentBlackboardContracts.CreateEvidenceChecks(citations.Count, candidates.Count, status, findings);
+        var evidenceChecks = AgentBlackboardContracts.CreateEvidenceChecks(citations.Count, candidateCount, status, findings);
         blackboard[AgentBlackboardKeys.EvidenceChecks] = evidenceChecks;
         blackboard[AgentBlackboardKeys.CriticFindings] = findings;
         run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
         node.OutputJson = AgentNodeJson.Serialize(new CheckEvidenceNodeOutput(
             citations.Count,
-            candidates.Count,
+            candidateCount,
             status,
             findings.Count,
             findings.Select(AgentNodeJson.ParseFinding).Where(x => x is not null).Cast<CriticFinding>().ToList()));
         context.AddEvent(run, node, AgentEventTypes.BlackboardUpdated, "Evidence checks written to blackboard.", new { findingCount = findings.Count });
         return Task.CompletedTask;
     }
+}
+
+public sealed class BuildEvidencePacketNodeHandler : IAgentNodeHandler
+{
+    public string NodeType => CriticReviewNodeTypes.BuildEvidencePacket;
+
+    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    {
+        var run = context.Run;
+        var node = context.Node;
+        var blackboard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var researchRun = AgentNodeJson.GetRequiredBlackboardObject(blackboard, AgentBlackboardKeys.ResearchRun);
+        var runSummary = researchRun["run"]?.AsObject() ?? throw new InvalidOperationException("Research run summary is missing.");
+        var citations = researchRun["citations"]?.AsArray() ?? [];
+        var candidates = researchRun["candidates"]?.AsArray() ?? [];
+        var ticker = runSummary["ticker"]?.GetValue<string>();
+        var question = runSummary["question"]?.GetValue<string>();
+        var sourceStatus = runSummary["status"]?.GetValue<string>() ?? string.Empty;
+        var answer = AgentNodeJson.GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.Answer);
+        var packetCitations = citations
+            .Select(CreateEvidencePacketCitation)
+            .ToArray();
+        var emptyQuoteCount = packetCitations.Count(c => string.IsNullOrWhiteSpace(c.QuoteText));
+        var selectedCandidateCount = candidates.Count(c =>
+            string.Equals(c?["decision"]?.GetValue<string>(), "Selected", StringComparison.OrdinalIgnoreCase));
+        var summary = new EvidencePacketSummary(
+            !string.IsNullOrWhiteSpace(answer),
+            packetCitations.Length > 0,
+            emptyQuoteCount,
+            selectedCandidateCount);
+        var packet = new EvidencePacket(
+            ticker,
+            question,
+            answer,
+            sourceStatus,
+            packetCitations.Length,
+            candidates.Count,
+            packetCitations,
+            summary);
+
+        node.InputJson = AgentNodeJson.Serialize(new BuildEvidencePacketNodeInput(
+            ticker,
+            sourceStatus,
+            citations.Count,
+            candidates.Count,
+            summary.HasAnswer));
+        node.OutputJson = AgentNodeJson.Serialize(new BuildEvidencePacketNodeOutput(
+            ticker,
+            sourceStatus,
+            packet.CitationCount,
+            packet.CandidateCount,
+            summary));
+        blackboard[AgentBlackboardKeys.EvidencePacket] = JsonSerializer.SerializeToNode(packet, AgentNodeJson.SerializerOptions);
+        run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
+        context.AddEvent(run, node, AgentEventTypes.BlackboardUpdated, "Evidence packet written to blackboard.", new { packet.CitationCount, packet.CandidateCount, summary.EmptyQuoteCount });
+        return Task.CompletedTask;
+    }
+
+    private static EvidencePacketCitation CreateEvidencePacketCitation(JsonNode? citation)
+    {
+        var value = citation?.AsObject();
+        return new EvidencePacketCitation(
+            GetInt(value, "citationIndex") ?? 0,
+            GetString(value, "sourceType"),
+            GetGuid(value, "documentId"),
+            GetGuid(value, "documentChunkId"),
+            GetString(value, "title"),
+            GetString(value, "documentType"),
+            GetInt(value, "pageNumber"),
+            GetString(value, "quoteText"));
+    }
+
+    private static string? GetString(JsonObject? value, string key) => value?[key] is null ? null : value[key]!.GetValue<string>();
+
+    private static Guid? GetGuid(JsonObject? value, string key) => value?[key] is null ? null : value[key]!.GetValue<Guid>();
+
+    private static int? GetInt(JsonObject? value, string key) => value?[key] is null ? null : value[key]!.GetValue<int>();
 }
 
 public sealed class CritiqueAnswerNodeHandler : IAgentNodeHandler
@@ -164,17 +240,113 @@ public sealed class CritiqueAnswerNodeHandler : IAgentNodeHandler
         var input = AgentNodeJson.CreateCriticReviewInput(blackboard);
         node.InputJson = AgentNodeJson.Serialize(input);
 
-        var result = await _criticReviewAgent.CritiqueAsync(input, cancellationToken);
+        var toolCall = new AgentToolCall
+        {
+            Id = Guid.NewGuid(),
+            AgentRunId = run.Id,
+            AgentRunNodeId = node.Id,
+            ToolName = "criticReviewLLM",
+            Status = AgentToolCallStatuses.Running,
+            ArgumentsJson = AgentNodeJson.Serialize(new
+            {
+                input.Ticker,
+                input.CitationCount,
+                input.CandidateCount,
+                input.SourceStatus,
+                EvidenceFindingCount = input.EvidenceFindings.Count,
+                AnswerPreview = AgentNodeJson.Trim(input.Answer ?? string.Empty, 240)
+            }),
+            StartedAtUtc = DateTime.UtcNow
+        };
+        context.DbContext.AgentToolCalls.Add(toolCall);
+        context.AddEvent(run, node, AgentEventTypes.ToolCallStarted, "Tool criticReviewLLM started.", new { input.Ticker, input.CitationCount, input.CandidateCount });
+        await context.DbContext.SaveChangesAsync(cancellationToken);
+
+        var stopwatch = Stopwatch.StartNew();
+        CriticReviewResult result;
+        try
+        {
+            result = await _criticReviewAgent.CritiqueAsync(input, cancellationToken);
+            result = MergeEvidenceFindings(input, result);
+        }
+        catch (Exception exception)
+        {
+            stopwatch.Stop();
+            toolCall.Status = AgentToolCallStatuses.Failed;
+            toolCall.ErrorMessage = exception.Message;
+            toolCall.CompletedAtUtc = DateTime.UtcNow;
+            toolCall.DurationMs = stopwatch.ElapsedMilliseconds;
+            context.AddEvent(run, node, AgentEventTypes.ToolCallFailed, "Tool criticReviewLLM failed.", new { error = exception.Message });
+            await context.DbContext.SaveChangesAsync(cancellationToken);
+            throw;
+        }
+
+        stopwatch.Stop();
+        toolCall.Status = AgentToolCallStatuses.Succeeded;
+        toolCall.ResultJson = AgentNodeJson.Serialize(result);
+        toolCall.ResultPreview = $"{result.OverallSeverity}: {AgentNodeJson.Trim(result.Summary, 180)}";
+        toolCall.CompletedAtUtc = DateTime.UtcNow;
+        toolCall.DurationMs = stopwatch.ElapsedMilliseconds;
+        context.AddEvent(run, node, AgentEventTypes.ToolCallCompleted, "Tool criticReviewLLM completed.", new { toolCall.DurationMs, result.OverallSeverity, FindingCount = result.Findings.Count });
         blackboard[AgentBlackboardKeys.CriticReview] = JsonSerializer.SerializeToNode(result, AgentNodeJson.SerializerOptions);
         blackboard[AgentBlackboardKeys.CriticFindings] = JsonSerializer.SerializeToNode(result.Findings, AgentNodeJson.SerializerOptions);
         run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
         node.OutputJson = AgentNodeJson.Serialize(result);
         context.AddEvent(run, node, AgentEventTypes.BlackboardUpdated, "Critic review result written to blackboard.", new { findingCount = result.Findings.Count, result.OverallSeverity });
     }
+
+    private static CriticReviewResult MergeEvidenceFindings(CriticReviewInput input, CriticReviewResult result)
+    {
+        if (input.EvidenceFindings.Count == 0)
+        {
+            return result;
+        }
+
+        var findings = input.EvidenceFindings.ToList();
+        foreach (var finding in result.Findings)
+        {
+            if (!findings.Any(existing => IsSameFindingKind(existing, finding)))
+            {
+                findings.Add(finding);
+            }
+        }
+        var summary = findings.Count == input.EvidenceFindings.Count
+            ? $"系統證據檢查發現 {input.EvidenceFindings.Count} 個證據覆蓋問題，需先補強證據或修訂回答。"
+            : $"系統證據檢查發現 {input.EvidenceFindings.Count} 個證據覆蓋問題。{result.Summary}";
+
+        return result with
+        {
+            Summary = summary,
+            OverallSeverity = DetermineOverallSeverity(findings),
+            Findings = findings.ToArray()
+        };
+    }
+
+    private static bool IsSameFindingKind(CriticFinding left, CriticFinding right) =>
+        string.Equals(left.Category, right.Category, StringComparison.OrdinalIgnoreCase)
+        && left.RelatedCitationIndexes.SequenceEqual(right.RelatedCitationIndexes);
+
+    private static string DetermineOverallSeverity(IEnumerable<CriticFinding> findings)
+    {
+        var severities = findings.Select(f => f.Severity).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (severities.Contains("Critical")) return "Critical";
+        if (severities.Contains("High")) return "High";
+        if (severities.Contains("Medium")) return "Medium";
+        if (severities.Contains("Low")) return "Low";
+        return "None";
+    }
+
 }
 
 public sealed class FinalizeCriticReportNodeHandler : IAgentNodeHandler
 {
+    private readonly IReadOnlyDictionary<string, IWorkflowPolicyEvaluator> _policyEvaluators;
+
+    public FinalizeCriticReportNodeHandler(IEnumerable<IWorkflowPolicyEvaluator> policyEvaluators)
+    {
+        _policyEvaluators = policyEvaluators.ToDictionary(x => x.WorkflowType, StringComparer.Ordinal);
+    }
+
     public string NodeType => CriticReviewNodeTypes.FinalizeCriticReport;
 
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
@@ -183,7 +355,17 @@ public sealed class FinalizeCriticReportNodeHandler : IAgentNodeHandler
         var node = context.Node;
         var blackboard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
         var criticReview = AgentNodeJson.GetRequiredBlackboardObject(blackboard, AgentBlackboardKeys.CriticReview);
-        var finalOutput = AgentNodeJson.CreateFinalizeCriticReportNodeOutput(criticReview);
+        if (!_policyEvaluators.TryGetValue(run.WorkflowType, out var policyEvaluator))
+        {
+            throw new InvalidOperationException($"Unsupported workflow policy evaluator for '{run.WorkflowType}'.");
+        }
+
+        var policyDecision = policyEvaluator.Evaluate(new WorkflowPolicyContext(
+            run.WorkflowType,
+            node.NodeKey,
+            blackboard,
+            criticReview));
+        var finalOutput = AgentNodeJson.CreateFinalizeCriticReportNodeOutput(criticReview, policyDecision);
         node.InputJson = AgentNodeJson.Serialize(new FinalizeCriticReportNodeInput(
             finalOutput.OverallSeverity,
             finalOutput.RequiresRevision,
@@ -194,7 +376,7 @@ public sealed class FinalizeCriticReportNodeHandler : IAgentNodeHandler
         blackboard[AgentBlackboardKeys.FinalOutput] = JsonSerializer.SerializeToNode(finalOutput, AgentNodeJson.SerializerOptions);
         run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
         run.OutputJson = node.OutputJson;
-        context.AddEvent(run, node, AgentEventTypes.BlackboardUpdated, "Final critic report written to blackboard.", new { overallSeverity = finalOutput.OverallSeverity });
+        context.AddEvent(run, node, AgentEventTypes.BlackboardUpdated, "Final critic report written to blackboard.", new { overallSeverity = finalOutput.OverallSeverity, policyDecision.RecommendedNextAction, policyDecision.Reason });
         return Task.CompletedTask;
     }
 }

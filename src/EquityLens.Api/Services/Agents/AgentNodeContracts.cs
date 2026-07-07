@@ -9,6 +9,46 @@ public sealed record LoadResearchRunNodeOutput(
     int CandidateCount,
     bool HasAnswer);
 
+public sealed record BuildEvidencePacketNodeInput(
+    string? Ticker,
+    string? SourceStatus,
+    int CitationCount,
+    int CandidateCount,
+    bool HasAnswer);
+
+public sealed record BuildEvidencePacketNodeOutput(
+    string? Ticker,
+    string SourceStatus,
+    int CitationCount,
+    int CandidateCount,
+    EvidencePacketSummary EvidenceSummary);
+
+public sealed record EvidencePacket(
+    string? Ticker,
+    string? Question,
+    string? Answer,
+    string SourceStatus,
+    int CitationCount,
+    int CandidateCount,
+    IReadOnlyList<EvidencePacketCitation> Citations,
+    EvidencePacketSummary EvidenceSummary);
+
+public sealed record EvidencePacketCitation(
+    int CitationIndex,
+    string? SourceType,
+    Guid? DocumentId,
+    Guid? DocumentChunkId,
+    string? Title,
+    string? DocumentType,
+    int? PageNumber,
+    string? QuoteText);
+
+public sealed record EvidencePacketSummary(
+    bool HasAnswer,
+    bool HasCitations,
+    int EmptyQuoteCount,
+    int SelectedCandidateCount);
+
 public sealed record CheckEvidenceNodeInput(
     string? Ticker,
     string SourceStatus,

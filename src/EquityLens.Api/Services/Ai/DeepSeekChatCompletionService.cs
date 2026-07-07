@@ -34,17 +34,21 @@ public sealed class DeepSeekChatCompletionService : IChatCompletionService
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "chat/completions");
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-        var payload = new
+        var payload = new Dictionary<string, object?>
         {
-            model = _options.Model,
-            messages = new[]
+            ["model"] = _options.Model,
+            ["messages"] = new[]
             {
                 new { role = "system", content = request.SystemPrompt },
                 new { role = "user", content = request.UserPrompt }
             },
-            temperature = request.Temperature,
-            max_tokens = request.MaxTokens
+            ["temperature"] = request.Temperature,
+            ["max_tokens"] = request.MaxTokens
         };
+        if (request.ResponseFormat == ChatResponseFormat.JsonObject)
+        {
+            payload["response_format"] = new { type = "json_object" };
+        }
 
         httpRequest.Content = new StringContent(
             JsonSerializer.Serialize(payload, SerializerOptions),

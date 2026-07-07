@@ -30,6 +30,7 @@ public sealed class AgentWorkflowPlannerTests
         Assert.Equal(
         [
             CriticReviewNodeKeys.LoadResearchRun,
+            CriticReviewNodeKeys.BuildEvidencePacket,
             CriticReviewNodeKeys.CheckEvidence,
             CriticReviewNodeKeys.CritiqueAnswer,
             CriticReviewNodeKeys.FinalizeCriticReport

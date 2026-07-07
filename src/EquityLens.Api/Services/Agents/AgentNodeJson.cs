@@ -23,6 +23,7 @@ internal static class AgentNodeJson
 
     public static CriticReviewInput CreateCriticReviewInput(JsonObject blackboard)
     {
+        var evidencePacket = GetRequiredBlackboardObject(blackboard, AgentBlackboardKeys.EvidencePacket);
         var evidenceChecks = GetBlackboardObject(blackboard, AgentBlackboardKeys.EvidenceChecks) ?? new JsonObject();
         var findings = (evidenceChecks[EvidenceCheckFields.Findings]?.AsArray() ?? [])
             .Select(ParseFinding)
@@ -31,16 +32,18 @@ internal static class AgentNodeJson
             .ToList();
 
         return new CriticReviewInput(
-            GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.Ticker),
-            GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.Question),
-            GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.Answer),
+            evidencePacket[AgentBlackboardKeys.Ticker]?.GetValue<string>(),
+            evidencePacket[AgentBlackboardKeys.Question]?.GetValue<string>(),
+            evidencePacket[AgentBlackboardKeys.Answer]?.GetValue<string>(),
             evidenceChecks[EvidenceCheckFields.CitationCount]?.GetValue<int>() ?? 0,
             evidenceChecks[EvidenceCheckFields.CandidateCount]?.GetValue<int>() ?? 0,
             evidenceChecks[EvidenceCheckFields.SourceStatus]?.GetValue<string>() ?? string.Empty,
             findings);
     }
 
-    public static FinalizeCriticReportNodeOutput CreateFinalizeCriticReportNodeOutput(JsonObject criticReview)
+    public static FinalizeCriticReportNodeOutput CreateFinalizeCriticReportNodeOutput(
+        JsonObject criticReview,
+        WorkflowPolicyDecision policyDecision)
     {
         var findings = (criticReview[CriticReviewFields.Findings]?.AsArray() ?? [])
             .Select(ParseFinding)
@@ -52,10 +55,10 @@ internal static class AgentNodeJson
             criticReview[CriticReviewFields.Summary]?.GetValue<string>() ?? string.Empty,
             criticReview[CriticReviewFields.OverallSeverity]?.GetValue<string>() ?? "None",
             findings,
-            criticReview[CriticReviewFields.RequiresRevision]?.GetValue<bool>() ?? false,
-            criticReview[CriticReviewFields.RequiresMoreEvidence]?.GetValue<bool>() ?? false,
-            criticReview[CriticReviewFields.RouteBackTo]?.GetValue<string>(),
-            criticReview[CriticReviewFields.RecommendedNextAction]?.GetValue<string>() ?? "AcceptAnswer",
+            policyDecision.RequiresRevision,
+            policyDecision.RequiresMoreEvidence,
+            policyDecision.RouteBackTo,
+            policyDecision.RecommendedNextAction,
             criticReview[CriticReviewFields.SuggestedAnswerRevision]?.GetValue<string>());
     }
 

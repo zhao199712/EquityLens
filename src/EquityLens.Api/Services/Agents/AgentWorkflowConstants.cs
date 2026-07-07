@@ -25,6 +25,7 @@ public static class DraftRevisionWorkflow
 public static class CriticReviewNodeKeys
 {
     public const string LoadResearchRun = "loadResearchRun";
+    public const string BuildEvidencePacket = "buildEvidencePacket";
     public const string CheckEvidence = "checkEvidence";
     public const string CritiqueAnswer = "critiqueAnswer";
     public const string FinalizeCriticReport = "finalizeCriticReport";
@@ -33,6 +34,7 @@ public static class CriticReviewNodeKeys
 public static class CriticReviewNodeTypes
 {
     public const string LoadResearchRun = "LoadResearchRun";
+    public const string BuildEvidencePacket = "BuildEvidencePacket";
     public const string CheckEvidence = "CheckEvidence";
     public const string CritiqueAnswer = "CritiqueAnswer";
     public const string FinalizeCriticReport = "FinalizeCriticReport";

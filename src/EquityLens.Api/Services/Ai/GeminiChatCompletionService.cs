@@ -36,6 +36,10 @@ public sealed class GeminiChatCompletionService : IChatCompletionService
         {
             throw new InvalidOperationException("Gemini model is not configured. Set Gemini:Model.");
         }
+        if (request.ResponseFormat == ChatResponseFormat.JsonObject)
+        {
+            throw new NotSupportedException("Gemini chat completion does not support JsonObject response format yet.");
+        }
 
         var endpoint = $"models/{Uri.EscapeDataString(_options.Model)}:generateContent";
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint);

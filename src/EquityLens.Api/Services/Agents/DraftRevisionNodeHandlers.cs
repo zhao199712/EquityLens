@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using EquityLens.Api.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Services.Agents;
@@ -66,9 +68,16 @@ public sealed class LoadCriticReviewRunNodeHandler : IAgentNodeHandler
 
 public sealed class DraftRevisedAnswerNodeHandler : IAgentNodeHandler
 {
+    private readonly IDraftRevisionAgent _draftRevisionAgent;
+
+    public DraftRevisedAnswerNodeHandler(IDraftRevisionAgent draftRevisionAgent)
+    {
+        _draftRevisionAgent = draftRevisionAgent;
+    }
+
     public string NodeType => DraftRevisionNodeTypes.DraftRevisedAnswer;
 
-    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var run = context.Run;
         var node = context.Node;
@@ -77,46 +86,105 @@ public sealed class DraftRevisedAnswerNodeHandler : IAgentNodeHandler
         var sourceAnswer = AgentNodeJson.GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.Answer);
         var requiresRevision = criticReview[CriticReviewFields.RequiresRevision]?.GetValue<bool>() ?? false;
         var suggestedAnswerRevision = criticReview[CriticReviewFields.SuggestedAnswerRevision]?.GetValue<string>();
-        node.InputJson = AgentNodeJson.Serialize(new DraftRevisedAnswerNodeInput(
+        var findings = (criticReview[CriticReviewFields.Findings]?.AsArray() ?? [])
+            .Select(AgentNodeJson.ParseFinding)
+            .Where(x => x is not null)
+            .Cast<CriticFinding>()
+            .ToList();
+        var input = new DraftRevisionInput(
             AgentNodeJson.GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.Ticker),
             AgentNodeJson.GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.Question),
             sourceAnswer,
             requiresRevision,
-            suggestedAnswerRevision));
+            criticReview[CriticReviewFields.Summary]?.GetValue<string>() ?? string.Empty,
+            criticReview[CriticReviewFields.OverallSeverity]?.GetValue<string>() ?? "None",
+            findings,
+            suggestedAnswerRevision,
+            CreateAppliedRecommendation(requiresRevision, suggestedAnswerRevision));
+        node.InputJson = AgentNodeJson.Serialize(new DraftRevisedAnswerNodeInput(
+            input.Ticker,
+            input.Question,
+            input.SourceAnswer,
+            input.RequiresRevision,
+            input.SuggestedAnswerRevision));
 
-        var revisedAnswer = CreateRevisedAnswer(sourceAnswer, requiresRevision, suggestedAnswerRevision);
-        var revisionSummary = requiresRevision
-            ? "已根據 CriticReview 建議產生 deterministic 修訂稿。"
-            : "CriticReview 未要求修訂，保留原回答。";
+        var result = requiresRevision
+            ? await ReviseWithToolCallAsync(context, input, cancellationToken)
+            : await _draftRevisionAgent.ReviseAsync(input, cancellationToken);
         var output = new DraftRevisedAnswerNodeOutput(
             sourceAnswer,
-            revisedAnswer,
-            revisionSummary,
+            result.RevisedAnswer,
+            result.RevisionSummary,
             requiresRevision,
-            requiresRevision ? suggestedAnswerRevision : null);
-        blackboard[AgentBlackboardKeys.RevisedAnswer] = revisedAnswer;
-        blackboard[AgentBlackboardKeys.RevisionSummary] = revisionSummary;
+            result.AppliedRecommendation);
+        blackboard[AgentBlackboardKeys.RevisedAnswer] = result.RevisedAnswer;
+        blackboard[AgentBlackboardKeys.RevisionSummary] = result.RevisionSummary;
+        blackboard[AgentBlackboardKeys.AppliedRecommendation] = result.AppliedRecommendation;
         run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
         node.OutputJson = AgentNodeJson.Serialize(output);
         context.AddEvent(run, node, AgentEventTypes.BlackboardUpdated, "Draft revision written to blackboard.", new { requiresRevision });
-        return Task.CompletedTask;
     }
 
-    private static string CreateRevisedAnswer(string? sourceAnswer, bool requiresRevision, string? suggestedAnswerRevision)
+    private static string? CreateAppliedRecommendation(bool requiresRevision, string? suggestedAnswerRevision)
     {
-        if (!requiresRevision)
-        {
-            return sourceAnswer ?? string.Empty;
-        }
+        if (!requiresRevision) return null;
+        return string.IsNullOrWhiteSpace(suggestedAnswerRevision)
+            ? DeterministicDraftRevisionAgent.FallbackRecommendation
+            : suggestedAnswerRevision;
+    }
 
-        if (!string.IsNullOrWhiteSpace(suggestedAnswerRevision))
+    private async Task<DraftRevisionResult> ReviseWithToolCallAsync(
+        AgentNodeExecutionContext context,
+        DraftRevisionInput input,
+        CancellationToken cancellationToken)
+    {
+        var run = context.Run;
+        var node = context.Node;
+        var toolCall = new AgentToolCall
         {
-            return suggestedAnswerRevision;
-        }
+            Id = Guid.NewGuid(),
+            AgentRunId = run.Id,
+            AgentRunNodeId = node.Id,
+            ToolName = "draftRevisionLLM",
+            Status = AgentToolCallStatuses.Running,
+            ArgumentsJson = AgentNodeJson.Serialize(new
+            {
+                input.Ticker,
+                input.OverallSeverity,
+                FindingCount = input.Findings.Count,
+                SourceAnswerPreview = AgentNodeJson.Trim(input.SourceAnswer ?? string.Empty, 240),
+                input.AppliedRecommendation
+            }),
+            StartedAtUtc = DateTime.UtcNow
+        };
+        context.DbContext.AgentToolCalls.Add(toolCall);
+        context.AddEvent(run, node, AgentEventTypes.ToolCallStarted, "Tool draftRevisionLLM started.", new { input.Ticker, input.OverallSeverity, FindingCount = input.Findings.Count });
+        await context.DbContext.SaveChangesAsync(cancellationToken);
 
-        return string.IsNullOrWhiteSpace(sourceAnswer)
-            ? "修訂稿待補：原回答為空，需先補充可引用證據。"
-            : $"{sourceAnswer}\n\n修訂提醒：請補強引用支撐，並避免超出來源證據的推論。";
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var result = await _draftRevisionAgent.ReviseAsync(input, cancellationToken);
+            stopwatch.Stop();
+            toolCall.Status = AgentToolCallStatuses.Succeeded;
+            toolCall.ResultJson = AgentNodeJson.Serialize(result);
+            toolCall.ResultPreview = AgentNodeJson.Trim(result.RevisionSummary, 180);
+            toolCall.CompletedAtUtc = DateTime.UtcNow;
+            toolCall.DurationMs = stopwatch.ElapsedMilliseconds;
+            context.AddEvent(run, node, AgentEventTypes.ToolCallCompleted, "Tool draftRevisionLLM completed.", new { toolCall.DurationMs });
+            return result;
+        }
+        catch (Exception exception)
+        {
+            stopwatch.Stop();
+            toolCall.Status = AgentToolCallStatuses.Failed;
+            toolCall.ErrorMessage = exception.Message;
+            toolCall.CompletedAtUtc = DateTime.UtcNow;
+            toolCall.DurationMs = stopwatch.ElapsedMilliseconds;
+            context.AddEvent(run, node, AgentEventTypes.ToolCallFailed, "Tool draftRevisionLLM failed.", new { error = exception.Message });
+            await context.DbContext.SaveChangesAsync(cancellationToken);
+            throw;
+        }
     }
 }
 
@@ -134,9 +202,7 @@ public sealed class FinalizeRevisionNodeHandler : IAgentNodeHandler
         var revisedAnswer = AgentNodeJson.GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.RevisedAnswer) ?? string.Empty;
         var revisionSummary = AgentNodeJson.GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.RevisionSummary) ?? string.Empty;
         var revisionRequired = criticReview[CriticReviewFields.RequiresRevision]?.GetValue<bool>() ?? false;
-        var appliedRecommendation = revisionRequired
-            ? criticReview[CriticReviewFields.SuggestedAnswerRevision]?.GetValue<string>()
-            : null;
+        var appliedRecommendation = AgentNodeJson.GetBlackboardValue<string>(blackboard, AgentBlackboardKeys.AppliedRecommendation);
         node.InputJson = AgentNodeJson.Serialize(new FinalizeRevisionNodeInput(revisionRequired, revisionSummary));
         var output = new FinalizeRevisionNodeOutput(
             sourceAnswer,
