@@ -37,6 +37,7 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 
 ## Infra And Env Gotchas
 - `docker-compose.yml` starts ParadeDB `paradedb/paradedb:0.24.1-pg18` on `${POSTGRES_PORT:-5432}`, Redis, Garage S3, Garage WebUI, and Aspire dashboard.
+- Aspire Dashboard is exposed at `http://localhost:18888`; API traces/metrics/logs export through OTLP gRPC at `${OTEL_GRPC_PORT:-4317}` when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
 - `DesignTimeDbContextFactory` reads `ConnectionStrings__PostgreSQL` first, otherwise `POSTGRES_*` env vars with Docker defaults; it does not read `.env` directly.
 - `Program.cs` registers `Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)` because TWSE/MOPS sources use Big5; do not remove it as dead code.
 - `appsettings.json` contains local live API-key shaped values for DeepSeek/Cohere/Jina/Brave/AlphaVantage; avoid editing or committing it unless explicitly requested.
@@ -60,6 +61,7 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 - Current V3 runtime is a persisted DAG workflow runner, not Microsoft Agent Framework runtime; `Microsoft.Agents.AI` is referenced but MAF should stay behind seams such as `ICriticReviewAgent` / `IDraftRevisionAgent`.
 - DAG definitions are produced by `AgentWorkflowDefinitionProvider` into `AgentRun.WorkflowDefinitionJson`; `AgentWorkflowPlanner` topologically sorts `nodes`/`edges`; `AgentRunGraphValidator` ensures persisted `AgentRun.Nodes` match the definition.
 - Run/node status transitions are centralized in `AgentStateMachine.cs`; `AgentRunService` must use state-machine `Transition`/`ResetForRetry`, not direct `Status = ...` assignments.
+- Agent runtime telemetry is in `EquityLensTelemetry`: `agent.run.execute` / `agent.node.execute` spans plus `equitylens.agent.*.status.transitions` metrics feed Aspire; persisted `events`, `nodes`, and `toolCalls` remain the source of truth.
 - Node handlers in `CriticReviewNodeHandlers.cs` and `DraftRevisionNodeHandlers.cs` should only execute node business logic and write `InputJson`, `OutputJson`, `BlackboardJson`, tool calls, and events.
 - Current workflows:
 ```text

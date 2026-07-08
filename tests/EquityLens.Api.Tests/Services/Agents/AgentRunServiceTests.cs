@@ -111,6 +111,47 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
+    public async Task CreateCriticReviewAsync_ValidResearchRun_UsesStateMachinesForLifecycleTransitions()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var runStateMachine = new RecordingRunStateMachine();
+        var nodeStateMachine = new RecordingNodeStateMachine();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+            new DeterministicCriticReviewAgent(),
+            runStateMachine,
+            nodeStateMachine);
+
+        var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Succeeded, summary.Status);
+        Assert.Equal(
+            [
+                $"{AgentRunStatuses.Pending}->{AgentRunStatuses.Running}",
+                $"{AgentRunStatuses.Running}->{AgentRunStatuses.Succeeded}"
+            ],
+            runStateMachine.Transitions.Select(x => $"{x.From}->{x.To}").ToArray());
+
+        var expectedNodeTransitions = new[]
+        {
+            CriticReviewNodeKeys.LoadResearchRun,
+            CriticReviewNodeKeys.BuildEvidencePacket,
+            CriticReviewNodeKeys.CheckEvidence,
+            CriticReviewNodeKeys.CritiqueAnswer,
+            CriticReviewNodeKeys.FinalizeCriticReport
+        }.SelectMany(nodeKey => new[]
+        {
+            $"{nodeKey}:{AgentNodeStatuses.Pending}->{AgentNodeStatuses.Ready}",
+            $"{nodeKey}:{AgentNodeStatuses.Ready}->{AgentNodeStatuses.Running}",
+            $"{nodeKey}:{AgentNodeStatuses.Running}->{AgentNodeStatuses.Succeeded}"
+        }).ToArray();
+        Assert.Equal(expectedNodeTransitions, nodeStateMachine.Transitions.Select(x => $"{x.NodeKey}:{x.From}->{x.To}").ToArray());
+    }
+
+    [Fact]
     public async Task CreateCriticReviewAsync_StrongEvidence_RecommendsAcceptAnswer()
     {
         await using var db = CreateDbContext();
@@ -773,7 +814,9 @@ public sealed class AgentRunServiceTests
     private static AgentRunService CreateService(
         EquityLensDbContext db,
         IResearchRunTraceService researchTraceService,
-        ICriticReviewAgent criticReviewAgent)
+        ICriticReviewAgent criticReviewAgent,
+        IAgentRunStateMachine? runStateMachine = null,
+        IAgentNodeStateMachine? nodeStateMachine = null)
     {
         var handlers = CreateAllHandlers(researchTraceService, criticReviewAgent);
         return new AgentRunService(
@@ -781,8 +824,8 @@ public sealed class AgentRunServiceTests
             [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider()],
             new AgentWorkflowPlanner(),
             new AgentRunGraphValidator(),
-            new AgentRunStateMachine(),
-            new AgentNodeStateMachine(),
+            runStateMachine ?? new AgentRunStateMachine(),
+            nodeStateMachine ?? new AgentNodeStateMachine(),
             handlers,
             NullLogger<AgentRunService>.Instance);
     }
@@ -819,6 +862,55 @@ public sealed class AgentRunServiceTests
             .Options;
         return new TestEquityLensDbContext(options);
     }
+
+    private sealed class RecordingRunStateMachine : IAgentRunStateMachine
+    {
+        private readonly AgentRunStateMachine _inner = new();
+
+        public List<StatusTransition> Transitions { get; } = [];
+
+        public void Transition(AgentRun run, string nextStatus)
+        {
+            var from = run.Status;
+            _inner.Transition(run, nextStatus);
+            Transitions.Add(new StatusTransition(from, nextStatus));
+        }
+
+        public void ResetForRetry(AgentRun run)
+        {
+            var from = run.Status;
+            _inner.ResetForRetry(run);
+            Transitions.Add(new StatusTransition(from, run.Status));
+        }
+    }
+
+    private sealed class RecordingNodeStateMachine : IAgentNodeStateMachine
+    {
+        private readonly AgentNodeStateMachine _inner = new();
+
+        public List<NodeStatusTransition> Transitions { get; } = [];
+
+        public void Transition(AgentRunNode node, string nextStatus)
+        {
+            var from = node.Status;
+            _inner.Transition(node, nextStatus);
+            Transitions.Add(new NodeStatusTransition(node.NodeKey, from, nextStatus));
+        }
+
+        public void ResetForRetry(AgentRunNode node)
+        {
+            var from = node.Status;
+            _inner.ResetForRetry(node);
+            if (!string.Equals(from, node.Status, StringComparison.Ordinal))
+            {
+                Transitions.Add(new NodeStatusTransition(node.NodeKey, from, node.Status));
+            }
+        }
+    }
+
+    private sealed record StatusTransition(string From, string To);
+
+    private sealed record NodeStatusTransition(string NodeKey, string From, string To);
 
     private sealed class MissingFinalizeNodeWorkflowDefinitionProvider : IAgentWorkflowDefinitionProvider
     {

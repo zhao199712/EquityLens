@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using EquityLens.Api.Data.Entities;
+using EquityLens.Api.Observability;
 
 namespace EquityLens.Api.Services.Agents;
 
@@ -20,22 +22,48 @@ public sealed class AgentRunStateMachine : IAgentRunStateMachine
 {
     public void Transition(AgentRun run, string nextStatus)
     {
-        if (!CanTransition(run.Status, nextStatus))
+        var currentStatus = run.Status;
+        if (!CanTransition(currentStatus, nextStatus))
         {
-            throw new InvalidOperationException($"Invalid agent run status transition: {run.Status} -> {nextStatus}.");
+            throw new InvalidOperationException($"Invalid agent run status transition: {currentStatus} -> {nextStatus}.");
         }
 
         run.Status = nextStatus;
+        RecordRunTransition(run, currentStatus, nextStatus, reset: false);
     }
 
     public void ResetForRetry(AgentRun run)
     {
-        if (!string.Equals(run.Status, AgentRunStatuses.Failed, StringComparison.Ordinal))
+        var currentStatus = run.Status;
+        if (!string.Equals(currentStatus, AgentRunStatuses.Failed, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException($"Invalid agent run retry reset from status: {run.Status}.");
+            throw new InvalidOperationException($"Invalid agent run retry reset from status: {currentStatus}.");
         }
 
         run.Status = AgentRunStatuses.Pending;
+        RecordRunTransition(run, currentStatus, AgentRunStatuses.Pending, reset: true);
+    }
+
+    private static void RecordRunTransition(AgentRun run, string fromStatus, string toStatus, bool reset)
+    {
+        EquityLensTelemetry.AgentRunStatusTransitions.Add(1,
+            new KeyValuePair<string, object?>("workflow.type", run.WorkflowType),
+            new KeyValuePair<string, object?>("agent.type", run.AgentType),
+            new KeyValuePair<string, object?>("status.from", fromStatus),
+            new KeyValuePair<string, object?>("status.to", toStatus),
+            new KeyValuePair<string, object?>("transition.reset", reset));
+
+        Activity.Current?.AddEvent(new ActivityEvent(
+            reset ? "agent.run.status.reset" : "agent.run.status.transition",
+            tags: new ActivityTagsCollection
+            {
+                ["agent.run.id"] = run.Id,
+                ["workflow.type"] = run.WorkflowType,
+                ["agent.type"] = run.AgentType,
+                ["status.from"] = fromStatus,
+                ["status.to"] = toStatus,
+                ["transition.reset"] = reset
+            }));
     }
 
     private static bool CanTransition(string current, string next) => (current, next) switch
@@ -54,27 +82,54 @@ public sealed class AgentNodeStateMachine : IAgentNodeStateMachine
 {
     public void Transition(AgentRunNode node, string nextStatus)
     {
-        if (!CanTransition(node.Status, nextStatus))
+        var currentStatus = node.Status;
+        if (!CanTransition(currentStatus, nextStatus))
         {
-            throw new InvalidOperationException($"Invalid agent node status transition: {node.Status} -> {nextStatus}.");
+            throw new InvalidOperationException($"Invalid agent node status transition: {currentStatus} -> {nextStatus}.");
         }
 
         node.Status = nextStatus;
+        RecordNodeTransition(node, currentStatus, nextStatus, reset: false);
     }
 
     public void ResetForRetry(AgentRunNode node)
     {
-        if (string.Equals(node.Status, AgentNodeStatuses.Pending, StringComparison.Ordinal))
+        var currentStatus = node.Status;
+        if (string.Equals(currentStatus, AgentNodeStatuses.Pending, StringComparison.Ordinal))
         {
             return;
         }
 
-        if (node.Status is not (AgentNodeStatuses.Ready or AgentNodeStatuses.Running or AgentNodeStatuses.Succeeded or AgentNodeStatuses.Failed))
+        if (currentStatus is not (AgentNodeStatuses.Ready or AgentNodeStatuses.Running or AgentNodeStatuses.Succeeded or AgentNodeStatuses.Failed))
         {
-            throw new InvalidOperationException($"Invalid agent node retry reset from status: {node.Status}.");
+            throw new InvalidOperationException($"Invalid agent node retry reset from status: {currentStatus}.");
         }
 
         node.Status = AgentNodeStatuses.Pending;
+        RecordNodeTransition(node, currentStatus, AgentNodeStatuses.Pending, reset: true);
+    }
+
+    private static void RecordNodeTransition(AgentRunNode node, string fromStatus, string toStatus, bool reset)
+    {
+        EquityLensTelemetry.AgentNodeStatusTransitions.Add(1,
+            new KeyValuePair<string, object?>("node.type", node.NodeType),
+            new KeyValuePair<string, object?>("node.key", node.NodeKey),
+            new KeyValuePair<string, object?>("status.from", fromStatus),
+            new KeyValuePair<string, object?>("status.to", toStatus),
+            new KeyValuePair<string, object?>("transition.reset", reset));
+
+        Activity.Current?.AddEvent(new ActivityEvent(
+            reset ? "agent.node.status.reset" : "agent.node.status.transition",
+            tags: new ActivityTagsCollection
+            {
+                ["agent.run.id"] = node.AgentRunId,
+                ["agent.run.node.id"] = node.Id,
+                ["node.key"] = node.NodeKey,
+                ["node.type"] = node.NodeType,
+                ["status.from"] = fromStatus,
+                ["status.to"] = toStatus,
+                ["transition.reset"] = reset
+            }));
     }
 
     private static bool CanTransition(string current, string next) => (current, next) switch

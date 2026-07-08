@@ -41,6 +41,14 @@ public static class EquityLensTelemetry
         "equitylens.chat.sessions",
         description: "Number of chat sessions created.");
 
+    // Agent runtime
+    public static readonly Counter<long> AgentRunStatusTransitions = Meter.CreateCounter<long>(
+        "equitylens.agent.run.status.transitions",
+        description: "Number of agent run status transitions.");
+    public static readonly Counter<long> AgentNodeStatusTransitions = Meter.CreateCounter<long>(
+        "equitylens.agent.node.status.transitions",
+        description: "Number of agent node status transitions.");
+
     public static void MarkError(Activity? activity, Exception exception)
     {
         activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);

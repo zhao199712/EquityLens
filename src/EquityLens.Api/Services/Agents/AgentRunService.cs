@@ -3,6 +3,7 @@ using System.Text.Json;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
+using EquityLens.Api.Observability;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Services.Agents;
@@ -204,6 +205,11 @@ public sealed class AgentRunService : IAgentRunService
             .Include(x => x.ToolCalls)
             .FirstAsync(x => x.Id == runId && x.UserId == userId, cancellationToken);
 
+        using var activity = EquityLensTelemetry.ActivitySource.StartActivity("agent.run.execute");
+        activity?.SetTag("agent.run.id", run.Id);
+        activity?.SetTag("workflow.type", run.WorkflowType);
+        activity?.SetTag("agent.type", run.AgentType);
+
         try
         {
             _runStateMachine.Transition(run, AgentRunStatuses.Running);
@@ -225,6 +231,7 @@ public sealed class AgentRunService : IAgentRunService
         }
         catch (Exception exception)
         {
+            EquityLensTelemetry.MarkError(activity, exception);
             _logger.LogError(exception, "Agent run {AgentRunId} failed", runId);
             if (run.Status != AgentRunStatuses.Failed)
             {
@@ -240,6 +247,12 @@ public sealed class AgentRunService : IAgentRunService
     private async Task RunNodeAsync(AgentRun run, string nodeKey, CancellationToken cancellationToken)
     {
         var node = run.Nodes.First(x => x.NodeKey == nodeKey);
+        using var activity = EquityLensTelemetry.ActivitySource.StartActivity("agent.node.execute");
+        activity?.SetTag("agent.run.id", run.Id);
+        activity?.SetTag("agent.run.node.id", node.Id);
+        activity?.SetTag("workflow.type", run.WorkflowType);
+        activity?.SetTag("node.key", node.NodeKey);
+        activity?.SetTag("node.type", node.NodeType);
         var decisionPayload = new { decision = "RunNode", nextNodeId = nodeKey, reason = "Previous dependencies are satisfied.", mode = "Deterministic" };
         AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Supervisor selected {nodeKey}.", decisionPayload);
 
@@ -269,6 +282,7 @@ public sealed class AgentRunService : IAgentRunService
         }
         catch (Exception exception)
         {
+            EquityLensTelemetry.MarkError(activity, exception);
             stopwatch.Stop();
             _nodeStateMachine.Transition(node, AgentNodeStatuses.Failed);
             node.ErrorMessage = exception.Message;

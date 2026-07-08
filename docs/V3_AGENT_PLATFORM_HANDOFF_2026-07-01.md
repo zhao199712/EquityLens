@@ -1,4 +1,4 @@
-# EquityLens V3 Agent Platform Handoff - Updated 2026-07-07
+# EquityLens V3 Agent Platform Handoff - Updated 2026-07-08
 
 ## Purpose
 
@@ -24,9 +24,11 @@ Current execution path:
 ```text
 AgentRunsController
  -> AgentRunService
+    -> AgentStateMachine run transition
     -> workflow provider registry
     -> AgentWorkflowPlanner
     -> AgentRunGraphValidator
+    -> AgentStateMachine node transitions
     -> IAgentNodeHandler.ExecuteAsync(...)
     -> BlackboardJson / OutputJson / AgentRunEvent / AgentToolCall persistence
 ```
@@ -41,6 +43,7 @@ Core runtime concepts:
 - Blackboard: shared JSON state between nodes.
 - Policy evaluator: deterministic backend routing decision seam.
 - Tool call: persisted external/tool/model call observability.
+- State machine: centralized run/node status transition guard and retry reset path.
 
 ## Current Workflows
 
@@ -235,6 +238,14 @@ criticReviewLLM
 
 Both LLM tool calls persist status, duration, result preview, result JSON, and error message on failure.
 
+Aspire / OpenTelemetry:
+
+- `Program.cs` exports `EquityLens.Api` traces, metrics, and logs to the configured OTLP endpoint; `docker-compose.yml` includes Aspire Dashboard on `${ASPIRE_DASHBOARD_PORT:-18888}`.
+- `AgentRunService` emits `agent.run.execute` and `agent.node.execute` spans with run, workflow, node key, and node type tags.
+- `AgentStateMachine` emits Activity events for `agent.run.status.transition`, `agent.run.status.reset`, `agent.node.status.transition`, and `agent.node.status.reset`.
+- Metrics counters `equitylens.agent.run.status.transitions` and `equitylens.agent.node.status.transitions` expose low-cardinality transition counts by workflow/node type and from/to status.
+- For debugging a specific run, use API persisted `events` / `nodes` / `toolCalls` as the source of truth; use Aspire to inspect latency, failures, and cross-service request traces.
+
 ## Blackboard Contract
 
 Core CriticReview blackboard keys:
@@ -296,9 +307,16 @@ src/EquityLens.Api/Services/Agents/AgentWorkflowConstants.cs
 src/EquityLens.Api/Services/Agents/AgentWorkflowDefinitionProvider.cs
 src/EquityLens.Api/Services/Agents/AgentWorkflowPlanner.cs
 src/EquityLens.Api/Services/Agents/AgentRunGraphValidator.cs
+src/EquityLens.Api/Services/Agents/AgentStateMachine.cs
 src/EquityLens.Api/Services/Agents/AgentBlackboardContracts.cs
 src/EquityLens.Api/Services/Agents/AgentNodeContracts.cs
 src/EquityLens.Api/Services/Agents/WorkflowPolicyEvaluator.cs
+```
+
+Observability:
+
+```text
+src/EquityLens.Api/Observability/EquityLensTelemetry.cs
 ```
 
 Agents and node handlers:
@@ -344,6 +362,7 @@ Tests:
 
 ```text
 tests/EquityLens.Api.Tests/Services/Agents/AgentRunServiceTests.cs
+tests/EquityLens.Api.Tests/Services/Agents/AgentStateMachineTests.cs
 tests/EquityLens.Api.Tests/Services/Agents/AgentWorkflowPlannerTests.cs
 tests/EquityLens.Api.Tests/Services/Agents/AgentRunGraphValidatorTests.cs
 tests/EquityLens.Api.Tests/Services/Agents/LlmCriticReviewAgentTests.cs
@@ -438,19 +457,21 @@ Latest DraftRevision E2E output:
 Latest commands:
 
 ```text
+dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj --filter FullyQualifiedName~Agent
 dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
 dotnet build src/EquityLens.Api/EquityLens.Api.csproj
-npm run build
-~/.dotnet/tools/dotnet-ef migrations has-pending-model-changes --project src/EquityLens.Api --startup-project src/EquityLens.Api
+ConnectionStrings__PostgreSQL="..." ~/.dotnet/tools/dotnet-ef database update --project src/EquityLens.Api --startup-project src/EquityLens.Api
+API E2E: register -> /api/research/ask -> /api/agent-runs/critic-review -> /api/agent-runs/draft-revision
 ```
 
 Latest results:
 
 ```text
-Tests: 262 passed, 0 failed
+Focused Agent tests: 74 passed, 0 failed
+Tests: 290 passed, 0 failed
 Backend build: success
-Frontend build: success
-EF pending model changes: none after migration
+EF database update: already up to date
+E2E: ResearchRun InsufficientEvidence -> CriticReview Succeeded -> DraftRevision Succeeded
 ```
 
 Known warnings:
@@ -471,13 +492,15 @@ When adding a workflow:
 3. Add node input/output contracts in `AgentNodeContracts.cs`.
 4. Add an `IAgentWorkflowDefinitionProvider` implementation.
 5. Add one `IAgentNodeHandler` per node.
-6. Register provider, handlers, agents, and policy evaluators in `Program.cs`.
+6. Register provider, handlers, agents, policy evaluators, and any state-machine/observability dependencies in `Program.cs`.
 7. Add service/API method or generic create endpoint.
 8. Add tests for workflow definition, planner order, handler coverage, blackboard/output contract, failure/retry behavior, and user isolation.
 
 Rules:
 
 - Do not hardcode execution order in `AgentRunService`; keep DAG edges in `WorkflowDefinitionJson`.
+- Do not assign `AgentRun.Status` or `AgentRunNode.Status` directly in runtime code; use `AgentStateMachine.Transition` or `ResetForRetry`.
+- Keep node handlers focused on business logic and JSON/tool-call writes; status lifecycle belongs to `AgentRunService` plus `AgentStateMachine`.
 - Keep deterministic implementations/fakes for tests.
 - Keep LLM implementations behind agent interfaces.
 - Do not let LLM decide platform route fields directly; use policy evaluators.
