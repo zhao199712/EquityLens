@@ -97,6 +97,7 @@ const activeMenuKey = computed(() => {
   if (name.startsWith('portfolio')) return 'portfolios'
   if (name.startsWith('risk-run')) return 'risk-runs'
   if (name.startsWith('financial-report')) return 'financial-reports'
+  if (name.startsWith('research')) return 'research'
   if (name.startsWith('agent-run')) return 'agent-runs'
   return name
 })
@@ -145,6 +146,13 @@ function handleMenuSelect(key: string) {
             @click="handleMenuSelect('financial-reports')"
           >
             {{ t('nav.reports') }}
+          </button>
+          <span class="kimi-nav-sep">|</span>
+          <button
+            :class="['kimi-nav-item', activeMenuKey === 'research' && 'active']"
+            @click="handleMenuSelect('research')"
+          >
+            Research
           </button>
           <span class="kimi-nav-sep">|</span>
           <button

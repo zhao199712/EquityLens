@@ -4,6 +4,7 @@ export default {
     portfolios: '投資組合',
     riskRuns: '風險分析',
     reports: '報告',
+    research: '研究',
     settings: '設定',
     logout: '登出',
   },

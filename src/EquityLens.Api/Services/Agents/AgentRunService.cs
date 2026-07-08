@@ -78,6 +78,7 @@ public sealed class AgentRunService : IAgentRunService
         int limit = 50,
         string? workflowType = null,
         string? status = null,
+        Guid? researchRunId = null,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.AgentRuns.AsNoTracking();
@@ -87,6 +88,11 @@ public sealed class AgentRunService : IAgentRunService
             query = query.Where(x => x.WorkflowType == workflowType.Trim());
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(x => x.Status == status.Trim());
+        if (researchRunId.HasValue)
+        {
+            var rid = researchRunId.Value.ToString("D");
+            query = query.Where(x => x.InputJson.Contains($"\"researchRunId\":\"{rid}\""));
+        }
 
         return await query
             .OrderByDescending(x => x.CreatedAtUtc)

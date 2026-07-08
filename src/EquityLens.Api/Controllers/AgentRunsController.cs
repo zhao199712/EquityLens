@@ -72,9 +72,10 @@ public sealed class AgentRunsController : ControllerBase
         [FromQuery] int limit = 50,
         [FromQuery] string? workflowType = null,
         [FromQuery] string? status = null,
+        [FromQuery] Guid? researchRunId = null,
         CancellationToken cancellationToken = default)
     {
-        var runs = await _agentRunService.ListAsync(_currentUser.UserId, limit, workflowType, status, cancellationToken);
+        var runs = await _agentRunService.ListAsync(_currentUser.UserId, limit, workflowType, status, researchRunId, cancellationToken);
         return Ok(runs);
     }
 

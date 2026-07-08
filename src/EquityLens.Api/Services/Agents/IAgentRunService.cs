@@ -19,6 +19,7 @@ public interface IAgentRunService
         int limit = 50,
         string? workflowType = null,
         string? status = null,
+        Guid? researchRunId = null,
         CancellationToken cancellationToken = default);
 
     Task<AgentRunDetailResponse?> GetByIdAsync(

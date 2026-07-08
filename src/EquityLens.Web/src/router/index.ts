@@ -20,6 +20,8 @@ import RiskModelManagementView from '../views/admin/RiskModelManagementView.vue'
 import AISettingsView from '../views/admin/AISettingsView.vue'
 import AgentRunListView from '../views/agent-runs/AgentRunListView.vue'
 import AgentRunDetailView from '../views/agent-runs/AgentRunDetailView.vue'
+import ResearchRunListView from '../views/research/ResearchRunListView.vue'
+import ResearchRunDetailView from '../views/research/ResearchRunDetailView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -81,6 +83,16 @@ export const router = createRouter({
       path: '/agent-runs/:id',
       name: 'agent-run-detail',
       component: AgentRunDetailView,
+    },
+    {
+      path: '/research',
+      name: 'research',
+      component: ResearchRunListView,
+    },
+    {
+      path: '/research/:id',
+      name: 'research-run-detail',
+      component: ResearchRunDetailView,
     },
     {
       path: '/settings',

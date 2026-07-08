@@ -86,6 +86,7 @@ export async function listAgentRuns(params?: {
   limit?: number
   workflowType?: string
   status?: string
+  researchRunId?: string
 }): Promise<AgentRunListItem[]> {
   const response = await http.get<AgentRunListItem[]>('/agent-runs', { params })
   return response.data
