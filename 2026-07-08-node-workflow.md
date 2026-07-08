@@ -576,6 +576,378 @@ CollectMoreEvidenceThenReviseAnswer
 - 預估成本與時間是否在限制內。
 - Human-in-the-loop node 是否支援 waiting/resume。
 
+## 控制動態 Workflow 組合爆炸
+
+如果有很多 node，而且 planner 可以任意挑選、任意排序、任意連接，可組成的 workflow 數量會快速爆炸。
+
+例如：
+- 10 個 node 如果允許任意 subset，光 subset 就有 `2^10 = 1024` 種。
+- 如果還允許任意排序，會接近 `N!` 等級。
+- 如果再允許 branching 或 loop，搜尋空間會更大，也更難完整驗證。
+
+所以 dynamic workflow 不應該等於任意 workflow。
+
+建議採用：
+
+```text
+Stage-based ordering
++ Template slots
++ Strategy selection
++ Node contracts
++ Conservative validator
+```
+
+核心原則：
+
+```text
+不要讓 planner 在 node graph 空間裡自由搜尋；
+讓 planner 在「模板 slot + stage strategy」空間裡做有限選擇。
+```
+
+## Stage-Based Ordering
+
+Stage-based ordering 是先規定 workflow 必須照階段前進。
+
+例如：
+
+```text
+Stage 1: Load
+Stage 2: Evidence
+Stage 3: Analyze
+Stage 4: Decide
+Stage 5: Act
+Stage 6: Finalize
+```
+
+流程只能大致往後走：
+
+```text
+Load -> Evidence -> Analyze -> Decide -> Act -> Finalize
+```
+
+不允許任意倒退或亂接：
+
+```text
+Finalize -> Analyze
+DraftRevisedAnswer -> LoadResearchRun
+CritiqueAnswer -> BuildEvidencePacket
+```
+
+套到 Research Quality Workflow：
+
+```text
+Load:
+- LoadResearchRun
+
+Evidence:
+- BuildEvidencePacket
+- LocalSearch
+- WebSearch
+
+Analyze:
+- CheckEvidenceCoverage
+- CritiqueAnswer
+
+Decide:
+- EvaluateCriticPolicy
+
+Act:
+- DraftRevisedAnswer
+- FollowUpSearch
+- HumanApproval
+
+Finalize:
+- FinalizeAnswer
+```
+
+每個 node metadata 可以加：
+
+```text
+Stage: Analyze
+StageOrder: 30
+```
+
+Validator 規定 edge 通常只能從低 `StageOrder` 指向高 `StageOrder`。
+
+如果要支援 loop，只允許受控 loop，例如：
+
+```text
+Act -> Evidence
+```
+
+但必須搭配：
+- `maxIterations`。
+- `routeBackTo` 白名單。
+- loop reason。
+- iteration output versioning。
+
+## Template Slots
+
+Template slots 是讓 workflow 不從零開始組，而是先有固定骨架，每個位置留 slot。
+
+例如：
+
+```text
+ResearchQualityReview Template
+
+LoadSlot
+-> EvidenceSlot
+-> AnalyzeSlot
+-> DecideSlot
+-> ActSlot
+-> FinalizeSlot
+```
+
+Template 規定這類 workflow 一定有這幾段，但每個 slot 裡可以放不同 strategy。
+
+例如：
+
+```text
+LoadSlot:
+- LoadResearchRun
+
+EvidenceSlot:
+- ExistingEvidenceOnly
+- LocalSearchEvidence
+- LocalThenWebEvidence
+
+AnalyzeSlot:
+- CriticOnly
+- CriticWithEvidenceCoverage
+
+ActSlot:
+- AcceptOnly
+- DraftRevision
+- HumanApprovalThenDraft
+- FollowUpSearchThenDraft
+
+FinalizeSlot:
+- FinalizeAnswer
+```
+
+這樣 planner 不需要考慮所有 node 任意排列，只需要填 slot。
+
+## Strategy Selection
+
+Strategy selection 是每個 slot 裡選一個預先定義好的 strategy，而不是直接讓 planner 排一串 node。
+
+例如 `EvidenceSlot`：
+
+```text
+Strategy: ExistingEvidenceOnly
+Nodes:
+BuildEvidencePacket
+```
+
+```text
+Strategy: LocalSearchEvidence
+Nodes:
+BuildEvidencePacket
+-> LocalSearch
+-> MergeEvidencePacket
+```
+
+```text
+Strategy: LocalThenWebEvidence
+Nodes:
+BuildEvidencePacket
+-> LocalSearch
+-> WebSearch
+-> RerankEvidence
+-> MergeEvidencePacket
+```
+
+Planner 只要決定：
+
+```text
+這次 EvidenceSlot 使用 LocalThenWebEvidence
+```
+
+而不是自己決定：
+- 要不要 LocalSearch。
+- LocalSearch 放哪裡。
+- WebSearch 放哪裡。
+- Rerank 放哪裡。
+- Merge 放哪裡。
+
+這會大幅降低組合空間，也讓每個 strategy 可以被獨立測試。
+
+## Node Contracts
+
+即使有 stage、template、strategy，每個 node 還是必須有明確 contract。
+
+至少要有：
+
+```text
+NodeType
+Stage
+RequiredBlackboardKeys
+ProducedBlackboardKeys
+AllowedNextNodeTypes
+Retryable
+TimeoutSeconds
+SideEffectLevel
+SupportsLoop
+RequiresHumanInput
+```
+
+例如：
+
+```text
+NodeType: DraftRevisedAnswer
+Stage: Act
+
+RequiredBlackboardKeys:
+- originalQuestion
+- originalAnswer
+- evidencePacket
+- criticReviewResult
+- criticPolicyDecision
+
+ProducedBlackboardKeys:
+- draftRevisionResult
+
+AllowedNextNodeTypes:
+- FinalizeAnswer
+
+Retryable: true
+SideEffectLevel: ExternalLlmRead
+SupportsLoop: false
+RequiresHumanInput: false
+```
+
+這讓 validator 可以判斷：
+- `DraftRevisedAnswer` 不能放在 Load stage。
+- `DraftRevisedAnswer` 不能在缺少 `criticReviewResult` 時執行。
+- `DraftRevisedAnswer` 後面通常只能接 `FinalizeAnswer`。
+- `DraftRevisedAnswer` 可以 retry。
+- `DraftRevisedAnswer` 不應該進 loop。
+
+## Conservative Validator
+
+Planner 產生 workflow 後不能直接執行，必須先交給 validator 檢查。
+
+Validator 要保守：寧可擋掉不確定的 workflow，也不要放過不安全 graph。
+
+Validator 應檢查：
+- Stage order 是否合法。
+- Template slot 是否都有填。
+- RequiredBlackboardKeys 是否能由前面 node 產生。
+- AllowedNextNodeTypes 是否允許目前 edge。
+- 是否有且只有一個 finalize node。
+- Loop 是否有 `maxIterations`。
+- 有 side effect 的 node 是否被放進 loop。
+- HumanApproval 是否支援 waiting/resume。
+- 使用者權限是否允許。
+- 預估成本與時間是否超過上限。
+- Workflow definition 是否能被 persist。
+
+Planner 可以聰明，但 validator 必須保守。
+
+## 組合爆炸的實際壓縮方式
+
+如果有 30 個 node，任意 graph 會非常難控。
+
+改成 template/slot/strategy 後，組合空間會變成：
+
+```text
+模板數量 * 每個 slot 的 strategy 數量
+```
+
+而不是：
+
+```text
+所有 node subset * 任意排列 * 任意 edges
+```
+
+例如：
+
+```text
+3 templates * 3 evidence strategies * 2 analyze strategies * 3 act strategies
+= 54 種
+```
+
+這比任意組合 30 個 node 小很多，而且每種 strategy 都能被測試與驗證。
+
+## 套用到 Research Quality Workflow
+
+使用者需求：
+
+```text
+幫我檢查這份研究答案是否可靠，必要時修正。
+```
+
+不要讓 LLM 直接產生任意 graph：
+
+```text
+LoadResearchRun -> RandomNodeA -> Draft -> Search -> Critique -> Finalize
+```
+
+應該這樣做：
+
+```text
+Template = ResearchQualityReview
+
+Stage order:
+Load -> Evidence -> Analyze -> Decide -> Act -> Finalize
+
+Slots:
+LoadSlot = LoadResearchRun
+EvidenceSlot = ExistingEvidenceOnly
+AnalyzeSlot = CriticWithEvidenceCoverage
+DecideSlot = CriticPolicy
+ActSlot = DraftRevision
+FinalizeSlot = FinalizeAnswer
+```
+
+Strategy 展開後：
+
+```text
+LoadResearchRun
+-> BuildEvidencePacket
+-> CheckEvidenceCoverage
+-> CritiqueAnswer
+-> EvaluateCriticPolicy
+-> DraftRevisedAnswer
+-> FinalizeAnswer
+```
+
+再由 validator 檢查：
+- 每個 node input 是否都有。
+- stage 順序是否正確。
+- edge 是否合法。
+- loop 是否安全。
+- side effect 是否安全。
+
+通過後才 persist workflow definition 並執行。
+
+## 不建議的做法
+
+- 不要讓 LLM 直接輸出任意 workflow graph。
+- 不要讓所有 node 互相 `AllowedNext`。
+- 不要用一個超大 `UniversalResearchAgentNode` 吃掉所有邏輯。
+- 不要一開始就做 generic arbitrary workflow engine。
+
+LLM 可以輔助：
+- intent classification。
+- template selection。
+- strategy selection。
+- parameter filling。
+
+但第一版不應該讓 LLM 任意決定：
+- node type。
+- edge。
+- loop。
+- side effect。
+- finalize behavior。
+
+一句話總結：
+
+```text
+動態 workflow 應該是有限模板內的動態選擇，
+不是所有 node 任意排列組合。
+```
+
 ## 分工建議
 
 ## 角色 1：Workflow Runtime Owner
