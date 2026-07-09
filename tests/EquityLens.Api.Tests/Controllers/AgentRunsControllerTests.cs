@@ -106,7 +106,7 @@ public sealed class AgentRunsControllerTests
                 Guid.NewGuid(), "DraftRevision", "DraftAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null));
         }
 
-        public Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(Guid? userId, int limit = 50, string? workflowType = null, string? status = null, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(Guid? userId, int limit = 50, string? workflowType = null, string? status = null, Guid? researchRunId = null, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<AgentRunSummaryResponse>>([]);
 
         public Task<AgentRunDetailResponse?> GetByIdAsync(Guid id, Guid? userId, CancellationToken cancellationToken = default)

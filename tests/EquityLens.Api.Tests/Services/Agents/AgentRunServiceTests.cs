@@ -111,6 +111,33 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
+    public async Task CreateCriticReviewAsync_WithQueue_EnqueuesRunAndReturnsPending()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var researchRunId = Guid.NewGuid();
+        var queue = new RecordingAgentRunQueue();
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+            new DeterministicCriticReviewAgent(),
+            agentRunQueue: queue);
+
+        var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Pending, summary.Status);
+        var queued = Assert.Single(queue.Messages);
+        Assert.Equal(summary.Id, queued.RunId);
+        Assert.Equal(userId, queued.UserId);
+        Assert.Equal(AgentWorkflowTypes.CriticReview, queued.WorkflowType);
+
+        var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
+        Assert.NotNull(detail);
+        Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunCreated);
+        Assert.DoesNotContain(detail.Events, e => e.EventType == AgentEventTypes.RunStarted);
+    }
+
+    [Fact]
     public async Task CreateCriticReviewAsync_ValidResearchRun_UsesStateMachinesForLifecycleTransitions()
     {
         await using var db = CreateDbContext();
@@ -428,15 +455,10 @@ public sealed class AgentRunServiceTests
                 new DeterministicCriticReviewAgent())
             .Where(handler => handler.NodeType != DraftRevisionNodeTypes.DraftRevisedAnswer)
             .ToArray();
-        var failingService = new AgentRunService(
+        var failingService = CreateServiceWithHandlers(
             db,
             [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider()],
-            new AgentWorkflowPlanner(),
-            new AgentRunGraphValidator(),
-            new AgentRunStateMachine(),
-            new AgentNodeStateMachine(),
-            failingHandlers,
-            NullLogger<AgentRunService>.Instance);
+            failingHandlers);
 
         var failed = await failingService.CreateDraftRevisionAsync(userId, criticReview.Id, CancellationToken.None);
 
@@ -550,17 +572,13 @@ public sealed class AgentRunServiceTests
     public async Task CreateCriticReviewAsync_MissingWorkflowProvider_Throws()
     {
         await using var db = CreateDbContext();
-        var service = new AgentRunService(
+        var service = CreateServiceWithHandlers(
             db,
             [],
-            new AgentWorkflowPlanner(),
-            new AgentRunGraphValidator(),
-            new AgentRunStateMachine(),
-            new AgentNodeStateMachine(),
             CreateCriticReviewHandlers(
                 new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid(), candidateCount: 3)),
                 new DeterministicCriticReviewAgent()),
-            NullLogger<AgentRunService>.Instance);
+            new RecordingAgentRunQueue());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.CreateCriticReviewAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None));
@@ -573,17 +591,13 @@ public sealed class AgentRunServiceTests
     {
         await using var db = CreateDbContext();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => new AgentRunService(
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateServiceWithHandlers(
             db,
             [new CriticReviewWorkflowDefinitionProvider(), new CriticReviewWorkflowDefinitionProvider()],
-            new AgentWorkflowPlanner(),
-            new AgentRunGraphValidator(),
-            new AgentRunStateMachine(),
-            new AgentNodeStateMachine(),
             CreateCriticReviewHandlers(
                 new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid(), candidateCount: 3)),
                 new DeterministicCriticReviewAgent()),
-            NullLogger<AgentRunService>.Instance));
+            new RecordingAgentRunQueue()));
 
         Assert.Equal($"Workflow provider '{AgentWorkflowTypes.CriticReview}' is registered more than once.", exception.Message);
     }
@@ -601,7 +615,7 @@ public sealed class AgentRunServiceTests
             new CheckEvidenceNodeHandler(),
             new CritiqueAnswerNodeHandler(new DeterministicCriticReviewAgent())
         ];
-        var service = new AgentRunService(db, [new CriticReviewWorkflowDefinitionProvider()], new AgentWorkflowPlanner(), new AgentRunGraphValidator(), new AgentRunStateMachine(), new AgentNodeStateMachine(), handlers, NullLogger<AgentRunService>.Instance);
+        var service = CreateServiceWithHandlers(db, [new CriticReviewWorkflowDefinitionProvider()], handlers);
 
         var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
 
@@ -619,17 +633,12 @@ public sealed class AgentRunServiceTests
         await using var db = CreateDbContext();
         var userId = Guid.NewGuid();
         var researchRunId = Guid.NewGuid();
-        var service = new AgentRunService(
+        var service = CreateServiceWithHandlers(
             db,
             [new MissingFinalizeNodeWorkflowDefinitionProvider()],
-            new AgentWorkflowPlanner(),
-            new AgentRunGraphValidator(),
-            new AgentRunStateMachine(),
-            new AgentNodeStateMachine(),
             CreateCriticReviewHandlers(
                 new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3)),
-                new DeterministicCriticReviewAgent()),
-            NullLogger<AgentRunService>.Instance);
+                new DeterministicCriticReviewAgent()));
 
         var summary = await service.CreateCriticReviewAsync(userId, researchRunId, CancellationToken.None);
 
@@ -816,18 +825,40 @@ public sealed class AgentRunServiceTests
         IResearchRunTraceService researchTraceService,
         ICriticReviewAgent criticReviewAgent,
         IAgentRunStateMachine? runStateMachine = null,
-        IAgentNodeStateMachine? nodeStateMachine = null)
+        IAgentNodeStateMachine? nodeStateMachine = null,
+        IAgentRunQueue? agentRunQueue = null)
     {
+        runStateMachine ??= new AgentRunStateMachine();
+        nodeStateMachine ??= new AgentNodeStateMachine();
         var handlers = CreateAllHandlers(researchTraceService, criticReviewAgent);
+        agentRunQueue ??= new AutoExecutingAgentRunQueue(db, handlers, runStateMachine, nodeStateMachine);
+
         return new AgentRunService(
             db,
             [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider()],
-            new AgentWorkflowPlanner(),
-            new AgentRunGraphValidator(),
-            runStateMachine ?? new AgentRunStateMachine(),
-            nodeStateMachine ?? new AgentNodeStateMachine(),
-            handlers,
-            NullLogger<AgentRunService>.Instance);
+            runStateMachine,
+            nodeStateMachine,
+            agentRunQueue);
+    }
+
+    private static AgentRunService CreateServiceWithHandlers(
+        EquityLensDbContext db,
+        IEnumerable<IAgentWorkflowDefinitionProvider> workflowProviders,
+        IEnumerable<IAgentNodeHandler> handlers,
+        IAgentRunQueue? agentRunQueue = null,
+        IAgentRunStateMachine? runStateMachine = null,
+        IAgentNodeStateMachine? nodeStateMachine = null)
+    {
+        runStateMachine ??= new AgentRunStateMachine();
+        nodeStateMachine ??= new AgentNodeStateMachine();
+        agentRunQueue ??= new AutoExecutingAgentRunQueue(db, handlers, runStateMachine, nodeStateMachine);
+
+        return new AgentRunService(
+            db,
+            workflowProviders,
+            runStateMachine,
+            nodeStateMachine,
+            agentRunQueue);
     }
 
     private static IAgentNodeHandler[] CreateCriticReviewHandlers(
@@ -861,6 +892,67 @@ public sealed class AgentRunServiceTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new TestEquityLensDbContext(options);
+    }
+
+    private sealed class AutoExecutingAgentRunQueue : IAgentRunQueue
+    {
+        private readonly IAgentRunExecutor _executor;
+
+        public AutoExecutingAgentRunQueue(
+            EquityLensDbContext db,
+            IEnumerable<IAgentNodeHandler> handlers,
+            IAgentRunStateMachine runStateMachine,
+            IAgentNodeStateMachine nodeStateMachine)
+        {
+            _executor = new AgentRunExecutor(
+                db,
+                new AgentWorkflowPlanner(),
+                new AgentRunGraphValidator(),
+                runStateMachine,
+                nodeStateMachine,
+                handlers,
+                NullLogger<AgentRunExecutor>.Instance);
+        }
+
+        public async Task EnqueueAsync(AgentRunQueueMessage message, CancellationToken cancellationToken = default)
+        {
+            await _executor.ExecuteAsync(message.RunId, message.UserId, cancellationToken);
+        }
+
+        public Task<AgentRunQueueItem?> ReadNextAsync(string consumerName, CancellationToken cancellationToken = default) =>
+            Task.FromResult<AgentRunQueueItem?>(null);
+
+        public Task<AgentRunQueueItem?> ReadStalePendingAsync(
+            string consumerName,
+            TimeSpan minIdleTime,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<AgentRunQueueItem?>(null);
+
+        public Task AcknowledgeAsync(string streamId, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class RecordingAgentRunQueue : IAgentRunQueue
+    {
+        public List<AgentRunQueueMessage> Messages { get; } = [];
+
+        public Task EnqueueAsync(AgentRunQueueMessage message, CancellationToken cancellationToken = default)
+        {
+            Messages.Add(message);
+            return Task.CompletedTask;
+        }
+
+        public Task<AgentRunQueueItem?> ReadNextAsync(string consumerName, CancellationToken cancellationToken = default) =>
+            Task.FromResult<AgentRunQueueItem?>(null);
+
+        public Task<AgentRunQueueItem?> ReadStalePendingAsync(
+            string consumerName,
+            TimeSpan minIdleTime,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<AgentRunQueueItem?>(null);
+
+        public Task AcknowledgeAsync(string streamId, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class RecordingRunStateMachine : IAgentRunStateMachine

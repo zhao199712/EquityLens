@@ -115,6 +115,7 @@ builder.Services.AddDbContext<EquityLensDbContext>(options =>
 
 builder.Services.Configure<AlphaVantageOptions>(builder.Configuration.GetSection("MarketData:AlphaVantage"));
 builder.Services.Configure<FinMindOptions>(builder.Configuration.GetSection("MarketData:FinMind"));
+builder.Services.Configure<AgentRunQueueOptions>(builder.Configuration.GetSection(AgentRunQueueOptions.SectionName));
 
 // Redis 設定與服務註冊
 builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection("Redis"));
@@ -122,6 +123,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     ConnectionMultiplexer.Connect(sp.GetRequiredService<IOptions<RedisOptions>>().Value.ConnectionString));
 builder.Services.AddScoped<IRedisCacheService, RedisCacheService>();
 builder.Services.AddScoped<IBackgroundJobQueue, RedisBackgroundJobQueue>();
+builder.Services.AddScoped<IAgentRunQueue, RedisAgentRunQueue>();
 
 // S3 相容物件儲存設定與服務註冊
 builder.Services.Configure<ObjectStorageOptions>(builder.Configuration.GetSection("ObjectStorage"));
@@ -184,7 +186,9 @@ builder.Services.AddScoped<IAgentNodeHandler, FinalizeCriticReportNodeHandler>()
 builder.Services.AddScoped<IAgentNodeHandler, LoadCriticReviewRunNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, DraftRevisedAnswerNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, FinalizeRevisionNodeHandler>();
+builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
 builder.Services.AddScoped<IAgentRunService, AgentRunService>();
+builder.Services.AddHostedService<AgentRunWorker>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務

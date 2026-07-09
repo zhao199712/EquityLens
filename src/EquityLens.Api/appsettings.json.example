@@ -23,6 +23,11 @@
     "CacheKeyPrefix": "equitylens:cache",
     "DefaultCacheMinutes": 15
   },
+  "AgentRunQueue": {
+    "StreamKey": "equitylens:agent-runs:stream",
+    "ConsumerGroupName": "agent-run-workers",
+    "PendingMinIdleSeconds": 300
+  },
   "ObjectStorage": {
     "ServiceUrl": "http://localhost:9000",
     "Region": "garage",
