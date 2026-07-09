@@ -36,11 +36,6 @@ public sealed class GeminiChatCompletionService : IChatCompletionService
         {
             throw new InvalidOperationException("Gemini model is not configured. Set Gemini:Model.");
         }
-        if (request.ResponseFormat == ChatResponseFormat.JsonObject)
-        {
-            throw new NotSupportedException("Gemini chat completion does not support JsonObject response format yet.");
-        }
-
         var endpoint = $"models/{Uri.EscapeDataString(_options.Model)}:generateContent";
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint);
         httpRequest.Headers.Add("x-goog-api-key", apiKey);
@@ -62,7 +57,10 @@ public sealed class GeminiChatCompletionService : IChatCompletionService
                 generationConfig = new
                 {
                     temperature = request.Temperature,
-                    maxOutputTokens = request.MaxTokens
+                    maxOutputTokens = request.MaxTokens,
+                    responseMimeType = request.ResponseFormat == ChatResponseFormat.JsonObject
+                        ? "application/json"
+                        : (string?)null
                 }
             }, SerializerOptions),
             Encoding.UTF8,
