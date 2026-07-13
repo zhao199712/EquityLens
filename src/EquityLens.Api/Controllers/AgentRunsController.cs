@@ -65,6 +65,26 @@ public sealed class AgentRunsController : ControllerBase
     }
 
     /// <summary>
+    /// 建立並執行 Research Quality Review workflow，合併 CriticReview 與 DraftRevision 為單一完整流程。
+    /// </summary>
+    [HttpPost("research-quality-review")]
+    public async Task<ActionResult<AgentRunSummaryResponse>> CreateResearchQualityReview(
+        CreateResearchQualityReviewRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.ResearchRunId == Guid.Empty)
+        {
+            return BadRequest(new ApiError("research_run_id_required", "請指定 researchRunId。"));
+        }
+
+        var response = await _agentRunService.CreateResearchQualityReviewAsync(
+            _currentUser.UserId,
+            request.ResearchRunId,
+            cancellationToken);
+        return Ok(response);
+    }
+
+    /// <summary>
     /// 查詢 Agent runs 清單，可依 workflow type 與狀態篩選。
     /// </summary>
     [HttpGet]

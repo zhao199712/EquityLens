@@ -374,6 +374,10 @@ public sealed class FinalizeCriticReportNodeHandler : IAgentNodeHandler
             finalOutput.RecommendedNextAction));
         node.OutputJson = AgentNodeJson.Serialize(finalOutput);
         blackboard[AgentBlackboardKeys.FinalOutput] = JsonSerializer.SerializeToNode(finalOutput, AgentNodeJson.SerializerOptions);
+        criticReview[CriticReviewFields.RequiresRevision] = finalOutput.RequiresRevision;
+        criticReview[CriticReviewFields.RequiresMoreEvidence] = finalOutput.RequiresMoreEvidence;
+        criticReview[CriticReviewFields.RouteBackTo] = finalOutput.RouteBackTo is null ? null : JsonSerializer.SerializeToNode(finalOutput.RouteBackTo, AgentNodeJson.SerializerOptions);
+        criticReview[CriticReviewFields.RecommendedNextAction] = finalOutput.RecommendedNextAction;
         run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
         run.OutputJson = node.OutputJson;
         context.AddEvent(run, node, AgentEventTypes.BlackboardUpdated, "Final critic report written to blackboard.", new { overallSeverity = finalOutput.OverallSeverity, policyDecision.RecommendedNextAction, policyDecision.Reason });

@@ -80,10 +80,41 @@ public sealed class AgentRunsControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
+    [Fact]
+    public async Task CreateResearchQualityReview_EmptyResearchRunId_ReturnsBadRequest()
+    {
+        var service = new FakeAgentRunService();
+        var controller = new AgentRunsController(service, new FakeCurrentUserContext());
+
+        var result = await controller.CreateResearchQualityReview(new CreateResearchQualityReviewRequest(Guid.Empty), CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        var error = Assert.IsType<ApiError>(badRequest.Value);
+        Assert.Equal("research_run_id_required", error.Code);
+        Assert.False(service.CreateResearchQualityReviewWasCalled);
+    }
+
+    [Fact]
+    public async Task CreateResearchQualityReview_ValidRequest_CallsService()
+    {
+        var service = new FakeAgentRunService();
+        var controller = new AgentRunsController(service, new FakeCurrentUserContext());
+        var researchRunId = Guid.NewGuid();
+
+        var result = await controller.CreateResearchQualityReview(new CreateResearchQualityReviewRequest(researchRunId), CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<AgentRunSummaryResponse>(ok.Value);
+        Assert.Equal("ResearchQualityReview", response.WorkflowType);
+        Assert.Equal(researchRunId, service.LastResearchRunId);
+        Assert.True(service.CreateResearchQualityReviewWasCalled);
+    }
+
     private sealed class FakeAgentRunService : IAgentRunService
     {
         public bool CreateWasCalled { get; private set; }
         public bool CreateDraftRevisionWasCalled { get; private set; }
+        public bool CreateResearchQualityReviewWasCalled { get; private set; }
         public Guid LastResearchRunId { get; private set; }
         public Guid LastCriticReviewRunId { get; private set; }
         public AgentRunDetailResponse? Detail { get; set; } = new(
@@ -106,7 +137,15 @@ public sealed class AgentRunsControllerTests
                 Guid.NewGuid(), "DraftRevision", "DraftAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null));
         }
 
-        public Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(Guid? userId, int limit = 50, string? workflowType = null, string? status = null, CancellationToken cancellationToken = default)
+        public Task<AgentRunSummaryResponse> CreateResearchQualityReviewAsync(Guid userId, Guid researchRunId, CancellationToken cancellationToken = default)
+        {
+            CreateResearchQualityReviewWasCalled = true;
+            LastResearchRunId = researchRunId;
+            return Task.FromResult(new AgentRunSummaryResponse(
+                Guid.NewGuid(), "ResearchQualityReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null));
+        }
+
+        public Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(Guid? userId, int limit = 50, string? workflowType = null, string? status = null, Guid? researchRunId = null, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<AgentRunSummaryResponse>>([]);
 
         public Task<AgentRunDetailResponse?> GetByIdAsync(Guid id, Guid? userId, CancellationToken cancellationToken = default)

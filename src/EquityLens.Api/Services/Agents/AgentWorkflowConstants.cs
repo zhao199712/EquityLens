@@ -4,6 +4,7 @@ public static class AgentWorkflowTypes
 {
     public const string CriticReview = "CriticReview";
     public const string DraftRevision = "DraftRevision";
+    public const string ResearchQualityReview = "ResearchQualityReview";
 }
 
 public static class AgentTypes
@@ -18,6 +19,11 @@ public static class CriticReviewWorkflow
 }
 
 public static class DraftRevisionWorkflow
+{
+    public const int Version = 1;
+}
+
+public static class ResearchQualityReviewWorkflow
 {
     public const int Version = 1;
 }
@@ -81,6 +87,28 @@ public static class AgentToolCallStatuses
     public const string Succeeded = "Succeeded";
     public const string Failed = "Failed";
     public const string Cancelled = "Cancelled";
+}
+
+public static class ResearchQualityReviewNodeKeys
+{
+    public const string LoadResearchRun = "loadResearchRun";
+    public const string BuildEvidencePacket = "buildEvidencePacket";
+    public const string CheckEvidence = "checkEvidence";
+    public const string CritiqueAnswer = "critiqueAnswer";
+    public const string FinalizeCriticReport = "finalizeCriticReport";
+    public const string DraftRevisedAnswer = "draftRevisedAnswer";
+    public const string FinalizeRevision = "finalizeRevision";
+}
+
+public static class ResearchQualityReviewNodeTypes
+{
+    public const string LoadResearchRun = "LoadResearchRun";
+    public const string BuildEvidencePacket = "BuildEvidencePacket";
+    public const string CheckEvidence = "CheckEvidence";
+    public const string CritiqueAnswer = "CritiqueAnswer";
+    public const string FinalizeCriticReport = "FinalizeCriticReport";
+    public const string DraftRevisedAnswer = "DraftRevisedAnswer";
+    public const string FinalizeRevision = "FinalizeRevision";
 }
 
 public static class AgentEventTypes
