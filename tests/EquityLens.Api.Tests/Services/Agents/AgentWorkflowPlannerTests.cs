@@ -39,6 +39,28 @@ public sealed class AgentWorkflowPlannerTests
     }
 
     [Fact]
+    public void GetExecutionOrder_ResearchQualityReviewWorkflow_ReturnsExpected7NodeOrder()
+    {
+        var provider = new ResearchQualityReviewWorkflowDefinitionProvider();
+        var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var planner = new AgentWorkflowPlanner();
+
+        var order = planner.GetExecutionOrder(run.WorkflowDefinitionJson);
+
+        Assert.Equal(
+        [
+            ResearchQualityReviewNodeKeys.LoadResearchRun,
+            ResearchQualityReviewNodeKeys.BuildEvidencePacket,
+            ResearchQualityReviewNodeKeys.CheckEvidence,
+            ResearchQualityReviewNodeKeys.CritiqueAnswer,
+            ResearchQualityReviewNodeKeys.FinalizeCriticReport,
+            ResearchQualityReviewNodeKeys.DraftRevisedAnswer,
+            ResearchQualityReviewNodeKeys.FinalizeRevision
+        ],
+        order);
+    }
+
+    [Fact]
     public void GetExecutionOrder_EdgeReferencesUnknownNode_Throws()
     {
         var planner = new AgentWorkflowPlanner();

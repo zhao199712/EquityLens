@@ -60,6 +60,21 @@ public sealed class AgentRunService : IAgentRunService
         return MapSummary(run);
     }
 
+    public async Task<AgentRunSummaryResponse> CreateResearchQualityReviewAsync(
+        Guid userId,
+        Guid researchRunId,
+        CancellationToken cancellationToken = default)
+    {
+        var provider = GetWorkflowProvider(AgentWorkflowTypes.ResearchQualityReview);
+        var run = provider.CreateRun(userId, researchRunId);
+        _dbContext.AgentRuns.Add(run);
+        AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchQualityReview run created.", new { researchRunId });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await EnqueueAsync(run, userId, cancellationToken);
+        return MapSummary(run);
+    }
+
     public async Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(
         Guid? userId,
         int limit = 50,

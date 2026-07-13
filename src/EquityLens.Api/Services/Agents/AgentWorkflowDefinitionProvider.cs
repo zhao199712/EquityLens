@@ -110,3 +110,61 @@ public sealed class DraftRevisionWorkflowDefinitionProvider : IAgentWorkflowDefi
         }
     };
 }
+
+public sealed class ResearchQualityReviewWorkflowDefinitionProvider : IAgentWorkflowDefinitionProvider
+{
+    public string WorkflowType => AgentWorkflowTypes.ResearchQualityReview;
+
+    public AgentRun CreateRun(Guid userId, Guid researchRunId) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = userId,
+        WorkflowType = AgentWorkflowTypes.ResearchQualityReview,
+        AgentType = AgentTypes.Critic,
+        Status = AgentRunStatuses.Pending,
+        InputJson = AgentNodeJson.Serialize(new { researchRunId }),
+        BlackboardJson = CreateInitialBlackboardJson(researchRunId),
+        WorkflowDefinitionJson = CreateWorkflowDefinition().ToJsonString(AgentNodeJson.SerializerOptions),
+        CreatedAtUtc = DateTime.UtcNow,
+        Nodes = CreateNodes()
+    };
+
+    public string CreateInitialBlackboardJson(Guid researchRunId) =>
+        AgentBlackboardContracts.CreateInitialResearchQualityReviewBlackboard(researchRunId).ToJsonString(AgentNodeJson.SerializerOptions);
+
+    private static List<AgentRunNode> CreateNodes() =>
+    [
+        new AgentRunNode { Id = Guid.NewGuid(), NodeKey = ResearchQualityReviewNodeKeys.LoadResearchRun, NodeType = ResearchQualityReviewNodeTypes.LoadResearchRun, Status = AgentNodeStatuses.Pending },
+        new AgentRunNode { Id = Guid.NewGuid(), NodeKey = ResearchQualityReviewNodeKeys.BuildEvidencePacket, NodeType = ResearchQualityReviewNodeTypes.BuildEvidencePacket, Status = AgentNodeStatuses.Pending },
+        new AgentRunNode { Id = Guid.NewGuid(), NodeKey = ResearchQualityReviewNodeKeys.CheckEvidence, NodeType = ResearchQualityReviewNodeTypes.CheckEvidence, Status = AgentNodeStatuses.Pending },
+        new AgentRunNode { Id = Guid.NewGuid(), NodeKey = ResearchQualityReviewNodeKeys.CritiqueAnswer, NodeType = ResearchQualityReviewNodeTypes.CritiqueAnswer, Status = AgentNodeStatuses.Pending },
+        new AgentRunNode { Id = Guid.NewGuid(), NodeKey = ResearchQualityReviewNodeKeys.FinalizeCriticReport, NodeType = ResearchQualityReviewNodeTypes.FinalizeCriticReport, Status = AgentNodeStatuses.Pending },
+        new AgentRunNode { Id = Guid.NewGuid(), NodeKey = ResearchQualityReviewNodeKeys.DraftRevisedAnswer, NodeType = ResearchQualityReviewNodeTypes.DraftRevisedAnswer, Status = AgentNodeStatuses.Pending },
+        new AgentRunNode { Id = Guid.NewGuid(), NodeKey = ResearchQualityReviewNodeKeys.FinalizeRevision, NodeType = ResearchQualityReviewNodeTypes.FinalizeRevision, Status = AgentNodeStatuses.Pending }
+    ];
+
+    private static JsonObject CreateWorkflowDefinition() => new()
+    {
+        ["workflowType"] = AgentWorkflowTypes.ResearchQualityReview,
+        ["version"] = ResearchQualityReviewWorkflow.Version,
+        ["nodes"] = new JsonArray
+        {
+            new JsonObject { ["id"] = ResearchQualityReviewNodeKeys.LoadResearchRun, ["type"] = ResearchQualityReviewNodeTypes.LoadResearchRun, ["required"] = true },
+            new JsonObject { ["id"] = ResearchQualityReviewNodeKeys.BuildEvidencePacket, ["type"] = ResearchQualityReviewNodeTypes.BuildEvidencePacket, ["required"] = true },
+            new JsonObject { ["id"] = ResearchQualityReviewNodeKeys.CheckEvidence, ["type"] = ResearchQualityReviewNodeTypes.CheckEvidence, ["required"] = true },
+            new JsonObject { ["id"] = ResearchQualityReviewNodeKeys.CritiqueAnswer, ["type"] = ResearchQualityReviewNodeTypes.CritiqueAnswer, ["required"] = true },
+            new JsonObject { ["id"] = ResearchQualityReviewNodeKeys.FinalizeCriticReport, ["type"] = ResearchQualityReviewNodeTypes.FinalizeCriticReport, ["required"] = true },
+            new JsonObject { ["id"] = ResearchQualityReviewNodeKeys.DraftRevisedAnswer, ["type"] = ResearchQualityReviewNodeTypes.DraftRevisedAnswer, ["required"] = true },
+            new JsonObject { ["id"] = ResearchQualityReviewNodeKeys.FinalizeRevision, ["type"] = ResearchQualityReviewNodeTypes.FinalizeRevision, ["required"] = true }
+        },
+        ["edges"] = new JsonArray
+        {
+            new JsonObject { ["from"] = ResearchQualityReviewNodeKeys.LoadResearchRun, ["to"] = ResearchQualityReviewNodeKeys.BuildEvidencePacket },
+            new JsonObject { ["from"] = ResearchQualityReviewNodeKeys.BuildEvidencePacket, ["to"] = ResearchQualityReviewNodeKeys.CheckEvidence },
+            new JsonObject { ["from"] = ResearchQualityReviewNodeKeys.CheckEvidence, ["to"] = ResearchQualityReviewNodeKeys.CritiqueAnswer },
+            new JsonObject { ["from"] = ResearchQualityReviewNodeKeys.CritiqueAnswer, ["to"] = ResearchQualityReviewNodeKeys.FinalizeCriticReport },
+            new JsonObject { ["from"] = ResearchQualityReviewNodeKeys.FinalizeCriticReport, ["to"] = ResearchQualityReviewNodeKeys.DraftRevisedAnswer },
+            new JsonObject { ["from"] = ResearchQualityReviewNodeKeys.DraftRevisedAnswer, ["to"] = ResearchQualityReviewNodeKeys.FinalizeRevision }
+        }
+    };
+}
