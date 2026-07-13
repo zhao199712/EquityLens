@@ -1,51 +1,30 @@
 # EquityLens
 
-## TWSE 財報爬蟲 PoC 驗證
+> 一個整合投資組合帳務、績效分析、量化風險模型、財報處理與 AI 研究工作流的全端投資研究平台。
 
-### 驗證項目與結果
+EquityLens 的目標不是只呈現持股與即時損益，而是將投資人的完整研究流程串在一起：
 
-| 步驟 | 結果 | 說明 |
-|------|------|------|
-| TPEX 0050 成分股 API | ✅ | `https://www.tpex.org.tw/web/stock/iNdex_info/gretai50/ingrid/r50cnstnt_result.php?l=zh-tw&o=data`，CSV 格式，共 50 檔 |
-| TWSE 財報查詢頁面解析 | ✅ | `https://doc.twse.com.tw/server-java/t57sb01?step=1&colorchg=1&co_id={code}&year={year}&mtype=A&`，HTML 表格可解析 |
-| TWSE PDF 下載 | ✅ | POST 表單到同一 URL（step=9, kind=A），回應含 PDF 連結，下載成功 |
-| PdfPig 文字提取 | ✅ | 93 頁台積電 Q1 財報成功提取中文，`PdfPig 0.1.14` NuGet 套件 |
-
-### TWSE URL 結構
-
-- **財報查詢頁面**: `GET https://doc.twse.com.tw/server-java/t57sb01?step=1&colorchg=1&co_id={code}&year={year}&mtype=A&`
-- **PDF 下載**: `POST` 同一 URL，body: `step=9&kind=A&co_id={code}&filename={pdf_name}`
-- **PDF 實際連結**: 回應 HTML 中包含 `/pdf/{filename}_{timestamp}.pdf`
-
-### 0050 成分股
-
-- **資料來源**: TPEX CSV API
-- **更新頻率**: 每日
-- **股票數量**: 50 檔
-
-### API 端點
-
-```
-POST /api/financial-filings/crawl
-Authorization: Bearer {token}
-Content-Type: application/json
-
-{
-  "stockCodes": ["2330", "2498"],
-  "startYear": 112,
-  "endYear": 115
-}
+```text
+交易與現金流
+    ↓
+投資組合估值與績效
+    ↓
+風險分析
+    ↓
+財報與研究資料
+    ↓
+AI 證據檢查、批判與答案修訂
 ```
 
-### 回應格式
+本專案目前仍在持續開發中，主要用途為金融科技、量化風險分析與 Agentic Workflow 的工程實作與研究。
 
-```json
-{
-  "totalRequested": 8,
-  "successCount": 6,
-  "failedCount": 2,
-  "failedFiles": [
-    { "stockCode": "2498", "year": 112, "reason": "..." }
-  ]
-}
-```
+---
+
+## 專案動機
+
+一般投資工具常將以下能力拆散在不同平台：
+
+- 券商提供持倉與損益，但缺乏完整績效與模型分析。
+- 財報網站提供公司資料，但不會與個人投資組合連動。
+- 量化工具能計算風險，卻通常沒有交易帳務與研究脈絡。
+- L
