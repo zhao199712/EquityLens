@@ -1,6 +1,6 @@
 # EquityLens Workflow Design Principles
 
-> 本文件用來約束 AI 在 EquityLens 中設計、修改與審查 workflow。
+> 本文件用來約束 AI 在 EquityLens 中設計、修改與審查 workflow。  
 > 核心目標不是最大化 Agent 自主性，而是建立具備**正確性、可驗證性、可追蹤性、可恢復性與成本邊界**的研究流程。
 
 ---
@@ -107,6 +107,7 @@ SmartFinanceAgent
 ```text
 NodeKey
 NodeType
+Stage
 Purpose
 RequiredInputs
 ProducedOutputs
@@ -125,6 +126,7 @@ IdempotencyKey
 {
   "nodeKey": "validateQuantitativeClaims",
   "nodeType": "ValidateQuantitativeClaims",
+  "stage": "Validation",
   "requiredBlackboardKeys": ["claims", "evidencePacket"],
   "producedBlackboardKeys": ["quantitativeValidationResults"],
   "timeoutSeconds": 30,
@@ -263,7 +265,203 @@ exitConditions
 
 ---
 
-## 8. LLM Node 原則
+## 8. Stage 設計原則
+
+### 8.1 Stage 的定位
+
+每個 Node 應指定一個 `Stage`，用來描述它在 workflow 中的語義區段。
+
+> **Edge 決定執行順序，Stage 決定 Node 的語義分組。**
+
+Stage 不得取代 graph dependency、state machine 或 execution order。
+
+不得假設：
+
+- 同一 Stage 的 Node 可以任意排序
+- Stage 只能出現一次
+- Stage 必須線性遞增
+- 完成一個 Stage 後不能再次回到該 Stage
+- Runtime 可以依 Stage 名稱推導執行順序
+
+例如補充檢索流程可能合法地出現：
+
+```text
+Evidence
+→ Validation
+→ Retrieval
+→ Evidence
+→ Validation
+```
+
+因此 Stage 是 metadata，不是第二套 workflow engine。
+
+### 8.2 Stage 的用途
+
+Stage 可用於：
+
+- UI 分區與進度顯示
+- latency、token、成本與失敗率統計
+- stage-level timeout 與 budget policy
+- worker routing 或資源配置
+- telemetry attributes
+- workflow review 與除錯
+- 說明 Node 在整體研究流程中的角色
+
+Stage 不應直接用於：
+
+- 決定 Node execution order
+- 隱式建立 dependency
+- 取代 Node status
+- 取代 graph edge
+- 將同 Stage Node 強制視為可平行執行
+
+### 8.3 建議 Stage 清單
+
+第一版使用固定且精簡的 Stage 集合：
+
+```text
+Input
+Planning
+Retrieval
+Evidence
+Analysis
+Validation
+Decision
+Generation
+Finalization
+```
+
+實際 workflow 不必使用全部 Stage。
+
+不得為每個 Node 建立專屬 Stage，否則 Stage 會退化成 NodeType 的別名。新增 Stage 時必須說明現有 Stage 為何不足、新 Stage 的語義邊界，以及對 UI、metrics 或 policy 的實際價值。
+
+### 8.4 Stage 與 NodeType
+
+```text
+Stage = workflow 中的語義區段
+NodeType = 實際執行行為與 handler 類型
+```
+
+例如：
+
+```json
+{
+  "nodeKey": "validateQuantitativeClaims",
+  "nodeType": "ValidateQuantitativeClaims",
+  "stage": "Validation"
+}
+```
+
+```json
+{
+  "nodeKey": "validateCitationSupport",
+  "nodeType": "ValidateCitationSupport",
+  "stage": "Validation"
+}
+```
+
+兩個 Node 可屬於同一 Stage，但必須保有各自獨立的 contract、handler 與 dependency。
+
+### 8.5 Stage Metadata
+
+每個 workflow node definition 至少應包含：
+
+```json
+{
+  "id": "checkEvidence",
+  "type": "CheckEvidence",
+  "stage": "Validation",
+  "required": true
+}
+```
+
+Node metadata 建議包含：
+
+```csharp
+public sealed record NodeMetadata(
+    string NodeType,
+    string Stage,
+    IReadOnlyList<string> RequiredBlackboardKeys,
+    IReadOnlyList<string> ProducedBlackboardKeys,
+    bool HasSideEffects = false,
+    bool IsIdempotent = true);
+```
+
+建立 Workflow Run 時，建議將 Stage snapshot 寫入 `AgentRunNode`，確保歷史紀錄不受未來 workflow definition 變更影響。
+
+`stageOrder` 可供 UI 排序，但不得控制執行順序。
+
+### 8.6 Stage Status
+
+第一版不建立獨立 Stage entity 或持久化 Stage state。Stage status 應由其 Node status 動態聚合，例如：
+
+```text
+任一 Node Running → Stage Running
+任一 required Node Failed → Stage Failed
+所有 required Node Succeeded 或 Skipped → Stage Succeeded
+部分成功且部分 Skipped → Stage PartiallySucceeded
+```
+
+避免同時維護 Run、Stage、Node 三套可能互相矛盾的狀態來源。若未來需要持久化 Stage 狀態，必須先證明動態聚合無法滿足查詢或效能需求。
+
+### 8.7 Stage-Level Policy
+
+Stage 可提供共用預設 policy，但 Node-level policy 必須可以覆寫。
+
+```json
+{
+  "stage": "Retrieval",
+  "maxDurationSeconds": 60,
+  "maxToolCalls": 10
+}
+```
+
+```json
+{
+  "stage": "Analysis",
+  "maxInputTokens": 20000,
+  "maxOutputTokens": 4000
+}
+```
+
+Policy precedence：
+
+```text
+Node override
+→ Stage default
+→ Workflow default
+→ System default
+```
+
+Validation Stage 失敗時不得默認繼續 Publish；是否允許 fallback 必須由明確 policy 決定。
+
+### 8.8 Stage Observability
+
+每個 Node span 與 metric 至少加入：
+
+```text
+workflow.type
+workflow.version
+node.key
+node.type
+node.stage
+```
+
+建議 metrics：
+
+```text
+agent_node_duration_ms{stage="Validation"}
+agent_node_failures_total{stage="Retrieval"}
+llm_input_tokens_total{stage="Analysis"}
+llm_output_tokens_total{stage="Generation"}
+workflow_stage_duration_ms{stage="Evidence"}
+```
+
+Stage duration 必須由實際 Node timeline 聚合，不得假設 Stage 是單一連續時間區段。
+
+---
+
+## 9. LLM Node 原則
 
 LLM Node 必須優先使用 structured output，schema 應具備：
 
@@ -297,7 +495,7 @@ Prompt 變更視同程式碼變更，必須版本控制與測試。
 
 ---
 
-## 9. 金融領域規則
+## 10. 金融領域規則
 
 以下計算必須由金融計算模組執行：
 
@@ -348,7 +546,7 @@ confidence
 
 ---
 
-## 10. Queue 與 Worker 可靠性
+## 11. Queue 與 Worker 可靠性
 
 Redis Queue 負責傳遞工作；PostgreSQL 是 run 狀態、ownership、attempt 與完成狀態的事實來源。
 
@@ -389,7 +587,7 @@ workflowVersion
 
 ---
 
-## 11. Observability
+## 12. Observability
 
 每個 Workflow Run 至少可查詢：
 
@@ -399,6 +597,7 @@ workflowVersion
 - 每個 Node 的 input/output
 - retry、tool calls、model 與 prompt version
 - token、成本、latency、error code 與 trace ID
+- Stage 聚合進度、耗時、成本與錯誤率
 
 每個 Node 至少產生：
 
@@ -413,7 +612,7 @@ NodeSkipped
 
 ---
 
-## 12. Testing 與 Evaluation
+## 13. Testing 與 Evaluation
 
 測試至少涵蓋：
 
@@ -424,6 +623,7 @@ NodeSkipped
 5. Queue/worker integration tests
 6. Workflow end-to-end tests
 7. LLM evaluation tests
+8. Stage aggregation 與 policy precedence tests
 
 LLM output 不以完整字串相等作為唯一判斷，應驗證 schema、必要事實、citation grounding、unsupported claim rate 與 contradiction detection。
 
@@ -438,11 +638,11 @@ LLM output 不以完整字串相等作為唯一判斷，應驗證 schema、必�
 - 文件無法取得
 - LLM schema invalid
 
-修改 prompt、model、retrieval 或 graph 後，必須執行 regression evaluation。
+修改 prompt、model、retrieval、graph 或 Stage policy 後，必須執行 regression evaluation。
 
 ---
 
-## 13. 成本、安全與權限
+## 14. 成本、安全與權限
 
 每條 workflow 必須定義：
 
@@ -470,7 +670,7 @@ LLM 不得自行擴大權限或繞過 application service。
 
 ---
 
-## 14. AI 設計 Workflow 的強制輸出格式
+## 15. AI 設計 Workflow 的強制輸出格式
 
 AI 提出 workflow 設計時，必須依序輸出：
 
@@ -486,14 +686,14 @@ AI 提出 workflow 設計時，必須依序輸出：
 
 ### B. Node 清單
 
-| NodeKey | NodeType | 類型 | 主要責任 | 輸入 | 輸出 |
-|---|---|---|---|---|---|
+| NodeKey | NodeType | Stage | 類型 | 主要責任 | 輸入 | 輸出 |
+|---|---|---|---|---|---|---|
 
 類型只能是：`Deterministic`、`LLM`、`Tool`、`HumanApproval`、`ControlFlow`。
 
 ### C. Graph
 
-列出所有節點、條件分支與 loop 上限。
+列出所有節點、條件分支與 loop 上限。必須明確說明 Edge，而不是以 Stage 暗示順序。
 
 ### D. Failure Policy
 
@@ -503,21 +703,32 @@ AI 提出 workflow 設計時，必須依序輸出：
 
 列出 required/produced Blackboard keys、artifacts 與 schema versions。
 
-### F. Observability
+### F. Stage Contract
+
+列出：
+
+- 每個 Node 的 Stage
+- 使用的 Stage 清單
+- Stage-level default policy
+- Node override 規則
+- Stage status 聚合方式
+- Stage observability 指標
+
+### G. Observability
 
 列出 events、metrics、trace attributes、token 與成本資料。
 
-### G. Tests
+### H. Tests
 
-至少提出正常、邊界、失敗、retry、duplicate delivery 與 LLM schema invalid 案例。
+至少提出正常、邊界、失敗、retry、duplicate delivery、Stage aggregation 與 LLM schema invalid 案例。
 
-### H. 風險與不做事項
+### I. 風險與不做事項
 
 明確說明限制、不應由 LLM 執行的部分、第一版暫不實作功能與未來擴充條件。
 
 ---
 
-## 15. Review Checklist
+## 16. Review Checklist
 
 AI 完成設計後必須自查：
 
@@ -526,7 +737,15 @@ AI 完成設計後必須自查：
 - [ ] 可形式化工作由 deterministic code 執行
 - [ ] Node input/output 有 schema
 - [ ] NodeType 已註冊
+- [ ] 每個 Node 已指定固定清單中的 Stage
+- [ ] Stage 只表達語義分組，不控制 execution order
 - [ ] Graph 可驗證
+- [ ] 未假設同 Stage Node 可任意排序或平行
+- [ ] Stage 未過度細分成 NodeType 別名
+- [ ] Stage status 由 Node status 聚合
+- [ ] Stage-level policy 有明確 default 與 override 規則
+- [ ] 歷史 Run 保存 Stage snapshot
+- [ ] Telemetry 記錄 `node.stage`
 - [ ] Loop 與 retry 有上限
 - [ ] 已考慮 duplicate delivery 與 idempotency
 - [ ] Blackboard 只保存必要狀態
@@ -543,13 +762,14 @@ AI 完成設計後必須自查：
 
 ---
 
-## 16. 最終原則
+## 17. 最終原則
 
 EquityLens workflow 的成熟度不以 Agent 數量衡量，而取決於：
 
 - 每個數字能說明如何算出
 - 每個結論能追溯至證據
 - 每個 Node 有明確責任
+- 每個 Stage 有清楚語義但不干涉 Graph
 - 每次失敗能辨識原因
 - 每個工作能安全重試
 - 每個版本能被重現
