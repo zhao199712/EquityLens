@@ -240,7 +240,7 @@ public class AuthController : ControllerBase
     }
 
     private static UserInfo ToUserInfo(AppUser user) =>
-        new UserInfo(user.Id, user.Email, user.DisplayName);
+        new UserInfo(user.Id, user.Email, user.DisplayName, user.Role);
 }
 
 /// <summary>

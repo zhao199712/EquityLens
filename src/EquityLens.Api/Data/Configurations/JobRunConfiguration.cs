@@ -27,6 +27,7 @@ public class JobRunConfiguration : IEntityTypeConfiguration<JobRun>
         builder.Property(x => x.StartedAtUtc).HasColumnName("started_at_utc");
         builder.Property(x => x.CompletedAtUtc).HasColumnName("completed_at_utc");
         builder.Property(x => x.ErrorMessage).HasColumnName("error_message");
+        builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("now()").IsRequired();
 
         builder.HasOne(x => x.CreatedByUser)
             .WithMany(u => u.JobRuns)
