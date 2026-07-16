@@ -77,8 +77,8 @@ DraftRevision: loadCriticReviewRun -> draftRevisedAnswer -> finalizeRevision
 dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --import-conferences
 dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --chunk-conferences
 dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --embed-chunks
-dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --import-finmind-financials [--from 2023-01-01] [--to 2026-07-07]
-dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --import-mops-financials [--from 2023-01-01] [--to 2026-07-07]
+dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --import-finmind-financials [--from YYYY-MM-DD] [--to YYYY-MM-DD]
+dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --import-mops-financials [--from YYYY-MM-DD] [--to YYYY-MM-DD]
 dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --download-twse-reports [--output ./exports/financial-reports]
 dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --import-twse-report-files
 dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --export-embeddings [path]
