@@ -1,5 +1,19 @@
 import { http } from './http'
 
+export interface MarketPrice {
+  id: string
+  securityId: string
+  priceTime: string
+  interval: string
+  open: number
+  high: number
+  low: number
+  close: number
+  adjustedClose: number | null
+  volume: number | null
+  dataSource: string | null
+}
+
 export interface SyncMarketPricesResponse {
   securityId: string
   source: string | null
@@ -23,5 +37,13 @@ export async function syncSecurityPrices(
     null,
     { params: { days, force } },
   )
+  return response.data
+}
+
+export async function getSecurityPrices(
+  securityId: string,
+  params: { from?: string; to?: string } = {},
+): Promise<MarketPrice[]> {
+  const response = await http.get<MarketPrice[]>(`/securities/${securityId}/prices`, { params })
   return response.data
 }

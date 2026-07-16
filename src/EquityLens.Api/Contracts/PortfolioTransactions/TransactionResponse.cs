@@ -12,4 +12,7 @@ public sealed record TransactionResponse(
     decimal Fee,
     DateOnly TransactionDate,
     string? Note,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    decimal? NetProceeds = null,
+    decimal? FifoCost = null,
+    decimal? RealizedPnl = null);
