@@ -106,7 +106,7 @@ describe('RegisterView', () => {
       data: {
         accessToken: 'token',
         refreshToken: 'refresh',
-        user: { id: 'u1', email: 'test@test.com', displayName: 'Test' },
+        user: { id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' },
       },
     })
 
@@ -140,7 +140,7 @@ describe('RegisterView', () => {
       data: {
         accessToken: 'token',
         refreshToken: 'refresh',
-        user: { id: 'u1', email: 'test@test.com', displayName: 'test' },
+        user: { id: 'u1', email: 'test@test.com', displayName: 'test', role: 'User' },
       },
     })
 

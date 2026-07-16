@@ -13,6 +13,7 @@
           :class="{ highlight: highlightRow === rowIdx }"
           @mouseenter="$emit('rowHover', rowIdx)"
           @mouseleave="$emit('rowHover', null)"
+          @click="$emit('rowClick', rowIdx)"
         >
           <td
             v-for="(cell, colIdx) in row"
@@ -37,5 +38,12 @@ defineProps<{
 
 defineEmits<{
   rowHover: [index: number | null]
+  rowClick: [index: number]
 }>()
 </script>
+
+<style scoped>
+tbody tr {
+  cursor: pointer;
+}
+</style>

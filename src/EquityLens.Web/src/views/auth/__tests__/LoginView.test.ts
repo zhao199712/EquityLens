@@ -25,6 +25,7 @@ function createTestRouter() {
       { path: '/login', name: 'login', component: { template: '<div />' } },
       { path: '/register', name: 'register', component: { template: '<div />' } },
       { path: '/', name: 'dashboard', component: { template: '<div />' } },
+      { path: '/admin/agent-runs', name: 'admin-agent-runs', component: { template: '<div />' } },
     ],
   })
 }
@@ -95,12 +96,12 @@ describe('LoginView', () => {
     expect(wrapper.find('.kimi-error').text()).toBe('Please fill in all fields')
   })
 
-  it('redirects to dashboard on successful login', async () => {
+  it('redirects users to dashboard on successful login', async () => {
     mockedHttp.post.mockResolvedValueOnce({
       data: {
         accessToken: 'token',
         refreshToken: 'refresh',
-        user: { id: 'u1', email: 'test@test.com', displayName: 'Test' },
+        user: { id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' },
       },
     })
 
@@ -119,6 +120,33 @@ describe('LoginView', () => {
 
     await vi.waitFor(() => {
       expect(pushSpy).toHaveBeenCalledWith({ name: 'dashboard' })
+    })
+  })
+
+  it('redirects admins to admin area on successful login', async () => {
+    mockedHttp.post.mockResolvedValueOnce({
+      data: {
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        user: { id: 'u1', email: 'admin@test.com', displayName: 'Admin', role: 'Admin' },
+      },
+    })
+
+    const router = createTestRouter()
+    const pushSpy = vi.spyOn(router, 'push')
+    const pinia = createPinia()
+    setActivePinia(pinia)
+
+    const wrapper = mount(LoginView, {
+      global: { plugins: [pinia, router, createTestI18n()], stubs: { RouterLink: true } },
+    })
+
+    await wrapper.find('input[type="email"]').setValue('admin@test.com')
+    await wrapper.find('input[type="password"]').setValue('password123')
+    await wrapper.find('form').trigger('submit')
+
+    await vi.waitFor(() => {
+      expect(pushSpy).toHaveBeenCalledWith({ name: 'admin-agent-runs' })
     })
   })
 
@@ -172,7 +200,7 @@ describe('LoginView', () => {
       data: {
         accessToken: 't',
         refreshToken: 'r',
-        user: { id: 'u1', email: 'test@test.com', displayName: 'Test' },
+        user: { id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' },
       },
     })
     await vi.waitFor(() => {

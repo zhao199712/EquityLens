@@ -5,6 +5,7 @@ export default {
     riskRuns: 'Risk Runs',
     reports: 'Reports',
     research: 'Research',
+    equityLines: 'Equity Lines',
     settings: 'Settings',
     logout: 'Logout',
   },

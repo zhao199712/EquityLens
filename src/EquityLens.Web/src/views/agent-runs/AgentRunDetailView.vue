@@ -5,62 +5,49 @@ import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import {
   cancelAgentRun,
   createDraftRevision,
-  getAgentRun,
   retryAgentRun,
-  type AgentRunDetail,
   type AgentRunNodeDto,
 } from '../../services/agentRuns'
+import { useAgentRunPolling } from '../../composables/useAgentRunPolling'
 
 interface CriticFinding {
-  Severity: string
-  Category: string
-  Message: string
-  RelatedCitationIndexes: number[]
-  Recommendation: string
+  severity: string
+  category: string
+  message: string
+  relatedCitationIndexes: number[]
+  recommendation: string
 }
 
 interface CriticReviewOutput {
-  Summary?: string
-  OverallSeverity?: string
-  Findings?: CriticFinding[]
-  RequiresRevision?: boolean
-  RequiresMoreEvidence?: boolean
-  RouteBackTo?: string | null
-  RecommendedNextAction?: string
-  SuggestedAnswerRevision?: string | null
+  summary?: string
+  overallSeverity?: string
+  findings?: CriticFinding[]
+  requiresRevision?: boolean
+  requiresMoreEvidence?: boolean
+  routeBackTo?: string | null
+  recommendedNextAction?: string
+  suggestedAnswerRevision?: string | null
 }
 
 interface DraftRevisionOutput {
-  SourceAnswer?: string | null
-  RevisedAnswer?: string
-  RevisionSummary?: string
-  RevisionRequired?: boolean
-  AppliedRecommendation?: string | null
+  sourceAnswer?: string | null
+  revisedAnswer?: string
+  revisionSummary?: string
+  revisionRequired?: boolean
+  appliedRecommendation?: string | null
 }
 
 const route = useRoute()
 const router = useRouter()
-const run = ref<AgentRunDetail | null>(null)
-const loading = ref(true)
 const actionLoading = ref(false)
 const error = ref('')
 const activeTab = ref<'timeline' | 'nodes' | 'toolCalls' | 'feedback' | 'blackboard' | 'workflow'>('timeline')
 const debugExpanded = ref(false)
 
-onMounted(loadRun)
+const runId = computed(() => route.params.id as string)
+const { agentRun: run, isLoading, isPolling, isTerminalStatus, error: pollError, startPolling, refresh } = useAgentRunPolling(runId.value)
 
-async function loadRun() {
-  const id = route.params.id as string
-  loading.value = true
-  error.value = ''
-  try {
-    run.value = await getAgentRun(id)
-  } catch {
-    error.value = '無法載入 Agent Run 詳情。'
-  } finally {
-    loading.value = false
-  }
-}
+onMounted(startPolling)
 
 async function handleRetry() {
   if (!run.value) return
@@ -68,7 +55,7 @@ async function handleRetry() {
   error.value = ''
   try {
     await retryAgentRun(run.value.run.id)
-    await loadRun()
+    refresh()
   } catch {
     error.value = '重試失敗。'
   } finally {
@@ -82,7 +69,7 @@ async function handleCancel() {
   error.value = ''
   try {
     await cancelAgentRun(run.value.run.id)
-    await loadRun()
+    refresh()
   } catch {
     error.value = '取消失敗。'
   } finally {
@@ -152,7 +139,7 @@ const canCreateDraftRevision = computed(() => {
   if (!run.value || run.value.run.workflowType !== 'CriticReview' || run.value.run.status !== 'Succeeded') return false
   const output = run.value.outputJson as CriticReviewOutput | null
   if (!output) return true
-  return output.RecommendedNextAction === 'ReviseAnswer' || output.RecommendedNextAction === 'CollectMoreEvidenceThenReviseAnswer'
+  return output.recommendedNextAction === 'ReviseAnswer' || output.recommendedNextAction === 'CollectMoreEvidenceThenReviseAnswer'
 })
 
 const criticOutput = computed((): CriticReviewOutput | null => {
@@ -166,7 +153,7 @@ const draftOutput = computed((): DraftRevisionOutput | null => {
 })
 
 const nextActionLabel = computed(() => {
-  const action = criticOutput.value?.RecommendedNextAction
+  const action = criticOutput.value?.recommendedNextAction
   if (!action) return null
   switch (action) {
     case 'AcceptAnswer': return { text: '答案可接受', color: '#34d399', bg: 'rgba(52,211,153,0.1)' }
@@ -178,14 +165,14 @@ const nextActionLabel = computed(() => {
 </script>
 
 <template>
-  <div class="kimi-page-light">
+  <div class="kimi-page-vscode">
     <div class="kimi-content">
       <div style="margin-top: 60px; margin-bottom: 12px">
         <button class="kimi-btn" @click="router.push({ name: 'agent-runs' })">← 返回列表</button>
       </div>
 
-      <div v-if="loading" style="padding: 40px 0; color: var(--kimi-muted); font-size: 14px; text-align: center">載入中...</div>
-      <div v-else-if="error" style="padding: 20px; color: #f87171; font-size: 14px">{{ error }}</div>
+      <div v-if="isLoading" style="padding: 40px 0; color: var(--kimi-muted); font-size: 14px; text-align: center">載入中...</div>
+      <div v-else-if="error || pollError" style="padding: 20px; color: #f87171; font-size: 14px">{{ error || pollError }}</div>
 
       <template v-else-if="run">
         <!-- Header -->
@@ -204,7 +191,7 @@ const nextActionLabel = computed(() => {
                 <button v-if="run.run.status === 'Failed'" class="kimi-btn kimi-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
                 <button v-if="run.run.status === 'Running' || run.run.status === 'Pending'" class="kimi-btn" style="border-color: #f87171; color: #f87171" :disabled="actionLoading" @click="handleCancel">取消</button>
                 <button v-if="canCreateDraftRevision" class="kimi-btn kimi-btn-solid" :disabled="actionLoading" @click="handleCreateDraftRevision">產生修訂稿</button>
-                <button class="kimi-btn" :disabled="actionLoading" @click="loadRun">重新整理</button>
+                <button class="kimi-btn" :disabled="actionLoading" @click="refresh">重新整理</button>
               </div>
 
               <div style="display: flex; gap: 20px; margin-top: 12px; font-size: 12px; color: var(--kimi-muted); flex-wrap: wrap">
@@ -213,7 +200,24 @@ const nextActionLabel = computed(() => {
                 <span>完成：{{ formatDate(run.run.completedAtUtc) }}</span>
               </div>
 
-              <div v-if="run.run.errorMessage" style="color: #f87171; font-size: 13px; margin-top: 12px; padding: 12px; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.2)">{{ run.run.errorMessage }}</div>
+              <div v-if="!isTerminalStatus || run.run.errorMessage" style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; flex-wrap: wrap">
+                <span v-if="!isTerminalStatus" style="display: inline-flex; align-items: center; gap: 6px; color: #60a5fa">
+                  <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #60a5fa; animation: pulse 1.5s infinite" />
+                  {{ run.run.status === 'Pending' ? '已加入背景執行佇列，正在等待執行' : '背景執行中，頁面會自動更新' }}
+                </span>
+                <span v-if="run.run.errorMessage" style="color: #f87171">{{ run.run.errorMessage }}</span>
+              </div>
+
+              <div v-if="isPolling" style="display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--kimi-muted)">
+                <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #60a5fa; animation: pulse 1.5s infinite" />
+                自動重新整理中
+              </div>
+            </div>
+
+            <!-- Waiting for output -->
+            <div v-if="!isTerminalStatus || run.outputJson === null" style="padding: 40px 20px; border-bottom: 1px solid var(--kimi-border-light); text-align: center; color: var(--kimi-muted)">
+              <div style="font-size: 14px; margin-bottom: 8px">等待背景工作完成</div>
+              <div style="font-size: 12px">結果產出後會自動顯示在這裡</div>
             </div>
 
             <!-- CriticReview Result -->
@@ -227,44 +231,44 @@ const nextActionLabel = computed(() => {
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px">
                 <div>
                   <div class="kimi-caption" style="margin-bottom: 4px">Overall Severity</div>
-                  <div style="font-size: 14px; font-weight: 600">{{ criticOutput.OverallSeverity ?? '-' }}</div>
+                  <div style="font-size: 14px; font-weight: 600">{{ criticOutput.overallSeverity ?? '-' }}</div>
                 </div>
                 <div>
                   <div class="kimi-caption" style="margin-bottom: 4px">Requires Revision</div>
-                  <div :style="{ color: criticOutput.RequiresRevision ? '#f87171' : '#34d399', fontSize: '14px', fontWeight: '600' }">{{ criticOutput.RequiresRevision ? '是' : '否' }}</div>
+                  <div :style="{ color: criticOutput.requiresRevision ? '#f87171' : '#34d399', fontSize: '14px', fontWeight: '600' }">{{ criticOutput.requiresRevision ? '是' : '否' }}</div>
                 </div>
                 <div>
                   <div class="kimi-caption" style="margin-bottom: 4px">Requires More Evidence</div>
-                  <div :style="{ color: criticOutput.RequiresMoreEvidence ? '#fbbf24' : '#34d399', fontSize: '14px', fontWeight: '600' }">{{ criticOutput.RequiresMoreEvidence ? '是' : '否' }}</div>
+                  <div :style="{ color: criticOutput.requiresMoreEvidence ? '#fbbf24' : '#34d399', fontSize: '14px', fontWeight: '600' }">{{ criticOutput.requiresMoreEvidence ? '是' : '否' }}</div>
                 </div>
-                <div v-if="criticOutput.RouteBackTo">
+                <div v-if="criticOutput.routeBackTo">
                   <div class="kimi-caption" style="margin-bottom: 4px">Route Back To</div>
-                  <div style="font-size: 14px">{{ criticOutput.RouteBackTo }}</div>
+                  <div style="font-size: 14px">{{ criticOutput.routeBackTo }}</div>
                 </div>
               </div>
 
               <div style="margin-bottom: 16px">
                 <div class="kimi-caption" style="margin-bottom: 4px">Summary</div>
-                <div style="font-size: 14px; line-height: 1.6">{{ criticOutput.Summary ?? '-' }}</div>
+                <div style="font-size: 14px; line-height: 1.6">{{ criticOutput.summary ?? '-' }}</div>
               </div>
 
-              <div v-if="criticOutput.Findings && criticOutput.Findings.length > 0">
-                <div class="kimi-caption" style="margin-bottom: 8px">Findings ({{ criticOutput.Findings.length }})</div>
+              <div v-if="criticOutput.findings && criticOutput.findings.length > 0">
+                <div class="kimi-caption" style="margin-bottom: 8px">Findings ({{ criticOutput.findings.length }})</div>
                 <div style="display: flex; flex-direction: column; gap: 8px">
-                  <div v-for="(finding, fi) in criticOutput.Findings" :key="fi" style="padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light)">
+                  <div v-for="(finding, fi) in criticOutput.findings" :key="fi" style="padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light)">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
-                      <span class="kimi-tag" :style="{ borderColor: finding.Severity === 'Critical' || finding.Severity === 'High' ? '#f87171' : finding.Severity === 'Medium' ? '#fbbf24' : '#34d399', color: finding.Severity === 'Critical' || finding.Severity === 'High' ? '#f87171' : finding.Severity === 'Medium' ? '#fbbf24' : '#34d399', fontSize: '11px' }">{{ finding.Severity }}</span>
-                      <span class="kimi-tag" style="font-size: 11px">{{ finding.Category }}</span>
+                      <span class="kimi-tag" :style="{ borderColor: finding.severity === 'Critical' || finding.severity === 'High' ? '#f87171' : finding.severity === 'Medium' ? '#fbbf24' : '#34d399', color: finding.severity === 'Critical' || finding.severity === 'High' ? '#f87171' : finding.severity === 'Medium' ? '#fbbf24' : '#34d399', fontSize: '11px' }">{{ finding.severity }}</span>
+                      <span class="kimi-tag" style="font-size: 11px">{{ finding.category }}</span>
                     </div>
-                    <div style="font-size: 13px; margin-bottom: 4px">{{ finding.Message }}</div>
-                    <div style="font-size: 12px; color: var(--kimi-muted)">建議：{{ finding.Recommendation }}</div>
+                    <div style="font-size: 13px; margin-bottom: 4px">{{ finding.message }}</div>
+                    <div style="font-size: 12px; color: var(--kimi-muted)">建議：{{ finding.recommendation }}</div>
                   </div>
                 </div>
               </div>
 
-              <div v-if="criticOutput.SuggestedAnswerRevision" style="margin-top: 16px">
+              <div v-if="criticOutput.suggestedAnswerRevision" style="margin-top: 16px">
                 <div class="kimi-caption" style="margin-bottom: 4px">Suggested Revision</div>
-                <div style="font-size: 13px; color: #b45309; line-height: 1.6; padding: 12px; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2)">{{ criticOutput.SuggestedAnswerRevision }}</div>
+                <div style="font-size: 13px; color: #b45309; line-height: 1.6; padding: 12px; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2)">{{ criticOutput.suggestedAnswerRevision }}</div>
               </div>
             </div>
 
@@ -275,27 +279,27 @@ const nextActionLabel = computed(() => {
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px">
                 <div>
                   <div class="kimi-caption" style="margin-bottom: 4px">Revision Required</div>
-                  <div :style="{ color: draftOutput.RevisionRequired ? '#fbbf24' : '#34d399', fontSize: '14px', fontWeight: '600' }">{{ draftOutput.RevisionRequired ? '是' : '否' }}</div>
+                  <div :style="{ color: draftOutput.revisionRequired ? '#fbbf24' : '#34d399', fontSize: '14px', fontWeight: '600' }">{{ draftOutput.revisionRequired ? '是' : '否' }}</div>
                 </div>
-                <div v-if="draftOutput.AppliedRecommendation">
+                <div v-if="draftOutput.appliedRecommendation">
                   <div class="kimi-caption" style="margin-bottom: 4px">Applied Recommendation</div>
-                  <div style="font-size: 14px">{{ draftOutput.AppliedRecommendation }}</div>
+                  <div style="font-size: 14px">{{ draftOutput.appliedRecommendation }}</div>
                 </div>
               </div>
 
-              <div v-if="draftOutput.RevisionSummary" style="margin-bottom: 16px">
+              <div v-if="draftOutput.revisionSummary" style="margin-bottom: 16px">
                 <div class="kimi-caption" style="margin-bottom: 4px">修正說明</div>
-                <div style="font-size: 14px; line-height: 1.6">{{ draftOutput.RevisionSummary }}</div>
+                <div style="font-size: 14px; line-height: 1.6">{{ draftOutput.revisionSummary }}</div>
               </div>
 
-              <div v-if="draftOutput.SourceAnswer" style="margin-bottom: 16px">
+              <div v-if="draftOutput.sourceAnswer" style="margin-bottom: 16px">
                 <div class="kimi-caption" style="margin-bottom: 4px">原始答案</div>
-                <div style="font-size: 13px; color: var(--kimi-muted); line-height: 1.6; padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); white-space: pre-wrap">{{ draftOutput.SourceAnswer }}</div>
+                <div style="font-size: 13px; color: var(--kimi-muted); line-height: 1.6; padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); white-space: pre-wrap">{{ draftOutput.sourceAnswer }}</div>
               </div>
 
-              <div v-if="draftOutput.RevisedAnswer">
+              <div v-if="draftOutput.revisedAnswer">
                 <div class="kimi-caption" style="margin-bottom: 4px">修正版答案</div>
-                <div style="font-size: 14px; line-height: 1.7; padding: 16px; background: rgba(52,211,153,0.06); border: 1px solid rgba(52,211,153,0.2); white-space: pre-wrap">{{ draftOutput.RevisedAnswer }}</div>
+                <div style="font-size: 14px; line-height: 1.7; padding: 16px; background: rgba(52,211,153,0.06); border: 1px solid rgba(52,211,153,0.2); white-space: pre-wrap">{{ draftOutput.revisedAnswer }}</div>
               </div>
             </div>
 
