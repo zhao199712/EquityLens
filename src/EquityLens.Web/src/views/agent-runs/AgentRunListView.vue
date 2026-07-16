@@ -54,7 +54,7 @@ function statusColor(status: string) {
 </script>
 
 <template>
-  <div class="kimi-page-light">
+  <div class="kimi-page-vscode">
     <div class="kimi-content">
       <ScrollReveal>
         <div class="kimi-section" style="margin-top: 60px">

@@ -23,6 +23,9 @@ export interface TransactionResponse {
   transactionDate: string
   note: string | null
   createdAtUtc: string
+  netProceeds: number | null
+  fifoCost: number | null
+  realizedPnl: number | null
 }
 
 export async function createTransaction(
@@ -34,4 +37,22 @@ export async function createTransaction(
     request,
   )
   return response.data
+}
+
+export async function getTransactions(
+  portfolioId: string,
+  securityId?: string,
+): Promise<TransactionResponse[]> {
+  const response = await http.get<TransactionResponse[]>(
+    `/portfolios/${portfolioId}/transactions`,
+    { params: securityId ? { securityId } : undefined },
+  )
+  return response.data
+}
+
+export async function deleteTransaction(
+  portfolioId: string,
+  transactionId: string,
+): Promise<void> {
+  await http.delete(`/portfolios/${portfolioId}/transactions/${transactionId}`)
 }

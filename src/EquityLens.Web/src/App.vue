@@ -15,6 +15,7 @@ const chatStore = useChatStore()
 const { t, locale } = useI18n()
 
 const isAuthPage = computed(() => route.name === 'login' || route.name === 'register')
+const isAdmin = computed(() => authStore.user?.role === 'Admin')
 
 const naiveLocale = computed(() => locale.value === 'zh-TW' ? zhTW : enUS)
 
@@ -97,6 +98,8 @@ const activeMenuKey = computed(() => {
   if (name.startsWith('portfolio')) return 'portfolios'
   if (name.startsWith('risk-run')) return 'risk-runs'
   if (name.startsWith('financial-report')) return 'financial-reports'
+  if (name.startsWith('equity-lines')) return 'equity-lines'
+  if (name.startsWith('admin-')) return 'admin-agent-runs'
   if (name.startsWith('research')) return 'research'
   if (name.startsWith('agent-run')) return 'agent-runs'
   return name
@@ -156,11 +159,27 @@ function handleMenuSelect(key: string) {
           </button>
           <span class="kimi-nav-sep">|</span>
           <button
+            :class="['kimi-nav-item', activeMenuKey === 'equity-lines' && 'active']"
+            @click="handleMenuSelect('equity-lines')"
+          >
+            {{ t('nav.equityLines') }}
+          </button>
+          <span class="kimi-nav-sep">|</span>
+          <button
             :class="['kimi-nav-item', activeMenuKey === 'agent-runs' && 'active']"
             @click="handleMenuSelect('agent-runs')"
           >
             Agent Runs
           </button>
+          <template v-if="isAdmin">
+            <span class="kimi-nav-sep">|</span>
+            <button
+              :class="['kimi-nav-item', activeMenuKey === 'admin-agent-runs' && 'active']"
+              @click="handleMenuSelect('admin-agent-runs')"
+            >
+              Admin
+            </button>
+          </template>
         </nav>
 
         <div class="kimi-header-right">

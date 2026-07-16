@@ -21,7 +21,7 @@ function mockAuthResponse(overrides = {}) {
       refreshToken: 'refresh-123',
       tokenType: 'Bearer',
       expiresIn: 60,
-      user: { id: 'u1', email: 'test@test.com', displayName: 'Test' },
+      user: { id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' },
       ...overrides,
     },
   }
@@ -68,7 +68,7 @@ describe('auth store', () => {
       })
       expect(store.token).toBe('access-123')
       expect(store.refreshTokenValue).toBe('refresh-123')
-      expect(store.user).toEqual({ id: 'u1', email: 'test@test.com', displayName: 'Test' })
+      expect(store.user).toEqual({ id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' })
       expect(store.isAuthenticated).toBe(true)
       expect(sessionStorage.getItem('auth_token')).toBe('access-123')
       expect(http.defaults.headers.common['Authorization']).toBe('Bearer access-123')
@@ -110,7 +110,7 @@ describe('auth store', () => {
         password: 'password123',
       })
       expect(store.token).toBe('access-123')
-      expect(store.user).toEqual({ id: 'u1', email: 'test@test.com', displayName: 'Test' })
+      expect(store.user).toEqual({ id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' })
       expect(store.isAuthenticated).toBe(true)
       expect(sessionStorage.getItem('auth_token')).toBe('access-123')
       expect(sessionStorage.getItem('refresh_token')).toBe('refresh-123')
@@ -210,7 +210,7 @@ describe('auth store', () => {
       await store.login('test@test.com', 'password123')
 
       mockedHttp.get.mockResolvedValueOnce({
-        data: { user: { id: 'u1', email: 'test@test.com', displayName: 'Updated' } },
+        data: { user: { id: 'u1', email: 'test@test.com', displayName: 'Updated', role: 'User' } },
       })
       await store.fetchUser()
 

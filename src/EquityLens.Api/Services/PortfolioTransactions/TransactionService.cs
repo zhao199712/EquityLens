@@ -7,6 +7,8 @@ using EquityLens.Api.Repositories.Portfolios;
 using EquityLens.Api.Repositories.PortfolioTransactions;
 using EquityLens.Api.Repositories.Securities;
 using EquityLens.Api.Services.CurrentUser;
+using EquityLens.Api.Services.PortfolioFunding;
+using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Services.PortfolioTransactions;
 
@@ -18,6 +20,7 @@ public sealed class TransactionService : ITransactionService
     private readonly ITransactionRepository _transactionRepository;
     private readonly IPortfolioHoldingRepository _holdingRepository;
     private readonly ISecurityRepository _securityRepository;
+    private readonly IPortfolioFundingService _portfolioFundingService;
 
     public TransactionService(
         EquityLensDbContext dbContext,
@@ -25,7 +28,8 @@ public sealed class TransactionService : ITransactionService
         IPortfolioRepository portfolioRepository,
         ITransactionRepository transactionRepository,
         IPortfolioHoldingRepository holdingRepository,
-        ISecurityRepository securityRepository)
+        ISecurityRepository securityRepository,
+        IPortfolioFundingService portfolioFundingService)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
@@ -33,6 +37,7 @@ public sealed class TransactionService : ITransactionService
         _transactionRepository = transactionRepository;
         _holdingRepository = holdingRepository;
         _securityRepository = securityRepository;
+        _portfolioFundingService = portfolioFundingService;
     }
 
     public async Task<Result<IReadOnlyList<TransactionResponse>>> ListAsync(
@@ -43,6 +48,7 @@ public sealed class TransactionService : ITransactionService
 
         var transactions = await _transactionRepository.ListAsync(portfolioId, securityId, cancellationToken);
 
+        var fifo = FifoPortfolioCalculator.Calculate(transactions);
         var responses = new List<TransactionResponse>();
         foreach (var tx in transactions)
         {
@@ -51,7 +57,10 @@ public sealed class TransactionService : ITransactionService
             responses.Add(new TransactionResponse(
                 tx.Id, tx.SecurityId, sec.Ticker, sec.Exchange, sec.Name,
                 tx.TransactionType, tx.Quantity, tx.Price, tx.Fee,
-                tx.TransactionDate, tx.Note, tx.CreatedAtUtc));
+                tx.TransactionDate, tx.Note, tx.CreatedAtUtc,
+                fifo.Sales.TryGetValue(tx.Id, out var sale) ? sale.NetProceeds : null,
+                fifo.Sales.TryGetValue(tx.Id, out sale) ? sale.MatchedCost : null,
+                fifo.Sales.TryGetValue(tx.Id, out sale) ? sale.RealizedPnl : null));
         }
 
         return Result<IReadOnlyList<TransactionResponse>>.Success(responses);
@@ -77,12 +86,7 @@ public sealed class TransactionService : ITransactionService
         if (security is null)
             return Result<TransactionResponse>.Failure("security.not_found", "Security was not found.");
 
-        if (txType == "SELL")
-        {
-            var holding = await _holdingRepository.GetBySecurityIdAsync(portfolioId, request.SecurityId, cancellationToken);
-            if (holding is null || holding.Quantity < request.Quantity)
-                return Result<TransactionResponse>.Failure("transaction.insufficient_quantity", "Insufficient quantity to sell.");
-        }
+        var existing = await _transactionRepository.ListAsync(portfolioId, null, cancellationToken);
 
         var transaction = new PortfolioTransaction
         {
@@ -97,15 +101,25 @@ public sealed class TransactionService : ITransactionService
             CreatedAtUtc = DateTime.UtcNow
         };
 
+        var projected = FifoPortfolioCalculator.Calculate(existing.Append(transaction));
+        if (!projected.IsValid)
+            return Result<TransactionResponse>.Failure("transaction.insufficient_quantity", "Insufficient quantity to sell.");
+
         _transactionRepository.Add(transaction);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateHoldingAsync(portfolioId, request.SecurityId, cancellationToken);
+        await BackfillDividendCashFlowsAsync(portfolioId, request.SecurityId, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _portfolioFundingService.RebuildImplicitFundingAsync(portfolioId, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var response = new TransactionResponse(
             transaction.Id, transaction.SecurityId, security.Ticker, security.Exchange, security.Name,
             transaction.TransactionType, transaction.Quantity, transaction.Price, transaction.Fee,
-            transaction.TransactionDate, transaction.Note, transaction.CreatedAtUtc);
+            transaction.TransactionDate, transaction.Note, transaction.CreatedAtUtc,
+            projected.Sales.TryGetValue(transaction.Id, out var sale) ? sale.NetProceeds : null,
+            projected.Sales.TryGetValue(transaction.Id, out sale) ? sale.MatchedCost : null,
+            projected.Sales.TryGetValue(transaction.Id, out sale) ? sale.RealizedPnl : null);
 
         return Result<TransactionResponse>.Success(response);
     }
@@ -120,10 +134,17 @@ public sealed class TransactionService : ITransactionService
         if (transaction is null)
             return Result<bool>.Failure("transaction.not_found", "Transaction was not found.");
 
+        var remaining = (await _transactionRepository.ListAsync(portfolioId, null, cancellationToken))
+            .Where(x => x.Id != transaction.Id);
+        if (!FifoPortfolioCalculator.Calculate(remaining).IsValid)
+            return Result<bool>.Failure("transaction.delete_would_oversell", "Deleting this transaction would make a later sell exceed available quantity.");
+
         var securityId = transaction.SecurityId;
         _transactionRepository.Remove(transaction);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateHoldingAsync(portfolioId, securityId, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _portfolioFundingService.RebuildImplicitFundingAsync(portfolioId, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return Result<bool>.Success(true);
@@ -152,25 +173,10 @@ public sealed class TransactionService : ITransactionService
     {
         var transactions = await _transactionRepository.ListByHoldingAsync(portfolioId, securityId, cancellationToken);
 
-        decimal totalBuyQty = 0;
-        decimal totalBuyCost = 0m;
-        decimal totalSellQty = 0;
-
-        foreach (var tx in transactions)
-        {
-            var cost = tx.Quantity * tx.Price + tx.Fee;
-            if (tx.TransactionType == "BUY")
-            {
-                totalBuyQty += tx.Quantity;
-                totalBuyCost += cost;
-            }
-            else
-            {
-                totalSellQty += tx.Quantity;
-            }
-        }
-
-        var netQuantity = totalBuyQty - totalSellQty;
+        var fifo = FifoPortfolioCalculator.Calculate(transactions);
+        if (!fifo.IsValid) return;
+        var lots = fifo.LotsBySecurity.GetValueOrDefault(securityId, new Queue<FifoLot>());
+        var netQuantity = lots.Sum(x => x.Quantity);
         var holding = await _holdingRepository.GetBySecurityIdAsync(portfolioId, securityId, cancellationToken);
 
         if (netQuantity <= 0)
@@ -180,7 +186,7 @@ public sealed class TransactionService : ITransactionService
             return;
         }
 
-        var avgCost = totalBuyQty == 0 ? 0 : totalBuyCost / totalBuyQty;
+        var avgCost = netQuantity == 0 ? 0 : lots.Sum(x => x.CostValue) / netQuantity;
 
         if (holding is null)
         {
@@ -201,6 +207,40 @@ public sealed class TransactionService : ITransactionService
             holding.Quantity = netQuantity;
             holding.AverageCost = avgCost;
             holding.UpdatedAtUtc = DateTime.UtcNow;
+        }
+    }
+
+    // 股息事件可能早於使用者補登交易的時間才被匯入；每次交易變動後補建仍符合除息日的權益。
+    private async Task BackfillDividendCashFlowsAsync(Guid portfolioId, Guid securityId, CancellationToken cancellationToken)
+    {
+        var events = await _dbContext.CashDividendEvents
+            .Where(x => x.SecurityId == securityId)
+            .OrderBy(x => x.ExDividendDate)
+            .ToListAsync(cancellationToken);
+        if (events.Count == 0) return;
+
+        var transactions = await _transactionRepository.ListAsync(portfolioId, securityId, cancellationToken);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        foreach (var evt in events)
+        {
+            var quantity = transactions.Where(x => x.TransactionDate <= evt.ExDividendDate)
+                .Sum(x => x.TransactionType == "BUY" ? x.Quantity : -x.Quantity);
+            if (quantity <= 0 || await _dbContext.PortfolioCashFlows.AnyAsync(x => x.PortfolioId == portfolioId && x.CashDividendEventId == evt.Id, cancellationToken))
+                continue;
+
+            var effectiveDate = evt.PaymentDate ?? evt.ExDividendDate;
+            _dbContext.PortfolioCashFlows.Add(new PortfolioCashFlow
+            {
+                PortfolioId = portfolioId,
+                SecurityId = securityId,
+                CashDividendEventId = evt.Id,
+                FlowType = "Dividend",
+                Amount = quantity * evt.CashAmountPerShare,
+                Currency = "TWD",
+                EffectiveDate = effectiveDate,
+                Status = effectiveDate <= today ? "Posted" : "Scheduled",
+                Note = $"FinMind 現金股利"
+            });
         }
     }
 }

@@ -1,11 +1,14 @@
 using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Portfolios;
+using EquityLens.Api.Data;
 using EquityLens.Api.Domain.Calculations;
 using EquityLens.Api.Repositories.MarketPrices;
 using EquityLens.Api.Repositories.Portfolios;
 using EquityLens.Api.Repositories.PortfolioTransactions;
 using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Services.ExchangeRates;
+using EquityLens.Api.Services.PortfolioTransactions;
+using EquityLens.Api.Services.PortfolioFunding;
 
 namespace EquityLens.Api.Services.PortfolioValuations;
 
@@ -21,6 +24,9 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
     private readonly IMarketPriceRepository _marketPriceRepository;
     private readonly ITransactionRepository _transactionRepository;
     private readonly IExchangeRateService _exchangeRateService;
+    private readonly EquityLensDbContext _dbContext;
+    private readonly IPortfolioFundingService _portfolioFundingService;
+    private readonly IPortfolioBenchmarkService _benchmarkService;
 
     /// <summary>
     /// 初始化投資組合估值服務。
@@ -35,13 +41,19 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
         IPortfolioRepository portfolioRepository,
         IMarketPriceRepository marketPriceRepository,
         ITransactionRepository transactionRepository,
-        IExchangeRateService exchangeRateService)
+        IExchangeRateService exchangeRateService,
+        EquityLensDbContext dbContext,
+        IPortfolioFundingService portfolioFundingService,
+        IPortfolioBenchmarkService benchmarkService)
     {
         _currentUser = currentUser;
         _portfolioRepository = portfolioRepository;
         _marketPriceRepository = marketPriceRepository;
         _transactionRepository = transactionRepository;
         _exchangeRateService = exchangeRateService;
+        _dbContext = dbContext;
+        _portfolioFundingService = portfolioFundingService;
+        _benchmarkService = benchmarkService;
     }
 
     /// <inheritdoc />
@@ -58,6 +70,8 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
         {
             return Result<PortfolioValuationResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
         }
+
+        await EnsureImplicitFundingAsync(portfolioId, cancellationToken);
 
         var securityIds = portfolio.Holdings
             .Select(x => x.SecurityId)
@@ -97,7 +111,9 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
                     null,
                     null,
                     null,
-                    "MissingPrice"));
+                    "MissingPrice",
+                    holding.Sector,
+                    holding.Industry));
                 continue;
             }
 
@@ -123,7 +139,9 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
                 marketValueInBase,
                 unrealizedPnl,
                 unrealizedPnlPercent,
-                "Priced"));
+                "Priced",
+                holding.Sector,
+                holding.Industry));
         }
 
         // 彙總投資組合層級的數據
@@ -151,18 +169,43 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
                 x.UnrealizedPnl,
                 x.UnrealizedPnlPercent,
                 x.MarketValue.HasValue ? PortfolioMath.CalculateWeight(x.MarketValue.Value, totalMarketValue) : null,
-                x.ValuationStatus))
+                x.ValuationStatus,
+                x.Sector,
+                x.Industry))
             .ToList();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var transactions = await _transactionRepository.ListAsync(portfolioId, null, cancellationToken);
+        var fifo = FifoPortfolioCalculator.Calculate(transactions);
+        var flows = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            _dbContext.PortfolioCashFlows.Where(x => x.PortfolioId == portfolioId && x.EffectiveDate <= today && x.Status != "Skipped" && x.Status != "Scheduled"), cancellationToken);
+        var cashBalance = CalculateCashBalance(transactions, flows);
+        decimal? todayPnl = null;
+        var history = await GetValuationHistoryAsync(portfolioId, today.AddDays(-1), today, cancellationToken);
+        if (history.IsSuccess && history.Value!.Points.Count == 2) todayPnl = history.Value.Points[^1].DailyPnl;
+        var firstActivity = transactions.Select(x => x.TransactionDate)
+            .Concat(flows.Select(x => x.EffectiveDate))
+            .DefaultIfEmpty(today)
+            .Min();
+        var performanceHistory = await GetValuationHistoryAsync(portfolioId, firstActivity, today, cancellationToken);
+        var twr = performanceHistory.IsSuccess ? CalculateTwr(performanceHistory.Value!.Points) : null;
+        var xirr = CalculateXirr(flows, totalMarketValue + cashBalance, today);
 
         var response = new PortfolioValuationResponse(
             portfolio.Id,
-            DateOnly.FromDateTime(DateTime.UtcNow),
+            today,
             portfolio.BaseCurrency,
             totalCostValue,
             totalMarketValue,
             totalUnrealizedPnl,
             totalUnrealizedPnlPercent,
-            holdings);
+            holdings,
+            cashBalance,
+            totalMarketValue + cashBalance,
+            fifo.IsValid ? fifo.TotalRealizedPnl : 0m,
+            todayPnl,
+            twr,
+            xirr);
 
         return Result<PortfolioValuationResponse>.Success(response);
     }
@@ -190,7 +233,11 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
             return Result<PortfolioValuationHistoryResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
         }
 
+        await EnsureImplicitFundingAsync(portfolioId, cancellationToken);
+
         var transactions = await _transactionRepository.ListAsync(portfolioId, null, cancellationToken);
+        var cashFlows = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            _dbContext.PortfolioCashFlows.Where(x => x.PortfolioId == portfolioId && x.EffectiveDate <= to && x.Status != "Skipped" && x.Status != "Scheduled"), cancellationToken);
         var orderedTransactions = transactions
             .Where(x => x.TransactionDate <= to)
             .OrderBy(x => x.TransactionDate)
@@ -213,9 +260,12 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
         }
 
         var priceBySecurity = new Dictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>>();
+        // 歷史區間可能從非交易日開始。必須自最早交易日讀取價格，才能在
+        // 區間首日沿用前一個有效收盤價；否則週末／休市日會把持股市值錯算為 0。
+        var priceHistoryStart = orderedTransactions.Min(x => x.TransactionDate);
         foreach (var securityId in securityIds)
         {
-            var prices = await _marketPriceRepository.GetBySecurityAsync(securityId, from, to, cancellationToken);
+            var prices = await _marketPriceRepository.GetBySecurityAsync(securityId, priceHistoryStart, to, cancellationToken);
             priceBySecurity[securityId] = prices;
         }
 
@@ -228,12 +278,36 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
         var priceIndexBySecurity = securityIds.ToDictionary(x => x, _ => 0);
         var points = new List<PortfolioValuationHistoryPoint>();
         var txIndex = 0;
+        var appliedTransactions = new List<Data.Entities.PortfolioTransaction>();
+        // 交易會在第一個日期重播所有歷史資料；現金流也必須先帶入起始日前已生效的餘額，
+        // 否則初始入金會被漏算，導致第一個淨值接近零而使報酬率失真。
+        decimal cashBalance = cashFlows
+            .Where(x => x.EffectiveDate < from)
+            .Sum(SignedCashFlow);
+        decimal realizedPnl = 0m;
+        decimal? previousTotalAssetValue = null;
 
         for (var date = from; date <= to; date = date.AddDays(1))
         {
+            // 現金流是當日開盤前可用的資金。尤其是系統推導的入金與買入
+            // 同日發生時，必須先入帳，否則會短暫產生接近零／負值的淨值，
+            // 進而將 TWR 與累積報酬率放大成不合理的數字。
+            var dayFlows = cashFlows.Where(x => x.EffectiveDate == date).ToList();
+            var externalCashFlow = 0m;
+            foreach (var flow in dayFlows)
+            {
+                var signed = SignedCashFlow(flow);
+                cashBalance += signed;
+                if (flow.FlowType is "Deposit" or "Withdrawal") externalCashFlow += signed;
+            }
+
             while (txIndex < orderedTransactions.Count && orderedTransactions[txIndex].TransactionDate <= date)
             {
+                cashBalance += orderedTransactions[txIndex].TransactionType == "BUY"
+                    ? -(orderedTransactions[txIndex].Quantity * orderedTransactions[txIndex].Price + orderedTransactions[txIndex].Fee)
+                    : orderedTransactions[txIndex].Quantity * orderedTransactions[txIndex].Price - orderedTransactions[txIndex].Fee;
                 ApplyTransaction(lots, orderedTransactions[txIndex]);
+                appliedTransactions.Add(orderedTransactions[txIndex]);
                 txIndex++;
             }
 
@@ -250,17 +324,21 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
                 priceIndexBySecurity[securityId] = priceIndex;
             }
 
+            var fifoAsOf = FifoPortfolioCalculator.Calculate(appliedTransactions);
+            realizedPnl = fifoAsOf.IsValid ? fifoAsOf.TotalRealizedPnl : 0m;
             decimal totalCostValue = 0;
             decimal totalMarketValue = 0;
             var holdingCount = 0;
             var pricedHoldingCount = 0;
 
-            foreach (var (securityId, holding) in lots.Where(x => x.Value.Quantity > 0))
+            foreach (var (securityId, fifoLots) in fifoAsOf.LotsBySecurity.Where(x => x.Value.Sum(lot => lot.Quantity) > 0))
             {
+                var holdingQuantity = fifoLots.Sum(x => x.Quantity);
+                var holdingCost = fifoLots.Sum(x => x.CostValue);
                 holdingCount++;
                 var currency = costCurrencyBySecurity.GetValueOrDefault(securityId, portfolio.BaseCurrency);
                 var costInBase = await _exchangeRateService.ConvertAsync(
-                    holding.CostValue, currency, portfolio.BaseCurrency, cancellationToken);
+                    holdingCost, currency, portfolio.BaseCurrency, cancellationToken);
                 totalCostValue += costInBase;
 
                 if (!latestPriceBySecurity.TryGetValue(securityId, out var price))
@@ -269,7 +347,7 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
                 }
 
                 pricedHoldingCount++;
-                var marketValue = holding.Quantity * price;
+                var marketValue = holdingQuantity * price;
                 var marketValueInBase = await _exchangeRateService.ConvertAsync(
                     marketValue, currency, portfolio.BaseCurrency, cancellationToken);
                 totalMarketValue += marketValueInBase;
@@ -277,6 +355,8 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
 
             var totalUnrealizedPnl = totalMarketValue - totalCostValue;
             var totalUnrealizedPnlPercent = PortfolioMath.CalculateUnrealizedPnlPercent(totalUnrealizedPnl, totalCostValue);
+            var totalAssetValue = totalMarketValue + cashBalance;
+            decimal? dailyPnl = previousTotalAssetValue.HasValue ? totalAssetValue - previousTotalAssetValue.Value - externalCashFlow : null;
             points.Add(new PortfolioValuationHistoryPoint(
                 date,
                 totalCostValue,
@@ -284,15 +364,37 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
                 totalUnrealizedPnl,
                 totalUnrealizedPnlPercent,
                 holdingCount,
-                pricedHoldingCount));
+                pricedHoldingCount,
+                cashBalance,
+                totalAssetValue,
+                realizedPnl,
+                externalCashFlow,
+                dailyPnl));
+            previousTotalAssetValue = totalAssetValue;
         }
 
+        IReadOnlyList<BenchmarkPoint>? benchmark = null;
+        try { benchmark = PortfolioPerformanceCalculator.NormalizeBenchmark(points.Select(x => x.Date).ToList(), await _benchmarkService.GetTotalReturnIndexAsync(from, to, cancellationToken)); } catch { }
+        decimal? benchmarkReturn = benchmark?.LastOrDefault(x => x.NormalizedValue.HasValue)?.NormalizedValue is decimal normalized ? normalized / 100m - 1m : null;
+        var twr = PortfolioPerformanceCalculator.CalculateTwr(points);
+        var beta = benchmark is not null ? PortfolioPerformanceCalculator.CalculateBeta(points, benchmark) : null;
+        var days = to.DayNumber - from.DayNumber;
+        var jensenAlpha = twr.HasValue && benchmarkReturn.HasValue && beta.HasValue && days > 0
+            ? PortfolioPerformanceCalculator.CalculateJensenAlpha(twr.Value, benchmarkReturn.Value, beta.Value, 0.02m, days)
+            : null;
         return Result<PortfolioValuationHistoryResponse>.Success(new PortfolioValuationHistoryResponse(
             portfolio.Id,
             from,
             to,
             portfolio.BaseCurrency,
-            points));
+            points,
+            twr,
+            CalculatePeriodXirr(points),
+            benchmark,
+            benchmarkReturn,
+            twr.HasValue && benchmarkReturn.HasValue ? twr.Value - benchmarkReturn.Value : null,
+            beta,
+            jensenAlpha));
     }
 
     private static IReadOnlyList<PortfolioValuationHistoryPoint> BuildEmptyPoints(DateOnly from, DateOnly to)
@@ -335,6 +437,78 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
         lots[tx.SecurityId] = holding;
     }
 
+    private static decimal CalculateCashBalance(IEnumerable<Data.Entities.PortfolioTransaction> transactions, IEnumerable<Data.Entities.PortfolioCashFlow> flows)
+        => transactions.Sum(x => x.TransactionType == "BUY" ? -(x.Quantity * x.Price + x.Fee) : x.Quantity * x.Price - x.Fee) + flows.Sum(SignedCashFlow);
+
+    private static decimal SignedCashFlow(Data.Entities.PortfolioCashFlow flow)
+        => flow.FlowType is "Withdrawal" or "Fee" or "DividendTax" ? -flow.Amount : flow.Amount;
+
+    private static decimal? CalculateTwr(IReadOnlyList<PortfolioValuationHistoryPoint> points)
+    {
+        decimal cumulative = 1m;
+        var hasReturn = false;
+        for (var index = 1; index < points.Count; index++)
+        {
+            var previous = points[index - 1].TotalAssetValue;
+            var current = points[index].TotalAssetValue;
+            if (previous <= 0 || current < 0) continue;
+            cumulative *= (current - points[index].ExternalCashFlow) / previous;
+            hasReturn = true;
+        }
+        return hasReturn ? cumulative - 1m : null;
+    }
+
+    private static decimal? CalculateXirr(IReadOnlyList<Data.Entities.PortfolioCashFlow> flows, decimal terminalValue, DateOnly asOf)
+    {
+        var external = flows.Where(x => x.FlowType is "Deposit" or "Withdrawal")
+            .Select(x => (Date: x.EffectiveDate, Amount: x.FlowType == "Deposit" ? -x.Amount : x.Amount))
+            .ToList();
+        if (terminalValue > 0) external.Add((asOf, terminalValue));
+        return CalculateXirr(external);
+    }
+
+    private static decimal? CalculatePeriodXirr(IReadOnlyList<PortfolioValuationHistoryPoint> points)
+    {
+        if (points.Count < 2 || points[0].TotalAssetValue <= 0 || points[^1].TotalAssetValue <= 0) return null;
+
+        var external = new List<(DateOnly Date, decimal Amount)> { (points[0].Date, -points[0].TotalAssetValue) };
+        foreach (var point in points.Skip(1))
+        {
+            if (point.ExternalCashFlow != 0) external.Add((point.Date, -point.ExternalCashFlow));
+        }
+        external.Add((points[^1].Date, points[^1].TotalAssetValue));
+        return CalculateXirr(external);
+    }
+
+    private static decimal? CalculateXirr(IReadOnlyList<(DateOnly Date, decimal Amount)> external)
+    {
+        if (!external.Any(x => x.Amount < 0) || !external.Any(x => x.Amount > 0)) return null;
+
+        var origin = external.Min(x => x.Date);
+        double Npv(double rate) => external.Sum(x => (double)x.Amount / Math.Pow(1d + rate, (x.Date.DayNumber - origin.DayNumber) / 365d));
+        var low = -0.9999d;
+        var high = 10d;
+        var lowValue = Npv(low);
+        var highValue = Npv(high);
+        while (lowValue * highValue > 0 && high < 1_000_000d) { high *= 2; highValue = Npv(high); }
+        if (lowValue * highValue > 0) return null;
+        for (var i = 0; i < 100; i++)
+        {
+            var middle = (low + high) / 2;
+            var middleValue = Npv(middle);
+            if (Math.Abs(middleValue) < 0.000001d) return (decimal)middle;
+            if (lowValue * middleValue <= 0) { high = middle; highValue = middleValue; }
+            else { low = middle; lowValue = middleValue; }
+        }
+        return (decimal)((low + high) / 2);
+    }
+
+    private async Task EnsureImplicitFundingAsync(Guid portfolioId, CancellationToken cancellationToken)
+    {
+        await _portfolioFundingService.RebuildImplicitFundingAsync(portfolioId, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     // 持倉估值計算的中間草稿記錄，用於彙總前暫存各持倉計算結果
     private sealed record HoldingValuationDraft(
         Guid HoldingId,
@@ -351,7 +525,9 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
         decimal? MarketValue,
         decimal? UnrealizedPnl,
         decimal? UnrealizedPnlPercent,
-        string ValuationStatus);
+        string ValuationStatus,
+        string? Sector,
+        string? Industry);
 
     private sealed record RunningHolding(decimal Quantity, decimal CostValue);
 }

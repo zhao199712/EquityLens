@@ -22,6 +22,9 @@ import AgentRunListView from '../views/agent-runs/AgentRunListView.vue'
 import AgentRunDetailView from '../views/agent-runs/AgentRunDetailView.vue'
 import ResearchRunListView from '../views/research/ResearchRunListView.vue'
 import ResearchRunDetailView from '../views/research/ResearchRunDetailView.vue'
+import AgentRunManagementView from '../views/admin/AgentRunManagementView.vue'
+import ResearchRunManagementView from '../views/admin/ResearchRunManagementView.vue'
+import EquityLinesView from '../views/equity-lines/EquityLinesView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -90,6 +93,11 @@ export const router = createRouter({
       component: ResearchRunListView,
     },
     {
+      path: '/equity-lines',
+      name: 'equity-lines',
+      component: EquityLinesView,
+    },
+    {
       path: '/research/:id',
       name: 'research-run-detail',
       component: ResearchRunDetailView,
@@ -102,8 +110,34 @@ export const router = createRouter({
     {
       path: '/admin',
       component: AdminLayout,
-      redirect: '/admin/users',
+      meta: { requiresAuth: true, requiresAdmin: true },
+      redirect: '/admin/agent-runs',
       children: [
+        {
+          path: 'agent-runs',
+          name: 'admin-agent-runs',
+          component: AgentRunManagementView,
+        },
+        {
+          path: 'agent-runs/:id',
+          name: 'admin-agent-run-detail',
+          component: AgentRunManagementView,
+        },
+        {
+          path: 'research-runs',
+          name: 'admin-research-runs',
+          component: ResearchRunManagementView,
+        },
+        {
+          path: 'jobs',
+          name: 'admin-jobs',
+          component: JobManagementView,
+        },
+        {
+          path: 'jobs/:id',
+          name: 'admin-job-detail',
+          component: JobManagementView,
+        },
         {
           path: 'users',
           name: 'admin-users',
@@ -134,23 +168,30 @@ export const router = createRouter({
           name: 'admin-ai-settings',
           component: AISettingsView,
         },
-        {
-          path: 'jobs',
-          name: 'admin-jobs',
-          component: JobManagementView,
-        },
       ],
     },
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth !== false && !authStore.isAuthenticated) {
     return { name: 'login' }
   }
+
+  if (authStore.isAuthenticated && !authStore.user) {
+    await authStore.fetchUser()
+  }
+
+  if (to.meta.requiresAuth !== false && !authStore.isAuthenticated) {
+    return { name: 'login' }
+  }
+
   if ((to.name === 'login' || to.name === 'register') && authStore.isAuthenticated) {
+    return { name: 'dashboard' }
+  }
+  if (to.meta.requiresAdmin && authStore.user?.role !== 'Admin') {
     return { name: 'dashboard' }
   }
 })

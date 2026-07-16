@@ -30,7 +30,9 @@ public sealed class PortfolioHoldingRepository : IPortfolioHoldingRepository
                 x.AverageCost,
                 x.CostCurrency,
                 x.Note,
-                x.UpdatedAtUtc))
+                x.UpdatedAtUtc,
+                x.Security.Sector,
+                x.Security.Industry))
             .ToListAsync(cancellationToken);
     }
 
@@ -52,7 +54,9 @@ public sealed class PortfolioHoldingRepository : IPortfolioHoldingRepository
                 x.AverageCost,
                 x.CostCurrency,
                 x.Note,
-                x.UpdatedAtUtc))
+                x.UpdatedAtUtc,
+                x.Security.Sector,
+                x.Security.Industry))
             .SingleOrDefaultAsync(cancellationToken);
     }
 

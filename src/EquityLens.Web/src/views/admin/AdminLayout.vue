@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NLayout, NLayoutSider, NLayoutContent, NMenu } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutContent, NMenu, NMessageProvider } from 'naive-ui'
 import {
   PeopleOutline,
   BusinessOutline,
@@ -11,6 +11,8 @@ import {
   ShieldCheckmarkOutline,
   SparklesOutline,
   TimeOutline,
+  TerminalOutline,
+  FlaskOutline,
 } from '@vicons/ionicons5'
 import { renderIcon } from '../../utils/icons'
 
@@ -26,6 +28,24 @@ function handleMenuSelect(key: string) {
 }
 
 const menuOptions = computed(() => [
+  {
+    label: 'Agent Runs',
+    key: 'agent-runs',
+    icon: renderIcon(TerminalOutline),
+    path: '/admin/agent-runs',
+  },
+  {
+    label: 'Research Runs',
+    key: 'research-runs',
+    icon: renderIcon(FlaskOutline),
+    path: '/admin/research-runs',
+  },
+  {
+    label: 'Import Jobs',
+    key: 'jobs',
+    icon: renderIcon(TimeOutline),
+    path: '/admin/jobs',
+  },
   {
     label: t('admin.layout.userMgmt'),
     key: 'users',
@@ -62,12 +82,6 @@ const menuOptions = computed(() => [
     icon: renderIcon(SparklesOutline),
     path: '/admin/ai-settings',
   },
-  {
-    label: t('admin.layout.jobMgmt'),
-    key: 'jobs',
-    icon: renderIcon(TimeOutline),
-    path: '/admin/jobs',
-  },
 ])
 
 const activeMenuKey = computed(() => {
@@ -78,7 +92,7 @@ const activeMenuKey = computed(() => {
 </script>
 
 <template>
-  <NLayout has-sider style="min-height: calc(100vh - 68px);">
+  <NLayout class="admin-layout" has-sider style="min-height: calc(100vh - 68px);">
     <NLayoutSider
       bordered
       collapse-mode="width"
@@ -104,12 +118,30 @@ const activeMenuKey = computed(() => {
     </NLayoutSider>
 
     <NLayoutContent style="padding: 32px; background: transparent;">
-      <RouterView />
+      <NMessageProvider>
+        <RouterView />
+      </NMessageProvider>
     </NLayoutContent>
   </NLayout>
 </template>
 
 <style scoped>
+.admin-layout {
+  background: #001d2f !important;
+}
+
+:deep(.n-layout-content) {
+  background: #001d2f !important;
+}
+
+:deep(.page-heading h1) {
+  color: #f8fafc !important;
+}
+
+:deep(.page-heading .eyebrow) {
+  color: #9cdcfe !important;
+}
+
 :deep(.n-layout-sider-trigger) {
   background: var(--bg-tertiary) !important;
   color: var(--text-secondary) !important;

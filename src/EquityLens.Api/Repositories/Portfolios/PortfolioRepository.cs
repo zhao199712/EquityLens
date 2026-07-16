@@ -58,7 +58,9 @@ public sealed class PortfolioRepository : IPortfolioRepository
                         h.AverageCost,
                         h.CostCurrency,
                         h.Note,
-                        h.UpdatedAtUtc))
+                        h.UpdatedAtUtc,
+                        h.Security.Sector,
+                        h.Security.Industry))
                     .ToList()))
             .SingleOrDefaultAsync(cancellationToken);
     }

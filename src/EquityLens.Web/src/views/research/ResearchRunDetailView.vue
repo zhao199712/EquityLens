@@ -72,7 +72,7 @@ function statusColor(status: string) {
 </script>
 
 <template>
-  <div class="kimi-page-light">
+  <div class="kimi-page-vscode">
     <div class="kimi-content">
       <div style="margin-top: 60px; margin-bottom: 12px">
         <button class="kimi-btn" @click="router.push({ name: 'research' })">← 返回列表</button>

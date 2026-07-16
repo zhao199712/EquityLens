@@ -24,7 +24,7 @@ async function handleLogin() {
 
   try {
     await authStore.login(email.value, password.value)
-    router.push({ name: 'dashboard' })
+    router.push({ name: authStore.user?.role === 'Admin' ? 'admin-agent-runs' : 'dashboard' })
   } catch (e: any) {
     error.value = e?.response?.data?.message || t('auth.login.errorLoginFailed')
   } finally {

@@ -47,5 +47,27 @@ public interface IRiskAnalysisService
         int simulations,
         Guid providerUserId,
         CancellationToken cancellationToken,
-        string modelName = "gbm_ewma_normal");
+        string modelName = "gbm_ewma_normal",
+        IReadOnlyDictionary<Guid, decimal>? targetWeights = null);
+
+    Task<Result<PortfolioRiskBacktestResponse>> GetPortfolioRiskBacktestAsync(
+        Guid portfolioId, DateOnly from, DateOnly to, Guid providerUserId,
+        CancellationToken cancellationToken);
+
+    Task<Result<PortfolioMonteCarloResponse>> GetPortfolioMonteCarloAsync(
+        Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken,
+        string modelName = "mvewma_fhs");
+
+    Task<Result<PortfolioRiskGovernanceResponse>> GetPortfolioRiskGovernanceAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken);
+
+    Task<Result<PortfolioRiskScenarioResponse>> CalculatePortfolioRiskScenarioAsync(Guid portfolioId, PortfolioRiskScenarioRequest request, Guid providerUserId, CancellationToken cancellationToken);
+
+    Task<Result<PortfolioRiskReportSnapshotDetailResponse>> CreatePortfolioRiskReportSnapshotAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken);
+
+    Task<Result<IReadOnlyList<PortfolioRiskReportSnapshotListItemResponse>>> GetPortfolioRiskReportSnapshotsAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken);
+
+    Task<Result<PortfolioRiskReportSnapshotDetailResponse>> GetPortfolioRiskReportSnapshotAsync(Guid portfolioId, Guid reportId, Guid providerUserId, CancellationToken cancellationToken);
+
+    Task<Result<PortfolioStressTestResponse>> GetPortfolioStressTestAsync(
+        Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken);
 }

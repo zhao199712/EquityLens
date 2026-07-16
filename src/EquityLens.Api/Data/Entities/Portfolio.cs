@@ -14,6 +14,7 @@ public class Portfolio
     // Navigation
     public AppUser Owner { get; set; } = null!;
     public ICollection<PortfolioHolding> Holdings { get; set; } = [];
+    public ICollection<PortfolioCashFlow> CashFlows { get; set; } = [];
     public ICollection<PortfolioSnapshot> Snapshots { get; set; } = [];
     public ICollection<RiskRun> RiskRuns { get; set; } = [];
     public ICollection<FinancialReport> FinancialReports { get; set; } = [];

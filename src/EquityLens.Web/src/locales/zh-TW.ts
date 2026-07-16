@@ -5,6 +5,7 @@ export default {
     riskRuns: '風險分析',
     reports: '報告',
     research: '研究',
+    equityLines: 'Equity Lines',
     settings: '設定',
     logout: '登出',
   },

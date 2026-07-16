@@ -17,6 +17,7 @@ public class JobRun
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
     public string? ErrorMessage { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     // Navigation
     public AppUser? CreatedByUser { get; set; }

@@ -10,4 +10,6 @@ public sealed record PortfolioHoldingResponse(
     decimal AverageCost,
     string CostCurrency,
     string? Note,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    string? Sector,
+    string? Industry);

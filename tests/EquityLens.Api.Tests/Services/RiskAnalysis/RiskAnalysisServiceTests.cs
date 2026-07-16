@@ -9,6 +9,7 @@ using EquityLens.Api.Repositories.Portfolios;
 using EquityLens.Api.Repositories.Securities;
 using EquityLens.Api.Services.ExchangeRates;
 using EquityLens.Api.Services.RiskAnalysis;
+using System.Reflection;
 
 namespace EquityLens.Api.Tests.Services.RiskAnalysis;
 
@@ -54,7 +55,7 @@ public sealed class RiskAnalysisServiceTests
     [Fact]
     public async Task GetSecurityRiskAsync_NonPositivePrice_ReturnsFailure()
     {
-        var prices = BuildMutablePrices(100);
+        var prices = BuildMutablePrices(252);
         prices[5] = prices[5] with { Close = 0, AdjustedClose = 0 };
         var service = CreateService(activeExists: true, prices: prices);
         var result = await service.GetSecurityRiskAsync(
@@ -110,7 +111,7 @@ public sealed class RiskAnalysisServiceTests
     [Fact]
     public async Task GetSecurityRiskAsync_AdjustedClosePreferredOverClose()
     {
-        var prices = BuildMutablePrices(100);
+        var prices = BuildMutablePrices(252);
         prices[0] = prices[0] with { Close = 100, AdjustedClose = 95 };
         var service = CreateService(activeExists: true, prices: prices);
         var result = await service.GetSecurityRiskAsync(
@@ -157,8 +158,8 @@ public sealed class RiskAnalysisServiceTests
 
         var holdings = new List<PortfolioHoldingResponse>
         {
-            new(Guid.NewGuid(), secId1, "AAPL", "NASDAQ", "Apple", 100, 150, "USD", null, DateTime.UtcNow),
-            new(Guid.NewGuid(), secId2, "MSFT", "NASDAQ", "Microsoft", 50, 300, "USD", null, DateTime.UtcNow),
+            new(Guid.NewGuid(), secId1, "AAPL", "NASDAQ", "Apple", 100, 150, "USD", null, DateTime.UtcNow, "Technology", "Semiconductor"),
+            new(Guid.NewGuid(), secId2, "MSFT", "NASDAQ", "Microsoft", 50, 300, "USD", null, DateTime.UtcNow, "Financials", "Insurance"),
         };
 
         var portfolio = new PortfolioDetailResponse(
@@ -172,10 +173,10 @@ public sealed class RiskAnalysisServiceTests
         };
 
         var baseDate = new DateTime(2025, 1, 1);
-        var prices1 = new List<MarketPriceResponse>(50);
-        var prices2 = new List<MarketPriceResponse>(50);
+        var prices1 = new List<MarketPriceResponse>(252);
+        var prices2 = new List<MarketPriceResponse>(252);
         var price = 100m;
-        for (var i = 0; i < 50; i++)
+        for (var i = 0; i < 252; i++)
         {
             price += (decimal)(new Random(i).NextDouble() - 0.5) * 5;
             if (price <= 0) price = 50;
@@ -193,7 +194,7 @@ public sealed class RiskAnalysisServiceTests
 
         var service = CreatePortfolioService(portfolio, latestPrices, historicalPrices);
         var result = await service.GetPortfolioRiskAsync(
-            PortfolioId, DateOnly.FromDateTime(baseDate), DateOnly.FromDateTime(baseDate.AddDays(49)),
+            PortfolioId, DateOnly.FromDateTime(baseDate), DateOnly.FromDateTime(baseDate.AddDays(251)),
             HorizonDays, 0.95m, 5000, UserId, default);
 
         Assert.True(result.IsSuccess, $"Expected success but got: {result.ErrorCode}:{result.ErrorMessage}");
@@ -218,6 +219,21 @@ public sealed class RiskAnalysisServiceTests
         }
         Assert.Equal(0.95m, response.ConfidenceLevel);
         Assert.Equal(2, response.Holdings.Count);
+        Assert.Equal(0.5m, response.ConcentrationHhi);
+        Assert.Equal(0.5m, response.LargestHoldingWeight);
+        Assert.Equal(DateOnly.FromDateTime(baseDate.AddDays(251)), response.DataAsOfDate);
+        Assert.NotNull(response.Industries);
+        Assert.Equal(2, response.Industries!.Count);
+        Assert.Equal(new[] { "Insurance", "Semiconductor" }, response.Industries.Select(industry => industry.Industry).Order());
+        Assert.True(response.Holdings.Sum(holding => holding.ComponentVolatility) > 0);
+        Assert.Equal(response.RiskSourceAnnualizedVolatility,
+            response.Holdings.Sum(holding => holding.ComponentVolatility), 6);
+        Assert.Equal(1m, response.Holdings.Sum(holding => holding.ComponentRiskShare), 6);
+        Assert.All(response.Holdings, holding =>
+        {
+            Assert.True(holding.MarginalVolatility > 0);
+            Assert.True(holding.IncrementalVolatility > 0);
+        });
     }
 
     [Fact]
@@ -226,7 +242,7 @@ public sealed class RiskAnalysisServiceTests
         var secId = Guid.NewGuid();
         var holdings = new List<PortfolioHoldingResponse>
         {
-            new(Guid.NewGuid(), secId, "AAPL", "NASDAQ", "Apple", 100, 150, "USD", null, DateTime.UtcNow),
+            new(Guid.NewGuid(), secId, "AAPL", "NASDAQ", "Apple", 100, 150, "USD", null, DateTime.UtcNow, null, null),
         };
 
         var portfolio = new PortfolioDetailResponse(
@@ -240,7 +256,7 @@ public sealed class RiskAnalysisServiceTests
 
         var historicalPrices = new Dictionary<Guid, IReadOnlyList<MarketPriceResponse>>
         {
-            [secId] = BuildPricesForSecurity(secId, 50),
+            [secId] = BuildPricesForSecurity(secId, 252),
         };
 
         var service = CreatePortfolioService(portfolio, latestPrices, historicalPrices);
@@ -258,7 +274,7 @@ public sealed class RiskAnalysisServiceTests
         var secId = Guid.NewGuid();
         var holdings = new List<PortfolioHoldingResponse>
         {
-            new(Guid.NewGuid(), secId, "AAPL", "NASDAQ", "Apple", 100, 150, "USD", null, DateTime.UtcNow),
+            new(Guid.NewGuid(), secId, "AAPL", "NASDAQ", "Apple", 100, 150, "USD", null, DateTime.UtcNow, null, null),
         };
 
         var portfolio = new PortfolioDetailResponse(
@@ -270,7 +286,7 @@ public sealed class RiskAnalysisServiceTests
             [secId] = new(secId, 200, new DateTime(2025, 12, 31), "Test"),
         };
 
-        var prices = BuildPricesForSecurity(secId, 50).ToList();
+        var prices = BuildPricesForSecurity(secId, 252).ToList();
         prices[10] = prices[10] with { Close = 0 };
         var historicalPrices = new Dictionary<Guid, IReadOnlyList<MarketPriceResponse>>
         {
@@ -290,7 +306,7 @@ public sealed class RiskAnalysisServiceTests
     {
         var holdings = new List<PortfolioHoldingResponse>
         {
-            new(Guid.NewGuid(), Guid.NewGuid(), "AAPL", "NASDAQ", "Apple", 100, 150, "USD", null, DateTime.UtcNow),
+            new(Guid.NewGuid(), Guid.NewGuid(), "AAPL", "NASDAQ", "Apple", 100, 150, "USD", null, DateTime.UtcNow, null, null),
         };
         var portfolio = new PortfolioDetailResponse(
             PortfolioId, "Test", null, "USD",
@@ -304,6 +320,38 @@ public sealed class RiskAnalysisServiceTests
             PortfolioId, To, From, HorizonDays, 0.95m, 5000, UserId, default);
         Assert.False(result.IsSuccess);
         Assert.Equal("risk.invalid_date_range", result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task GetPortfolioStressTestAsync_PortfolioNotFound_ReturnsFailure()
+    {
+        var service = CreatePortfolioService(null, null, null);
+        var result = await service.GetPortfolioStressTestAsync(PortfolioId, UserId, default);
+        Assert.False(result.IsSuccess);
+        Assert.Equal("portfolio.not_found", result.ErrorCode);
+    }
+
+    [Fact]
+    public void PortfolioStressContracts_DoNotExposeCurrency()
+    {
+        var names = typeof(PortfolioStressTestResponse).Assembly
+            .GetTypes().Where(type => type.Namespace == typeof(PortfolioStressTestResponse).Namespace && type.Name.StartsWith("PortfolioStress"))
+            .SelectMany(type => type.GetProperties()).Select(property => property.Name);
+        Assert.DoesNotContain(names, name => name.Contains("Currency", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void KupiecPValue_UsesOneDegreeOfFreedomTailProbability()
+    {
+        var method = typeof(RiskAnalysisService).GetMethod(
+            "KupiecPValue", BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+        var pValue = (decimal)method!.Invoke(null, new object[] { 100, 10, 0.05m })!;
+
+        // LR = 4.13; χ² with one degree of freedom has a tail probability of
+        // approximately 4.2%.  Treating it as df=2 would incorrectly yield ~12.7%.
+        Assert.InRange(pValue, 0.03m, 0.05m);
     }
 
     private static readonly Guid PortfolioId = Guid.NewGuid();

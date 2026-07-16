@@ -45,7 +45,13 @@ public sealed record PortfolioRiskResponse(
     string? CovarianceMethod = null,
     string? ResidualSampling = null,
     int? CommonTradingDays = null,
-    decimal? ShrinkageAlpha = null);
+    decimal? ShrinkageAlpha = null,
+    DateOnly? DataAsOfDate = null,
+    decimal ConcentrationHhi = 0,
+    decimal LargestHoldingWeight = 0,
+    IReadOnlyList<PortfolioIndustryRiskResponse>? Industries = null,
+    decimal RiskSourceAnnualizedVolatility = 0,
+    IReadOnlyList<decimal>? DailyLogReturns = null);
 
 /// <summary>
 /// 投資組合中單一持倉的風險貢獻摘要。
@@ -64,4 +70,19 @@ public sealed record PortfolioHoldingRiskResponse(
     string SecurityName,
     decimal Weight,
     decimal AnnualizedVolatility,
-    int DataPointCount);
+    int DataPointCount,
+    string Industry = "未分類",
+    decimal ComponentVolatility = 0,
+    decimal ComponentRiskShare = 0,
+    decimal MarginalVolatility = 0,
+    decimal IncrementalVolatility = 0);
+
+/// <summary>以產業彙總的投資組合波動率風險來源。</summary>
+public sealed record PortfolioIndustryRiskResponse(
+    string Industry,
+    decimal Weight,
+    decimal ComponentVolatility,
+    decimal ComponentRiskShare,
+    decimal MarginalVolatility,
+    decimal IncrementalVolatility,
+    int HoldingCount);

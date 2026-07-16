@@ -8,4 +8,10 @@ public sealed record PortfolioValuationResponse(
     decimal TotalMarketValue,
     decimal TotalUnrealizedPnl,
     decimal? TotalUnrealizedPnlPercent,
-    IReadOnlyList<HoldingValuationResponse> Holdings);
+    IReadOnlyList<HoldingValuationResponse> Holdings,
+    decimal CashBalance = 0m,
+    decimal TotalAssetValue = 0m,
+    decimal TotalRealizedPnl = 0m,
+    decimal? TodayPnl = null,
+    decimal? Twr = null,
+    decimal? Xirr = null);

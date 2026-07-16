@@ -26,6 +26,7 @@ using EquityLens.Api.Services.ExchangeRates;
 using EquityLens.Api.Services.MarketData;
 using EquityLens.Api.Services.MarketPrices;
 using EquityLens.Api.Services.ObjectStorage;
+using EquityLens.Api.Services.PortfolioDividends;
 using EquityLens.Api.Services.PortfolioHoldings;
 using EquityLens.Api.Services.Portfolios;
 using EquityLens.Api.Services.PortfolioValuations;
@@ -36,12 +37,15 @@ using EquityLens.Api.Services.FinancialFilings;
 using EquityLens.Api.Services.DocumentParsing;
 using EquityLens.Api.Services.DocumentProcessing;
 using EquityLens.Api.Services.PortfolioTransactions;
+using EquityLens.Api.Services.PortfolioFunding;
 using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Services.InvestorConferences;
 using EquityLens.Api.Services.FinancialData;
+using EquityLens.Api.Services.AdminJobs;
+using EquityLens.Api.Services.BackgroundWorkers;
 using EquityLens.Api.Services.Ai;
-using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Ai.Retrieval;
+using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Chat;
 using EquityLens.Api.Services.Research;
 using EquityLens.Api.Observability;
@@ -155,11 +159,17 @@ builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<ISecurityService, SecurityService>();
 builder.Services.AddScoped<IPortfolioHoldingService, PortfolioHoldingService>();
 builder.Services.AddScoped<IPortfolioValuationService, PortfolioValuationService>();
+builder.Services.AddHttpClient<IPortfolioBenchmarkService, FinMindPortfolioBenchmarkService>((sp, client) =>
+{
+    client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<FinMindOptions>>().Value.BaseUrl);
+});
+builder.Services.AddScoped<IPortfolioDividendService, PortfolioDividendService>();
 builder.Services.AddScoped<IMarketPriceService, MarketPriceService>();
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 builder.Services.AddScoped<IUploadedFileService, UploadedFileService>();
 builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddScoped<IPortfolioFundingService, PortfolioFundingService>();
 builder.Services.AddScoped<IRiskAnalysisService, RiskAnalysisService>();
 builder.Services.AddScoped<IConferenceImportService, ConferenceImportService>();
 builder.Services.AddScoped<IPdfTextExtractionService, PdfPigTextExtractionService>();
@@ -190,7 +200,9 @@ builder.Services.AddScoped<IAgentNodeHandler, DraftRevisedAnswerNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, FinalizeRevisionNodeHandler>();
 builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
 builder.Services.AddScoped<IAgentRunService, AgentRunService>();
-builder.Services.AddHostedService<AgentRunWorker>();
+    builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();
+    builder.Services.AddHostedService<BackgroundJobWorker>();
+    builder.Services.AddHostedService<AgentRunWorker>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務
@@ -252,6 +264,11 @@ builder.Services.AddHttpClient<FinMindFinancialImportService>((sp, client) =>
     var options = sp.GetRequiredService<IOptions<FinMindOptions>>().Value;
     client.BaseAddress = new Uri(options.BaseUrl);
 });
+builder.Services.AddHttpClient<IFinMindDividendImportService, FinMindDividendImportService>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<FinMindOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+});
 
 builder.Services.AddScoped<IMopsFinancialImportService, MopsFinancialImportService>();
 builder.Services.AddHttpClient<MopsFinancialImportService>(client =>
@@ -271,9 +288,10 @@ builder.Services.AddHttpClient<TwseReportDownloadService>(client =>
     client.Timeout = TimeSpan.FromSeconds(60);
 });
 
-// TWSE 財報爬蟲服務
+// 富櫃50資料來源（不可作為元大0050成分股來源）
 builder.Services.AddHttpClient<TpeiTaiwan50Provider>();
 builder.Services.AddScoped<ITaiwan50ConstituentProvider, TpeiTaiwan50Provider>();
+builder.Services.AddScoped<ITw0050PriceSyncService, Tw0050PriceSyncService>();
 builder.Services.AddHttpClient<TwseFilingCrawler>();
 builder.Services.AddScoped<ITwseFilingCrawler, TwseFilingCrawler>();
 builder.Services.AddScoped<IPdfParser, PigPdfParser>();

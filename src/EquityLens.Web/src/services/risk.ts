@@ -53,6 +53,21 @@ export interface PortfolioHoldingRisk {
   weight: number
   annualizedVolatility: number
   dataPointCount: number
+  industry: string
+  componentVolatility: number
+  componentRiskShare: number
+  marginalVolatility: number
+  incrementalVolatility: number
+}
+
+export interface PortfolioIndustryRisk {
+  industry: string
+  weight: number
+  componentVolatility: number
+  componentRiskShare: number
+  marginalVolatility: number
+  incrementalVolatility: number
+  holdingCount: number
 }
 
 export interface PortfolioRiskResponse {
@@ -77,8 +92,14 @@ export interface PortfolioRiskResponse {
   commonTradingDays: number | null
   shrinkageAlpha: number | null
   supportedHorizons: number[]
+  dataAsOfDate: string | null
+  concentrationHhi: number
+  largestHoldingWeight: number
   horizons: RiskHorizonResult[]
   holdings: PortfolioHoldingRisk[]
+  industries: PortfolioIndustryRisk[]
+  riskSourceAnnualizedVolatility: number
+  dailyLogReturns: number[]
 }
 
 export async function getPortfolios(): Promise<PortfolioListItem[]> {
@@ -110,6 +131,97 @@ export async function getPortfolioRisk(
   )
   return response.data
 }
+
+export interface PortfolioRiskBacktestPoint {
+  date: string
+  actualReturn: number
+  predictedVaR: number
+  predictedES: number
+  breached: boolean
+}
+export interface PortfolioRiskBacktestModel {
+  model: string
+  confidenceLevel: number
+  observationCount: number
+  breachCount: number
+  breachRate: number
+  expectedBreachRate: number
+  kupiecPValue: number | null
+  christoffersenPValue: number | null
+  tailObservationCount: number
+  actualTailLossAverage: number | null
+  predictedEsAverage: number | null
+  esTailLossRatio: number | null
+  esStatus: string
+  status: string
+  points: PortfolioRiskBacktestPoint[]
+}
+export interface PortfolioRiskBacktestResponse {
+  portfolioId: string
+  from: string
+  to: string
+  lookbackDays: number
+  observationCount: number
+  models: PortfolioRiskBacktestModel[]
+}
+export async function getPortfolioRiskBacktest(portfolioId: string, from: string, to: string): Promise<PortfolioRiskBacktestResponse> {
+  const response = await http.get<PortfolioRiskBacktestResponse>(`/portfolios/${portfolioId}/risk/backtest`, { params: { from, to } })
+  return response.data
+}
+export interface PortfolioMonteCarloBandPoint { day:number; p1:number; p5:number; p50:number; p95:number; p99:number }
+export interface PortfolioMonteCarloPath { pathIndex:number; cumulativeReturns:number[] }
+export interface PortfolioMonteCarloDiagnostics {
+  annualizedPortfolioVolatility:number; residualNormP99:number; maxResidualNorm:number
+  p50FinalReturn:number; p95FinalReturn:number; p99FinalReturn:number; expectedMedianGap:number
+  residualCapQuantile:number; cappedDrawRate:number
+  rightSkewWarning:boolean; rightSkewMessage:string|null
+}
+export interface PortfolioMonteCarloResponse {
+  portfolioId:string; status:string; message:string|null; dataAsOfDate:string|null; commonTradingDays:number
+  horizonDays:number; simulations:number; model:string; ewmaLambda:number; shrinkageAlpha:number; residualCapQuantile:number; cappedDrawRate:number
+  bands:PortfolioMonteCarloBandPoint[]; samplePaths:PortfolioMonteCarloPath[]
+  positiveReturnProbability:number; expectedReturn:number; p5FinalReturn:number; p1FinalReturn:number
+  diagnostics:PortfolioMonteCarloDiagnostics
+}
+export async function getPortfolioMonteCarlo(portfolioId:string, model = 'mvewma_fhs'): Promise<PortfolioMonteCarloResponse> {
+  const response = await http.get<PortfolioMonteCarloResponse>(`/portfolios/${portfolioId}/risk/monte-carlo`, { params: { model } })
+  return response.data
+}
+export interface PortfolioRiskAlert { code:string; status:'normal'|'warning'|'critical'; currentValue:number; warningThreshold:number; criticalThreshold:number; message:string }
+export interface PortfolioRiskGovernanceResponse { portfolioId:string; dataStatus:string; dataAsOfDate:string|null; commonTradingDays:number; alerts:PortfolioRiskAlert[] }
+export async function getPortfolioRiskGovernance(portfolioId:string): Promise<PortfolioRiskGovernanceResponse> {
+  const response = await http.get<PortfolioRiskGovernanceResponse>(`/portfolios/${portfolioId}/risk/governance`)
+  return response.data
+}
+export interface PortfolioRiskScenarioWeight { securityId:string; targetWeight:number }
+export interface PortfolioRiskScenarioResponse { portfolioId:string; cashWeight:number; current:PortfolioRiskResponse; scenario:PortfolioRiskResponse; currentStress:PortfolioStressScenario[]; scenarioStress:PortfolioStressScenario[]; currentGovernance:PortfolioRiskGovernanceResponse; scenarioGovernance:PortfolioRiskGovernanceResponse }
+export async function calculatePortfolioRiskScenario(portfolioId:string, targetWeights:PortfolioRiskScenarioWeight[]): Promise<PortfolioRiskScenarioResponse> {
+  const response = await http.post<PortfolioRiskScenarioResponse>(`/portfolios/${portfolioId}/risk/scenario`, { targetWeights })
+  return response.data
+}
+export interface PortfolioRiskReportSnapshotListItem {
+  id:string; createdAtUtc:string; dataAsOfDate:string|null; model:string; thresholdVersion:string; overallStatus:string
+}
+export interface PortfolioRiskReportSnapshotDetail extends PortfolioRiskReportSnapshotListItem {
+  portfolioId:string; snapshot:Record<string, unknown>
+}
+export async function createPortfolioRiskReportSnapshot(portfolioId:string): Promise<PortfolioRiskReportSnapshotDetail> {
+  const response = await http.post<PortfolioRiskReportSnapshotDetail>(`/portfolios/${portfolioId}/risk/reports`)
+  return response.data
+}
+export async function getPortfolioRiskReportSnapshots(portfolioId:string): Promise<PortfolioRiskReportSnapshotListItem[]> {
+  const response = await http.get<PortfolioRiskReportSnapshotListItem[]>(`/portfolios/${portfolioId}/risk/reports`)
+  return response.data
+}
+export async function getPortfolioRiskReportSnapshot(portfolioId:string, reportId:string): Promise<PortfolioRiskReportSnapshotDetail> {
+  const response = await http.get<PortfolioRiskReportSnapshotDetail>(`/portfolios/${portfolioId}/risk/reports/${reportId}`)
+  return response.data
+}
+export interface PortfolioStressHolding { ticker:string; securityName:string; industry:string; weight:number; basePrice:number; stressedPrice:number; shock:number; contribution:number }
+export interface PortfolioStressIndustry { industry:string; weight:number; impact:number; contribution:number }
+export interface PortfolioStressScenario { id:string; name:string; type:string; status:string; methodology:string; from:string|null; to:string|null; totalImpact:number; holdings:PortfolioStressHolding[]; industries:PortfolioStressIndustry[] }
+export interface PortfolioStressTestResponse { portfolioId:string; dataAsOfDate:string|null; scenarios:PortfolioStressScenario[] }
+export async function getPortfolioStressTest(portfolioId:string): Promise<PortfolioStressTestResponse> { const response=await http.get<PortfolioStressTestResponse>(`/portfolios/${portfolioId}/risk/stress`); return response.data }
 
 export interface CreatePortfolioRequest {
   name: string
@@ -143,6 +255,8 @@ export interface HoldingValuation {
   unrealizedPnlPercent: number | null
   weight: number | null
   valuationStatus: string
+  sector: string | null
+  industry: string | null
 }
 
 export interface PortfolioValuationResponse {
@@ -154,6 +268,12 @@ export interface PortfolioValuationResponse {
   totalUnrealizedPnl: number
   totalUnrealizedPnlPercent: number | null
   holdings: HoldingValuation[]
+  cashBalance: number
+  totalAssetValue: number
+  totalRealizedPnl: number
+  todayPnl: number | null
+  twr: number | null
+  xirr: number | null
 }
 
 export async function getPortfolioValuation(portfolioId: string): Promise<PortfolioValuationResponse> {
@@ -169,6 +289,11 @@ export interface PortfolioValuationHistoryPoint {
   totalUnrealizedPnlPercent: number | null
   holdingCount: number
   pricedHoldingCount: number
+  cashBalance: number
+  totalAssetValue: number
+  totalRealizedPnl: number
+  externalCashFlow: number
+  dailyPnl: number | null
 }
 
 export interface PortfolioValuationHistoryResponse {
@@ -177,6 +302,13 @@ export interface PortfolioValuationHistoryResponse {
   to: string
   currency: string
   points: PortfolioValuationHistoryPoint[]
+  twr: number | null
+  xirr: number | null
+  benchmark: { date: string; indexValue: number | null; normalizedValue: number | null }[] | null
+  benchmarkReturn: number | null
+  excessReturn: number | null
+  beta: number | null
+  jensenAlpha: number | null
 }
 
 export async function getPortfolioValuationHistory(
