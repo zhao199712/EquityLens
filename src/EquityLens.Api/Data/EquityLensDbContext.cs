@@ -16,9 +16,12 @@ public class EquityLensDbContext : DbContext
     public DbSet<Security> Securities => Set<Security>();
     public DbSet<PortfolioHolding> PortfolioHoldings => Set<PortfolioHolding>();
     public DbSet<PortfolioSnapshot> PortfolioSnapshots => Set<PortfolioSnapshot>();
+    public DbSet<RiskReportSnapshot> RiskReportSnapshots => Set<RiskReportSnapshot>();
 
     // Market Data
     public DbSet<MarketPrice> MarketPrices => Set<MarketPrice>();
+    public DbSet<CashDividendEvent> CashDividendEvents => Set<CashDividendEvent>();
+    public DbSet<TaiwanTotalReturnIndex> TaiwanTotalReturnIndices => Set<TaiwanTotalReturnIndex>();
     public DbSet<FinancialStatement> FinancialStatements => Set<FinancialStatement>();
     public DbSet<FinancialLineItem> FinancialLineItems => Set<FinancialLineItem>();
 
@@ -68,6 +71,7 @@ public class EquityLensDbContext : DbContext
 
     // Transactions
     public DbSet<PortfolioTransaction> PortfolioTransactions => Set<PortfolioTransaction>();
+    public DbSet<PortfolioCashFlow> PortfolioCashFlows => Set<PortfolioCashFlow>();
 
     // Auth
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();

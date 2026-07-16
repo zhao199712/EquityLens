@@ -39,6 +39,22 @@ public sealed class RiskMathTests
     }
 
     [Fact]
+    public void CalculateConcentration_NormalizesWeightsAndReturnsHhiAndLargestWeight()
+    {
+        var (hhi, largestWeight) = RiskMath.CalculateConcentration(new[] { 200m, 100m, 100m });
+
+        Assert.Equal(0.375m, hhi);
+        Assert.Equal(0.5m, largestWeight);
+    }
+
+    [Fact]
+    public void CalculateConcentration_EmptyOrNonPositiveWeights_ReturnsZero()
+    {
+        Assert.Equal((0m, 0m), RiskMath.CalculateConcentration(Array.Empty<decimal>()));
+        Assert.Equal((0m, 0m), RiskMath.CalculateConcentration(new[] { -1m, 0m }));
+    }
+
+    [Fact]
     public void CalculateVolatility_ReturnsStandardDeviation()
     {
         var returns = new decimal[] { 0.01m, 0.02m, -0.01m, 0.03m, 0m };
@@ -160,7 +176,19 @@ public sealed class RiskMathTests
         };
         var result = RiskMath.CalculateHistoricalVaR(returns, 0.95m);
         var sorted = returns.OrderBy(x => x).ToList();
-        Assert.Equal(sorted[1], result);
+        Assert.Equal(sorted[0], result);
+    }
+
+    [Theory]
+    [InlineData(0.95, -0.12)]
+    [InlineData(0.99, -0.12)]
+    public void CalculateHistoricalVaR_UsesLeftTailNearestRank(double confidenceLevel, double expected)
+    {
+        var returns = new[] { -0.12m, -0.10m, -0.08m, -0.05m, 0m };
+
+        var result = RiskMath.CalculateHistoricalVaR(returns, (decimal)confidenceLevel);
+
+        Assert.Equal((decimal)expected, result);
     }
 
     [Fact]
@@ -323,6 +351,36 @@ public sealed class RiskMathTests
         };
         var result = RiskMath.CalculatePortfolioVolatility(weights, cov);
         Assert.Equal((decimal)Math.Sqrt(0.0375), result, 4);
+    }
+
+    [Fact]
+    public void CalculateVolatilityRiskContribution_ComponentsAddToPortfolioVolatility()
+    {
+        var weights = new decimal[] { 0.5m, 0.5m };
+        var covariance = new[]
+        {
+            new decimal[] { 0.04m, 0.01m },
+            new decimal[] { 0.01m, 0.09m },
+        };
+
+        var first = RiskMath.CalculateVolatilityRiskContribution(weights, covariance, [0]);
+        var second = RiskMath.CalculateVolatilityRiskContribution(weights, covariance, [1]);
+        var total = RiskMath.CalculatePortfolioVolatility(weights, covariance) * (decimal)Math.Sqrt(252);
+
+        Assert.Equal(total, first.ComponentVolatility + second.ComponentVolatility, 8);
+        Assert.Equal(1m, first.ComponentRiskShare + second.ComponentRiskShare, 8);
+        Assert.True(first.MarginalVolatility > 0);
+        Assert.True(first.IncrementalVolatility > 0);
+    }
+
+    [Fact]
+    public void CalculateVolatilityRiskContribution_ZeroVolatilityOrEmptySelection_ReturnsZero()
+    {
+        var covariance = new[] { new decimal[] { 0m } };
+        Assert.Equal(VolatilityRiskContribution.Zero,
+            RiskMath.CalculateVolatilityRiskContribution(new[] { 1m }, covariance, [0]));
+        Assert.Equal(VolatilityRiskContribution.Zero,
+            RiskMath.CalculateVolatilityRiskContribution(new[] { 1m }, new[] { new decimal[] { 0.01m } }, Array.Empty<int>()));
     }
 
     [Fact]
@@ -729,5 +787,72 @@ public sealed class RiskMathTests
         Assert.True(result.MeanFinalValue > 0);
         Assert.Equal(1, result.AssetCount);
         Assert.False(result.DidFallback);
+    }
+
+    [Fact]
+    public void RunMultivariateFhsPathSimulation_ReturnsOrderedBandsAndDeterministicSamples()
+    {
+        var returns = Enumerable.Range(0, 120)
+            .Select(index => (decimal)((index % 9 - 4) * 0.0025))
+            .ToArray();
+        var matrix = new IReadOnlyList<decimal>[] { returns, returns.Select(value => value * 0.7m).ToArray() };
+        var weights = new decimal[] { 0.6m, 0.4m };
+
+        var first = RiskMath.RunMultivariateFhsPathSimulation(matrix, weights, 30, 500, 8, 12345);
+        var second = RiskMath.RunMultivariateFhsPathSimulation(matrix, weights, 30, 500, 8, 12345);
+
+        Assert.False(first.DidFallback);
+        Assert.Equal(31, first.Bands.Count);
+        Assert.Equal(8, first.SamplePaths.Count);
+        Assert.All(first.SamplePaths, path => Assert.Equal(31, path.Count));
+        Assert.All(first.SamplePaths, path => Assert.Equal(0m, path[0]));
+        Assert.All(first.Bands, band => Assert.True(band.P1 <= band.P5 && band.P5 <= band.P50 && band.P50 <= band.P95 && band.P95 <= band.P99));
+        Assert.True(first.AnnualizedPortfolioVolatility >= 0m);
+        Assert.True(first.ResidualNormP99 <= first.MaxResidualNorm);
+        Assert.True(first.P50FinalReturn <= first.P95FinalReturn && first.P95FinalReturn <= first.P99FinalReturn);
+        Assert.Equal(first.Bands, second.Bands);
+        Assert.Equal(first.SamplePaths, second.SamplePaths);
+    }
+
+    [Fact]
+    public void RunMultivariateFhsPathSimulation_ZeroVolatility_ReturnsZeroPaths()
+    {
+        var matrix = new IReadOnlyList<decimal>[] { Enumerable.Repeat(0m, 120).ToArray() };
+        var result = RiskMath.RunMultivariateFhsPathSimulation(matrix, new decimal[] { 1m }, 10, 100, 8, 7);
+
+        Assert.False(result.DidFallback);
+        Assert.All(result.Bands, band => Assert.Equal(0m, band.P1));
+        Assert.All(result.SamplePaths, path => Assert.All(path, value => Assert.Equal(0m, value)));
+        Assert.Equal(0m, result.AnnualizedPortfolioVolatility);
+        Assert.False(RiskMath.HasMaterialRightSkew(result.ExpectedMedianGap));
+    }
+
+    [Fact]
+    public void RunMultivariateFhsPathSimulation_ConservativeP99CapsExtremeResidualsWithoutChangingBaseMode()
+    {
+        var returns = Enumerable.Range(0, 160)
+            .Select(index => index == 159 ? 0.30m : (decimal)((index % 7 - 3) * 0.003))
+            .ToArray();
+        var matrix = new IReadOnlyList<decimal>[] { returns, returns.Select(value => value * 0.8m).ToArray() };
+        var weights = new decimal[] { 0.5m, 0.5m };
+
+        var defaultMode = RiskMath.RunMultivariateFhsPathSimulation(matrix, weights, 40, 1000, 8, 999);
+        var explicitBase = RiskMath.RunMultivariateFhsPathSimulation(matrix, weights, 40, 1000, 8, 999, residualCapQuantile: 0m);
+        var conservative = RiskMath.RunMultivariateFhsPathSimulation(matrix, weights, 40, 1000, 8, 999, residualCapQuantile: 0.99m);
+
+        Assert.Equal(defaultMode.Bands, explicitBase.Bands);
+        Assert.Equal(0m, defaultMode.CappedDrawRate);
+        Assert.Equal(0.99m, conservative.ResidualCapQuantile);
+        Assert.True(conservative.CappedDrawRate > 0m);
+        Assert.True(conservative.CappedDrawRate < 0.05m);
+    }
+
+    [Theory]
+    [InlineData(0.2499, false)]
+    [InlineData(0.25, true)]
+    [InlineData(0.40, true)]
+    public void HasMaterialRightSkew_UsesTwentyFivePercentagePointThreshold(double gap, bool expected)
+    {
+        Assert.Equal(expected, RiskMath.HasMaterialRightSkew((decimal)gap));
     }
 }

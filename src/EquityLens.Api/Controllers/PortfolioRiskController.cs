@@ -62,4 +62,67 @@ public sealed class PortfolioRiskController : ApiControllerBase
             _currentUser.UserId, cancellationToken, model);
         return ToActionResult(result);
     }
+
+    [HttpGet("backtest")]
+    public async Task<ActionResult<PortfolioRiskBacktestResponse>> GetPortfolioRiskBacktest(
+        Guid portfolioId, [FromQuery] DateOnly from, [FromQuery] DateOnly to,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _riskAnalysisService.GetPortfolioRiskBacktestAsync(
+            portfolioId, from, to, _currentUser.UserId, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    [HttpGet("monte-carlo")]
+    public async Task<ActionResult<PortfolioMonteCarloResponse>> GetPortfolioMonteCarlo(
+        Guid portfolioId, [FromQuery] string model = "mvewma_fhs", CancellationToken cancellationToken = default)
+    {
+        var result = await _riskAnalysisService.GetPortfolioMonteCarloAsync(
+            portfolioId, _currentUser.UserId, cancellationToken, model);
+        return ToActionResult(result);
+    }
+
+    [HttpGet("governance")]
+    public async Task<ActionResult<PortfolioRiskGovernanceResponse>> GetPortfolioRiskGovernance(Guid portfolioId, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskAnalysisService.GetPortfolioRiskGovernanceAsync(portfolioId, _currentUser.UserId, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    [HttpPost("scenario")]
+    public async Task<ActionResult<PortfolioRiskScenarioResponse>> CalculatePortfolioRiskScenario(Guid portfolioId, [FromBody] PortfolioRiskScenarioRequest request, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskAnalysisService.CalculatePortfolioRiskScenarioAsync(portfolioId, request, _currentUser.UserId, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    [HttpPost("reports")]
+    public async Task<ActionResult<PortfolioRiskReportSnapshotDetailResponse>> CreatePortfolioRiskReportSnapshot(Guid portfolioId, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskAnalysisService.CreatePortfolioRiskReportSnapshotAsync(portfolioId, _currentUser.UserId, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    [HttpGet("reports")]
+    public async Task<ActionResult<IReadOnlyList<PortfolioRiskReportSnapshotListItemResponse>>> GetPortfolioRiskReportSnapshots(Guid portfolioId, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskAnalysisService.GetPortfolioRiskReportSnapshotsAsync(portfolioId, _currentUser.UserId, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    [HttpGet("reports/{reportId:guid}")]
+    public async Task<ActionResult<PortfolioRiskReportSnapshotDetailResponse>> GetPortfolioRiskReportSnapshot(Guid portfolioId, Guid reportId, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskAnalysisService.GetPortfolioRiskReportSnapshotAsync(portfolioId, reportId, _currentUser.UserId, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    [HttpGet("stress")]
+    public async Task<ActionResult<PortfolioStressTestResponse>> GetPortfolioStressTest(
+        Guid portfolioId, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskAnalysisService.GetPortfolioStressTestAsync(
+            portfolioId, _currentUser.UserId, cancellationToken);
+        return ToActionResult(result);
+    }
 }
