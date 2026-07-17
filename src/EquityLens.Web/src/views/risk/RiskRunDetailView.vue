@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import Footer from '../../components/kimi/Footer.vue'
@@ -52,6 +52,21 @@ const selectedBacktestConfidence = ref<0.95 | 0.99>(0.95)
 const backtestModels: Array<'Historical' | 'MVEWMA-FHS'> = ['Historical', 'MVEWMA-FHS']
 const backtestConfidences: Array<0.95 | 0.99> = [0.95, 0.99]
 const error = ref('')
+type DeferredLoadState = 'idle' | 'loading' | 'ready' | 'error'
+const modelComparisonState = ref<DeferredLoadState>('idle')
+const stressTestState = ref<DeferredLoadState>('idle')
+const backtestState = ref<DeferredLoadState>('idle')
+const monteCarloState = ref<DeferredLoadState>('idle')
+const modelComparisonError = ref('')
+const stressTestError = ref('')
+const backtestError = ref('')
+const monteCarloError = ref('')
+const modelComparisonSentinel = ref<HTMLElement | null>(null)
+const stressTestSentinel = ref<HTMLElement | null>(null)
+const backtestSentinel = ref<HTMLElement | null>(null)
+const monteCarloSentinel = ref<HTMLElement | null>(null)
+let sectionObserver: IntersectionObserver | null = null
+let viewIsActive = true
 const governanceAlerts = computed(() => (governance.value?.alerts ?? []).filter(alert => alert.status !== 'normal').sort((a, b) => (a.status === 'critical' ? -1 : 1) - (b.status === 'critical' ? -1 : 1)))
 const governanceLabel = (code: string) => ({
   'concentration.largest_holding': '最大單一持倉',
@@ -352,32 +367,44 @@ function riskErrorMessage(e: unknown) {
   }
 }
 
+async function loadDeferred(state: typeof modelComparisonState, message: typeof modelComparisonError, request: () => Promise<void>) {
+  if (state.value === 'loading' || state.value === 'ready') return
+  state.value = 'loading'; message.value = ''
+  try { await request(); if (viewIsActive) state.value = 'ready' }
+  catch (e) { if (viewIsActive) { message.value = riskErrorMessage(e); state.value = 'error' } }
+}
+const loadModelComparison = () => loadDeferred(modelComparisonState, modelComparisonError, async () => {
+  const [at99, ewma95, ewma99, ...curve] = await Promise.all([
+    getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .99, simulations: 10000, model: 'mvewma_fhs' }),
+    getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .95, simulations: 10000, model: 'gbm_ewma_normal' }),
+    getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .99, simulations: 10000, model: 'gbm_ewma_normal' }),
+    ...[.90, .95, .975, .99, .995].map(confidenceLevel => getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 1, confidenceLevel, simulations: 5000, model: 'mvewma_fhs' })),
+  ])
+  risk99.value = at99; riskEwma.value = ewma95; riskEwma99.value = ewma99; riskCurve.value = curve
+})
+const loadStressTest = () => loadDeferred(stressTestState, stressTestError, async () => { stressTest.value = await getPortfolioStressTest(portfolioId.value) })
+const loadBacktest = () => loadDeferred(backtestState, backtestError, async () => { backtest.value = await getPortfolioRiskBacktest(portfolioId.value, backtestFromDate.value, toDate.value) })
+const loadMonteCarlo = () => loadDeferred(monteCarloState, monteCarloError, async () => { monteCarloBase.value = await getPortfolioMonteCarlo(portfolioId.value) })
+
+function observeDeferredSections() {
+  const targets: Array<[HTMLElement | null, () => Promise<void>]> = [[modelComparisonSentinel.value, loadModelComparison], [stressTestSentinel.value, loadStressTest], [backtestSentinel.value, loadBacktest], [monteCarloSentinel.value, loadMonteCarlo]]
+  if (typeof IntersectionObserver === 'undefined') { targets.forEach(([, loader]) => void loader()); return }
+  sectionObserver = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { sectionObserver?.unobserve(entry.target); const target = targets.find(([element]) => element === entry.target); if (target) void target[1]() } }), { rootMargin: '300px 0px' })
+  targets.forEach(([element]) => { if (element) sectionObserver?.observe(element) })
+}
+
 onMounted(async () => {
   loading.value = true
   try {
-    const [portfolio, riskData, riskData99, backtestDataResponse, ewmaData, ewmaData99, stressData, monteCarloData, governanceData, ...curve] = await Promise.all([
+    const [portfolio, riskData, governanceData] = await Promise.all([
       getPortfolio(portfolioId.value),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'mvewma_fhs' }),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'mvewma_fhs' }),
-      getPortfolioRiskBacktest(portfolioId.value, backtestFromDate.value, toDate.value),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'gbm_ewma_normal' }),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'gbm_ewma_normal' }),
-      getPortfolioStressTest(portfolioId.value),
-      getPortfolioMonteCarlo(portfolioId.value),
       getPortfolioRiskGovernance(portfolioId.value),
-      ...[0.90, 0.95, 0.975, 0.99, 0.995].map(confidenceLevel => getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 1, confidenceLevel, simulations: 5000, model: 'mvewma_fhs' })),
     ])
     portfolioName.value = portfolio.name
     risk.value = riskData
-    risk99.value = riskData99
-    riskEwma.value = ewmaData
-    riskEwma99.value = ewmaData99
-    stressTest.value = stressData
-    monteCarloBase.value = monteCarloData
     governance.value = governanceData
     targetWeights.value = Object.fromEntries(riskData.holdings.map(holding => [holding.securityId, Number((holding.weight * 100).toFixed(2))]))
-    backtest.value = backtestDataResponse
-    riskCurve.value = curve
     try {
       reportSnapshots.value = await getPortfolioRiskReportSnapshots(portfolioId.value)
     } catch {
@@ -387,8 +414,12 @@ onMounted(async () => {
     error.value = riskErrorMessage(e)
   } finally {
     loading.value = false
+    await nextTick()
+    if (viewIsActive && risk.value) observeDeferredSections()
   }
 })
+
+onBeforeUnmount(() => { viewIsActive = false; sectionObserver?.disconnect() })
 </script>
 
 <template>
@@ -698,6 +729,7 @@ onMounted(async () => {
           </div>
         </ScrollReveal>
 
+        <div ref="modelComparisonSentinel" class="deferred-sentinel" />
         <!-- VaR Results Table -->
         <ScrollReveal class="mt-20">
           <div class="prestige-panel">
@@ -826,6 +858,7 @@ onMounted(async () => {
           </div>
         </ScrollReveal>
 
+        <div ref="stressTestSentinel" class="deferred-sentinel" />
         <!-- Stress Test Scenarios -->
         <ScrollReveal class="mt-20">
           <div class="prestige-panel">
@@ -900,6 +933,7 @@ onMounted(async () => {
           </div>
         </ScrollReveal>
 
+        <div ref="backtestSentinel" class="deferred-sentinel" />
         <!-- Backtest Results -->
         <ScrollReveal class="mt-20">
           <div class="prestige-panel">
@@ -970,6 +1004,7 @@ onMounted(async () => {
           </div>
         </ScrollReveal>
 
+        <div ref="monteCarloSentinel" class="deferred-sentinel" />
         <!-- Monte Carlo Simulation -->
         <ScrollReveal class="mt-20" style="margin-bottom: 80px">
           <div class="prestige-panel">
@@ -1061,6 +1096,8 @@ onMounted(async () => {
 .prestige-page {
   min-height: calc(100vh - 60px);
 }
+
+.deferred-sentinel { height: 1px; }
 
 .mt-20 {
   margin-top: 40px;
