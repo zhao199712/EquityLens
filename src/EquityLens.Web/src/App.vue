@@ -124,6 +124,13 @@ function handleMenuSelect(key: string) {
 
         <nav class="kimi-main-nav">
           <button
+            :class="['kimi-nav-item', activeMenuKey === 'home' && 'active']"
+            @click="handleMenuSelect('home')"
+          >
+            {{ t('nav.home') }}
+          </button>
+          <span class="kimi-nav-sep">|</span>
+          <button
             :class="['kimi-nav-item', activeMenuKey === 'dashboard' && 'active']"
             @click="handleMenuSelect('dashboard')"
           >

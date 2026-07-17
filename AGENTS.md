@@ -42,6 +42,12 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 - `Program.cs` registers `Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)` because TWSE/MOPS sources use Big5; do not remove it as dead code.
 - `src/EquityLens.Api/appsettings.json` contains local live API-key shaped values for DeepSeek/Cohere/Jina/Brave/AlphaVantage; avoid editing or committing it unless explicitly requested.
 
+## Frontend Shape
+- Two visual systems coexist. Legacy "kimi" editorial (`src/assets/kimi-design.css`, `src/components/kimi/`, monochrome zero-radius) and the newer "tech" neon system (`src/assets/tech-design.css`, `src/components/tech/`, dark `#050a14` + cyan neon). New pages should use the tech system: root `.tech-page` (+ optional `.tech-grid-overlay`), panels `.tech-panel`, inputs `.tech-input`, buttons `.tech-btn`, numbers `.tech-mono`.
+- Do not add a bare `page` class to view roots: `src/style.css` has a global `.page { width: min(1280px,100%); margin: 0 auto }` that will silently constrain full-bleed pages. The tech views use `.tech-page-fill` instead.
+- ECharts is registered exactly once in `src/components/tech/TechChart.vue` (`vue-echarts` wrapper); reuse it for new charts instead of calling `echarts/core` `use()` elsewhere. The kimi chart components are pure SVG and take color props.
+- `/home` (tech landing, mock data in `src/data/homeTechData.ts`) intentionally uses `meta.requiresAuth: false`; the production routes `/portfolios` and `/risk-runs` are tech-styled and fully API-wired via `src/services/risk.ts`.
+
 ## Backend Shape
 - DI/service registration and CLI import/export modes live in `src/EquityLens.Api/Program.cs`; CLI modes return before normal web startup.
 - EF entities/configurations/migrations are in `Data/Entities`, `Data/Configurations`, and `Migrations`.

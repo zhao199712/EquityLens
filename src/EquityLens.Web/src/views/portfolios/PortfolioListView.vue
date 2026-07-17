@@ -43,12 +43,13 @@ async function loadValuations(items: PortfolioListItem[]) {
 
 async function loadPortfolios() {
   loading.value = true
+  error.value = ''
   try {
     const items = await getPortfolios()
     portfolios.value = items
     await loadValuations(items)
   } catch (e) {
-    error.value = '無法載入投資組合列表，請稍後再試。'
+    error.value = '無法載入投資組合列表,請稍後再試。'
   } finally {
     loading.value = false
   }
@@ -59,6 +60,7 @@ onMounted(loadPortfolios)
 async function handleCreatePortfolio() {
   if (!newPortfolio.value.name.trim()) return
   creating.value = true
+  error.value = ''
   try {
     const created = await createPortfolio({
       name: newPortfolio.value.name,
@@ -77,19 +79,20 @@ async function handleCreatePortfolio() {
     newPortfolio.value = { name: '', description: '', baseCurrency: 'TWD' }
     showCreate.value = false
   } catch (e) {
-    error.value = '建立投資組合失敗，請稍後再試。'
+    error.value = '建立投資組合失敗,請稍後再試。'
   } finally {
     creating.value = false
   }
 }
 
 async function handleDeletePortfolio(id: string) {
-  if (!confirm('確定要刪除此投資組合嗎？')) return
+  if (!confirm('確定要刪除此投資組合嗎?')) return
+  error.value = ''
   try {
     await deletePortfolio(id)
     portfolios.value = portfolios.value.filter((p) => p.id !== id)
   } catch (e) {
-    error.value = '刪除投資組合失敗，請稍後再試。'
+    error.value = '刪除投資組合失敗,請稍後再試。'
   }
 }
 
@@ -113,141 +116,238 @@ function formatPercent(n: number | null) {
   return `${n >= 0 ? '+' : ''}${(n * 100).toFixed(2)}%`
 }
 
-function getPnlColor(n: number | null) {
-  if (n === null || n === undefined) return '#666666'
-  return n >= 0 ? '#34d399' : '#f87171'
+function pnlClass(n: number | null | undefined) {
+  if (n === null || n === undefined) return 'neutral'
+  return n >= 0 ? 'up' : 'down'
 }
 </script>
 
 <template>
-  <div class="kimi-page-dark" style="padding-top: 40px; padding-bottom: 80px">
-    <div class="kimi-content" style="margin-top: 0; padding-top: 20px">
+  <div class="prestige-page">
+    <div class="prestige-section">
       <!-- Header -->
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
+      <div class="prestige-section-head">
         <div>
-          <h1 style="font-size: 28px; font-weight: 700; margin: 0; color: #FFFFFF">投資組合管理</h1>
-          <span class="kimi-caption" style="margin-top: 4px; display: block">PORTFOLIO MANAGEMENT</span>
+          <span class="prestige-label">Portfolio Management</span>
+          <h2 class="prestige-section-title">投資組合</h2>
         </div>
-        <button class="kimi-btn kimi-btn-solid-dark" @click="showCreate = !showCreate">
-          {{ showCreate ? 'CANCEL' : '+ CREATE PORTFOLIO' }}
+        <button class="prestige-btn prestige-btn-solid" @click="showCreate = !showCreate">
+          {{ showCreate ? '取消' : '+ 建立組合' }}
         </button>
       </div>
 
       <!-- Create Form -->
       <ScrollReveal v-if="showCreate">
-        <div class="kimi-section-dark" style="margin-bottom: 40px; padding: 20px">
-          <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 600; color: #FFFFFF">建立新投資組合</h3>
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px">
-            <input v-model="newPortfolio.name" placeholder="組合名稱" class="kimi-input-dark" />
-            <input v-model="newPortfolio.description" placeholder="描述" class="kimi-input-dark" />
-            <select v-model="newPortfolio.baseCurrency" class="kimi-input-dark">
+        <div class="prestige-panel prestige-panel-pad create-panel">
+          <span class="prestige-label">New Portfolio</span>
+          <div class="create-grid">
+            <input v-model="newPortfolio.name" placeholder="組合名稱" class="prestige-input" />
+            <input v-model="newPortfolio.description" placeholder="描述(選填)" class="prestige-input" />
+            <select v-model="newPortfolio.baseCurrency" class="prestige-input">
               <option value="TWD">TWD</option>
               <option value="USD">USD</option>
               <option value="HKD">HKD</option>
               <option value="JPY">JPY</option>
             </select>
           </div>
-          <button
-            class="kimi-btn kimi-btn-solid-dark"
-            :disabled="creating"
-            @click="handleCreatePortfolio"
-          >
-            {{ creating ? 'CREATING...' : 'CREATE' }}
+          <button class="prestige-btn" :disabled="creating" @click="handleCreatePortfolio">
+            {{ creating ? '建立中...' : '建立' }}
           </button>
         </div>
       </ScrollReveal>
 
       <!-- Search -->
-      <div style="margin-bottom: 24px">
-        <input v-model="search" placeholder="搜尋投資組合..." class="kimi-input-dark" style="width: 300px" />
+      <div class="search-row">
+        <input v-model="search" placeholder="搜尋投資組合..." class="prestige-input search-input" />
       </div>
 
-      <!-- Loading / Error -->
-      <div v-if="loading" style="color: #666666; font-size: 14px">載入中...</div>
-      <div v-if="error" style="color: #f87171; font-size: 14px; margin-bottom: 24px">{{ error }}</div>
+      <!-- Error -->
+      <div v-if="error" class="prestige-error" style="margin-bottom: 20px">{{ error }}</div>
+
+      <!-- Loading skeleton -->
+      <div v-if="loading" class="portfolio-grid">
+        <div v-for="i in 3" :key="i" class="prestige-skeleton" />
+      </div>
 
       <!-- Portfolio Grid -->
-      <div v-if="!loading" class="kimi-grid-3">
-        <ScrollReveal v-for="(portfolio, i) in filteredPortfolios" :key="portfolio.id" :delay="i * 0.1">
+      <div v-else class="portfolio-grid">
+        <ScrollReveal v-for="(portfolio, i) in filteredPortfolios" :key="portfolio.id" :delay="i * 0.06">
           <div
-            class="kimi-panel-dark"
-            style="cursor: pointer; transition: all 0.2s ease"
+            class="prestige-panel prestige-panel-pad portfolio-card"
             @click="router.push({ name: 'portfolio-detail', params: { id: portfolio.id } })"
           >
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
-              <span class="kimi-tag-dark">{{ portfolio.baseCurrency }}</span>
+            <div class="card-top">
+              <span class="prestige-tag prestige-mono">{{ portfolio.baseCurrency }}</span>
               <button
-                class="kimi-btn kimi-btn-dark"
-                style="padding: 2px 8px; font-size: 10px"
+                class="del-btn"
+                title="刪除組合"
                 @click.stop="handleDeletePortfolio(portfolio.id)"
               >
-                DEL
+                ✕
               </button>
             </div>
 
-            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 600; color: #FFFFFF">{{ portfolio.name }}</h3>
-            <p style="margin: 0 0 16px; font-size: 13px; color: #666666">{{ portfolio.description || '無描述' }}</p>
+            <h3 class="card-title">{{ portfolio.name }}</h3>
+            <p class="card-desc">{{ portfolio.description || '無描述' }}</p>
 
-            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px">
-              <span style="font-size: 12px; color: #666666">市場價值</span>
-              <span style="font-size: 16px; font-weight: 600; color: #FFFFFF">
+            <div class="metric-row">
+              <span class="metric-label">市場價值</span>
+              <span class="metric-value prestige-mono">
                 {{ valuations.get(portfolio.id) ? formatMoney(valuations.get(portfolio.id)!.totalMarketValue, portfolio.baseCurrency) : '—' }}
               </span>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px">
-              <span style="font-size: 12px; color: #666666">未實現損益</span>
-              <span
-                style="font-size: 14px; font-weight: 500"
-                :style="{ color: getPnlColor(valuations.get(portfolio.id)?.totalUnrealizedPnlPercent ?? null) }"
-              >
+            <div class="metric-row">
+              <span class="metric-label">未實現損益</span>
+              <span :class="['metric-value prestige-mono', pnlClass(valuations.get(portfolio.id)?.totalUnrealizedPnlPercent)]">
                 {{ formatPercent(valuations.get(portfolio.id)?.totalUnrealizedPnlPercent ?? null) }}
               </span>
             </div>
 
-            <div style="border-top: 1px solid #333333; padding-top: 12px; display: flex; justify-content: space-between">
-              <span style="font-size: 12px; color: #666666">{{ portfolio.holdingCount }} Holdings</span>
-              <span style="font-size: 12px; color: #666666">{{ formatDate(portfolio.updatedAtUtc) }}</span>
+            <div class="card-foot prestige-mono">
+              <span>{{ portfolio.holdingCount }} HOLDINGS</span>
+              <span>{{ formatDate(portfolio.updatedAtUtc) }}</span>
             </div>
           </div>
         </ScrollReveal>
       </div>
 
-      <div v-if="!loading && filteredPortfolios.length === 0" style="color: #666666; margin-top: 24px">
-        沒有符合條件的投資組合。
+      <div v-if="!loading && filteredPortfolios.length === 0" class="prestige-empty">
+        沒有符合條件的投資組合
       </div>
-
-      <div style="height: 80px" />
     </div>
-
-    <footer class="kimi-footer kimi-footer-dark">
-      <span style="color: #666666">EQUITYLENS 2026</span>
-      <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px; color: #666666">PORTFOLIO</span>
-      <span style="color: #666666">數據僅供參考</span>
-    </footer>
   </div>
 </template>
 
 <style scoped>
-.kimi-input-dark {
-  padding: 8px 12px;
-  font-size: 14px;
-  font-family: var(--kimi-font-body);
-  border: 1px solid var(--kimi-border-dark);
-  background: transparent;
-  color: var(--kimi-text-dark);
-  outline: none;
-  transition: border-color 0.2s;
-  width: 100%;
+.prestige-page {
+  min-height: calc(100vh - 60px);
 }
-.kimi-input-dark:focus {
-  border-color: #ffffff;
+
+.create-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
 }
-.kimi-input-dark::placeholder {
-  color: #666666;
+
+.create-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
 }
-select.kimi-input-dark {
-  appearance: none;
+
+.create-panel .prestige-btn {
+  align-self: flex-start;
+}
+
+.search-row {
+  margin-bottom: 24px;
+}
+
+.search-input {
+  max-width: 320px;
+}
+
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.portfolio-card {
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.25s ease, border-color 0.3s ease;
+}
+
+.portfolio-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(201, 168, 106, 0.45);
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.del-btn {
+  background: none;
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 10px;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.del-btn:hover {
+  color: var(--down);
+  border-color: rgba(176, 92, 92, 0.5);
+  background: rgba(176, 92, 92, 0.08);
+}
+
+.card-title {
+  margin: 4px 0 0;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.card-desc {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 18px;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.metric-value {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.metric-value.up {
+  color: var(--up);
+}
+
+.metric-value.down {
+  color: var(--down);
+}
+
+.metric-value.neutral {
+  color: var(--muted);
+}
+
+.card-foot {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gold-border-soft);
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 720px) {
+  .create-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

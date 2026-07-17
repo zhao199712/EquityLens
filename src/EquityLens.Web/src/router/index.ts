@@ -3,6 +3,13 @@ import { useAuthStore } from '../stores/auth'
 import LoginView from '../views/auth/LoginView.vue'
 import RegisterView from '../views/auth/RegisterView.vue'
 import DashboardView from '../views/DashboardView.vue'
+import HomeView from '../views/home/HomeView.vue'
+import StyleLabView from '../views/home-lab/StyleLabView.vue'
+import AuroraHomeView from '../views/home-lab/AuroraHomeView.vue'
+import SwissHomeView from '../views/home-lab/SwissHomeView.vue'
+import PrestigeHomeView from '../views/home-lab/PrestigeHomeView.vue'
+import AnalystHomeView from '../views/home-lab/AnalystHomeView.vue'
+import ZenHomeView from '../views/home-lab/ZenHomeView.vue'
 import PortfolioListView from '../views/portfolios/PortfolioListView.vue'
 import PortfolioDetailView from '../views/portfolios/PortfolioDetailView.vue'
 import RiskRunListView from '../views/risk/RiskRunListView.vue'
@@ -39,6 +46,48 @@ export const router = createRouter({
       path: '/register',
       name: 'register',
       component: RegisterView,
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/home',
+      name: 'home',
+      component: HomeView,
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/home/lab',
+      name: 'home-lab',
+      component: StyleLabView,
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/home/aurora',
+      name: 'home-aurora',
+      component: AuroraHomeView,
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/home/swiss',
+      name: 'home-swiss',
+      component: SwissHomeView,
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/home/prestige',
+      name: 'home-prestige',
+      component: PrestigeHomeView,
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/home/analyst',
+      name: 'home-analyst',
+      component: AnalystHomeView,
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/home/zen',
+      name: 'home-zen',
+      component: ZenHomeView,
       meta: { requiresAuth: false },
     },
     {

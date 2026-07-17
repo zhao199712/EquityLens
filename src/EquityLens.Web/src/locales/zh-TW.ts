@@ -1,5 +1,6 @@
 export default {
   nav: {
+    home: '首頁',
     dashboard: '儀表板',
     portfolios: '投資組合',
     riskRuns: '風險分析',
