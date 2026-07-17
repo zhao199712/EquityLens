@@ -106,6 +106,49 @@ public sealed class PortfolioPerformanceCalculatorTests
         Assert.Equal(0.04m, alpha.Value, precision: 6);
     }
 
+    [Fact]
+    public void CalculatePeriodXirr_LeadingZeroValuePoints_OpensAtFirstPositivePoint()
+    {
+        // 區間起點尚無持倉(淨值 0)時,應以第一個正淨值點作為期初,而不是回傳 null
+        var points = new[]
+        {
+            Point(new DateOnly(2026, 1, 1), 0m),
+            Point(new DateOnly(2026, 1, 2), 0m),
+            Point(new DateOnly(2026, 1, 3), 100m),
+            Point(new DateOnly(2027, 1, 3), 110m),
+        };
+
+        var xirr = PortfolioPerformanceCalculator.CalculatePeriodXirr(points);
+
+        Assert.NotNull(xirr);
+        Assert.Equal(0.10m, xirr.Value, precision: 2);
+    }
+
+    [Fact]
+    public void CalculatePeriodXirr_AllZeroPoints_ReturnsNull()
+    {
+        var points = new[]
+        {
+            Point(new DateOnly(2026, 1, 1), 0m),
+            Point(new DateOnly(2026, 1, 2), 0m),
+            Point(new DateOnly(2026, 1, 3), 0m),
+        };
+
+        Assert.Null(PortfolioPerformanceCalculator.CalculatePeriodXirr(points));
+    }
+
+    [Fact]
+    public void CalculatePeriodXirr_ZeroTerminalValue_ReturnsNull()
+    {
+        var points = new[]
+        {
+            Point(new DateOnly(2026, 1, 1), 100m),
+            Point(new DateOnly(2026, 1, 2), 0m),
+        };
+
+        Assert.Null(PortfolioPerformanceCalculator.CalculatePeriodXirr(points));
+    }
+
     private static PortfolioValuationHistoryPoint Point(DateOnly date, decimal value, decimal external = 0m)
         => new(date, 0, value, 0, null, 0, 0, 0, value, 0, external);
 }

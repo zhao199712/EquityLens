@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
@@ -15,19 +16,22 @@ public sealed class AgentRunService : IAgentRunService
     private readonly IAgentRunStateMachine _runStateMachine;
     private readonly IAgentNodeStateMachine _nodeStateMachine;
     private readonly IAgentRunQueue _agentRunQueue;
+    private readonly IAgentWorkflowAdminService? _workflowAdminService;
 
     public AgentRunService(
         EquityLensDbContext dbContext,
         IEnumerable<IAgentWorkflowDefinitionProvider> workflowProviders,
         IAgentRunStateMachine runStateMachine,
         IAgentNodeStateMachine nodeStateMachine,
-        IAgentRunQueue agentRunQueue)
+        IAgentRunQueue agentRunQueue,
+        IAgentWorkflowAdminService? workflowAdminService = null)
     {
         _dbContext = dbContext;
         _workflowProviders = CreateWorkflowProviderRegistry(workflowProviders);
         _runStateMachine = runStateMachine;
         _nodeStateMachine = nodeStateMachine;
         _agentRunQueue = agentRunQueue;
+        _workflowAdminService = workflowAdminService;
     }
 
     public async Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
@@ -35,8 +39,10 @@ public sealed class AgentRunService : IAgentRunService
         Guid researchRunId,
         CancellationToken cancellationToken = default)
     {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.CriticReview, cancellationToken);
         var provider = GetWorkflowProvider(AgentWorkflowTypes.CriticReview);
         var run = provider.CreateRun(userId, researchRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "CriticReview run created.", new { researchRunId });
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -50,8 +56,10 @@ public sealed class AgentRunService : IAgentRunService
         Guid criticReviewRunId,
         CancellationToken cancellationToken = default)
     {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.DraftRevision, cancellationToken);
         var provider = GetWorkflowProvider(AgentWorkflowTypes.DraftRevision);
         var run = provider.CreateRun(userId, criticReviewRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "DraftRevision run created.", new { criticReviewRunId });
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -208,6 +216,15 @@ public sealed class AgentRunService : IAgentRunService
         _agentRunQueue.EnqueueAsync(
             new AgentRunQueueMessage(run.Id, userId, run.WorkflowType, DateTime.UtcNow),
             cancellationToken);
+
+    private async Task SnapshotExecutionPoliciesAsync(AgentRun run, CancellationToken cancellationToken)
+    {
+        if (_workflowAdminService is null) return;
+        var policies = await _workflowAdminService.GetPoliciesAsync(run.Nodes.Select(x => x.NodeType), cancellationToken);
+        var root = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
+        foreach (var node in root["nodes"]!.AsArray().OfType<JsonObject>()) { var p = policies[node["type"]!.GetValue<string>()]; node["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = p.TimeoutSeconds, ["maxRetryCount"] = p.MaxRetryCount }; }
+        run.WorkflowDefinitionJson = root.ToJsonString(AgentNodeJson.SerializerOptions);
+    }
 
     private static IReadOnlyDictionary<string, IAgentWorkflowDefinitionProvider> CreateWorkflowProviderRegistry(
         IEnumerable<IAgentWorkflowDefinitionProvider> workflowProviders)

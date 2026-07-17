@@ -1,0 +1,275 @@
+/* ========================================
+   Prestige Design System — 私人銀行
+   Midnight navy + champagne gold hairlines
+   ======================================== */
+
+.prestige-page {
+  --gold: #c9a86a;
+  --gold-strong: #ddc18a;
+  --gold-border: rgba(201, 168, 106, 0.25);
+  --gold-border-soft: rgba(201, 168, 106, 0.14);
+  --ivory: #f5efe0;
+  --muted: #9a917c;
+  --up: #7fa387;
+  --down: #b05c5c;
+  --panel-bg: rgba(201, 168, 106, 0.04);
+  --serif: Georgia, 'Noto Serif TC', serif;
+  --sans: 'Inter', 'Noto Sans TC', sans-serif;
+
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0b1220 0%, #101a2e 100%);
+  color: var(--ivory);
+  font-family: var(--sans);
+}
+
+.prestige-page h1,
+.prestige-page h2,
+.prestige-page h3 {
+  color: var(--ivory);
+}
+
+/* ---- Layout ---- */
+.prestige-section {
+  position: relative;
+  width: min(1200px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 56px 0 24px;
+}
+
+.prestige-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--gold-border-soft);
+}
+
+.prestige-section-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ---- Typography helpers ---- */
+.prestige-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.prestige-mono {
+  font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Panel ---- */
+.prestige-panel {
+  position: relative;
+  background: var(--panel-bg);
+  border: 1px solid var(--gold-border);
+  border-radius: 6px;
+  transition: border-color 0.3s ease;
+}
+
+.prestige-panel:hover {
+  border-color: rgba(201, 168, 106, 0.45);
+}
+
+.prestige-panel-pad {
+  padding: 24px;
+}
+
+/* ---- Buttons ---- */
+.prestige-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 24px;
+  background: transparent;
+  border: 1px solid var(--gold-border);
+  border-radius: 4px;
+  color: var(--gold);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.prestige-btn:hover {
+  border-color: var(--gold);
+  background: rgba(201, 168, 106, 0.08);
+}
+
+.prestige-btn-solid {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #0b1220;
+}
+
+.prestige-btn-solid:hover {
+  background: var(--gold-strong);
+  border-color: var(--gold-strong);
+}
+
+.prestige-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Form inputs ---- */
+.prestige-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(11, 18, 32, 0.6);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+  color: var(--ivory);
+  font-family: var(--sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.prestige-input::placeholder {
+  color: var(--muted);
+}
+
+.prestige-input:focus {
+  border-color: var(--gold);
+}
+
+select.prestige-input {
+  appearance: none;
+  cursor: pointer;
+}
+
+select.prestige-input option {
+  background: #101a2e;
+  color: var(--ivory);
+}
+
+/* ---- Tag ---- */
+.prestige-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--gold-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+}
+
+/* ---- Table ---- */
+.prestige-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.prestige-table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.prestige-table td {
+  padding: 12px 14px;
+  color: var(--ivory);
+  border-bottom: 1px solid var(--gold-border-soft);
+}
+
+.prestige-table tr:last-child td {
+  border-bottom: none;
+}
+
+.prestige-table tbody tr {
+  transition: background 0.2s ease;
+}
+
+.prestige-table tbody tr:hover {
+  background: rgba(201, 168, 106, 0.05);
+}
+
+/* ---- Loading / error / empty ---- */
+.prestige-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--panel-bg);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 6px;
+  min-height: 140px;
+}
+
+.prestige-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 106, 0.06), transparent);
+  animation: prestige-shimmer 1.8s infinite;
+}
+
+@keyframes prestige-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.prestige-error {
+  padding: 14px 18px;
+  border: 1px solid rgba(176, 92, 92, 0.4);
+  border-radius: 4px;
+  background: rgba(176, 92, 92, 0.08);
+  color: var(--down);
+  font-size: 13px;
+}
+
+.prestige-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  border: 1px dashed var(--gold-border-soft);
+  border-radius: 6px;
+}
+
+/* ---- Entrance ---- */
+.prestige-fade {
+  opacity: 0;
+  animation: prestige-fade-in 0.9s ease-out forwards;
+  animation-delay: var(--d, 0s);
+}
+
+@keyframes prestige-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prestige-fade {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 900px) {
+  .prestige-section {
+    width: calc(100% - 32px);
+    padding: 40px 0 16px;
+  }
+}

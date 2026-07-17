@@ -16,7 +16,6 @@ import {
 } from 'naive-ui'
 import {
   SearchOutline,
-  AddOutline,
   CreateOutline,
   TrashOutline,
 } from '@vicons/ionicons5'
@@ -96,26 +95,23 @@ function handleDelete(id: string) {
 </script>
 
 <template>
-  <main class="page animate-fade-in">
-    <section class="page-heading">
+  <main class="prestige-section prestige-fade admin-view">
+    <div class="prestige-section-head">
       <div>
-        <p class="eyebrow">{{ t('admin.users.titleEn') }}</p>
-        <h1>{{ t('admin.users.title') }}</h1>
+        <p class="prestige-label view-eyebrow">{{ t('admin.users.titleEn') }}</p>
+        <h1 class="prestige-section-title">{{ t('admin.users.title') }}</h1>
       </div>
-      <NButton type="primary" class="btn-primary" @click="showCreateModal = true">
-        <template #icon>
-          <NIcon><AddOutline /></NIcon>
-        </template>
+      <button class="prestige-btn prestige-btn-solid" @click="showCreateModal = true">
         {{ t('admin.users.create') }}
-      </NButton>
-    </section>
+      </button>
+    </div>
 
-    <div class="glass-panel" style="padding: 16px 20px;">
+    <div class="prestige-panel search-panel">
       <NInput
         v-model:value="searchQuery"
         :placeholder="t('admin.users.searchPlaceholder')"
         clearable
-        style="max-width: 400px;"
+        class="search-input"
       >
         <template #prefix>
           <NIcon><SearchOutline /></NIcon>
@@ -123,75 +119,62 @@ function handleDelete(id: string) {
       </NInput>
     </div>
 
-    <div class="glass-panel" style="margin-top: 24px; padding: 0; overflow: hidden;">
-      <div class="glass-table">
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr style="border-bottom: 1px solid var(--border-subtle);">
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.user') }}</th>
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.role') }}</th>
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.status') }}</th>
-              <th style="text-align: left; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.lastLogin') }}</th>
-              <th style="text-align: center; padding: 14px 20px; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ t('admin.users.table.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="user in filteredUsers"
-              :key="user.id"
-              style="border-bottom: 1px solid var(--border-subtle);"
-              class="table-row-hover"
-            >
-              <td style="padding: 14px 20px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                  <div
-                    style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 14px;"
-                  >
-                    {{ user.name.charAt(0) }}
-                  </div>
-                  <div>
-                    <div style="color: var(--text-primary); font-weight: 500;">{{ user.name }}</div>
-                    <div style="color: var(--text-tertiary); font-size: 13px;">{{ user.email }}</div>
-                  </div>
+    <div class="prestige-panel table-panel">
+      <table class="prestige-table">
+        <thead>
+          <tr>
+            <th>{{ t('admin.users.table.user') }}</th>
+            <th>{{ t('admin.users.table.role') }}</th>
+            <th>{{ t('admin.users.table.status') }}</th>
+            <th>{{ t('admin.users.table.lastLogin') }}</th>
+            <th class="col-actions">{{ t('admin.users.table.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="user in filteredUsers" :key="user.id">
+            <td>
+              <div class="user-cell">
+                <div class="user-avatar">{{ user.name.charAt(0) }}</div>
+                <div>
+                  <div class="user-name">{{ user.name }}</div>
+                  <div class="user-email">{{ user.email }}</div>
                 </div>
-              </td>
-              <td style="padding: 14px 20px;">
-                <NTag :type="getRoleType(user.role)" size="small" round>
-                  {{ getRoleLabel(user.role) }}
-                </NTag>
-              </td>
-              <td style="padding: 14px 20px;">
-                <NTag :type="user.status === 'active' ? 'success' : 'default'" size="small" round>
-                  {{ user.status === 'active' ? t('admin.users.active') : t('admin.users.inactive') }}
-                </NTag>
-              </td>
-              <td style="padding: 14px 20px; color: var(--text-secondary); font-size: 13px;">
-                {{ user.lastLogin }}
-              </td>
-              <td style="padding: 14px 20px; text-align: center;">
-                <NSpace justify="center">
-                  <NButton text type="primary" size="small">
-                    <template #icon>
-                      <NIcon><CreateOutline /></NIcon>
-                    </template>
-                  </NButton>
-                  <NPopconfirm @positive-click="handleDelete(user.id)">
-                    <template #trigger>
-                      <NButton text type="error" size="small">
-                        <template #icon>
-                          <NIcon><TrashOutline /></NIcon>
-                        </template>
-                      </NButton>
-                    </template>
-                    {{ t('admin.users.delete') }}?
-                  </NPopconfirm>
-                </NSpace>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div style="padding: 16px 20px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end;">
+              </div>
+            </td>
+            <td>
+              <NTag :type="getRoleType(user.role)" size="small" round>
+                {{ getRoleLabel(user.role) }}
+              </NTag>
+            </td>
+            <td>
+              <NTag :type="user.status === 'active' ? 'success' : 'default'" size="small" round>
+                {{ user.status === 'active' ? t('admin.users.active') : t('admin.users.inactive') }}
+              </NTag>
+            </td>
+            <td class="prestige-mono cell-muted">{{ user.lastLogin }}</td>
+            <td class="col-actions">
+              <NSpace justify="center">
+                <NButton text size="small" class="icon-btn">
+                  <template #icon>
+                    <NIcon><CreateOutline /></NIcon>
+                  </template>
+                </NButton>
+                <NPopconfirm @positive-click="handleDelete(user.id)">
+                  <template #trigger>
+                    <NButton text size="small" class="icon-btn icon-btn--danger">
+                      <template #icon>
+                        <NIcon><TrashOutline /></NIcon>
+                      </template>
+                    </NButton>
+                  </template>
+                  {{ t('admin.users.delete') }}?
+                </NPopconfirm>
+              </NSpace>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="table-footer">
         <NPagination v-model:page="currentPage" :page-size="pageSize" :item-count="filteredUsers.length" />
       </div>
     </div>
@@ -226,7 +209,169 @@ function handleDelete(id: string) {
 </template>
 
 <style scoped>
-.table-row-hover:hover {
-  background: rgba(255, 255, 255, 0.04);
+.admin-view {
+  padding-top: 8px;
+}
+
+.view-eyebrow {
+  margin: 0 0 10px;
+}
+
+.search-panel {
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.search-input {
+  max-width: 400px;
+}
+
+.table-panel {
+  overflow: hidden;
+}
+
+.col-actions {
+  text-align: center;
+}
+
+.cell-muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--gold-border);
+  background: rgba(201, 168, 106, 0.08);
+  color: var(--gold);
+  font-family: var(--serif);
+  font-size: 15px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.user-name {
+  color: var(--ivory);
+  font-weight: 500;
+}
+
+.user-email {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.table-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--gold-border-soft);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---- naive-ui → Prestige ---- */
+.search-input {
+  background: rgba(11, 18, 32, 0.6) !important;
+  border-radius: 4px !important;
+}
+
+.search-input :deep(.n-input__border) {
+  border-color: var(--gold-border-soft) !important;
+}
+
+.search-input :deep(.n-input__state-border) {
+  box-shadow: none !important;
+}
+
+.search-input:hover :deep(.n-input__state-border),
+.search-input.n-input--focus :deep(.n-input__state-border) {
+  border-color: var(--gold) !important;
+}
+
+.search-input :deep(.n-input__input-el) {
+  color: var(--ivory) !important;
+  caret-color: var(--gold);
+}
+
+.search-input :deep(.n-input__input-el::placeholder) {
+  color: var(--muted);
+}
+
+.search-input :deep(.n-input__prefix) {
+  color: var(--gold) !important;
+}
+
+.search-input :deep(.n-input__suffix) {
+  color: var(--muted) !important;
+}
+
+:deep(.n-tag) {
+  background: transparent !important;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+:deep(.n-tag.n-tag--success-type) {
+  border-color: rgba(127, 163, 135, 0.5) !important;
+  color: var(--up) !important;
+}
+
+:deep(.n-tag.n-tag--warning-type) {
+  border-color: rgba(212, 162, 78, 0.5) !important;
+  color: #d4a24e !important;
+}
+
+:deep(.n-tag.n-tag--error-type) {
+  border-color: rgba(176, 92, 92, 0.5) !important;
+  color: var(--down) !important;
+}
+
+:deep(.n-tag.n-tag--default-type) {
+  border-color: var(--gold-border) !important;
+  color: var(--muted) !important;
+}
+
+.icon-btn {
+  color: var(--gold) !important;
+  border-radius: 4px;
+}
+
+.icon-btn:hover {
+  color: var(--gold-strong) !important;
+  background: rgba(201, 168, 106, 0.08) !important;
+}
+
+.icon-btn--danger {
+  color: var(--down) !important;
+}
+
+.icon-btn--danger:hover {
+  color: #c97a7a !important;
+  background: rgba(176, 92, 92, 0.1) !important;
+}
+
+.table-footer :deep(.n-pagination-item) {
+  background: transparent !important;
+  border-color: var(--gold-border-soft) !important;
+  color: var(--muted) !important;
+}
+
+.table-footer :deep(.n-pagination-item:hover) {
+  border-color: var(--gold) !important;
+  color: var(--gold) !important;
+}
+
+.table-footer :deep(.n-pagination-item--active),
+.table-footer :deep(.n-pagination-item--active:hover) {
+  background: rgba(201, 168, 106, 0.08) !important;
+  border-color: var(--gold) !important;
+  color: var(--gold) !important;
 }
 </style>

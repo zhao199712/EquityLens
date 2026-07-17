@@ -2,15 +2,11 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   NSpin,
-  NEmpty,
   NTag,
-  NButton,
   NSpace,
   NIcon,
   NTimeline,
   NTimelineItem,
-  NCard,
-  NCode,
   useMessage,
 } from 'naive-ui'
 import {
@@ -147,59 +143,61 @@ const nodeMap = computed(() => {
 </script>
 
 <template>
-  <NSpin :show="loading">
-    <div v-if="error" style="padding: 20px; color: #f87171">{{ error }}</div>
+  <NSpin :show="loading" class="agent-run-detail">
+    <div v-if="error" class="prestige-error">{{ error }}</div>
     <div v-else-if="run">
-      <NCard title="Run Info" style="margin-bottom: 16px">
-        <NSpace vertical size="small">
+      <section class="prestige-panel prestige-panel-pad detail-section">
+        <span class="prestige-label detail-label">Run Info</span>
+        <div class="detail-field">
+          <span class="detail-field-label">Workflow</span>
+          <span class="detail-field-value">{{ run.run.workflowType }}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">Agent Type</span>
+          <span class="detail-field-value">{{ run.run.agentType }}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">Status</span>
           <div>
-            <strong>Workflow:</strong> {{ run.run.workflowType }}
+            <NTag :type="statusType(run.run.status)" size="small">{{ run.run.status }}</NTag>
           </div>
-          <div>
-            <strong>Agent Type:</strong> {{ run.run.agentType }}
-          </div>
-          <div>
-            <strong>Status:</strong>
-            <NTag :type="statusType(run.run.status)" size="small" style="margin-left: 8px">
-              {{ run.run.status }}
-            </NTag>
-          </div>
-          <div>
-            <strong>ID:</strong> {{ run.run.id }}
-          </div>
-          <div>
-            <strong>Created:</strong> {{ formatDate(run.run.createdAtUtc) }}
-          </div>
-          <div>
-            <strong>Started:</strong> {{ formatDate(run.run.startedAtUtc) }}
-          </div>
-          <div>
-            <strong>Completed:</strong> {{ formatDate(run.run.completedAtUtc) }}
-          </div>
-          <div v-if="run.run.errorMessage" style="color: #f87171">
-            <strong>Error:</strong> {{ run.run.errorMessage }}
-          </div>
-          <NSpace v-if="run.run.status === 'Failed' || run.run.status === 'Pending' || run.run.status === 'Running'" style="margin-top: 12px">
-            <NButton v-if="run.run.status === 'Failed'" type="warning" @click="handleRetry">
-              <template #icon>
-                <NIcon><ReloadOutline /></NIcon>
-              </template>
-              重試
-            </NButton>
-            <NButton v-if="run.run.status === 'Pending' || run.run.status === 'Running'" type="error" @click="handleCancel">
-              <template #icon>
-                <NIcon><CloseOutline /></NIcon>
-              </template>
-              取消
-            </NButton>
-          </NSpace>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">ID</span>
+          <span class="detail-field-value prestige-mono">{{ run.run.id }}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">Created</span>
+          <span class="detail-field-value prestige-mono">{{ formatDate(run.run.createdAtUtc) }}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">Started</span>
+          <span class="detail-field-value prestige-mono">{{ formatDate(run.run.startedAtUtc) }}</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">Completed</span>
+          <span class="detail-field-value prestige-mono">{{ formatDate(run.run.completedAtUtc) }}</span>
+        </div>
+        <div v-if="run.run.errorMessage" class="detail-field">
+          <span class="detail-field-label">Error</span>
+          <span class="detail-field-value detail-down">{{ run.run.errorMessage }}</span>
+        </div>
+        <NSpace v-if="run.run.status === 'Failed' || run.run.status === 'Pending' || run.run.status === 'Running'" class="detail-actions">
+          <button v-if="run.run.status === 'Failed'" type="button" class="prestige-btn" @click="handleRetry">
+            <NIcon size="16"><ReloadOutline /></NIcon>
+            重試
+          </button>
+          <button v-if="run.run.status === 'Pending' || run.run.status === 'Running'" type="button" class="prestige-btn detail-btn-danger" @click="handleCancel">
+            <NIcon size="16"><CloseOutline /></NIcon>
+            取消
+          </button>
         </NSpace>
-      </NCard>
+      </section>
 
-      <NCard title="Nodes" style="margin-bottom: 16px">
-        <div v-if="run.nodes.length === 0" style="color: var(--text-tertiary)">暫無節點。</div>
-        <NTimeline v-else
-          >
+      <section class="prestige-panel prestige-panel-pad detail-section">
+        <span class="prestige-label detail-label">Nodes</span>
+        <div v-if="run.nodes.length === 0" class="detail-muted">暫無節點。</div>
+        <NTimeline v-else>
           <NTimelineItem
             v-for="node in run.nodes"
             :key="node.id"
@@ -208,50 +206,259 @@ const nodeMap = computed(() => {
             :title="node.nodeKey"
             :content="node.nodeType"
             :time="formatDate(node.completedAtUtc)"
+            :class="`tl-${statusType(node.status)}`"
           >
-            <div v-if="node.errorMessage" style="color: #f87171; font-size: 12px">{{ node.errorMessage }}</div>
-            <div v-if="node.durationMs !== null" style="color: var(--text-tertiary); font-size: 12px">耗時: {{ node.durationMs }}ms</div>
+            <div v-if="node.errorMessage" class="detail-node-error">{{ node.errorMessage }}</div>
+            <div v-if="node.durationMs !== null" class="detail-node-meta">耗時: {{ node.durationMs }}ms</div>
           </NTimelineItem>
         </NTimeline>
-      </NCard>
+      </section>
 
-      <NCard title="Events" style="margin-bottom: 16px">
-        <div v-if="sortedEvents.length === 0" style="color: var(--text-tertiary)">暫無事件。</div>
-        <NTimeline v-else
-          >
+      <section class="prestige-panel prestige-panel-pad detail-section">
+        <span class="prestige-label detail-label">Events</span>
+        <div v-if="sortedEvents.length === 0" class="detail-muted">暫無事件。</div>
+        <NTimeline v-else>
           <NTimelineItem
             v-for="evt in sortedEvents"
             :key="evt.id"
             :type="evt.eventType.includes('Failed') ? 'error' : evt.eventType.includes('Succeed') ? 'success' : 'info'"
             :title="evt.eventType"
             :time="formatDate(evt.createdAtUtc)"
+            :class="evt.eventType.includes('Failed') ? 'tl-error' : evt.eventType.includes('Succeed') ? 'tl-success' : 'tl-info'"
           >
-            <div v-if="evt.message" style="font-size: 13px; color: var(--text-secondary)">{{ evt.message }}</div>
-            <div v-if="evt.agentRunNodeId" style="font-size: 12px; color: var(--text-tertiary)">
+            <div v-if="evt.message" class="detail-event-message">{{ evt.message }}</div>
+            <div v-if="evt.agentRunNodeId" class="detail-node-meta">
               node: {{ nodeMap.get(evt.agentRunNodeId)?.nodeKey ?? evt.agentRunNodeId.slice(0, 8) }}
             </div>
           </NTimelineItem>
         </NTimeline>
-      </NCard>
+      </section>
 
-      <NCard title="Tool Calls" style="margin-bottom: 16px">
-        <div v-if="run.toolCalls.length === 0" style="color: var(--text-tertiary)">暫無工具呼叫。</div>
-        <div v-for="tc in run.toolCalls" :key="tc.id" style="margin-bottom: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px">
-          <div style="display: flex; align-items: center; justify-content: space-between">
-            <strong>{{ tc.toolName }}</strong>
+      <section class="prestige-panel prestige-panel-pad detail-section">
+        <span class="prestige-label detail-label">Tool Calls</span>
+        <div v-if="run.toolCalls.length === 0" class="detail-muted">暫無工具呼叫。</div>
+        <div v-for="tc in run.toolCalls" :key="tc.id" class="tool-call-item">
+          <div class="tool-call-head">
+            <span class="tool-call-name">{{ tc.toolName }}</span>
             <NTag :type="statusType(tc.status)" size="small">{{ tc.status }}</NTag>
           </div>
-          <div v-if="tc.resultPreview" style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px">{{ tc.resultPreview }}</div>
-          <div v-if="tc.errorMessage" style="font-size: 12px; color: #f87171; margin-top: 4px">{{ tc.errorMessage }}</div>
-          <NCode :code="prettyJson(tc.argumentsJson)" language="json" style="margin-top: 8px" />
+          <div v-if="tc.resultPreview" class="detail-node-meta tool-call-preview">{{ tc.resultPreview }}</div>
+          <div v-if="tc.errorMessage" class="detail-node-error tool-call-preview">{{ tc.errorMessage }}</div>
+          <pre class="detail-json tool-call-json">{{ prettyJson(tc.argumentsJson) }}</pre>
         </div>
-      </NCard>
+      </section>
 
-      <NCard title="Output" style="margin-bottom: 16px">
-        <NCode v-if="run.outputJson" :code="prettyJson(run.outputJson)" language="json" />
-        <div v-else style="color: var(--text-tertiary)">尚無輸出。</div>
-      </NCard>
+      <section class="prestige-panel prestige-panel-pad detail-section">
+        <span class="prestige-label detail-label">Output</span>
+        <pre v-if="run.outputJson" class="detail-json">{{ prettyJson(run.outputJson) }}</pre>
+        <div v-else class="detail-muted">尚無輸出。</div>
+      </section>
     </div>
-    <NEmpty v-else description="無資料" />
+    <div v-else class="prestige-empty">無資料</div>
   </NSpin>
 </template>
+
+<style scoped>
+.agent-run-detail {
+  --gold: #c9a86a;
+  --gold-strong: #ddc18a;
+  --gold-border: rgba(201, 168, 106, 0.25);
+  --gold-border-soft: rgba(201, 168, 106, 0.14);
+  --ivory: #f5efe0;
+  --muted: #9a917c;
+  --up: #7fa387;
+  --down: #b05c5c;
+  --panel-bg: rgba(201, 168, 106, 0.04);
+  --serif: Georgia, 'Noto Serif TC', serif;
+  --sans: 'Inter', 'Noto Sans TC', sans-serif;
+  color: var(--ivory);
+}
+
+.agent-run-detail :deep(.n-spin-body) {
+  color: var(--gold);
+}
+
+/* ---- Sections ---- */
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-label {
+  display: block;
+  margin-bottom: 16px;
+}
+
+/* ---- Run info fields ---- */
+.detail-field {
+  margin-bottom: 12px;
+}
+
+.detail-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.detail-field-value {
+  color: var(--ivory);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.detail-down {
+  color: var(--down);
+}
+
+.detail-actions {
+  margin-top: 12px;
+}
+
+.detail-btn-danger {
+  color: var(--down);
+  border-color: rgba(176, 92, 92, 0.45);
+}
+
+.detail-btn-danger:hover {
+  background: rgba(176, 92, 92, 0.1);
+  border-color: var(--down);
+}
+
+/* ---- Text helpers ---- */
+.detail-muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.detail-node-error {
+  color: var(--down);
+  font-size: 12px;
+}
+
+.detail-node-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.detail-event-message {
+  color: var(--ivory);
+  font-size: 13px;
+}
+
+/* ---- Timeline ---- */
+.agent-run-detail :deep(.n-timeline-item-content__title) {
+  color: var(--ivory);
+}
+
+.agent-run-detail :deep(.n-timeline-item-content__content) {
+  color: var(--muted);
+}
+
+.agent-run-detail :deep(.n-timeline-item-content__meta) {
+  color: var(--muted);
+}
+
+.agent-run-detail :deep(.n-timeline-item-timeline__line) {
+  background-color: var(--gold-border-soft);
+}
+
+.tl-success :deep(.n-timeline-item__icon) {
+  color: var(--up);
+}
+
+.tl-error :deep(.n-timeline-item__icon) {
+  color: var(--down);
+}
+
+.tl-warning :deep(.n-timeline-item__icon),
+.tl-info :deep(.n-timeline-item__icon) {
+  color: #d4a24e;
+}
+
+.tl-default :deep(.n-timeline-item__icon) {
+  color: var(--muted);
+}
+
+/* ---- Tags ---- */
+.agent-run-detail :deep(.n-tag) {
+  background: transparent;
+  color: var(--muted);
+}
+
+.agent-run-detail :deep(.n-tag .n-tag__border) {
+  border-color: var(--gold-border-soft);
+}
+
+.agent-run-detail :deep(.n-tag--success-type) {
+  color: var(--up);
+}
+
+.agent-run-detail :deep(.n-tag--success-type .n-tag__border) {
+  border-color: rgba(127, 163, 135, 0.45);
+}
+
+.agent-run-detail :deep(.n-tag--error-type) {
+  color: var(--down);
+}
+
+.agent-run-detail :deep(.n-tag--error-type .n-tag__border) {
+  border-color: rgba(176, 92, 92, 0.45);
+}
+
+.agent-run-detail :deep(.n-tag--warning-type),
+.agent-run-detail :deep(.n-tag--info-type) {
+  color: #d4a24e;
+}
+
+.agent-run-detail :deep(.n-tag--warning-type .n-tag__border),
+.agent-run-detail :deep(.n-tag--info-type .n-tag__border) {
+  border-color: rgba(212, 162, 78, 0.45);
+}
+
+/* ---- Tool calls ---- */
+.tool-call-item {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  background: rgba(11, 18, 32, 0.6);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+}
+
+.tool-call-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tool-call-name {
+  color: var(--ivory);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tool-call-preview {
+  margin-top: 4px;
+}
+
+.tool-call-json {
+  margin-top: 8px;
+}
+
+/* ---- JSON blocks ---- */
+.detail-json {
+  margin: 0;
+  padding: 12px 14px;
+  background: rgba(11, 18, 32, 0.6);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+  color: var(--ivory);
+  font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow: auto;
+}
+</style>

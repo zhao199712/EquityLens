@@ -180,6 +180,8 @@ builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 builder.Services.AddScoped<IResearchPreflightService, ResearchPreflightService>();
 builder.Services.AddScoped<IResearchRunTraceService, ResearchRunTraceService>();
 builder.Services.AddScoped<ICriticReviewAgent, LlmCriticReviewAgent>();
+builder.Services.AddSingleton<IAgentWorkflowCatalog, AgentWorkflowCatalog>();
+builder.Services.AddScoped<IAgentWorkflowAdminService, AgentWorkflowAdminService>();
 builder.Services.AddScoped<IDraftRevisionAgent, LlmDraftRevisionAgent>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, CriticReviewWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, DraftRevisionWorkflowDefinitionProvider>();

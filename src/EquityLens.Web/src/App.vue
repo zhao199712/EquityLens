@@ -98,7 +98,6 @@ const activeMenuKey = computed(() => {
   if (name.startsWith('portfolio')) return 'portfolios'
   if (name.startsWith('risk-run')) return 'risk-runs'
   if (name.startsWith('financial-report')) return 'financial-reports'
-  if (name.startsWith('equity-lines')) return 'equity-lines'
   if (name.startsWith('admin-')) return 'admin-agent-runs'
   if (name.startsWith('research')) return 'research'
   if (name.startsWith('agent-run')) return 'agent-runs'
@@ -123,6 +122,13 @@ function handleMenuSelect(key: string) {
         </RouterLink>
 
         <nav class="kimi-main-nav">
+          <button
+            :class="['kimi-nav-item', activeMenuKey === 'home' && 'active']"
+            @click="handleMenuSelect('home')"
+          >
+            {{ t('nav.home') }}
+          </button>
+          <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'dashboard' && 'active']"
             @click="handleMenuSelect('dashboard')"
@@ -156,13 +162,6 @@ function handleMenuSelect(key: string) {
             @click="handleMenuSelect('research')"
           >
             Research
-          </button>
-          <span class="kimi-nav-sep">|</span>
-          <button
-            :class="['kimi-nav-item', activeMenuKey === 'equity-lines' && 'active']"
-            @click="handleMenuSelect('equity-lines')"
-          >
-            {{ t('nav.equityLines') }}
           </button>
           <span class="kimi-nav-sep">|</span>
           <button
