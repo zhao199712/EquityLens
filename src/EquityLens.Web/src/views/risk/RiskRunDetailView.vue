@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import Footer from '../../components/kimi/Footer.vue'
@@ -56,6 +56,21 @@ const selectedBacktestConfidence = ref<0.95 | 0.99>(0.95)
 const backtestModels: Array<'Historical' | 'MVEWMA-FHS' | 'MVEWMA-FHS（保守 p99）'> = ['Historical', 'MVEWMA-FHS', 'MVEWMA-FHS（保守 p99）']
 const backtestConfidences: Array<0.95 | 0.99> = [0.95, 0.99]
 const error = ref('')
+type DeferredLoadState = 'idle' | 'loading' | 'ready' | 'error'
+const modelComparisonState = ref<DeferredLoadState>('idle')
+const stressTestState = ref<DeferredLoadState>('idle')
+const backtestState = ref<DeferredLoadState>('idle')
+const monteCarloState = ref<DeferredLoadState>('idle')
+const modelComparisonError = ref('')
+const stressTestError = ref('')
+const backtestError = ref('')
+const monteCarloError = ref('')
+const modelComparisonSentinel = ref<HTMLElement | null>(null)
+const stressTestSentinel = ref<HTMLElement | null>(null)
+const backtestSentinel = ref<HTMLElement | null>(null)
+const monteCarloSentinel = ref<HTMLElement | null>(null)
+let sectionObserver: IntersectionObserver | null = null
+let viewIsActive = true
 const governanceAlerts = computed(() => (governance.value?.alerts ?? []).filter(alert => alert.status !== 'normal').sort((a, b) => (a.status === 'critical' ? -1 : 1) - (b.status === 'critical' ? -1 : 1)))
 const governanceLabel = (code: string) => ({
   'concentration.largest_holding': '最大單一持倉',
@@ -381,38 +396,80 @@ function riskErrorMessage(e: unknown) {
   }
 }
 
-onMounted(async () => {
-  loading.value = true
+async function loadModelComparison() {
+  if (modelComparisonState.value === 'loading' || modelComparisonState.value === 'ready') return
+  modelComparisonState.value = 'loading'; modelComparisonError.value = ''
   try {
-    const [portfolio, riskData, riskData99, conservativeData, conservativeData99, backtestDataResponse, ewmaData, ewmaData99, stressData, monteCarloData, monteCarloConservativeData, governanceData, ...curve] = await Promise.all([
-      getPortfolio(portfolioId.value),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'mvewma_fhs' }),
+    const [riskData99, conservativeData, conservativeData99, ewmaData, ewmaData99, ...curve] = await Promise.all([
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'mvewma_fhs' }),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'mvewma_fhs_conservative' }),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'mvewma_fhs_conservative' }),
-      getPortfolioRiskBacktest(portfolioId.value, backtestFromDate.value, toDate.value),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'gbm_ewma_normal' }),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'gbm_ewma_normal' }),
-      getPortfolioStressTest(portfolioId.value),
-      getPortfolioMonteCarlo(portfolioId.value),
-      getPortfolioMonteCarlo(portfolioId.value, 'mvewma_fhs_conservative'),
-      getPortfolioRiskGovernance(portfolioId.value),
       ...[0.90, 0.95, 0.975, 0.99, 0.995].map(confidenceLevel => getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 1, confidenceLevel, simulations: 5000, model: 'mvewma_fhs' })),
+    ])
+    if (!viewIsActive) return
+    risk99.value = riskData99; riskConservative.value = conservativeData; riskConservative99.value = conservativeData99
+    riskEwma.value = ewmaData; riskEwma99.value = ewmaData99; riskCurve.value = curve
+    modelComparisonState.value = 'ready'
+  } catch (e) { if (viewIsActive) { modelComparisonError.value = riskErrorMessage(e); modelComparisonState.value = 'error' } }
+}
+
+async function loadStressTest() {
+  if (stressTestState.value === 'loading' || stressTestState.value === 'ready') return
+  stressTestState.value = 'loading'; stressTestError.value = ''
+  try { const data = await getPortfolioStressTest(portfolioId.value); if (viewIsActive) { stressTest.value = data; stressTestState.value = 'ready' } }
+  catch (e) { if (viewIsActive) { stressTestError.value = riskErrorMessage(e); stressTestState.value = 'error' } }
+}
+
+async function loadBacktest() {
+  if (backtestState.value === 'loading' || backtestState.value === 'ready') return
+  backtestState.value = 'loading'; backtestError.value = ''
+  try { const data = await getPortfolioRiskBacktest(portfolioId.value, backtestFromDate.value, toDate.value); if (viewIsActive) { backtest.value = data; backtestState.value = 'ready' } }
+  catch (e) { if (viewIsActive) { backtestError.value = riskErrorMessage(e); backtestState.value = 'error' } }
+}
+
+async function loadMonteCarlo() {
+  if (monteCarloState.value === 'loading' || monteCarloState.value === 'ready') return
+  monteCarloState.value = 'loading'; monteCarloError.value = ''
+  try {
+    const [base, conservative] = await Promise.all([getPortfolioMonteCarlo(portfolioId.value), getPortfolioMonteCarlo(portfolioId.value, 'mvewma_fhs_conservative')])
+    if (viewIsActive) { monteCarloBase.value = base; monteCarloConservative.value = conservative; monteCarloState.value = 'ready' }
+  } catch (e) { if (viewIsActive) { monteCarloError.value = riskErrorMessage(e); monteCarloState.value = 'error' } }
+}
+
+function observeDeferredSections() {
+  if (typeof IntersectionObserver === 'undefined') {
+    void loadModelComparison(); void loadStressTest(); void loadBacktest(); void loadMonteCarlo()
+    return
+  }
+  const loaders = new Map<Element, () => Promise<void>>([
+    ...(modelComparisonSentinel.value ? [[modelComparisonSentinel.value, loadModelComparison] as const] : []),
+    ...(stressTestSentinel.value ? [[stressTestSentinel.value, loadStressTest] as const] : []),
+    ...(backtestSentinel.value ? [[backtestSentinel.value, loadBacktest] as const] : []),
+    ...(monteCarloSentinel.value ? [[monteCarloSentinel.value, loadMonteCarlo] as const] : []),
+  ])
+  sectionObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      const loader = loaders.get(entry.target)
+      if (entry.isIntersecting && loader) { sectionObserver?.unobserve(entry.target); void loader() }
+    }
+  }, { rootMargin: '300px 0px' })
+  loaders.forEach((_, target) => sectionObserver?.observe(target))
+}
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    const [portfolio, riskData, governanceData] = await Promise.all([
+      getPortfolio(portfolioId.value),
+      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'mvewma_fhs' }),
+      getPortfolioRiskGovernance(portfolioId.value),
     ])
     portfolioName.value = portfolio.name
     risk.value = riskData
-    risk99.value = riskData99
-    riskConservative.value = conservativeData
-    riskConservative99.value = conservativeData99
-    riskEwma.value = ewmaData
-    riskEwma99.value = ewmaData99
-    stressTest.value = stressData
-    monteCarloBase.value = monteCarloData
-    monteCarloConservative.value = monteCarloConservativeData
     governance.value = governanceData
     targetWeights.value = Object.fromEntries(riskData.holdings.map(holding => [holding.securityId, Number((holding.weight * 100).toFixed(2))]))
-    backtest.value = backtestDataResponse
-    riskCurve.value = curve
     try {
       reportSnapshots.value = await getPortfolioRiskReportSnapshots(portfolioId.value)
     } catch {
@@ -422,8 +479,12 @@ onMounted(async () => {
     error.value = riskErrorMessage(e)
   } finally {
     loading.value = false
+    await nextTick()
+    if (viewIsActive && risk.value) observeDeferredSections()
   }
 })
+
+onBeforeUnmount(() => { viewIsActive = false; sectionObserver?.disconnect() })
 </script>
 
 <template>
@@ -650,9 +711,10 @@ onMounted(async () => {
           </div>
         </ScrollReveal>
 
-        <!-- VaR Results Table -->
+        <!-- VaR / ES model comparison -->
+        <div ref="modelComparisonSentinel" class="deferred-sentinel" aria-hidden="true" />
         <ScrollReveal class="mt-20">
-          <div class="prestige-panel">
+          <div v-if="modelComparisonState === 'ready'" class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">Value at Risk 分析</h2>
               <span class="prestige-label">Value at Risk — 95% & 99% 信賴區間</span>
@@ -714,10 +776,19 @@ onMounted(async () => {
               </div>
             </div>
           </div>
+          <div v-else class="prestige-panel prestige-panel-pad deferred-panel">
+            <span class="prestige-label">MODEL COMPARISON</span>
+            <p v-if="modelComparisonState === 'loading'" class="muted-text">正在載入 VaR／ES 模型比較…</p>
+            <template v-else-if="modelComparisonState === 'error'">
+              <p class="prestige-error">{{ modelComparisonError }}</p>
+              <button class="prestige-btn" @click="loadModelComparison">重新載入</button>
+            </template>
+            <p v-else class="muted-text">捲動至此區塊時會載入模型比較。</p>
+          </div>
         </ScrollReveal>
 
         <!-- ES / CVaR Analysis -->
-        <ScrollReveal class="mt-20">
+        <ScrollReveal v-if="modelComparisonState === 'ready'" class="mt-20">
           <div class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">Expected Shortfall (ES) 分析</h2>
@@ -779,8 +850,9 @@ onMounted(async () => {
         </ScrollReveal>
 
         <!-- Stress Test Scenarios -->
+        <div ref="stressTestSentinel" class="deferred-sentinel" aria-hidden="true" />
         <ScrollReveal class="mt-20">
-          <div class="prestige-panel">
+          <div v-if="stressTestState === 'ready'" class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">壓力測試情境</h2>
               <span class="prestige-label">Stress Testing — 六大極端情境模擬</span>
@@ -850,11 +922,21 @@ onMounted(async () => {
               </div>
             </div>
           </div>
+          <div v-else class="prestige-panel prestige-panel-pad deferred-panel">
+            <span class="prestige-label">STRESS TESTING</span>
+            <p v-if="stressTestState === 'loading'" class="muted-text">正在載入壓力測試情境…</p>
+            <template v-else-if="stressTestState === 'error'">
+              <p class="prestige-error">{{ stressTestError }}</p>
+              <button class="prestige-btn" @click="loadStressTest">重新載入</button>
+            </template>
+            <p v-else class="muted-text">捲動至此區塊時會載入壓力測試。</p>
+          </div>
         </ScrollReveal>
 
         <!-- Backtest Results -->
+        <div ref="backtestSentinel" class="deferred-sentinel" aria-hidden="true" />
         <ScrollReveal class="mt-20">
-          <div class="prestige-panel">
+          <div v-if="backtestState === 'ready'" class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">VaR 回測驗證</h2>
               <span class="prestige-label">Backtesting — 252 日滾動 VaR / ES</span>
@@ -920,11 +1002,21 @@ onMounted(async () => {
               </div>
             </div>
           </div>
+          <div v-else class="prestige-panel prestige-panel-pad deferred-panel">
+            <span class="prestige-label">BACKTESTING</span>
+            <p v-if="backtestState === 'loading'" class="muted-text">正在計算 252 日滾動 VaR／ES 回測，通常需要數秒…</p>
+            <template v-else-if="backtestState === 'error'">
+              <p class="prestige-error">{{ backtestError }}</p>
+              <button class="prestige-btn" @click="loadBacktest">重新載入</button>
+            </template>
+            <p v-else class="muted-text">捲動至此區塊時會開始回測。</p>
+          </div>
         </ScrollReveal>
 
         <!-- Monte Carlo Simulation -->
+        <div ref="monteCarloSentinel" class="deferred-sentinel" aria-hidden="true" />
         <ScrollReveal class="mt-20" style="margin-bottom: 80px">
-          <div class="prestige-panel">
+          <div v-if="monteCarloState === 'ready'" class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">蒙地卡羅模擬</h2>
               <span class="prestige-label">{{ monteCarlo?.model ?? 'MVEWMA-FHS' }} — {{ monteCarlo?.simulations?.toLocaleString() ?? '10,000' }} 次、{{ monteCarlo?.horizonDays ?? 252 }} 個交易日路徑模擬</span>
@@ -1030,10 +1122,16 @@ onMounted(async () => {
                 </div>
                 <p class="table-note" style="margin-top: 16px">以目前持倉權重與共同日價格資料推演未來報酬分布；區間不代表發生機率保證。</p>
               </template>
-              <div v-else class="prestige-empty">
-                {{ monteCarlo?.message ?? '蒙地卡羅路徑資料載入中。' }}
-              </div>
             </div>
+          </div>
+          <div v-else class="prestige-panel prestige-panel-pad deferred-panel">
+            <span class="prestige-label">MONTE CARLO</span>
+            <p v-if="monteCarloState === 'loading'" class="muted-text">正在載入 10,000 次 Monte Carlo 模擬…</p>
+            <template v-else-if="monteCarloState === 'error'">
+              <p class="prestige-error">{{ monteCarloError }}</p>
+              <button class="prestige-btn" @click="loadMonteCarlo">重新載入</button>
+            </template>
+            <p v-else class="muted-text">捲動至此區塊時會開始 Monte Carlo 模擬。</p>
           </div>
         </ScrollReveal>
 
@@ -1131,6 +1229,18 @@ onMounted(async () => {
 <style scoped>
 .prestige-page {
   min-height: calc(100vh - 60px);
+}
+
+.deferred-sentinel {
+  height: 1px;
+}
+
+.deferred-panel {
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
 }
 
 .mt-20 {
