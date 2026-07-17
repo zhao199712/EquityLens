@@ -571,37 +571,72 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         for (var index = 1; index < commonDates.Count; index++)
             returns.Add(aligned.Sum(pair => weights[pair.Key] * (decimal)Math.Log((double)(pair.Value[index] / pair.Value[index - 1]))));
 
-        var assetIds = aligned.Keys.OrderBy(id => id).ToList();
-        var weightList = assetIds.Select(id => weights[id]).ToList();
-        var shrinkageAlpha = RiskMath.DetermineAutoShrinkageAlpha(assetIds.Count, lookbackDays);
-        var models = new List<PortfolioRiskBacktestModelResponse>();
-        foreach (var confidence in new[] { 0.95m, 0.99m })
+        var assetIds = aligned.Keys.OrderBy(id => id).ToArray();
+        var weightList = assetIds.Select(id => weights[id]).ToArray();
+        var shrinkageAlpha = RiskMath.DetermineAutoShrinkageAlpha(assetIds.Length, lookbackDays);
+        var portfolioReturns = returns.ToArray();
+        var confidenceLevels = new[] { 0.95m, 0.99m };
+        var assetReturns = assetIds.Select(id =>
         {
+            var prices = aligned[id];
+            var result = new decimal[prices.Count - 1];
+            for (var index = 0; index < result.Length; index++)
+                result[index] = (decimal)Math.Log((double)(prices[index + 1] / prices[index]));
+            return result;
+        }).ToArray();
+
+        // Every rolling window is independent.  Limit the CPU use to four cores so a
+        // background backtest does not starve the API, Redis worker, or database host.
+        var windowCount = returns.Count - lookbackDays;
+        var windowResults = new BacktestWindowResult[windowCount];
+        var parallelOptions = new ParallelOptions
+        {
+            CancellationToken = cancellationToken,
+            MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount - 2, 1, 4),
+        };
+
+        Parallel.For(0, windowCount, parallelOptions, windowOffset =>
+        {
+            var index = lookbackDays + windowOffset;
+            var returnMatrix = new IReadOnlyList<decimal>[assetReturns.Length];
+            for (var assetIndex = 0; assetIndex < assetReturns.Length; assetIndex++)
+                returnMatrix[assetIndex] = new ArraySegment<decimal>(assetReturns[assetIndex], index - lookbackDays, lookbackDays);
+
+            var window = new ArraySegment<decimal>(portfolioReturns, index - lookbackDays, lookbackDays);
+            var historicalVaR = new decimal[confidenceLevels.Length];
+            var historicalEs = new decimal[confidenceLevels.Length];
+            for (var confidenceIndex = 0; confidenceIndex < confidenceLevels.Length; confidenceIndex++)
+            {
+                historicalVaR[confidenceIndex] = RiskMath.CalculateHistoricalVaR(window, confidenceLevels[confidenceIndex]);
+                historicalEs[confidenceIndex] = RiskMath.CalculateExpectedShortfall(window, confidenceLevels[confidenceIndex]);
+            }
+
+            var fhsResults = RiskMath.RunMultivariateFhsSimulationForConfidenceLevels(
+                returnMatrix, weightList, 100m, 1, simulations, confidenceLevels,
+                EwmaLambda, shrinkageAlpha);
+            var conservativeResults = RiskMath.RunMultivariateFhsSimulationForConfidenceLevels(
+                returnMatrix, weightList, 100m, 1, simulations, confidenceLevels,
+                EwmaLambda, shrinkageAlpha, residualCapQuantile: ConservativeResidualCapQuantile);
+            windowResults[windowOffset] = new BacktestWindowResult(
+                commonDates[index + 1], returns[index], historicalVaR, historicalEs,
+                fhsResults.Select(result => result.SimulatedVaR).ToArray(),
+                fhsResults.Select(result => result.SimulatedES).ToArray(),
+                conservativeResults.Select(result => result.SimulatedVaR).ToArray(),
+                conservativeResults.Select(result => result.SimulatedES).ToArray());
+        });
+
+        var models = new List<PortfolioRiskBacktestModelResponse>();
+        for (var confidenceIndex = 0; confidenceIndex < confidenceLevels.Length; confidenceIndex++)
+        {
+            var confidence = confidenceLevels[confidenceIndex];
             var historical = new List<PortfolioRiskBacktestPoint>();
             var monteCarlo = new List<PortfolioRiskBacktestPoint>();
             var conservativeMonteCarlo = new List<PortfolioRiskBacktestPoint>();
-            for (var index = lookbackDays; index < returns.Count; index++)
+            foreach (var window in windowResults)
             {
-                var window = returns.Skip(index - lookbackDays).Take(lookbackDays).ToList();
-                var actual = returns[index];
-                var historicalVaR = RiskMath.CalculateHistoricalVaR(window, confidence);
-                var historicalEs = RiskMath.CalculateExpectedShortfall(window, confidence);
-                var returnMatrix = assetIds.Select(id =>
-                {
-                    var prices = aligned[id];
-                    return (IReadOnlyList<decimal>)Enumerable.Range(index - lookbackDays, lookbackDays)
-                        .Select(returnIndex => (decimal)Math.Log((double)(prices[returnIndex + 1] / prices[returnIndex])))
-                        .ToList();
-                }).ToList();
-                var mcResult = RiskMath.RunMultivariateFhsSimulation(
-                    returnMatrix, weightList, 100m, 1, simulations, confidence,
-                    EwmaLambda, shrinkageAlpha);
-                var conservativeResult = RiskMath.RunMultivariateFhsSimulation(
-                    returnMatrix, weightList, 100m, 1, simulations, confidence,
-                    EwmaLambda, shrinkageAlpha, residualCapQuantile: ConservativeResidualCapQuantile);
-                historical.Add(new(commonDates[index + 1], actual, historicalVaR, historicalEs, actual < historicalVaR));
-                monteCarlo.Add(new(commonDates[index + 1], actual, mcResult.SimulatedVaR, mcResult.SimulatedES, actual < mcResult.SimulatedVaR));
-                conservativeMonteCarlo.Add(new(commonDates[index + 1], actual, conservativeResult.SimulatedVaR, conservativeResult.SimulatedES, actual < conservativeResult.SimulatedVaR));
+                historical.Add(new(window.Date, window.ActualReturn, window.HistoricalVaR[confidenceIndex], window.HistoricalEs[confidenceIndex], window.ActualReturn < window.HistoricalVaR[confidenceIndex]));
+                monteCarlo.Add(new(window.Date, window.ActualReturn, window.MonteCarloVaR[confidenceIndex], window.MonteCarloEs[confidenceIndex], window.ActualReturn < window.MonteCarloVaR[confidenceIndex]));
+                conservativeMonteCarlo.Add(new(window.Date, window.ActualReturn, window.ConservativeVaR[confidenceIndex], window.ConservativeEs[confidenceIndex], window.ActualReturn < window.ConservativeVaR[confidenceIndex]));
             }
             models.Add(BuildBacktestModel("Historical", confidence, historical));
             models.Add(BuildBacktestModel("MVEWMA-FHS", confidence, monteCarlo));
@@ -609,6 +644,16 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         }
         return Result<PortfolioRiskBacktestResponse>.Success(new(portfolioId, from, to, lookbackDays, returns.Count - lookbackDays, models));
     }
+
+    private sealed record BacktestWindowResult(
+        DateOnly Date,
+        decimal ActualReturn,
+        decimal[] HistoricalVaR,
+        decimal[] HistoricalEs,
+        decimal[] MonteCarloVaR,
+        decimal[] MonteCarloEs,
+        decimal[] ConservativeVaR,
+        decimal[] ConservativeEs);
 
     private static PortfolioRiskBacktestModelResponse BuildBacktestModel(string model, decimal confidence, IReadOnlyList<PortfolioRiskBacktestPoint> points)
     {

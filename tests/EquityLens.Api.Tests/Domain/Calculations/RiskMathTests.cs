@@ -733,6 +733,25 @@ public sealed class RiskMathTests
     }
 
     [Fact]
+    public void RunMultivariateFhsSimulationForConfidenceLevels_ReturnsBothTailLevelsFromOneDistribution()
+    {
+        var random = new Random(19);
+        var matrix = Enumerable.Range(0, 2)
+            .Select(_ => (IReadOnlyList<decimal>)Enumerable.Range(0, 120)
+                .Select(__ => (decimal)(random.NextDouble() * 0.04 - 0.02)).ToArray())
+            .ToArray();
+
+        var results = RiskMath.RunMultivariateFhsSimulationForConfidenceLevels(
+            matrix, new[] { 0.6m, 0.4m }, 100m, 1, 1000, new[] { 0.95m, 0.99m });
+
+        Assert.Equal(2, results.Count);
+        Assert.Equal(0.95m, results[0].ConfidenceLevel);
+        Assert.Equal(0.99m, results[1].ConfidenceLevel);
+        Assert.True(results[1].SimulatedVaR <= results[0].SimulatedVaR);
+        Assert.True(results[1].SimulatedES <= results[1].SimulatedVaR);
+    }
+
+    [Fact]
     public void RunMultivariateFhsSimulation_ZeroVol_Deterministic()
     {
         var n = 2;

@@ -6,7 +6,9 @@ import Footer from '../../components/kimi/Footer.vue'
 import {
   getPortfolio,
   getPortfolioRisk,
-  getPortfolioRiskBacktest,
+  createPortfolioRiskBacktestRun,
+  getPortfolioRiskBacktestRun,
+  getPortfolioRiskBacktestRuns,
   getPortfolioMonteCarlo,
   getPortfolioRiskGovernance,
   calculatePortfolioRiskScenario,
@@ -20,6 +22,7 @@ import {
   type PortfolioRiskReportSnapshotListItem,
   type PortfolioMonteCarloResponse,
   type PortfolioRiskBacktestResponse,
+  type PortfolioRiskBacktestRun,
   type PortfolioRiskResponse,
 } from '../../services/risk.ts'
 
@@ -71,6 +74,7 @@ const backtestSentinel = ref<HTMLElement | null>(null)
 const monteCarloSentinel = ref<HTMLElement | null>(null)
 let sectionObserver: IntersectionObserver | null = null
 let viewIsActive = true
+let backtestPollTimer: ReturnType<typeof setTimeout> | null = null
 const governanceAlerts = computed(() => (governance.value?.alerts ?? []).filter(alert => alert.status !== 'normal').sort((a, b) => (a.status === 'critical' ? -1 : 1) - (b.status === 'critical' ? -1 : 1)))
 const governanceLabel = (code: string) => ({
   'concentration.largest_holding': '最大單一持倉',
@@ -425,8 +429,27 @@ async function loadStressTest() {
 async function loadBacktest() {
   if (backtestState.value === 'loading' || backtestState.value === 'ready') return
   backtestState.value = 'loading'; backtestError.value = ''
-  try { const data = await getPortfolioRiskBacktest(portfolioId.value, backtestFromDate.value, toDate.value); if (viewIsActive) { backtest.value = data; backtestState.value = 'ready' } }
+  try {
+    const runs = await getPortfolioRiskBacktestRuns(portfolioId.value)
+    const existing = runs.find(run => run.from === backtestFromDate.value && run.to === toDate.value && run.status !== 'Failed')
+    await waitForBacktestRun(existing ?? await createPortfolioRiskBacktestRun(portfolioId.value, backtestFromDate.value, toDate.value))
+  }
   catch (e) { if (viewIsActive) { backtestError.value = riskErrorMessage(e); backtestState.value = 'error' } }
+}
+
+async function waitForBacktestRun(initialRun: PortfolioRiskBacktestRun) {
+  let run = initialRun
+  while (viewIsActive) {
+    if (run.status === 'Completed') {
+      if (!run.result) throw new Error('回測已完成，但找不到結果快照。')
+      backtest.value = run.result; backtestState.value = 'ready'
+      return
+    }
+    if (run.status === 'Failed') throw new Error(run.errorMessage || '回測失敗，請重新執行。')
+    await new Promise<void>(resolve => { backtestPollTimer = setTimeout(resolve, 1500) })
+    if (!viewIsActive) return
+    run = await getPortfolioRiskBacktestRun(portfolioId.value, run.id)
+  }
 }
 
 async function loadMonteCarlo() {
@@ -484,7 +507,7 @@ onMounted(async () => {
   }
 })
 
-onBeforeUnmount(() => { viewIsActive = false; sectionObserver?.disconnect() })
+onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeout(backtestPollTimer); sectionObserver?.disconnect() })
 </script>
 
 <template>
