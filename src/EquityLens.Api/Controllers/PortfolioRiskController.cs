@@ -15,6 +15,7 @@ namespace EquityLens.Api.Controllers;
 public sealed class PortfolioRiskController : ApiControllerBase
 {
     private readonly IRiskAnalysisService _riskAnalysisService;
+    private readonly IRiskBacktestRunService _riskBacktestRunService;
     private readonly ICurrentUserContext _currentUser;
 
     /// <summary>
@@ -24,9 +25,11 @@ public sealed class PortfolioRiskController : ApiControllerBase
     /// <param name="currentUser">目前使用者內容。</param>
     public PortfolioRiskController(
         IRiskAnalysisService riskAnalysisService,
+        IRiskBacktestRunService riskBacktestRunService,
         ICurrentUserContext currentUser)
     {
         _riskAnalysisService = riskAnalysisService;
+        _riskBacktestRunService = riskBacktestRunService;
         _currentUser = currentUser;
     }
 
@@ -70,6 +73,29 @@ public sealed class PortfolioRiskController : ApiControllerBase
     {
         var result = await _riskAnalysisService.GetPortfolioRiskBacktestAsync(
             portfolioId, from, to, _currentUser.UserId, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>Queues a saved backtest so expensive rolling simulations do not block the detail page.</summary>
+    [HttpPost("backtests")]
+    public async Task<ActionResult<PortfolioRiskBacktestRunResponse>> CreatePortfolioRiskBacktestRun(
+        Guid portfolioId, [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskBacktestRunService.CreateAsync(portfolioId, from, to, _currentUser.UserId, cancellationToken);
+        if (!result.IsSuccess) return ToActionResult(result);
+        return AcceptedAtAction(nameof(GetPortfolioRiskBacktestRun), new { portfolioId, runId = result.Value!.Id }, result.Value);
+    }
+
+    [HttpGet("backtests")]
+    public async Task<ActionResult<IReadOnlyList<PortfolioRiskBacktestRunResponse>>> GetPortfolioRiskBacktestRuns(
+        Guid portfolioId, CancellationToken cancellationToken = default) =>
+        Ok(await _riskBacktestRunService.ListAsync(portfolioId, _currentUser.UserId, cancellationToken));
+
+    [HttpGet("backtests/{runId:guid}")]
+    public async Task<ActionResult<PortfolioRiskBacktestRunResponse>> GetPortfolioRiskBacktestRun(
+        Guid portfolioId, Guid runId, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskBacktestRunService.GetAsync(portfolioId, runId, _currentUser.UserId, cancellationToken);
         return ToActionResult(result);
     }
 

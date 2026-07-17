@@ -168,6 +168,25 @@ export async function getPortfolioRiskBacktest(portfolioId: string, from: string
   const response = await http.get<PortfolioRiskBacktestResponse>(`/portfolios/${portfolioId}/risk/backtest`, { params: { from, to } })
   return response.data
 }
+export interface PortfolioRiskBacktestRun {
+  id: string; portfolioId: string; jobId: string
+  status: 'Queued' | 'Running' | 'Completed' | 'Failed'; progressPercent: number
+  from: string; to: string; lookbackDays: number; simulations: number; algorithmVersion: string
+  createdAtUtc: string; startedAtUtc: string | null; completedAtUtc: string | null
+  errorCode: string | null; errorMessage: string | null; result: PortfolioRiskBacktestResponse | null
+}
+export async function createPortfolioRiskBacktestRun(portfolioId: string, from: string, to: string): Promise<PortfolioRiskBacktestRun> {
+  const response = await http.post<PortfolioRiskBacktestRun>(`/portfolios/${portfolioId}/risk/backtests`, undefined, { params: { from, to } })
+  return response.data
+}
+export async function getPortfolioRiskBacktestRun(portfolioId: string, runId: string): Promise<PortfolioRiskBacktestRun> {
+  const response = await http.get<PortfolioRiskBacktestRun>(`/portfolios/${portfolioId}/risk/backtests/${runId}`)
+  return response.data
+}
+export async function getPortfolioRiskBacktestRuns(portfolioId: string): Promise<PortfolioRiskBacktestRun[]> {
+  const response = await http.get<PortfolioRiskBacktestRun[]>(`/portfolios/${portfolioId}/risk/backtests`)
+  return response.data
+}
 export interface PortfolioMonteCarloBandPoint { day:number; p1:number; p5:number; p50:number; p95:number; p99:number }
 export interface PortfolioMonteCarloPath { pathIndex:number; cumulativeReturns:number[] }
 export interface PortfolioMonteCarloDiagnostics {

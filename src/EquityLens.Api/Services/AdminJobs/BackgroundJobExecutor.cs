@@ -6,6 +6,7 @@ using EquityLens.Api.Services.Documents;
 using EquityLens.Api.Services.FinancialData;
 using EquityLens.Api.Services.InvestorConferences;
 using EquityLens.Api.Services.MarketPrices;
+using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Services.Redis;
 
 namespace EquityLens.Api.Services.AdminJobs;
@@ -133,6 +134,15 @@ public sealed class BackgroundJobExecutor : IBackgroundJobExecutor
                         result.FailedCount == 0,
                         result.FailedCount == 0 ? null : $"0050 price sync completed with {result.FailedCount} failed constituent(s).",
                         ToSummary(result));
+                }
+            case "PortfolioRiskBacktest":
+                {
+                    var runIdValue = payload.GetValueOrDefault("backtestRunId")?.ToString();
+                    if (!Guid.TryParse(runIdValue, out var runId))
+                        return new JobResult(false, "backtestRunId is required", new Dictionary<string, object?>());
+                    var service = _serviceProvider.GetRequiredService<IRiskBacktestRunService>();
+                    var completed = await service.ExecuteAsync(runId, cancellationToken);
+                    return new JobResult(completed, completed ? null : "Portfolio risk backtest failed.", new Dictionary<string, object?> { ["backtestRunId"] = runId });
                 }
             default:
                 return new JobResult(false, $"Unknown job type: {jobRun.JobType}", new Dictionary<string, object?>());

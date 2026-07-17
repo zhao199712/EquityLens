@@ -17,6 +17,7 @@ public class EquityLensDbContext : DbContext
     public DbSet<PortfolioHolding> PortfolioHoldings => Set<PortfolioHolding>();
     public DbSet<PortfolioSnapshot> PortfolioSnapshots => Set<PortfolioSnapshot>();
     public DbSet<RiskReportSnapshot> RiskReportSnapshots => Set<RiskReportSnapshot>();
+    public DbSet<RiskBacktestRun> RiskBacktestRuns => Set<RiskBacktestRun>();
 
     // Market Data
     public DbSet<MarketPrice> MarketPrices => Set<MarketPrice>();

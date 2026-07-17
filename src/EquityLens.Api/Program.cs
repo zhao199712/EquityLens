@@ -171,6 +171,7 @@ builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IPortfolioFundingService, PortfolioFundingService>();
 builder.Services.AddScoped<IRiskAnalysisService, RiskAnalysisService>();
+builder.Services.AddScoped<IRiskBacktestRunService, RiskBacktestRunService>();
 builder.Services.AddScoped<IConferenceImportService, ConferenceImportService>();
 builder.Services.AddScoped<IPdfTextExtractionService, PdfPigTextExtractionService>();
 builder.Services.AddScoped<IConferenceChunkingService, ConferenceChunkingService>();
