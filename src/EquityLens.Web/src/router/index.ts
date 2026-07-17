@@ -25,6 +25,8 @@ import PriceManagementView from '../views/admin/PriceManagementView.vue'
 import ReportManagementView from '../views/admin/ReportManagementView.vue'
 import RiskModelManagementView from '../views/admin/RiskModelManagementView.vue'
 import AISettingsView from '../views/admin/AISettingsView.vue'
+import WorkflowManagementView from '../views/admin/WorkflowManagementView.vue'
+import NodeCatalogManagementView from '../views/admin/NodeCatalogManagementView.vue'
 import AgentRunListView from '../views/agent-runs/AgentRunListView.vue'
 import AgentRunDetailView from '../views/agent-runs/AgentRunDetailView.vue'
 import ResearchRunListView from '../views/research/ResearchRunListView.vue'
@@ -162,6 +164,8 @@ export const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true },
       redirect: '/admin/agent-runs',
       children: [
+        { path: 'workflows', name: 'admin-workflows', component: WorkflowManagementView },
+        { path: 'nodes', name: 'admin-nodes', component: NodeCatalogManagementView },
         {
           path: 'agent-runs',
           name: 'admin-agent-runs',

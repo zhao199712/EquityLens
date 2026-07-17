@@ -13,6 +13,8 @@ import {
   TimeOutline,
   TerminalOutline,
   FlaskOutline,
+  GitNetworkOutline,
+  CubeOutline,
 } from '@vicons/ionicons5'
 import { renderIcon } from '../../utils/icons'
 
@@ -28,6 +30,8 @@ function handleMenuSelect(key: string) {
 }
 
 const menuOptions = computed(() => [
+  { label: 'Workflows', key: 'workflows', icon: renderIcon(GitNetworkOutline), path: '/admin/workflows' },
+  { label: 'Node Catalog', key: 'nodes', icon: renderIcon(CubeOutline), path: '/admin/nodes' },
   {
     label: 'Agent Runs',
     key: 'agent-runs',

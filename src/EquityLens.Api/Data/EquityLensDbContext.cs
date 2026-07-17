@@ -65,6 +65,8 @@ public class EquityLensDbContext : DbContext
     public DbSet<AgentRunEvent> AgentRunEvents => Set<AgentRunEvent>();
     public DbSet<AgentToolCall> AgentToolCalls => Set<AgentToolCall>();
     public DbSet<AgentFeedback> AgentFeedback => Set<AgentFeedback>();
+    public DbSet<AgentWorkflowSetting> AgentWorkflowSettings => Set<AgentWorkflowSetting>();
+    public DbSet<AgentNodeSetting> AgentNodeSettings => Set<AgentNodeSetting>();
 
     // Exchange Rates
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
