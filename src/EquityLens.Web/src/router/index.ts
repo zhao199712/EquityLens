@@ -33,7 +33,6 @@ import ResearchRunListView from '../views/research/ResearchRunListView.vue'
 import ResearchRunDetailView from '../views/research/ResearchRunDetailView.vue'
 import AgentRunManagementView from '../views/admin/AgentRunManagementView.vue'
 import ResearchRunManagementView from '../views/admin/ResearchRunManagementView.vue'
-import EquityLinesView from '../views/equity-lines/EquityLinesView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -52,7 +51,7 @@ export const router = createRouter({
     },
     {
       path: '/home',
-      name: 'home',
+      name: 'home-neon',
       component: HomeView,
       meta: { requiresAuth: false },
     },
@@ -94,6 +93,12 @@ export const router = createRouter({
     },
     {
       path: '/',
+      name: 'home',
+      component: PrestigeHomeView,
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/dashboard',
       name: 'dashboard',
       component: DashboardView,
       meta: { requiresAuth: true },
@@ -142,11 +147,6 @@ export const router = createRouter({
       path: '/research',
       name: 'research',
       component: ResearchRunListView,
-    },
-    {
-      path: '/equity-lines',
-      name: 'equity-lines',
-      component: EquityLinesView,
     },
     {
       path: '/research/:id',

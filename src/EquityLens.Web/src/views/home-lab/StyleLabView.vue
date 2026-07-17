@@ -14,12 +14,11 @@ interface StyleEntry {
 
 const styles: StyleEntry[] = [
   {
-    route: 'home',
+    route: 'home-neon',
     name: '霓虹科技',
-    en: 'NEON TECH(目前版本)',
-    desc: '深藍黑底、青藍霓虹光效、HUD 網格與粒子,現行採用的科技感設計。',
+    en: 'NEON TECH',
+    desc: '深藍黑底、青藍霓虹光效、HUD 網格與粒子,初版科技感設計。',
     swatches: ['#050a14', '#22d3ee', '#818cf8'],
-    current: true,
   },
   {
     route: 'home-aurora',
@@ -38,9 +37,10 @@ const styles: StyleEntry[] = [
   {
     route: 'home-prestige',
     name: '私人銀行',
-    en: 'PRESTIGE BANKING',
+    en: 'PRESTIGE BANKING(目前首頁)',
     desc: '深夜藍配香檳金,細襯線標題與金框卡片,低調奢華的穩重感。',
     swatches: ['#0b1220', '#c9a86a', '#f5efe0'],
+    current: true,
   },
   {
     route: 'home-analyst',
@@ -81,7 +81,7 @@ const styles: StyleEntry[] = [
           <span class="lab-card-en">{{ s.en }}</span>
           <span class="lab-card-name">
             {{ s.name }}
-            <span v-if="s.current" class="lab-current">目前版本</span>
+            <span v-if="s.current" class="lab-current">目前首頁</span>
           </span>
           <span class="lab-card-desc">{{ s.desc }}</span>
         </div>
