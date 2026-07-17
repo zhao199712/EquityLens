@@ -311,6 +311,10 @@ watch(() => route.params.id, () => {
   font-size: 13px;
 }
 
+.admin-table-panel :deep(.n-data-table-thead) {
+  background: transparent;
+}
+
 .admin-table-panel :deep(.n-data-table-th) {
   background: transparent;
   color: var(--gold);

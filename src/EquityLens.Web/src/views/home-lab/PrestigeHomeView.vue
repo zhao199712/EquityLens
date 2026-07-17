@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import TechChart from '../../components/tech/TechChart.vue'
 import {
@@ -11,17 +11,36 @@ import {
   riskRadar,
   tickerItems,
   varMetrics,
+  type AiFeedItem,
+  type AllocationSlice,
+  type EquityPoint,
   type EquityRange,
+  type HeroKpi,
+  type TickerItem,
+  type VarMetric,
 } from '../../data/homeTechData'
+import {
+  getPortfolios,
+  getPortfolioRisk,
+  getPortfolioValuation,
+  getPortfolioValuationHistory,
+  type PortfolioRiskResponse,
+  type PortfolioValuationResponse,
+} from '../../services/risk'
+import { getMarketTicker } from '../../services/marketPrices'
+import { listResearchRuns } from '../../services/research'
+import { listAgentRuns } from '../../services/agentRuns'
+import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 // Prestige Banking 色票
 const GOLD = '#c9a86a'
 const IVORY = '#f5efe0'
 const MUTED = '#9a917c'
 const DOWN = '#b05c5c'
-const ALLOC_COLORS = ['#c9a86a', '#a8905e', '#8a7348', '#3d5470', '#2a3d55', '#1d2c42']
+const ALLOC_COLORS = ['#c9a86a', '#3d5470', '#a8905e', '#2a3d55', '#8a7348', '#1d2c42']
 
 const formatKpiValue = (value: number, decimals: number) =>
   value.toLocaleString('en-US', {
@@ -29,14 +48,64 @@ const formatKpiValue = (value: number, decimals: number) =>
     maximumFractionDigits: decimals,
   })
 
+// ---- 即時資料狀態(任一區塊 API 失敗時,該區塊保留 mock)----
+const dataMode = ref<'live' | 'demo'>('demo')
+const primaryPortfolioId = ref<string | null>(null)
+
+// ---- KPI 四卡 ----
+const kpis = ref<HeroKpi[]>(heroKpis.map((kpi) => ({ ...kpi })))
+
+const setKpi = (index: number, kpi: HeroKpi) => {
+  kpis.value = kpis.value.map((current, i) => (i === index ? kpi : current))
+}
+
 // ---- 行情跑馬燈(複製一份達成無縫循環)----
-const tickerLoop = computed(() => [...tickerItems, ...tickerItems])
+const liveTickerItems = ref<TickerItem[] | null>(null)
+const tickerSource = computed(() => liveTickerItems.value ?? tickerItems)
+const tickerLoop = computed(() => [...tickerSource.value, ...tickerSource.value])
 
 // ---- 淨值曲線 ----
 const activeRange = ref<EquityRange>('6M')
+const liveEquityCurves = ref<Partial<Record<EquityRange, EquityPoint[]>>>({})
+const equityLoading = ref(false)
+const equityPoints = computed(
+  () => liveEquityCurves.value[activeRange.value] ?? equityCurves[activeRange.value],
+)
+
+// ---- 配置 donut ----
+const allocSlices = ref<AllocationSlice[]>(allocation)
+const allocCenterText = ref('NT$12.58M')
+
+// ---- 持股風險佔比 bar(live 載入前以 mock 因子數據渲染)----
+const riskShareBars = ref<{ label: string; value: number }[]>(
+  riskRadar.indicators.map((name, i) => ({ label: name, value: riskRadar.scores[i] ?? 0 })),
+)
+
+// ---- VaR 水平 bar ----
+const varItems = ref<VarMetric[]>(varMetrics)
+
+// ---- 風險數字卡 ----
+const riskData = ref<PortfolioRiskResponse | null>(null)
+// undefined = 尚未載入 live 歷史(顯示 mock);null = live 但無 beta(顯示 —)
+const liveBeta = ref<number | null | undefined>(undefined)
+
+const statMaxDrawdown = computed(() =>
+  riskData.value ? `${(riskData.value.maxDrawdown * 100).toFixed(1)}%` : '-8.4%',
+)
+const statVolatility = computed(() =>
+  riskData.value ? `${(riskData.value.historicalAnnualizedVolatility * 100).toFixed(1)}%` : '14.2%',
+)
+const statBeta = computed(() => {
+  if (liveBeta.value === undefined) return '1.08'
+  return liveBeta.value === null ? '—' : liveBeta.value.toFixed(2)
+})
+
+// ---- AI Research Feed ----
+const feedItems = ref<AiFeedItem[]>(aiFeed)
+const feedEmpty = ref(false)
 
 const equityOption = computed(() => {
-  const points = equityCurves[activeRange.value]
+  const points = equityPoints.value
   return {
     textStyle: { color: MUTED },
     grid: { left: 64, right: 20, top: 24, bottom: 32 },
@@ -45,7 +114,7 @@ const equityOption = computed(() => {
       data: points.map((p) => p.date.slice(5)),
       axisLine: { lineStyle: { color: 'rgba(201,168,106,0.25)' } },
       axisTick: { show: false },
-      axisLabel: { color: '#6e6757', fontSize: 11 },
+      axisLabel: { color: '#6e6757', fontSize: 11, interval: 14 },
     },
     yAxis: {
       type: 'value',
@@ -54,7 +123,7 @@ const equityOption = computed(() => {
       axisLabel: {
         color: '#6e6757',
         fontSize: 11,
-        formatter: (v: number) => `NT$${(v / 1_000_000).toFixed(1)}M`,
+        formatter: (v: number) => formatCompactMoney(v),
       },
     },
     tooltip: {
@@ -86,7 +155,6 @@ const equityOption = computed(() => {
   }
 })
 
-// ---- 配置 donut ----
 const allocationOption = computed(() => ({
   textStyle: { color: MUTED },
   tooltip: {
@@ -97,7 +165,7 @@ const allocationOption = computed(() => ({
     textStyle: { color: IVORY, fontSize: 12 },
   },
   title: {
-    text: 'NT$12.58M',
+    text: allocCenterText.value,
     subtext: 'TOTAL ASSETS',
     left: 'center',
     top: '40%',
@@ -110,11 +178,11 @@ const allocationOption = computed(() => ({
       radius: ['58%', '80%'],
       center: ['50%', '50%'],
       avoidLabelOverlap: true,
-      label: { color: MUTED, fontSize: 11, formatter: '{b} {c}%' },
-      labelLine: { lineStyle: { color: 'rgba(201,168,106,0.3)' } },
+      label: { show: false },
+      labelLine: { show: false },
       itemStyle: { borderColor: '#0b1220', borderWidth: 2 },
       emphasis: { scaleSize: 4 },
-      data: allocation.map((slice, i) => ({
+      data: allocSlices.value.map((slice, i) => ({
         ...slice,
         itemStyle: { color: ALLOC_COLORS[i % ALLOC_COLORS.length] },
       })),
@@ -122,34 +190,46 @@ const allocationOption = computed(() => ({
   ],
 }))
 
-// ---- 風險雷達 ----
-const radarOption = computed(() => ({
+// ---- 持股風險佔比水平 bar ----
+const riskShareOption = computed(() => ({
   textStyle: { color: MUTED },
+  grid: { left: 70, right: 56, top: 10, bottom: 24 },
+  xAxis: {
+    type: 'value',
+    splitLine: { lineStyle: { color: 'rgba(201,168,106,0.08)' } },
+    axisLabel: { color: '#6e6757', fontSize: 11, formatter: '{value}%' },
+  },
+  yAxis: {
+    type: 'category',
+    inverse: true,
+    data: riskShareBars.value.map((bar) => bar.label),
+    axisLine: { show: false },
+    axisTick: { show: false },
+    axisLabel: { color: MUTED, fontSize: 11 },
+  },
   tooltip: {
+    trigger: 'axis',
+    formatter: '{b}: {c}%',
     backgroundColor: 'rgba(11, 18, 32, 0.95)',
     borderColor: 'rgba(201,168,106,0.4)',
     textStyle: { color: IVORY, fontSize: 12 },
   },
-  radar: {
-    indicator: riskRadar.indicators.map((name) => ({ name, max: 100 })),
-    radius: '68%',
-    axisName: { color: MUTED, fontSize: 11 },
-    splitLine: { lineStyle: { color: 'rgba(201,168,106,0.15)' } },
-    splitArea: { areaStyle: { color: ['rgba(201,168,106,0.02)', 'rgba(201,168,106,0.05)'] } },
-    axisLine: { lineStyle: { color: 'rgba(201,168,106,0.2)' } },
-  },
   series: [
     {
-      type: 'radar',
-      data: [
-        {
-          value: riskRadar.scores,
-          name: '組合因子暴露',
-          lineStyle: { color: GOLD, width: 2 },
-          areaStyle: { color: 'rgba(201,168,106,0.15)' },
-          itemStyle: { color: GOLD },
+      type: 'bar',
+      barWidth: 12,
+      data: riskShareBars.value.map((bar) => Number(bar.value.toFixed(1))),
+      itemStyle: {
+        color: {
+          type: 'linear',
+          x: 0, y: 0, x2: 1, y2: 0,
+          colorStops: [
+            { offset: 0, color: 'rgba(201,168,106,0.35)' },
+            { offset: 1, color: 'rgba(201,168,106,0.9)' },
+          ],
         },
-      ],
+      },
+      label: { show: true, position: 'right', color: GOLD, fontSize: 11, formatter: '{c}%' },
     },
   ],
 }))
@@ -166,7 +246,7 @@ const varOption = computed(() => ({
   },
   yAxis: {
     type: 'category',
-    data: varMetrics.map((m) => m.label),
+    data: varItems.value.map((m) => m.label),
     axisLine: { show: false },
     axisTick: { show: false },
     axisLabel: { color: MUTED, fontSize: 11 },
@@ -182,7 +262,7 @@ const varOption = computed(() => ({
     {
       type: 'bar',
       barWidth: 12,
-      data: varMetrics.map((m) => m.value),
+      data: varItems.value.map((m) => Number(m.value.toFixed(2))),
       itemStyle: {
         color: {
           type: 'linear',
@@ -203,6 +283,282 @@ const feedStatusLabel: Record<string, string> = {
   running: 'RUNNING',
   failed: 'FAILED',
 }
+
+// ================= 即時資料載入 =================
+
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function rangeFromDate(range: EquityRange): string {
+  const from = new Date()
+  switch (range) {
+    case '1M':
+      from.setMonth(from.getMonth() - 1)
+      break
+    case '3M':
+      from.setMonth(from.getMonth() - 3)
+      break
+    case '6M':
+      from.setMonth(from.getMonth() - 6)
+      break
+    case '1Y':
+      from.setFullYear(from.getFullYear() - 1)
+      break
+  }
+  return formatLocalDate(from)
+}
+
+const formatMoney = (value: number) => `NT$${Math.round(value).toLocaleString('en-US')}`
+
+const formatSignedMoney = (value: number) =>
+  `${value < 0 ? '-' : ''}NT$${Math.round(Math.abs(value)).toLocaleString('en-US')}`
+
+const formatCompactMoney = (value: number, digits = 1) => {
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000) return `NT$${(value / 1_000_000).toFixed(digits)}M`
+  if (abs >= 1_000) return `NT$${(value / 1_000).toFixed(0)}K`
+  return `NT$${Math.round(value)}`
+}
+
+const truncate = (text: string, max = 42) => (text.length > max ? `${text.slice(0, max)}…` : text)
+
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const minutes = Math.floor(diffMs / 60000)
+  if (minutes < 1) return '剛剛'
+  if (minutes < 60) return `${minutes} 分鐘前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} 小時前`
+  return `${Math.floor(hours / 24)} 天前`
+}
+
+function mapFeedStatus(status: string): AiFeedItem['status'] {
+  const normalized = status.toLowerCase()
+  if (normalized === 'completed' || normalized === 'succeeded') return 'completed'
+  if (normalized === 'running' || normalized === 'pending') return 'running'
+  return 'failed'
+}
+
+// KPI 1/2:所有組合估值加總
+function applyValuationKpis(valuations: PortfolioValuationResponse[]) {
+  const totalAssets = valuations.reduce((sum, v) => sum + v.totalAssetValue, 0)
+  const totalCash = valuations.reduce((sum, v) => sum + v.cashBalance, 0)
+  const totalPnl = valuations.reduce((sum, v) => sum + v.totalUnrealizedPnl, 0)
+  const totalCost = valuations.reduce((sum, v) => sum + v.totalCostValue, 0)
+
+  setKpi(0, {
+    label: 'Total Assets',
+    value: totalAssets,
+    prefix: 'NT$',
+    suffix: '',
+    decimals: 0,
+    sub: `${valuations.length} 個組合 · 現金 ${formatMoney(totalCash)}`,
+    tone: 'neutral',
+  })
+
+  if (totalCost > 0) {
+    const pct = (totalPnl / totalCost) * 100
+    setKpi(1, {
+      label: 'Total Return',
+      value: pct,
+      prefix: pct >= 0 ? '+' : '',
+      suffix: '%',
+      decimals: 2,
+      sub: `未實現損益 ${formatSignedMoney(totalPnl)}`,
+      tone: pct >= 0 ? 'positive' : 'negative',
+    })
+  }
+}
+
+// KPI 3/4 + 持股風險佔比 + VaR + 風險數字卡
+function applyRisk(risk: PortfolioRiskResponse) {
+  riskData.value = risk
+
+  setKpi(2, {
+    label: 'Sharpe Ratio',
+    value: risk.sharpeRatio,
+    prefix: '',
+    suffix: '',
+    decimals: 2,
+    sub: '滾動 252 日',
+    tone: 'neutral',
+  })
+  setKpi(3, {
+    label: 'Max Drawdown',
+    value: risk.maxDrawdown * 100,
+    prefix: '',
+    suffix: '%',
+    decimals: 1,
+    sub: '過去一年',
+    tone: 'negative',
+  })
+
+  const topHoldings = [...risk.holdings]
+    .sort((a, b) => b.componentRiskShare - a.componentRiskShare)
+    .slice(0, 5)
+  if (topHoldings.length > 0) {
+    riskShareBars.value = topHoldings.map((h) => ({
+      label: h.ticker,
+      value: h.componentRiskShare * 100,
+    }))
+  }
+
+  if (risk.horizons.length > 0) {
+    varItems.value = [...risk.horizons]
+      .sort((a, b) => a.horizonDays - b.horizonDays)
+      .map((h) => ({ label: `VaR ${h.horizonDays}D`, value: h.historicalVaR * 100 }))
+  }
+}
+
+// 配置 donut:primary 組合持股以產業分組
+function applyAllocation(valuation: PortfolioValuationResponse) {
+  const groups = new Map<string, number>()
+  for (const holding of valuation.holdings) {
+    if (holding.marketValue == null || holding.marketValue <= 0) continue
+    const key = holding.industry ?? holding.sector ?? '其他'
+    groups.set(key, (groups.get(key) ?? 0) + holding.marketValue)
+  }
+  const total = [...groups.values()].reduce((sum, v) => sum + v, 0)
+  if (total <= 0) return
+
+  allocSlices.value = [...groups.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value]) => ({ name, value: Number(((value / total) * 100).toFixed(1)) }))
+  allocCenterText.value = formatCompactMoney(valuation.totalAssetValue, 2)
+}
+
+// 行情跑馬燈:加權指數 + 0050 + 0050 前五大成分股(後端 /market/ticker)
+async function loadTicker() {
+  try {
+    const entries = await getMarketTicker()
+    if (entries.length === 0) return
+    liveTickerItems.value = entries.map((entry) => ({
+      code: entry.code,
+      name: entry.name,
+      price: entry.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      changePct: entry.changePct ?? 0,
+    }))
+  } catch {
+    // 失敗時保留 mock 跑馬燈
+  }
+}
+
+// 淨值走勢:切換區間時重新打 API;失敗或空資料保留 mock 曲線
+async function loadEquityHistory(range: EquityRange) {
+  const portfolioId = primaryPortfolioId.value
+  if (!portfolioId) return
+  equityLoading.value = true
+  try {
+    const history = await getPortfolioValuationHistory(portfolioId, {
+      from: rangeFromDate(range),
+      to: formatLocalDate(new Date()),
+    })
+    const points = history.points
+      .map((p) => ({ date: p.date, value: p.totalAssetValue ?? p.totalMarketValue }))
+      .filter((p) => p.value > 0)
+    if (points.length > 0) {
+      liveEquityCurves.value = { ...liveEquityCurves.value, [range]: points }
+    }
+    liveBeta.value = history.beta
+  } catch {
+    // 保留 mock 曲線與 beta
+  } finally {
+    equityLoading.value = false
+  }
+}
+
+const handleRangeChange = (range: EquityRange) => {
+  activeRange.value = range
+  void loadEquityHistory(range)
+}
+
+// AI 研究動態:Research + Agent Run 合併,按建立時間降冪取前 6
+async function loadFeed() {
+  const [researchResult, agentResult] = await Promise.allSettled([
+    listResearchRuns({ limit: 5 }),
+    listAgentRuns({ limit: 5 }),
+  ])
+  // 兩者皆失敗才保留 mock
+  if (researchResult.status === 'rejected' && agentResult.status === 'rejected') return
+
+  const merged: { item: AiFeedItem; createdAtUtc: string }[] = []
+  if (researchResult.status === 'fulfilled') {
+    for (const run of researchResult.value) {
+      merged.push({
+        item: {
+          title: truncate(`${run.ticker} ${run.question}`),
+          kind: 'Research',
+          status: mapFeedStatus(run.status),
+          time: relativeTime(run.createdAtUtc),
+        },
+        createdAtUtc: run.createdAtUtc,
+      })
+    }
+  }
+  if (agentResult.status === 'fulfilled') {
+    for (const run of agentResult.value) {
+      merged.push({
+        item: {
+          title: truncate(`${run.workflowType} / ${run.agentType}`),
+          kind: 'Agent Run',
+          status: mapFeedStatus(run.status),
+          time: relativeTime(run.createdAtUtc),
+        },
+        createdAtUtc: run.createdAtUtc,
+      })
+    }
+  }
+
+  merged.sort((a, b) => b.createdAtUtc.localeCompare(a.createdAtUtc))
+  const items = merged.slice(0, 6).map((entry) => entry.item)
+  feedItems.value = items
+  feedEmpty.value = items.length === 0
+}
+
+onMounted(async () => {
+  if (!authStore.isAuthenticated) return
+
+  const portfolios = await getPortfolios().catch(() => null)
+  if (!portfolios || portfolios.length === 0) return
+  dataMode.value = 'live'
+
+  // 研究動態獨立載入,與組合資料互不影響
+  void loadFeed()
+
+  const valuationResults = await Promise.allSettled(
+    portfolios.map((portfolio) => getPortfolioValuation(portfolio.id)),
+  )
+  const valuations = valuationResults.flatMap((result) =>
+    result.status === 'fulfilled' ? [result.value] : [],
+  )
+  if (valuations.length === 0) return
+
+  applyValuationKpis(valuations)
+
+  // primary = 估值總資產最大的組合
+  const primary = valuations.reduce((best, current) =>
+    current.totalAssetValue > best.totalAssetValue ? current : best,
+  )
+  primaryPortfolioId.value = primary.portfolioId
+
+  applyAllocation(primary)
+  void loadTicker()
+
+  await Promise.allSettled([
+    getPortfolioRisk(primary.portfolioId, {
+      from: rangeFromDate('1Y'),
+      to: formatLocalDate(new Date()),
+      horizonDays: 30,
+      confidenceLevel: 0.95,
+      simulations: 10000,
+    }).then(applyRisk),
+    loadEquityHistory(activeRange.value),
+  ])
+})
 </script>
 
 <template>
@@ -221,8 +577,14 @@ const feedStatusLabel: Record<string, string> = {
           <button class="btn-text" @click="router.push({ name: 'research' })">查看 AI 研究</button>
         </div>
 
+        <div class="hero-badge fade-in" style="--d: 0.55s">
+          <span class="prestige-tag data-badge" :class="{ live: dataMode === 'live' }">
+            <span class="badge-dot" />{{ dataMode === 'live' ? 'LIVE DATA' : 'DEMO DATA' }}
+          </span>
+        </div>
+
         <div class="hero-kpis fade-in" style="--d: 0.6s">
-          <div v-for="kpi in heroKpis" :key="kpi.label" class="kpi">
+          <div v-for="kpi in kpis" :key="kpi.label" class="kpi">
             <span class="kpi-label">{{ kpi.label }}</span>
             <span :class="['kpi-value', kpi.tone]">
               {{ kpi.prefix }}{{ formatKpiValue(kpi.value, kpi.decimals) }}{{ kpi.suffix }}
@@ -254,11 +616,12 @@ const feedStatusLabel: Record<string, string> = {
           <h2 class="section-title">組合淨值走勢</h2>
         </div>
         <div class="range-switch">
+          <span v-if="equityLoading" class="range-loading">載入中…</span>
           <button
             v-for="range in equityRanges"
             :key="range"
             :class="['range-btn', activeRange === range && 'active']"
-            @click="activeRange = range"
+            @click="handleRangeChange(range)"
           >
             {{ range }}
           </button>
@@ -271,7 +634,14 @@ const feedStatusLabel: Record<string, string> = {
         </div>
         <div class="panel panel-pad">
           <span class="panel-label">ASSET ALLOCATION</span>
-          <TechChart :option="allocationOption" height="330px" />
+          <TechChart :option="allocationOption" height="270px" />
+          <div class="alloc-legend">
+            <div v-for="(slice, i) in allocSlices" :key="slice.name" class="alloc-legend-item">
+              <span class="alloc-dot" :style="{ background: ALLOC_COLORS[i % ALLOC_COLORS.length] }" />
+              <span class="alloc-name">{{ slice.name }}</span>
+              <span class="alloc-pct">{{ slice.value }}%</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -287,8 +657,8 @@ const feedStatusLabel: Record<string, string> = {
 
       <div class="risk-grid">
         <div class="panel panel-pad">
-          <span class="panel-label">FACTOR EXPOSURE</span>
-          <TechChart :option="radarOption" height="300px" />
+          <span class="panel-label">HOLDINGS RISK SHARE / 持股風險佔比</span>
+          <TechChart :option="riskShareOption" height="300px" />
         </div>
         <div class="panel panel-pad">
           <span class="panel-label">VALUE AT RISK(日,1 年歷史模擬)</span>
@@ -297,17 +667,17 @@ const feedStatusLabel: Record<string, string> = {
         <div class="risk-side">
           <div class="panel risk-stat">
             <span class="kpi-label">Max Drawdown</span>
-            <span class="kpi-value negative">-8.4%</span>
-            <span class="kpi-sub">2025.09 – 2025.11 區間</span>
+            <span class="kpi-value negative">{{ statMaxDrawdown }}</span>
+            <span class="kpi-sub">{{ riskData ? '過去一年' : '2025.09 – 2025.11 區間' }}</span>
           </div>
           <div class="panel risk-stat">
             <span class="kpi-label">Volatility(年化)</span>
-            <span class="kpi-value">14.2%</span>
-            <span class="kpi-sub">滾動 90 日</span>
+            <span class="kpi-value">{{ statVolatility }}</span>
+            <span class="kpi-sub">{{ riskData ? '年化 · 近一年' : '滾動 90 日' }}</span>
           </div>
           <div class="panel risk-stat">
             <span class="kpi-label">Beta(vs 加權指數)</span>
-            <span class="kpi-value">1.08</span>
+            <span class="kpi-value">{{ statBeta }}</span>
             <span class="kpi-sub">滾動 252 日</span>
           </div>
         </div>
@@ -325,15 +695,18 @@ const feedStatusLabel: Record<string, string> = {
       </div>
 
       <div class="panel feed-panel">
-        <div v-for="(item, i) in aiFeed" :key="i" class="feed-item">
-          <span :class="['feed-dot', item.status]" />
-          <div class="feed-body">
-            <span class="feed-title">{{ item.title }}</span>
-            <span class="feed-meta">{{ item.time }}</span>
+        <div v-if="feedEmpty" class="feed-empty">尚無研究紀錄</div>
+        <template v-else>
+          <div v-for="(item, i) in feedItems" :key="i" class="feed-item">
+            <span :class="['feed-dot', item.status]" />
+            <div class="feed-body">
+              <span class="feed-title">{{ item.title }}</span>
+              <span class="feed-meta">{{ item.time }}</span>
+            </div>
+            <span class="feed-kind">{{ item.kind }}</span>
+            <span :class="['feed-status', item.status]">{{ feedStatusLabel[item.status] }}</span>
           </div>
-          <span class="feed-kind">{{ item.kind }}</span>
-          <span :class="['feed-status', item.status]">{{ feedStatusLabel[item.status] }}</span>
-        </div>
+        </template>
       </div>
     </section>
 
@@ -494,11 +867,33 @@ const feedStatusLabel: Record<string, string> = {
   border-bottom-color: var(--gold-border);
 }
 
+.hero-badge {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.data-badge .badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.data-badge.live .badge-dot {
+  background: var(--gold);
+}
+
+.data-badge:not(.live) {
+  border-color: var(--gold-border-soft);
+  color: var(--muted);
+}
+
 .hero-kpis {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   width: 100%;
-  margin-top: 44px;
+  margin-top: 22px;
   border-top: 1px solid var(--gold-border-soft);
   border-bottom: 1px solid var(--gold-border-soft);
 }
@@ -643,6 +1038,41 @@ const feedStatusLabel: Record<string, string> = {
   margin-bottom: 12px;
 }
 
+/* ---- 配置圖例(donut 標籤改列於圖下,避免擁擠截斷) ---- */
+.alloc-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin-top: 8px;
+}
+
+.alloc-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.alloc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.alloc-name {
+  flex: 1;
+  color: var(--ivory);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alloc-pct {
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- Portfolio Pulse ---- */
 .pulse-grid {
   display: grid;
@@ -653,6 +1083,13 @@ const feedStatusLabel: Record<string, string> = {
 .range-switch {
   display: flex;
   gap: 8px;
+}
+
+.range-loading {
+  align-self: center;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
 }
 
 .range-btn {
@@ -708,6 +1145,14 @@ const feedStatusLabel: Record<string, string> = {
 /* ---- AI Research Feed ---- */
 .feed-panel {
   padding: 4px 0;
+}
+
+.feed-empty {
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.08em;
 }
 
 .feed-item {

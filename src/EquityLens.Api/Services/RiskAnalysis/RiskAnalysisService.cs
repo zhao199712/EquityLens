@@ -18,8 +18,8 @@ namespace EquityLens.Api.Services.RiskAnalysis;
 public sealed class RiskAnalysisService : IRiskAnalysisService
 {
     private const string DailyInterval = "1d";
-    // 約六個月的交易日；所有持倉必須在相同日期具有有效價格。
-    private const int MinPriceCount = 120;
+    // 最低共同交易日門檻(約一個月),讓 1M 以上區間可估算風險;所有持倉必須在相同日期具有有效價格。
+    private const int MinPriceCount = 20;
     private const decimal MaxConfidenceLevel = 0.999m;
     private const decimal MinConfidenceLevel = 0.90m;
     private const int MaxSimulations = 100000;

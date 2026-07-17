@@ -1045,41 +1045,38 @@ onMounted(loadPortfolioData)
           <div class="prestige-panel trend-section">
             <!-- Header -->
             <div class="trend-header">
-              <div class="trend-title-group">
-                <div class="trend-title">
-                  <h2 class="trend-main-title">投資組合價值走勢</h2>
-                  <span class="caption" style="margin-top: 6px; display: block">PORTFOLIO VALUE TREND · {{ fromDate }} — {{ toDate }}</span>
-                </div>
-                <div class="trend-metrics">
-                  <div v-for="(kpi, i) in kpiData" :key="i" class="trend-metric-item"
-                  >
-                    <span class="caption">{{ kpi.label }}</span>
-                    <span class="trend-metric-value prestige-mono" :style="kpi.valueStyle">{{ kpi.value }}</span>
-                    <span v-if="kpi.sub" class="trend-metric-sub">{{ kpi.sub }}</span>
-                  </div>
-                </div>
+              <div class="trend-title">
+                <h2 class="trend-main-title">投資組合價值走勢</h2>
+                <span class="caption" style="margin-top: 6px; display: block">PORTFOLIO VALUE TREND · {{ fromDate }} — {{ toDate }}</span>
               </div>
-              <div class="trend-pnl-range">
-                <div v-if="periodReturn !== null" class="trend-pnl">
-                  <div class="trend-pnl-value prestige-mono" :class="periodReturn >= 0 ? 'pnl-up' : 'pnl-down'">
-                    {{ formatPercent(periodReturn) }}
+              <div class="trend-body">
+                <div v-for="(kpi, i) in kpiData" :key="i" class="trend-metric-item">
+                  <span class="caption">{{ kpi.label }}</span>
+                  <span class="trend-metric-value prestige-mono" :style="kpi.valueStyle">{{ kpi.value }}</span>
+                  <span v-if="kpi.sub" class="trend-metric-sub">{{ kpi.sub }}</span>
+                </div>
+                <div class="trend-pnl-range">
+                  <div v-if="periodReturn !== null" class="trend-pnl">
+                    <div class="trend-pnl-value prestige-mono" :class="periodReturn >= 0 ? 'pnl-up' : 'pnl-down'">
+                      {{ formatPercent(periodReturn) }}
+                    </div>
+                    <span class="caption">區間報酬</span>
                   </div>
-                  <span class="caption">區間報酬</span>
+                  <div class="time-range">
+                    <button
+                      v-for="r in timeRanges"
+                      :key="r"
+                      :class="['time-btn', timeRange === r && 'active']"
+                      :disabled="loadingPeriodData"
+                      @click="selectTimeRange(r)"
+                    >
+                      {{ r }}
+                    </button>
+                  </div>
+                  <button class="time-btn" :class="{ active: showBenchmark }" @click="showBenchmark = !showBenchmark">與台股加權含息指數比較</button>
+                  <span v-if="showBenchmark && !benchmarkTrendData" class="caption" style="display:block; margin-top:8px">基準暫時不可用，僅顯示組合走勢。</span>
+                  <span v-if="timeRange !== '1Y' && timeRange !== 'ALL'" class="caption" style="display:block; margin-top:8px">XIRR 為年化報酬，非本區間累積報酬。</span>
                 </div>
-                <div class="time-range">
-                  <button
-                    v-for="r in timeRanges"
-                    :key="r"
-                    :class="['time-btn', timeRange === r && 'active']"
-                    :disabled="loadingPeriodData"
-                    @click="selectTimeRange(r)"
-                  >
-                    {{ r }}
-                  </button>
-                </div>
-                <button class="time-btn" :class="{ active: showBenchmark }" @click="showBenchmark = !showBenchmark">與台股加權含息指數比較</button>
-                <span v-if="showBenchmark && !benchmarkTrendData" class="caption" style="display:block; margin-top:8px">基準暫時不可用，僅顯示組合走勢。</span>
-                <span v-if="timeRange !== '1Y' && timeRange !== 'ALL'" class="caption" style="display:block; margin-top:8px">XIRR 為年化報酬，非本區間累積報酬。</span>
               </div>
             </div>
 
@@ -1192,6 +1189,7 @@ onMounted(loadPortfolioData)
                 :center-sub-label="`${allocationRows.length} 檔持倉`"
                 :active-index="hoveredSegment"
                 :dark="true"
+                :label-threshold="1.1"
                 @segment-hover="(i) => hoveredSegment = i"
               />
             </div>
@@ -1420,6 +1418,7 @@ onMounted(loadPortfolioData)
                 :center-sub-label="`${industrySegments.length} 個產業`"
                 :active-index="hoveredIndustrySegment"
                 :dark="true"
+                :label-threshold="1.1"
                 @segment-hover="(i) => hoveredIndustrySegment = i"
               />
               <div v-else class="insufficient-history" style="min-height: 300px">
@@ -1932,20 +1931,18 @@ onMounted(loadPortfolioData)
 
 .trend-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 20px;
   padding: 24px;
   border-bottom: 1px solid var(--gold-border-soft);
-  flex-wrap: wrap;
 }
 
-.trend-title-group {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  flex: 1 1 auto;
-  min-width: 260px;
+.trend-body {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr)) auto;
+  gap: 20px 24px;
+  align-items: start;
 }
 
 .trend-title {
@@ -1961,18 +1958,12 @@ onMounted(loadPortfolioData)
   letter-spacing: 0.01em;
 }
 
-.trend-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px 40px;
-}
-
 .trend-metric-item {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  min-width: 130px;
+  min-width: 0;
 }
 
 .trend-metric-value {
@@ -1992,6 +1983,8 @@ onMounted(loadPortfolioData)
   align-items: flex-end;
   gap: 12px;
   flex-shrink: 0;
+  grid-row: 1 / span 2;
+  grid-column: 6;
 }
 
 .trend-pnl {
@@ -2115,14 +2108,10 @@ onMounted(loadPortfolioData)
 }
 
 @media (max-width: 1024px) {
-  .trend-header {
+  .trend-body {
+    display: flex;
     flex-direction: column;
-    align-items: flex-start;
     gap: 24px;
-  }
-
-  .trend-title-group {
-    width: 100%;
   }
 
   .trend-pnl-range {
@@ -2138,7 +2127,7 @@ onMounted(loadPortfolioData)
 }
 
 @media (max-width: 768px) {
-  .trend-metrics {
+  .trend-body {
     gap: 12px 24px;
   }
 

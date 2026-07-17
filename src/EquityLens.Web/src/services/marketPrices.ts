@@ -47,3 +47,15 @@ export async function getSecurityPrices(
   const response = await http.get<MarketPrice[]>(`/securities/${securityId}/prices`, { params })
   return response.data
 }
+
+export interface MarketTickerEntry {
+  code: string
+  name: string
+  close: number
+  changePct: number | null
+}
+
+export async function getMarketTicker(): Promise<MarketTickerEntry[]> {
+  const response = await http.get<MarketTickerEntry[]>('/market/ticker')
+  return response.data
+}

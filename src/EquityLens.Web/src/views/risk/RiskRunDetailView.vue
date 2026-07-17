@@ -31,14 +31,11 @@ const portfolioName = ref('投資組合風險分析')
 const risk = ref<PortfolioRiskResponse | null>(null)
 const loading = ref(false)
 const risk99 = ref<PortfolioRiskResponse | null>(null)
-const riskConservative = ref<PortfolioRiskResponse | null>(null)
-const riskConservative99 = ref<PortfolioRiskResponse | null>(null)
 const riskEwma = ref<PortfolioRiskResponse | null>(null)
 const riskEwma99 = ref<PortfolioRiskResponse | null>(null)
 const riskCurve = ref<PortfolioRiskResponse[]>([])
 const backtest = ref<PortfolioRiskBacktestResponse | null>(null)
 const monteCarloBase = ref<PortfolioMonteCarloResponse | null>(null)
-const monteCarloConservative = ref<PortfolioMonteCarloResponse | null>(null)
 const governance = ref<PortfolioRiskGovernanceResponse | null>(null)
 const targetWeights = ref<Record<string, number>>({})
 const scenarioResult = ref<PortfolioRiskScenarioResponse | null>(null)
@@ -48,12 +45,11 @@ const reportSnapshots = ref<PortfolioRiskReportSnapshotListItem[]>([])
 const selectedReportSnapshot = ref<PortfolioRiskReportSnapshotDetail | null>(null)
 const reportActionMessage = ref('')
 const reportCreating = ref(false)
-const selectedMonteCarloModel = ref<'base' | 'conservative'>('base')
-const monteCarlo = computed(() => selectedMonteCarloModel.value === 'conservative' ? monteCarloConservative.value : monteCarloBase.value)
+const monteCarlo = computed(() => monteCarloBase.value)
 const stressTest = ref<Awaited<ReturnType<typeof getPortfolioStressTest>> | null>(null)
-const selectedBacktestModel = ref<'Historical' | 'MVEWMA-FHS' | 'MVEWMA-FHS（保守 p99）'>('Historical')
+const selectedBacktestModel = ref<'Historical' | 'MVEWMA-FHS'>('Historical')
 const selectedBacktestConfidence = ref<0.95 | 0.99>(0.95)
-const backtestModels: Array<'Historical' | 'MVEWMA-FHS' | 'MVEWMA-FHS（保守 p99）'> = ['Historical', 'MVEWMA-FHS', 'MVEWMA-FHS（保守 p99）']
+const backtestModels: Array<'Historical' | 'MVEWMA-FHS'> = ['Historical', 'MVEWMA-FHS']
 const backtestConfidences: Array<0.95 | 0.99> = [0.95, 0.99]
 const error = ref('')
 const governanceAlerts = computed(() => (governance.value?.alerts ?? []).filter(alert => alert.status !== 'normal').sort((a, b) => (a.status === 'critical' ? -1 : 1) - (b.status === 'critical' ? -1 : 1)))
@@ -207,12 +203,6 @@ const riskKPIData = computed(() => {
       color: '#b05c5c',
     },
     {
-      label: 'STRESS VaR',
-      value: '-18.52%',
-      sub: 'AI泡沫情境（示範資料）',
-      color: '#b05c5c',
-    },
-    {
       label: 'MAX DRAWDOWN',
       value: r ? `${(r.maxDrawdown * 100).toFixed(2)}%` : '—',
       sub: '歷史最大回撤',
@@ -242,14 +232,11 @@ const riskKPIData = computed(() => {
 const varTableRows = computed(() => {
   const h95 = risk.value?.horizons.find((h) => h.horizonDays === 1)
   const h99 = risk99.value?.horizons.find((h) => h.horizonDays === 1)
-  const conservative95 = riskConservative.value?.horizons.find((h) => h.horizonDays === 1)
-  const conservative99 = riskConservative99.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma99 = riskEwma99.value?.horizons.find((h) => h.horizonDays === 1)
   return [
     { method: '歷史模擬法', var95: h95?.historicalVaR ?? 0, var99: h99?.historicalVaR ?? 0, note: '1日' },
     { method: 'MVEWMA-FHS', var95: h95?.monteCarloVaR ?? 0, var99: h99?.monteCarloVaR ?? 0, note: '1日' },
-    { method: 'MVEWMA-FHS（保守 p99）', var95: conservative95?.monteCarloVaR ?? 0, var99: conservative99?.monteCarloVaR ?? 0, note: '比較模型' },
     { method: 'EWMA 常態蒙地卡羅', var95: ewma95?.monteCarloVaR ?? 0, var99: ewma99?.monteCarloVaR ?? 0, note: 'λ=0.94' },
   ]
 })
@@ -257,14 +244,11 @@ const varTableRows = computed(() => {
 const esTableRows = computed(() => {
   const h95 = risk.value?.horizons.find((h) => h.horizonDays === 1)
   const h99 = risk99.value?.horizons.find((h) => h.horizonDays === 1)
-  const conservative95 = riskConservative.value?.horizons.find((h) => h.horizonDays === 1)
-  const conservative99 = riskConservative99.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma99 = riskEwma99.value?.horizons.find((h) => h.horizonDays === 1)
   return [
     { method: '歷史模擬法', es95: h95?.historicalES ?? 0, es99: h99?.historicalES ?? 0 },
     { method: 'MVEWMA-FHS', es95: h95?.monteCarloES ?? 0, es99: h99?.monteCarloES ?? 0 },
-    { method: 'MVEWMA-FHS（保守 p99）', es95: conservative95?.monteCarloES ?? 0, es99: conservative99?.monteCarloES ?? 0 },
     { method: 'EWMA 常態蒙地卡羅', es95: ewma95?.monteCarloES ?? 0, es99: ewma99?.monteCarloES ?? 0 },
   ]
 })
@@ -348,19 +332,6 @@ const monteCarloDiagnostics = computed(() => {
     { label: '期望－中位數', value: percent(diagnostics.expectedMedianGap) },
   ]
 })
-const monteCarloComparison = computed(() => [
-  { label: '原始 FHS', data: monteCarloBase.value },
-  { label: '保守 FHS（p99）', data: monteCarloConservative.value },
-].filter((item): item is { label: string; data: PortfolioMonteCarloResponse } => item.data?.status === 'ready').map(item => ({
-  label: item.label,
-  positive: `${(item.data.positiveReturnProbability * 100).toFixed(1)}%`,
-  median: `${item.data.diagnostics.p50FinalReturn >= 0 ? '+' : ''}${(item.data.diagnostics.p50FinalReturn * 100).toFixed(1)}%`,
-  expected: `${item.data.expectedReturn >= 0 ? '+' : ''}${(item.data.expectedReturn * 100).toFixed(1)}%`,
-  p5: `${(item.data.p5FinalReturn * 100).toFixed(1)}%`,
-  p1: `${(item.data.p1FinalReturn * 100).toFixed(1)}%`,
-  capped: item.data.residualCapQuantile > 0 ? `${(item.data.cappedDrawRate * 100).toFixed(2)}%` : '未截尾',
-})))
-
 function formatMoney(n: number) {
   if (n === 0) return '0'
   const abs = Math.abs(n)
@@ -384,31 +355,25 @@ function riskErrorMessage(e: unknown) {
 onMounted(async () => {
   loading.value = true
   try {
-    const [portfolio, riskData, riskData99, conservativeData, conservativeData99, backtestDataResponse, ewmaData, ewmaData99, stressData, monteCarloData, monteCarloConservativeData, governanceData, ...curve] = await Promise.all([
+    const [portfolio, riskData, riskData99, backtestDataResponse, ewmaData, ewmaData99, stressData, monteCarloData, governanceData, ...curve] = await Promise.all([
       getPortfolio(portfolioId.value),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'mvewma_fhs' }),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'mvewma_fhs' }),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'mvewma_fhs_conservative' }),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'mvewma_fhs_conservative' }),
       getPortfolioRiskBacktest(portfolioId.value, backtestFromDate.value, toDate.value),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'gbm_ewma_normal' }),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'gbm_ewma_normal' }),
       getPortfolioStressTest(portfolioId.value),
       getPortfolioMonteCarlo(portfolioId.value),
-      getPortfolioMonteCarlo(portfolioId.value, 'mvewma_fhs_conservative'),
       getPortfolioRiskGovernance(portfolioId.value),
       ...[0.90, 0.95, 0.975, 0.99, 0.995].map(confidenceLevel => getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 1, confidenceLevel, simulations: 5000, model: 'mvewma_fhs' })),
     ])
     portfolioName.value = portfolio.name
     risk.value = riskData
     risk99.value = riskData99
-    riskConservative.value = conservativeData
-    riskConservative99.value = conservativeData99
     riskEwma.value = ewmaData
     riskEwma99.value = ewmaData99
     stressTest.value = stressData
     monteCarloBase.value = monteCarloData
-    monteCarloConservative.value = monteCarloConservativeData
     governance.value = governanceData
     targetWeights.value = Object.fromEntries(riskData.holdings.map(holding => [holding.securityId, Number((holding.weight * 100).toFixed(2))]))
     backtest.value = backtestDataResponse
@@ -579,6 +544,89 @@ onMounted(async () => {
           </section>
         </ScrollReveal>
 
+        <!-- Holdings Risk Contribution -->
+        <ScrollReveal class="mt-20">
+          <div class="prestige-panel" style="margin-bottom: 40px">
+            <div class="section-head">
+              <h2 class="panel-title">持倉風險摘要</h2>
+              <span class="prestige-label">Holding Risk Summary — 後端資料</span>
+            </div>
+            <div class="section-body table-wrap">
+              <div class="holdings-headline">
+                風險來源模型年化波動率：<span class="prestige-mono hl">{{ (risk.riskSourceAnnualizedVolatility * 100).toFixed(2) }}%</span>
+              </div>
+              <table class="prestige-table">
+                <thead>
+                  <tr>
+                    <th>代號</th>
+                    <th>名稱</th>
+                    <th>產業</th>
+                    <th style="text-align: right">權重</th>
+                    <th style="text-align: right">年化波動率</th>
+                    <th style="text-align: right">Component</th>
+                    <th style="text-align: right">風險占比</th>
+                    <th style="text-align: right">Marginal（+1%）</th>
+                    <th style="text-align: right">Incremental</th>
+                    <th style="text-align: right">資料筆數</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="h in risk.holdings" :key="h.securityId">
+                    <td>{{ h.ticker }}</td>
+                    <td>{{ h.securityName }}</td>
+                    <td class="td-muted">{{ h.industry }}</td>
+                    <td class="prestige-mono td-num">{{ (h.weight * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num" :class="{ 'td-warn': h.annualizedVolatility > 0.3 }">{{ (h.annualizedVolatility * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ (h.componentVolatility * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num" :class="h.componentRiskShare < 0 ? 'td-pos' : 'td-danger'">{{ (h.componentRiskShare * 100).toFixed(1) }}%</td>
+                    <td class="prestige-mono td-num">{{ h.marginalVolatility.toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ (h.incrementalVolatility * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ h.dataPointCount }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="table-note" style="padding: 0 24px 20px; margin-top: 0">
+              Component 可加總為上方的風險來源模型年化波動率；Marginal 為權重增加 1 個百分點的年化波動率變化；Incremental 假設移除部位後轉為現金。負值代表分散效果。
+            </p>
+          </div>
+        </ScrollReveal>
+
+        <ScrollReveal class="mt-20" v-if="risk.industries?.length">
+          <div class="prestige-panel" style="margin-bottom: 40px">
+            <div class="section-head">
+              <h2 class="panel-title">產業風險來源</h2>
+              <span class="prestige-label">Industry Risk Sources — 後端資料</span>
+            </div>
+            <div class="section-body table-wrap">
+              <table class="prestige-table">
+                <thead>
+                  <tr>
+                    <th>產業</th>
+                    <th style="text-align: right">持倉數</th>
+                    <th style="text-align: right">權重</th>
+                    <th style="text-align: right">Component</th>
+                    <th style="text-align: right">風險占比</th>
+                    <th style="text-align: right">Marginal（+1%）</th>
+                    <th style="text-align: right">Incremental</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="industry in risk.industries" :key="industry.industry">
+                    <td>{{ industry.industry }}</td>
+                    <td class="prestige-mono td-num">{{ industry.holdingCount }}</td>
+                    <td class="prestige-mono td-num">{{ (industry.weight * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ (industry.componentVolatility * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num" :class="industry.componentRiskShare < 0 ? 'td-pos' : 'td-danger'">{{ (industry.componentRiskShare * 100).toFixed(1) }}%</td>
+                    <td class="prestige-mono td-num">{{ industry.marginalVolatility.toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ (industry.incrementalVolatility * 100).toFixed(2) }}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </ScrollReveal>
+
         <!-- Run Info -->
         <ScrollReveal>
           <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
@@ -679,7 +727,7 @@ onMounted(async () => {
                     </tbody>
                   </table>
                   <p class="table-note">
-                    所有方法皆使用正式 API 資料；保守 FHS 僅將標準化殘差向量的最極端 1% 徑向截尾，原始 FHS 仍為預設模型。
+                    所有方法皆使用正式 API 資料。
                   </p>
                 </div>
 
@@ -930,15 +978,6 @@ onMounted(async () => {
               <span class="prestige-label">{{ monteCarlo?.model ?? 'MVEWMA-FHS' }} — {{ monteCarlo?.simulations?.toLocaleString() ?? '10,000' }} 次、{{ monteCarlo?.horizonDays ?? 252 }} 個交易日路徑模擬</span>
             </div>
             <div class="section-body">
-              <div class="btn-row" style="margin-bottom: 16px">
-                <button
-                  v-for="choice in [{ id: 'base', label: '原始 FHS' }, { id: 'conservative', label: '保守 FHS（p99）' }]"
-                  :key="choice.id"
-                  class="prestige-btn chip-btn"
-                  :class="{ active: selectedMonteCarloModel === choice.id }"
-                  @click="selectedMonteCarloModel = choice.id as 'base' | 'conservative'"
-                >{{ choice.label }}</button>
-              </div>
               <template v-if="monteCarlo?.status === 'ready'">
                 <svg width="100%" height="400" viewBox="0 0 900 400" preserveAspectRatio="xMidYMid meet">
                   <line v-for="tick in monteCarloChart.ticks" :key="'g-' + tick" x1="70" :y1="monteCarloChart.y(tick)" x2="850" :y2="monteCarloChart.y(tick)" :stroke="tick === 0 ? 'rgba(245,239,224,0.55)' : 'rgba(201,168,106,0.12)'" :stroke-width="tick === 0 ? 1.5 : 1" :stroke-dasharray="tick === 0 ? 'none' : '4 4'" />
@@ -985,33 +1024,6 @@ onMounted(async () => {
                     </div>
                   </div>
                 </div>
-                <div class="table-wrap" style="margin-top: 20px">
-                  <div class="prestige-label" style="margin-bottom: 8px">Model Comparison — 原始模型為預設，保守版僅供比較</div>
-                  <table class="prestige-table" style="min-width: 760px">
-                    <thead>
-                      <tr>
-                        <th>模型</th>
-                        <th>正報酬機率</th>
-                        <th>中位數</th>
-                        <th>期望</th>
-                        <th>5% 情境</th>
-                        <th>1% 情境</th>
-                        <th>殘差截尾比例</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="item in monteCarloComparison" :key="item.label">
-                        <td>{{ item.label }}</td>
-                        <td class="prestige-mono">{{ item.positive }}</td>
-                        <td class="prestige-mono">{{ item.median }}</td>
-                        <td class="prestige-mono">{{ item.expected }}</td>
-                        <td class="prestige-mono td-warn">{{ item.p5 }}</td>
-                        <td class="prestige-mono td-danger">{{ item.p1 }}</td>
-                        <td class="prestige-mono">{{ item.capped }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
                 <div class="mini-panel" style="margin-top: 20px">
                   <div class="panel-head" style="margin-bottom: 12px">
                     <span class="mini-title" style="margin: 0">模型診斷</span>
@@ -1033,89 +1045,6 @@ onMounted(async () => {
               <div v-else class="prestige-empty">
                 {{ monteCarlo?.message ?? '蒙地卡羅路徑資料載入中。' }}
               </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <!-- Holdings Risk Contribution -->
-        <ScrollReveal class="mt-20">
-          <div class="prestige-panel" style="margin-bottom: 40px">
-            <div class="section-head">
-              <h2 class="panel-title">持倉風險摘要</h2>
-              <span class="prestige-label">Holding Risk Summary — 後端資料</span>
-            </div>
-            <div class="section-body table-wrap">
-              <div class="holdings-headline">
-                風險來源模型年化波動率：<span class="prestige-mono hl">{{ (risk.riskSourceAnnualizedVolatility * 100).toFixed(2) }}%</span>
-              </div>
-              <table class="prestige-table">
-                <thead>
-                  <tr>
-                    <th>代號</th>
-                    <th>名稱</th>
-                    <th>產業</th>
-                    <th style="text-align: right">權重</th>
-                    <th style="text-align: right">年化波動率</th>
-                    <th style="text-align: right">Component</th>
-                    <th style="text-align: right">風險占比</th>
-                    <th style="text-align: right">Marginal（+1%）</th>
-                    <th style="text-align: right">Incremental</th>
-                    <th style="text-align: right">資料筆數</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="h in risk.holdings" :key="h.securityId">
-                    <td>{{ h.ticker }}</td>
-                    <td>{{ h.securityName }}</td>
-                    <td class="td-muted">{{ h.industry }}</td>
-                    <td class="prestige-mono td-num">{{ (h.weight * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num" :class="{ 'td-warn': h.annualizedVolatility > 0.3 }">{{ (h.annualizedVolatility * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ (h.componentVolatility * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num" :class="h.componentRiskShare < 0 ? 'td-pos' : 'td-danger'">{{ (h.componentRiskShare * 100).toFixed(1) }}%</td>
-                    <td class="prestige-mono td-num">{{ h.marginalVolatility.toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ (h.incrementalVolatility * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ h.dataPointCount }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p class="table-note" style="padding: 0 24px 20px; margin-top: 0">
-              Component 可加總為上方的風險來源模型年化波動率；Marginal 為權重增加 1 個百分點的年化波動率變化；Incremental 假設移除部位後轉為現金。負值代表分散效果。
-            </p>
-          </div>
-        </ScrollReveal>
-
-        <ScrollReveal class="mt-20" v-if="risk.industries?.length">
-          <div class="prestige-panel" style="margin-bottom: 40px">
-            <div class="section-head">
-              <h2 class="panel-title">產業風險來源</h2>
-              <span class="prestige-label">Industry Risk Sources — 後端資料</span>
-            </div>
-            <div class="section-body table-wrap">
-              <table class="prestige-table">
-                <thead>
-                  <tr>
-                    <th>產業</th>
-                    <th style="text-align: right">持倉數</th>
-                    <th style="text-align: right">權重</th>
-                    <th style="text-align: right">Component</th>
-                    <th style="text-align: right">風險占比</th>
-                    <th style="text-align: right">Marginal（+1%）</th>
-                    <th style="text-align: right">Incremental</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="industry in risk.industries" :key="industry.industry">
-                    <td>{{ industry.industry }}</td>
-                    <td class="prestige-mono td-num">{{ industry.holdingCount }}</td>
-                    <td class="prestige-mono td-num">{{ (industry.weight * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ (industry.componentVolatility * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num" :class="industry.componentRiskShare < 0 ? 'td-pos' : 'td-danger'">{{ (industry.componentRiskShare * 100).toFixed(1) }}%</td>
-                    <td class="prestige-mono td-num">{{ industry.marginalVolatility.toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ (industry.incrementalVolatility * 100).toFixed(2) }}%</td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
           </div>
         </ScrollReveal>
@@ -1495,6 +1424,10 @@ onMounted(async () => {
   background: var(--gold-border-soft);
 }
 
+.kpi-grid-5 {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
 .kpi-cell {
   position: relative;
   display: flex;
@@ -1792,7 +1725,7 @@ onMounted(async () => {
   }
 
   .kpi-grid-5 {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
 
   .grid-2 {

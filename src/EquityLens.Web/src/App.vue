@@ -118,7 +118,7 @@ function handleMenuSelect(key: string) {
       <header v-if="!isAuthPage" class="kimi-app-header">
         <RouterLink class="kimi-brand" to="/">
           <span class="kimi-brand-mark">EL</span>
-          <span class="kimi-brand-text">EquityLens</span>
+          <span class="kimi-brand-text">EQUITYLENS</span>
         </RouterLink>
 
         <nav class="kimi-main-nav">
@@ -128,57 +128,49 @@ function handleMenuSelect(key: string) {
           >
             {{ t('nav.home') }}
           </button>
-          <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'dashboard' && 'active']"
             @click="handleMenuSelect('dashboard')"
           >
             {{ t('nav.dashboard') }}
           </button>
-          <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'portfolios' && 'active']"
             @click="handleMenuSelect('portfolios')"
           >
             {{ t('nav.portfolios') }}
           </button>
-          <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'risk-runs' && 'active']"
             @click="handleMenuSelect('risk-runs')"
           >
             {{ t('nav.riskRuns') }}
           </button>
-          <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'financial-reports' && 'active']"
             @click="handleMenuSelect('financial-reports')"
           >
             {{ t('nav.reports') }}
           </button>
-          <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'research' && 'active']"
             @click="handleMenuSelect('research')"
           >
             Research
           </button>
-          <span class="kimi-nav-sep">|</span>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'agent-runs' && 'active']"
             @click="handleMenuSelect('agent-runs')"
           >
             Agent Runs
           </button>
-          <template v-if="isAdmin">
-            <span class="kimi-nav-sep">|</span>
-            <button
-              :class="['kimi-nav-item', activeMenuKey === 'admin-agent-runs' && 'active']"
-              @click="handleMenuSelect('admin-agent-runs')"
-            >
-              Admin
-            </button>
-          </template>
+          <button
+            v-if="isAdmin"
+            :class="['kimi-nav-item', activeMenuKey === 'admin-agent-runs' && 'active']"
+            @click="handleMenuSelect('admin-agent-runs')"
+          >
+            Admin
+          </button>
         </nav>
 
         <div class="kimi-header-right">
@@ -204,7 +196,7 @@ function handleMenuSelect(key: string) {
 <style scoped>
 .kimi-app-shell {
   min-height: 100vh;
-  background: var(--kimi-bg-light);
+  background: #0b1220;
 }
 
 .kimi-app-header {
@@ -216,8 +208,10 @@ function handleMenuSelect(key: string) {
   gap: 32px;
   height: 60px;
   padding: 0 clamp(20px, 4vw, 80px);
-  background: var(--kimi-bg-light);
-  border-bottom: 1px solid var(--kimi-border-light);
+  background: rgba(11, 18, 32, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(201, 168, 106, 0.18);
 }
 
 .kimi-brand {
@@ -225,7 +219,7 @@ function handleMenuSelect(key: string) {
   align-items: center;
   gap: 10px;
   text-decoration: none;
-  color: var(--kimi-text-light);
+  color: #f5efe0;
 }
 
 .kimi-brand-mark {
@@ -233,26 +227,30 @@ function handleMenuSelect(key: string) {
   width: 32px;
   height: 32px;
   place-items: center;
-  background: var(--kimi-text-light);
-  color: var(--kimi-bg-light);
+  border: 1px solid rgba(201, 168, 106, 0.35);
+  border-radius: 4px;
+  color: #c9a86a;
+  font-family: Georgia, 'Noto Serif TC', serif;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: 0.03em;
 }
 
 .kimi-brand-text {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: Georgia, 'Noto Serif TC', serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
 }
 
 .kimi-main-nav {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 22px;
 }
 
 .kimi-nav-item {
+  position: relative;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.1em;
@@ -260,24 +258,35 @@ function handleMenuSelect(key: string) {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px 0;
-  color: var(--kimi-muted);
-  transition: all 0.2s ease;
-  font-family: var(--kimi-font-body);
+  padding: 6px 2px;
+  color: #9a917c;
+  transition: color 0.2s ease;
+  font-family: 'Inter', 'Noto Sans TC', sans-serif;
+}
+
+.kimi-nav-item::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: #c9a86a;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
 }
 
 .kimi-nav-item:hover {
-  color: var(--kimi-text-light);
+  color: #f5efe0;
 }
 
 .kimi-nav-item.active {
-  color: var(--kimi-text-light);
-  font-weight: 700;
+  color: #c9a86a;
 }
 
-.kimi-nav-sep {
-  color: var(--kimi-border-light);
-  font-size: 12px;
+.kimi-nav-item.active::after {
+  transform: scaleX(1);
 }
 
 .kimi-admin-link {
@@ -286,35 +295,37 @@ function handleMenuSelect(key: string) {
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--kimi-muted);
+  color: #9a917c;
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 .kimi-admin-link:hover {
-  color: var(--kimi-text-light);
+  color: #c9a86a;
 }
 
 .kimi-header-right {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .kimi-chat-btn {
   background: none;
-  border: 1px solid var(--kimi-border-light);
+  border: 1px solid rgba(201, 168, 106, 0.25);
+  border-radius: 4px;
   cursor: pointer;
   padding: 6px 10px;
-  color: var(--kimi-muted);
+  color: #9a917c;
   display: flex;
   align-items: center;
   transition: all 0.2s ease;
 }
+
 .kimi-chat-btn:hover {
-  color: var(--kimi-text-light);
-  border-color: var(--kimi-text-light);
+  color: #c9a86a;
+  border-color: #c9a86a;
 }
 
 .kimi-logout-btn {
@@ -323,17 +334,18 @@ function handleMenuSelect(key: string) {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   background: none;
-  border: 1px solid var(--kimi-border-light);
+  border: 1px solid rgba(201, 168, 106, 0.25);
+  border-radius: 4px;
   cursor: pointer;
   padding: 6px 12px;
-  color: var(--kimi-muted);
+  color: #9a917c;
   transition: all 0.2s ease;
-  font-family: var(--kimi-font-body);
+  font-family: 'Inter', 'Noto Sans TC', sans-serif;
 }
 
 .kimi-logout-btn:hover {
-  color: var(--kimi-text-light);
-  border-color: var(--kimi-text-light);
+  color: #c9a86a;
+  border-color: #c9a86a;
 }
 
 .kimi-app-content {
