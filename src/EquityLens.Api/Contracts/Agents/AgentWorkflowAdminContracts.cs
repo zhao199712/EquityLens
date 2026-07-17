@@ -1,7 +1,9 @@
+using System.Text.Json;
+
 namespace EquityLens.Api.Contracts.Agents;
 
 public sealed record AgentWorkflowAdminResponse(string WorkflowType, string DisplayName, string Description, string AgentType, bool IsEnabled, IReadOnlyList<string> NodeTypes, IReadOnlyList<AgentWorkflowEdgeResponse> Edges);
 public sealed record AgentWorkflowEdgeResponse(string From, string To);
-public sealed record AgentNodeAdminResponse(string NodeType, string DisplayName, string Description, string Stage, string SideEffectLevel, bool IsEnabled, int TimeoutSeconds, int MaxRetryCount, IReadOnlyList<string> RequiredBlackboardKeys, IReadOnlyList<string> ProducedBlackboardKeys, IReadOnlyList<string> AllowedNextNodeTypes);
+public sealed record AgentNodeAdminResponse(string NodeType, string DisplayName, string Description, string Stage, string SideEffectLevel, bool IsEnabled, int TimeoutSeconds, int MaxRetryCount, JsonElement? Metadata, IReadOnlyList<string> RequiredBlackboardKeys, IReadOnlyList<string> ProducedBlackboardKeys, IReadOnlyList<string> AllowedNextNodeTypes);
 public sealed record UpdateAgentWorkflowSettingRequest(bool IsEnabled, string? DisplayName, string? Description);
-public sealed record UpdateAgentNodeSettingRequest(bool IsEnabled, string? DisplayName, string? Description, int TimeoutSeconds, int MaxRetryCount);
+public sealed record UpdateAgentNodeSettingRequest(bool IsEnabled, string? DisplayName, string? Description, int TimeoutSeconds, int MaxRetryCount, JsonElement? Metadata);

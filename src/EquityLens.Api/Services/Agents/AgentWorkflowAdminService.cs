@@ -2,6 +2,7 @@ using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace EquityLens.Api.Services.Agents;
 
@@ -37,10 +38,10 @@ public sealed class AgentWorkflowAdminService(EquityLensDbContext db, IAgentWork
     }
     public async Task<AgentNodeAdminResponse?> UpdateNodeAsync(string type, UpdateAgentNodeSettingRequest request, CancellationToken ct = default)
     {
-        if (request.TimeoutSeconds is < 1 or > 3600 || request.MaxRetryCount is < 0 or > 5) throw new ArgumentOutOfRangeException(nameof(request));
+        if (request.TimeoutSeconds is < 1 or > 3600 || request.MaxRetryCount is < 0 or > 5 || request.Metadata is { ValueKind: not JsonValueKind.Object and not JsonValueKind.Null }) throw new ArgumentOutOfRangeException(nameof(request));
         var entry = catalog.Nodes.SingleOrDefault(x => x.NodeType == type); if (entry is null) return null;
         var setting = await db.AgentNodeSettings.SingleOrDefaultAsync(x => x.NodeType == type, ct) ?? new AgentNodeSetting { Id = Guid.NewGuid(), NodeType = type };
-        setting.IsEnabled = request.IsEnabled; setting.DisplayName = request.DisplayName?.Trim(); setting.Description = request.Description?.Trim(); setting.TimeoutSeconds = request.TimeoutSeconds; setting.MaxRetryCount = request.MaxRetryCount; setting.UpdatedAtUtc = DateTime.UtcNow;
+        setting.IsEnabled = request.IsEnabled; setting.DisplayName = request.DisplayName?.Trim(); setting.Description = request.Description?.Trim(); setting.MetadataJson = request.Metadata?.ValueKind == JsonValueKind.Null ? null : request.Metadata?.GetRawText(); setting.TimeoutSeconds = request.TimeoutSeconds; setting.MaxRetryCount = request.MaxRetryCount; setting.UpdatedAtUtc = DateTime.UtcNow;
         if (db.Entry(setting).State == EntityState.Detached) db.AgentNodeSettings.Add(setting);
         await db.SaveChangesAsync(ct); return Map(entry, setting);
     }
@@ -57,5 +58,6 @@ public sealed class AgentWorkflowAdminService(EquityLensDbContext db, IAgentWork
         return types.ToDictionary(x => x, x => { var d = catalog.GetNode(x).DefaultPolicy; var s = settings.GetValueOrDefault(x); return new AgentNodeExecutionPolicy(s?.TimeoutSeconds ?? d.TimeoutSeconds, s?.MaxRetryCount ?? d.MaxRetryCount); });
     }
     private static AgentWorkflowAdminResponse Map(AgentWorkflowCatalogEntry x, AgentWorkflowSetting? s) => new(x.WorkflowType, s?.DisplayName ?? x.DisplayName, s?.Description ?? x.Description, x.AgentType, s?.IsEnabled ?? true, x.NodeTypes, x.Edges.Select(e => new AgentWorkflowEdgeResponse(e.From, e.To)).ToList());
-    private static AgentNodeAdminResponse Map(AgentNodeCatalogEntry x, AgentNodeSetting? s) => new(x.NodeType, s?.DisplayName ?? x.DisplayName, s?.Description ?? x.Description, x.Stage, x.SideEffectLevel, s?.IsEnabled ?? true, s?.TimeoutSeconds ?? x.DefaultPolicy.TimeoutSeconds, s?.MaxRetryCount ?? x.DefaultPolicy.MaxRetryCount, x.RequiredBlackboardKeys, x.ProducedBlackboardKeys, x.AllowedNextNodeTypes);
+    private static AgentNodeAdminResponse Map(AgentNodeCatalogEntry x, AgentNodeSetting? s) => new(x.NodeType, s?.DisplayName ?? x.DisplayName, s?.Description ?? x.Description, x.Stage, x.SideEffectLevel, s?.IsEnabled ?? true, s?.TimeoutSeconds ?? x.DefaultPolicy.TimeoutSeconds, s?.MaxRetryCount ?? x.DefaultPolicy.MaxRetryCount, ParseMetadata(s?.MetadataJson), x.RequiredBlackboardKeys, x.ProducedBlackboardKeys, x.AllowedNextNodeTypes);
+    private static JsonElement? ParseMetadata(string? value) => string.IsNullOrWhiteSpace(value) ? null : JsonDocument.Parse(value).RootElement.Clone();
 }
