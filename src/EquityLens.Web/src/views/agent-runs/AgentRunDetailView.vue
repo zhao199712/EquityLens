@@ -37,6 +37,26 @@ interface DraftRevisionOutput {
   appliedRecommendation?: string | null
 }
 
+interface AttributionItem {
+  evidenceId: string
+  name: string
+  industry?: string | null
+  weight: number
+  return: number
+  contribution: number
+}
+
+interface PortfolioDiagnosisOutput {
+  summary: string
+  portfolioReturn?: number | null
+  benchmarkReturn?: number | null
+  activeReturn?: number | null
+  mainDrags: AttributionItem[]
+  mainContributors: AttributionItem[]
+  recommendedAnalyses: Array<{ evidenceId: string; priority: number; analysis: string; reason: string }>
+  evidenceStatus: string
+}
+
 const route = useRoute()
 const router = useRouter()
 const actionLoading = ref(false)
@@ -94,6 +114,10 @@ async function handleCreateDraftRevision() {
 function formatDate(iso: string | null) {
   if (!iso) return '-'
   return new Date(iso).toLocaleString('zh-TW')
+}
+
+function formatPercent(value: number | null | undefined) {
+  return value == null ? '資料不足' : new Intl.NumberFormat('zh-TW', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
 
 function statusColor(status: string) {
@@ -163,6 +187,11 @@ const criticOutput = computed((): CriticReviewOutput | null => {
 const draftOutput = computed((): DraftRevisionOutput | null => {
   if (!run.value || run.value.run.workflowType !== 'DraftRevision') return null
   return (run.value.outputJson as DraftRevisionOutput) ?? null
+})
+
+const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null => {
+  if (!run.value || run.value.run.workflowType !== 'PortfolioDiagnosis') return null
+  return (run.value.outputJson as unknown as PortfolioDiagnosisOutput) ?? null
 })
 
 const nextActionLabel = computed(() => {
@@ -322,6 +351,32 @@ const nextActionLabel = computed(() => {
             <div v-if="draftOutput.revisedAnswer">
               <div class="prestige-label stat-caption">修正版答案</div>
               <div class="revised-answer">{{ draftOutput.revisedAnswer }}</div>
+            </div>
+          </div>
+
+          <!-- PortfolioDiagnosis Result -->
+          <div v-if="portfolioDiagnosisOutput" class="prestige-panel prestige-panel-pad result-panel">
+            <h3 class="panel-title">AI 投組診斷報告</h3>
+            <div class="stat-grid">
+              <div><div class="prestige-label stat-caption">投組報酬</div><div class="stat-value">{{ formatPercent(portfolioDiagnosisOutput.portfolioReturn) }}</div></div>
+              <div><div class="prestige-label stat-caption">大盤報酬</div><div class="stat-value">{{ formatPercent(portfolioDiagnosisOutput.benchmarkReturn) }}</div></div>
+              <div><div class="prestige-label stat-caption">相對報酬</div><div class="stat-value" :style="{ color: (portfolioDiagnosisOutput.activeReturn ?? 0) >= 0 ? '#7fa387' : '#b05c5c' }">{{ formatPercent(portfolioDiagnosisOutput.activeReturn) }}</div></div>
+              <div><div class="prestige-label stat-caption">證據覆蓋</div><div class="stat-value">{{ portfolioDiagnosisOutput.evidenceStatus === 'complete' ? '完整' : '部分' }}</div></div>
+            </div>
+            <div class="summary-block"><div class="prestige-label stat-caption">摘要</div><div class="body-text">{{ portfolioDiagnosisOutput.summary }}</div></div>
+            <div class="finding-list" style="margin-top: 18px">
+              <div class="prestige-label stat-caption">主要拖累</div>
+              <div v-if="portfolioDiagnosisOutput.mainDrags.length === 0" class="body-text">資料不足，無法列出拖累來源。</div>
+              <div v-for="item in portfolioDiagnosisOutput.mainDrags" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.name }}</div><div class="finding-rec">貢獻：{{ formatPercent(item.contribution) }} · 報酬：{{ formatPercent(item.return) }} · 權重：{{ formatPercent(item.weight) }}</div></div>
+            </div>
+            <div class="finding-list" style="margin-top: 18px">
+              <div class="prestige-label stat-caption">主要貢獻</div>
+              <div v-if="portfolioDiagnosisOutput.mainContributors.length === 0" class="body-text">資料不足，無法列出貢獻來源。</div>
+              <div v-for="item in portfolioDiagnosisOutput.mainContributors" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.name }}</div><div class="finding-rec">貢獻：{{ formatPercent(item.contribution) }} · 報酬：{{ formatPercent(item.return) }} · 權重：{{ formatPercent(item.weight) }}</div></div>
+            </div>
+            <div class="finding-list" style="margin-top: 18px">
+              <div class="prestige-label stat-caption">建議補做的風險分析</div>
+              <div v-for="item in portfolioDiagnosisOutput.recommendedAnalyses" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.priority }}. {{ item.analysis }}</div><div class="finding-rec">{{ item.reason }}</div></div>
             </div>
           </div>
 
