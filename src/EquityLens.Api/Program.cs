@@ -186,8 +186,8 @@ builder.Services.AddScoped<IAgentWorkflowAdminService, AgentWorkflowAdminService
 builder.Services.AddScoped<IDraftRevisionAgent, LlmDraftRevisionAgent>();
 builder.Services.AddScoped<LlmEvidenceRemediationAgent>();
 builder.Services.AddScoped<IClaimExtractionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
-builder.Services.AddScoped<IClaimSupportAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
 builder.Services.AddScoped<IEvidenceBackedRevisionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
+builder.Services.AddScoped<IEvidenceAssessor, LlmEvidenceAssessor>();
 builder.Services.AddScoped<IEvidenceRetrievalPlanAgent, EvidenceRetrievalPlanAgent>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, CriticReviewWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, DraftRevisionWorkflowDefinitionProvider>();

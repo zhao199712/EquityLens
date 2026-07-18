@@ -39,7 +39,7 @@ public static class PortfolioDiagnosisWorkflow
 
 public static class EvidenceRemediationWorkflow
 {
-    public const int Version = 2;
+    public const int Version = 3;
     public const int MaxIterations = 2;
 }
 

@@ -41,6 +41,8 @@ public static class AgentBlackboardKeys
     public const string RetrievalHistory = "retrievalHistory";
     public const string RouteDecision = "routeDecision";
     public const string UnresolvedClaims = "unresolvedClaims";
+    public const string RequiresReanalysis = "requiresReanalysis";
+    public const string ReanalysisReasons = "reanalysisReasons";
     public const string Runtime = "runtime";
 }
 
@@ -205,6 +207,8 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.RetrievalHistory] = new JsonArray(),
         [AgentBlackboardKeys.RouteDecision] = null,
         [AgentBlackboardKeys.UnresolvedClaims] = new JsonArray(),
+        [AgentBlackboardKeys.RequiresReanalysis] = false,
+        [AgentBlackboardKeys.ReanalysisReasons] = new JsonArray(),
         [AgentBlackboardKeys.Runtime] = new JsonObject { ["iteration"] = 0, ["maxIterations"] = EvidenceRemediationWorkflow.MaxIterations, ["webFallbackCount"] = 0 },
         [AgentBlackboardKeys.RevisedAnswer] = null,
         [AgentBlackboardKeys.RevisionSummary] = null,
