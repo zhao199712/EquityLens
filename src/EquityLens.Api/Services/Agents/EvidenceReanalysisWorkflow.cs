@@ -164,13 +164,35 @@ public sealed class CritiqueReanalysisNodeHandler(ICriticReviewAgent critic, IEn
     }
 }
 
-public sealed class ReviseReanalysisNodeHandler(IDraftRevisionAgent revision) : IAgentNodeHandler
+public sealed class ReviseReanalysisNodeHandler(IDraftRevisionAgent revision, ICriticReviewAgent? critic = null, IEnumerable<IWorkflowPolicyEvaluator>? policies = null) : IAgentNodeHandler
 {
     public string NodeType => EvidenceReanalysisNodeTypes.Revise;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = EvidenceReanalysisBoard.Parse(context.Run); var analysis = EvidenceReanalysisBoard.Required<InvestmentReanalysisContext>(board, AgentBlackboardKeys.AnalysisContext); var draft = EvidenceReanalysisBoard.Required<InvestmentReanalysisDraft>(board, AgentBlackboardKeys.ReanalysisDraft); var review = EvidenceReanalysisBoard.Required<CriticReviewResult>(board, AgentBlackboardKeys.ReanalysisCriticReview); var decision = EvidenceReanalysisBoard.Required<WorkflowPolicyDecision>(board, AgentBlackboardKeys.ReanalysisPolicyDecision);
-        var result = await EvidenceRemediationToolCall.RunAsync(context, "reanalysisRevisionAgent", new { requiresRevision = decision.RequiresRevision, promptTemplateId = "draft-revision", promptVersion = 1 }, () => revision.ReviseAsync(new(analysis.Ticker, analysis.Question, draft.ReanalyzedAnswer, decision.RequiresRevision, review.Summary, review.OverallSeverity, review.Findings, review.SuggestedAnswerRevision, decision.RecommendedNextAction), cancellationToken), x => x.RevisionSummary, cancellationToken); context.Node.InputJson = AgentNodeJson.Serialize(new { decision.RequiresRevision }); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.ReanalysisFinalRevision, result); EvidenceReanalysisBoard.Commit(context, board, result);
+        var result = await EvidenceRemediationToolCall.RunAsync(context, "reanalysisRevisionAgent", new { requiresRevision = decision.RequiresRevision, promptTemplateId = "draft-revision", promptVersion = 1 }, () => revision.ReviseAsync(new(analysis.Ticker, analysis.Question, draft.ReanalyzedAnswer, decision.RequiresRevision, review.Summary, review.OverallSeverity, review.Findings, review.SuggestedAnswerRevision, decision.RecommendedNextAction), cancellationToken), x => x.RevisionSummary, cancellationToken);
+        CriticReviewResult finalReview = review; WorkflowPolicyDecision finalDecision = decision; var correctionApplied = false;
+        var policy = policies?.SingleOrDefault(x => x.WorkflowType == AgentWorkflowTypes.EvidenceReanalysis);
+        if (critic is not null && policy is not null)
+        {
+            (finalReview, finalDecision) = await ReviewFinalAsync(context, critic, policy, analysis, result.RevisedAnswer, "finalEntailmentCriticLLM", cancellationToken);
+            if (finalDecision.RequiresRevision)
+            {
+                result = await EvidenceRemediationToolCall.RunAsync(context, "finalCorrectionRevisionAgent", new { promptTemplateId = "draft-revision", promptVersion = 2, findingCount = finalReview.Findings.Count }, () => revision.ReviseAsync(new(analysis.Ticker, analysis.Question, result.RevisedAnswer, true, finalReview.Summary, finalReview.OverallSeverity, finalReview.Findings, finalReview.SuggestedAnswerRevision, finalDecision.RecommendedNextAction), cancellationToken), x => x.RevisionSummary, cancellationToken);
+                correctionApplied = true;
+                (finalReview, finalDecision) = await ReviewFinalAsync(context, critic, policy, analysis, result.RevisedAnswer, "finalEntailmentRecheckLLM", cancellationToken);
+            }
+        }
+        context.Node.InputJson = AgentNodeJson.Serialize(new { decision.RequiresRevision, correctionApplied, finalDecision = finalDecision.RecommendedNextAction }); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.ReanalysisFinalRevision, result); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.FinalAnswerCriticReview, finalReview); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.FinalAnswerPolicyDecision, finalDecision); EvidenceReanalysisBoard.Commit(context, board, new { revision = result, finalReview, finalDecision, correctionApplied });
+        context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision, $"Final entailment decision: {finalDecision.RecommendedNextAction}; correction applied: {correctionApplied}.", new { finalDecision.RecommendedNextAction, finalDecision.RequiresRevision, finalDecision.RequiresMoreEvidence, correctionApplied });
+    }
+
+    private static async Task<(CriticReviewResult Review, WorkflowPolicyDecision Decision)> ReviewFinalAsync(AgentNodeExecutionContext context, ICriticReviewAgent critic, IWorkflowPolicyEvaluator policy, InvestmentReanalysisContext analysis, string answer, string toolName, CancellationToken cancellationToken)
+    {
+        var evidence = analysis.Evidence.Select(x => new CriticEvidenceItem(x.Index, x.Title, x.SourceType, x.Content)).ToList();
+        var review = await EvidenceRemediationToolCall.RunAsync(context, toolName, new { promptTemplateId = "critic-review-final-entailment", promptVersion = 1, citationCount = evidence.Count }, () => critic.CritiqueAsync(new(analysis.Ticker, analysis.Question, answer, evidence.Count, evidence.Count, "ValidatedEvidence", [], evidence), cancellationToken), x => x.Summary, cancellationToken);
+        var reviewNode = JsonSerializer.SerializeToNode(review, AgentNodeJson.SerializerOptions)!.AsObject();
+        return (review, policy.Evaluate(new(AgentWorkflowTypes.EvidenceReanalysis, context.Node.NodeKey, EvidenceReanalysisBoard.Parse(context.Run), reviewNode)));
     }
 }
 
@@ -179,13 +201,14 @@ public sealed class FinalizeReanalysisNodeHandler(IAnswerQualityValidator? quali
     public string NodeType => EvidenceReanalysisNodeTypes.Finalize;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = EvidenceReanalysisBoard.Parse(context.Run); var analysis = EvidenceReanalysisBoard.Required<InvestmentReanalysisContext>(board, AgentBlackboardKeys.AnalysisContext); var draft = EvidenceReanalysisBoard.Required<InvestmentReanalysisDraft>(board, AgentBlackboardKeys.ReanalysisDraft); var review = EvidenceReanalysisBoard.Required<CriticReviewResult>(board, AgentBlackboardKeys.ReanalysisCriticReview); var decision = EvidenceReanalysisBoard.Required<WorkflowPolicyDecision>(board, AgentBlackboardKeys.ReanalysisPolicyDecision); var revision = EvidenceReanalysisBoard.Required<DraftRevisionResult>(board, AgentBlackboardKeys.ReanalysisFinalRevision);
+        var board = EvidenceReanalysisBoard.Parse(context.Run); var analysis = EvidenceReanalysisBoard.Required<InvestmentReanalysisContext>(board, AgentBlackboardKeys.AnalysisContext); var draft = EvidenceReanalysisBoard.Required<InvestmentReanalysisDraft>(board, AgentBlackboardKeys.ReanalysisDraft); var review = board[AgentBlackboardKeys.FinalAnswerCriticReview] is null ? EvidenceReanalysisBoard.Required<CriticReviewResult>(board, AgentBlackboardKeys.ReanalysisCriticReview) : EvidenceReanalysisBoard.Required<CriticReviewResult>(board, AgentBlackboardKeys.FinalAnswerCriticReview); var decision = board[AgentBlackboardKeys.FinalAnswerPolicyDecision] is null ? EvidenceReanalysisBoard.Required<WorkflowPolicyDecision>(board, AgentBlackboardKeys.ReanalysisPolicyDecision) : EvidenceReanalysisBoard.Required<WorkflowPolicyDecision>(board, AgentBlackboardKeys.FinalAnswerPolicyDecision); var revision = EvidenceReanalysisBoard.Required<DraftRevisionResult>(board, AgentBlackboardKeys.ReanalysisFinalRevision);
         var claims = board[AgentBlackboardKeys.ExtractedClaims] is JsonArray ? EvidenceReanalysisBoard.Required<List<EvidenceClaim>>(board, AgentBlackboardKeys.ExtractedClaims) : [];
         var required = board[AgentBlackboardKeys.RequiredResearchDimensions]?.AsArray().Select(x => x?.GetValue<string>() ?? string.Empty).Where(x => x.Length > 0).ToList() ?? [];
         var supportedIds = analysis.AffectedClaims.Where(x => x.Status == "Supported").Select(x => x.ClaimId).ToHashSet(StringComparer.Ordinal);
         var allowedIndexes = analysis.Evidence.Select(x => x.Index).ToHashSet();
         var mode = LlmEvidenceRemediationAgent.IsAbstention(analysis.SourceAnswer) ? InvestigationModes.RecoverAnswer : InvestigationModes.CorrectExistingAnswer;
         var quality = (qualityValidator ?? new AnswerQualityValidator()).Validate(revision.RevisedAnswer, mode, claims, required, supportedIds, allowedIndexes);
+        if (decision.RequiresRevision || decision.RequiresMoreEvidence) quality = quality with { Status = decision.RequiresMoreEvidence ? "NeedsEvidence" : "NeedsRevision", Errors = review.Findings.Select(x => x.Message).ToList() };
         EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.AnswerQualityValidation, quality);
         var output = new EvidenceReanalysisOutput(analysis.SourceAnswer, analysis.RemediationAnswer, draft.ReanalyzedAnswer, revision.RevisedAnswer, draft.AnalysisChangeSummary, draft.ChangedClaimIds, draft.KeyConclusionChanges, analysis.Evidence, review, decision.RequiresMoreEvidence, decision.RequiresMoreEvidence ? "EvidenceRemediation" : decision.RecommendedNextAction, analysis.ReanalysisReasons, quality.Status, quality.Coverage, quality.AnsweredDimensions, quality.MissingDimensions); context.Node.InputJson = AgentNodeJson.Serialize(new { decision.RequiresMoreEvidence, citationCount = analysis.Evidence.Count, answerQualityStatus = quality.Status, answerCoverage = quality.Coverage }); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.FinalOutput, output); EvidenceReanalysisBoard.Commit(context, board, output); context.Run.OutputJson = context.Node.OutputJson; return Task.CompletedTask;
     }

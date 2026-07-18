@@ -40,6 +40,8 @@ public static class AgentBlackboardKeys
     public const string MissingResearchDimensions = "missingResearchDimensions";
     public const string ClaimRepairHistory = "claimRepairHistory";
     public const string AnswerQualityValidation = "answerQualityValidation";
+    public const string FinalAnswerCriticReview = "finalAnswerCriticReview";
+    public const string FinalAnswerPolicyDecision = "finalAnswerPolicyDecision";
     public const string ClaimSupportAssessments = "claimSupportAssessments";
     public const string EvidenceValidationResults = "evidenceValidationResults";
     public const string RemediatedEvidencePacket = "remediatedEvidencePacket";
@@ -124,6 +126,8 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.MissingResearchDimensions] = new JsonArray(),
         [AgentBlackboardKeys.ClaimRepairHistory] = new JsonArray(),
         [AgentBlackboardKeys.AnswerQualityValidation] = null,
+        [AgentBlackboardKeys.FinalAnswerCriticReview] = null,
+        [AgentBlackboardKeys.FinalAnswerPolicyDecision] = null,
         [AgentBlackboardKeys.ClaimSupportAssessments] = new JsonArray(),
         [AgentBlackboardKeys.EvidenceValidationResults] = null,
         [AgentBlackboardKeys.RemediatedEvidencePacket] = null,
@@ -242,6 +246,8 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.MissingResearchDimensions] = new JsonArray(),
         [AgentBlackboardKeys.ClaimRepairHistory] = new JsonArray(),
         [AgentBlackboardKeys.AnswerQualityValidation] = null,
+        [AgentBlackboardKeys.FinalAnswerCriticReview] = null,
+        [AgentBlackboardKeys.FinalAnswerPolicyDecision] = null,
         [AgentBlackboardKeys.ClaimSupportAssessments] = new JsonArray(),
         [AgentBlackboardKeys.EvidenceValidationResults] = null,
         [AgentBlackboardKeys.RemediatedEvidencePacket] = null,
@@ -270,6 +276,8 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.RequiredResearchDimensions] = new JsonArray(),
         [AgentBlackboardKeys.MissingResearchDimensions] = new JsonArray(),
         [AgentBlackboardKeys.AnswerQualityValidation] = null,
+        [AgentBlackboardKeys.FinalAnswerCriticReview] = null,
+        [AgentBlackboardKeys.FinalAnswerPolicyDecision] = null,
         [AgentBlackboardKeys.EvidenceValidationResults] = null,
         [AgentBlackboardKeys.RemediatedEvidencePacket] = null,
         [AgentBlackboardKeys.RequiresReanalysis] = false,
