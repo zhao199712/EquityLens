@@ -64,7 +64,7 @@ public interface IAgentWorkflowPlanner { Task<DynamicPlanProposal> PlanAsync(Wor
 public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgentWorkflowPlanner
 {
     public const string PromptTemplateId = "research-quality-workflow-planner";
-    public const int PromptVersion = 1;
+    public const int PromptVersion = 2;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public async Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default)
     {
@@ -113,9 +113,9 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
             x.TryGetProperty("iteration", out var i) ? i.GetInt32() : 0)).ToList() : [];
         return new(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, goal, reason, skills, actions, mode, response.Model, response.PromptTokens, response.CompletionTokens);
     }
-    private static object Summarize(JsonObject board) => new { question = board[AgentBlackboardKeys.Question], criticReview = board[AgentBlackboardKeys.CriticReview], unresolvedClaims = board[AgentBlackboardKeys.UnresolvedClaims], routeDecision = board[AgentBlackboardKeys.RouteDecision], requiresReanalysis = board[AgentBlackboardKeys.RequiresReanalysis], reanalysisReasons = board[AgentBlackboardKeys.ReanalysisReasons] };
+    private static object Summarize(JsonObject board) => new { question = board[AgentBlackboardKeys.Question], criticReview = board[AgentBlackboardKeys.CriticReview], unresolvedClaims = board[AgentBlackboardKeys.UnresolvedClaims], requiredResearchDimensions = board[AgentBlackboardKeys.RequiredResearchDimensions], missingResearchDimensions = board[AgentBlackboardKeys.MissingResearchDimensions], routeDecision = board[AgentBlackboardKeys.RouteDecision], requiresReanalysis = board[AgentBlackboardKeys.RequiresReanalysis], reanalysisReasons = board[AgentBlackboardKeys.ReanalysisReasons] };
     private const string SystemPrompt = """
-You are the constrained workflow planner for an equity research quality run. Return one JSON object only. Select only supplied skills, capabilities and nodeTypes. Never output providers, tools, code, raw Blackboard writes, unknown nodes, or graph cycles. Decide high-level research intent; retrieval nodes own concrete tool calls. Output {"goalStatus":"Continue|Complete","reason":"...","selectedSkills":["..."],"actions":[{"clientNodeKey":"unique-key","capability":"...","nodeType":"...","dependsOn":["client-key-or-existing-node-key"],"iteration":0,"arguments":{}}]}. Every action requires at least one dependency. If evidence is missing, provide retrieval arguments with 1-3 searchIntents containing targetClaims as an array, topic, preferredSourceRoles as an array, freshness as day|week|month|year and topK. Select RetrieveWebEvidence only for freshness or local evidence gaps. Dynamic local retrieval must set allowWebFallback=false. Respect all supplied budgets, including at most one Web retrieval node.
+You are the constrained workflow planner for an equity research quality run. Return one JSON object only. Select only supplied skills, capabilities and nodeTypes. Never output providers, tools, code, raw Blackboard writes, unknown nodes, or graph cycles. Decide high-level research intent; retrieval nodes own concrete tool calls. Output {"goalStatus":"Continue|Complete","reason":"...","selectedSkills":["..."],"actions":[{"clientNodeKey":"unique-key","capability":"...","nodeType":"...","dependsOn":["client-key-or-existing-node-key"],"iteration":0,"arguments":{}}]}. Every action requires at least one dependency. Use missingResearchDimensions and routeDecision as the retrieval target. PartiallySupportedNeedsRetrieval requires another bounded retrieval when budget remains; PartiallySupportedBudgetExhausted requires partial-answer finalization; RequiresReanalysis requires the registered reanalysis capabilities. If evidence is missing, provide retrieval arguments with 1-3 searchIntents containing targetClaims as an array, topic, preferredSourceRoles as an array, freshness as day|week|month|year and topK. Select RetrieveWebEvidence only for freshness or local evidence gaps. Dynamic local retrieval must set allowWebFallback=false. Respect all supplied budgets, including at most one Web retrieval node.
 """;
 }
 
@@ -144,7 +144,12 @@ public static class DeterministicDynamicWorkflowPlanner
             ]);
             actions = Chain(planned, ResearchQualityReviewNodeKeys.FinalizeCriticReport); skills = ["evidence-remediation", "financial-guidance-verification"]; goal = DynamicGoalStatuses.Continue; reason = NeedsCurrentWebEvidence(board) ? "Critic requires current external evidence." : "Critic requires additional evidence.";
         }
-        else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted && board[AgentBlackboardKeys.RouteDecision]?.GetValue<string>() == "InsufficientEvidence" && c.RetrievalIterations < 2)
+        else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted && board[AgentBlackboardKeys.RequiresReanalysis]?.GetValue<bool>() == true)
+        {
+            actions = Chain([A("buildRemediatedPacket", "build-evidence-packet", EvidenceRemediationNodeTypes.BuildPacket), A("buildAnalysisContext", "build-analysis-context", EvidenceReanalysisNodeTypes.BuildContext), A("reanalyzeAnswer", "reanalyze-investment-answer", EvidenceReanalysisNodeTypes.Reanalyze), A("critiqueReanalysis", "critique-reanalysis", EvidenceReanalysisNodeTypes.Critique), A("reviseReanalysis", "revise-reanalysis", EvidenceReanalysisNodeTypes.Revise), A("finalizeReanalysis", "finalize-reanalysis", EvidenceReanalysisNodeTypes.Finalize)], Last(c));
+            skills = ["evidence-driven-reanalysis"]; goal = DynamicGoalStatuses.Continue; reason = "Validated evidence materially changes the analysis.";
+        }
+        else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted && board[AgentBlackboardKeys.RouteDecision]?.GetValue<string>() is "InsufficientEvidence" or "PartiallySupportedNeedsRetrieval" && c.RetrievalIterations < 2)
         {
             var iteration = c.RetrievalIterations + 1; var suffix = $":{iteration}";
             var webUsed = c.CompletedNodeTypes.Contains(EvidenceRemediationNodeTypes.RetrieveWebEvidence);
@@ -153,11 +158,6 @@ public static class DeterministicDynamicWorkflowPlanner
                 : A("retrieveWebEvidence" + suffix, "retrieve-web-evidence", EvidenceRemediationNodeTypes.RetrieveWebEvidence, Args(board, false), iteration);
             actions = Chain([retrieval, A("assessEvidence" + suffix, "assess-claim-evidence", EvidenceRemediationNodeTypes.AssessSupport, iteration: iteration), A("validateEvidence" + suffix, "validate-evidence", EvidenceRemediationNodeTypes.ValidateMappings, iteration: iteration), A("routeEvidence" + suffix, "route-evidence", EvidenceRemediationNodeTypes.Route, iteration: iteration)], Last(c));
             skills = ["evidence-remediation"]; goal = DynamicGoalStatuses.Continue; reason = "Evidence remains insufficient and one retrieval iteration remains.";
-        }
-        else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted && board[AgentBlackboardKeys.RequiresReanalysis]?.GetValue<bool>() == true)
-        {
-            actions = Chain([A("buildRemediatedPacket", "build-evidence-packet", EvidenceRemediationNodeTypes.BuildPacket), A("buildAnalysisContext", "build-analysis-context", EvidenceReanalysisNodeTypes.BuildContext), A("reanalyzeAnswer", "reanalyze-investment-answer", EvidenceReanalysisNodeTypes.Reanalyze), A("critiqueReanalysis", "critique-reanalysis", EvidenceReanalysisNodeTypes.Critique), A("reviseReanalysis", "revise-reanalysis", EvidenceReanalysisNodeTypes.Revise), A("finalizeReanalysis", "finalize-reanalysis", EvidenceReanalysisNodeTypes.Finalize)], Last(c));
-            skills = ["evidence-driven-reanalysis"]; goal = DynamicGoalStatuses.Continue; reason = "Validated evidence materially changes the analysis.";
         }
         else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted)
         {
@@ -178,6 +178,7 @@ public static class DeterministicDynamicWorkflowPlanner
     private static JsonObject Args(JsonObject board, bool local = true) => new() { ["allowWebFallback"] = local ? false : null, ["searchIntents"] = new JsonArray { new JsonObject { ["targetClaims"] = Targets(board), ["topic"] = board[AgentBlackboardKeys.Question]?.DeepClone(), ["preferredSourceRoles"] = new JsonArray("Primary"), ["freshness"] = "year", ["topK"] = local ? 6 : 5 } } };
     private static JsonNode Targets(JsonObject board)
     {
+        if (board[AgentBlackboardKeys.MissingResearchDimensions] is JsonArray { Count: > 0 } dimensions) return dimensions.DeepClone();
         if (board[AgentBlackboardKeys.UnresolvedClaims] is JsonArray { Count: > 0 } unresolved) return unresolved.DeepClone();
         var question = board[AgentBlackboardKeys.Question]?.GetValue<string>(); return string.IsNullOrWhiteSpace(question) ? new JsonArray() : new JsonArray(question);
     }

@@ -35,6 +35,24 @@ public sealed class EvidenceAssessorTests
     }
 
     [Fact]
+    public async Task AssessAsync_PreservesQuestionRelevanceAndAnswerabilityEffect()
+    {
+        var json = """{"assessments":[{"claimId":"claim-1","status":"PartiallySupported","evidenceIndexes":[1],"reason":"supports direction","confidence":0.8,"analysisImpact":"Material","impactReason":"enables analysis","questionRelevance":"Core","answerabilityEffect":"EnablesBoundedAnswer"}]}""";
+
+        var assessment = Assert.Single((await new LlmEvidenceAssessor(new FakeChat(json)).AssessAsync(Input())).Assessments);
+
+        Assert.Equal("Core", assessment.QuestionRelevance); Assert.Equal("EnablesBoundedAnswer", assessment.AnswerabilityEffect);
+    }
+
+    [Fact]
+    public async Task Validate_InvalidQuestionRelevance_IsRejected()
+    {
+        var validation = await ValidateAsync(new("claim-1", "Supported", [1], "bad enum", .9, "None", "", "Important", "NoChange"), "2026 營收成長 20%");
+
+        Assert.Contains(Assert.Single(validation.Claims).ValidationErrors, x => x.Contains("Question relevance"));
+    }
+
+    [Fact]
     public async Task Validate_MaterialSupportedEvidence_RequiresReanalysis()
     {
         var validation = await ValidateAsync(new("claim-1", "Supported", [1], "new guidance", .95, "Material", "成長率改變估值假設"), "2026 營收成長 20%");

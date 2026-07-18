@@ -196,17 +196,35 @@ public sealed class RetrieveWebEvidenceNodeHandler(IWebRetriever web) : IAgentNo
     }
 }
 
-public sealed class ExtractAnswerClaimsNodeHandler(IClaimExtractionAgent agent) : IAgentNodeHandler
+public sealed class ExtractAnswerClaimsNodeHandler(IClaimExtractionAgent agent, IClaimSetValidator? validator = null) : IAgentNodeHandler
 {
     public string NodeType => EvidenceRemediationNodeTypes.ExtractClaims;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = EvidenceRemediationBoard.Parse(context.Run); var answer = board[AgentBlackboardKeys.Answer]?.GetValue<string>() ?? string.Empty; var question = board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
         var findings = board[AgentBlackboardKeys.CriticFindings]?.AsArray().Select(AgentNodeJson.ParseFinding).Where(x => x is not null).Cast<CriticFinding>().ToList() ?? [];
-        context.Node.InputJson = AgentNodeJson.Serialize(new { questionLength = question.Length, answerLength = answer.Length, findingCount = findings.Count });
-        var claims = await EvidenceRemediationToolCall.RunAsync(context, "claimExtractionLLM", new { questionLength = question.Length, answerLength = answer.Length, findingCount = findings.Count, promptTemplateId = "evidence-remediation-claim-extraction", promptVersion = 2 }, () => agent.ExtractAsync(new(question, answer, findings), cancellationToken), x => $"{x.Count} claims", cancellationToken);
-        if (claims.Count == 0) claims = LlmEvidenceRemediationAgent.CreateInvestigationFallback(new(question, answer, findings));
+        var mode = LlmEvidenceRemediationAgent.IsAbstention(answer) ? InvestigationModes.RecoverAnswer : InvestigationModes.CorrectExistingAnswer;
+        context.Node.InputJson = AgentNodeJson.Serialize(new { questionLength = question.Length, answerLength = answer.Length, findingCount = findings.Count, investigationMode = mode });
+        var claims = await EvidenceRemediationToolCall.RunAsync(context, "claimExtractionLLM", new { questionLength = question.Length, answerLength = answer.Length, findingCount = findings.Count, promptTemplateId = "evidence-remediation-claim-extraction", promptVersion = 3, investigationMode = mode }, () => agent.ExtractAsync(new(question, answer, findings), cancellationToken), x => $"{x.Count} claims", cancellationToken);
+        var claimValidator = validator ?? new ClaimSetValidator();
+        var validation = claimValidator.Validate(new(question, answer, findings, mode, claims));
+        var history = board[AgentBlackboardKeys.ClaimRepairHistory]?.AsArray() ?? new JsonArray();
+        history.Add(JsonSerializer.SerializeToNode(new { attempt = 0, validation.IsValid, validation.Coverage, validation.Errors }, AgentNodeJson.SerializerOptions));
+        if (!validation.IsValid)
+        {
+            var repaired = await EvidenceRemediationToolCall.RunAsync(context, "claimExtractionRepairLLM", new { validation.Errors, promptTemplateId = "evidence-remediation-claim-extraction", promptVersion = 3, investigationMode = mode }, () => agent.ExtractAsync(new(question, answer, findings, validation.Errors, true), cancellationToken), x => $"{x.Count} repaired claims", cancellationToken);
+            var repairedValidation = claimValidator.Validate(new(question, answer, findings, mode, repaired));
+            history.Add(JsonSerializer.SerializeToNode(new { attempt = 1, repairedValidation.IsValid, repairedValidation.Coverage, repairedValidation.Errors }, AgentNodeJson.SerializerOptions));
+            if (repairedValidation.IsValid) { claims = repaired; validation = repairedValidation with { Resolution = "LlmRepair" }; }
+            else { claims = LlmEvidenceRemediationAgent.CreateInvestigationFallback(new(question, answer, findings)); validation = claimValidator.Validate(new(question, answer, findings, mode, claims)) with { Resolution = "DeterministicFallback" }; }
+        }
+        if (!validation.IsValid) throw new InvalidOperationException($"Deterministic claim decomposition is invalid: {string.Join("; ", validation.Errors)}");
+        board[AgentBlackboardKeys.ClaimRepairHistory] = history;
+        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.ClaimSetValidation, validation);
+        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RequiredResearchDimensions, validation.RequiredDimensions);
+        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.MissingResearchDimensions, validation.MissingDimensions);
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.ExtractedClaims, claims); EvidenceRemediationBoard.Commit(context, board, claims);
+        context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision, $"Claim set accepted via {validation.Resolution} with {validation.Coverage:P0} coverage.", new { validation.Resolution, validation.Coverage, validation.RequiredDimensions, validation.MissingDimensions });
     }
 }
 
@@ -237,12 +255,13 @@ public sealed class ValidateEvidenceMappingsNodeHandler : IAgentNodeHandler
         var partialCount = domainClaims.Count(x => x.Status == "PartiallySupported");
         var status = domainClaims.Count > 0 && supportedCount == domainClaims.Count ? "Supported" : supportedCount + partialCount > 0 ? "PartiallySupported" : "InsufficientEvidence";
         var unresolved = domainClaims.Where(x => x.Status != "Supported").Select(x => x.ClaimId).ToList();
+        var missingDimensions = claims.Where(x => unresolved.Contains(x.Id)).Select(x => x.ResearchDimension ?? x.Text).Distinct().ToList();
         var reanalysisReasons = validated.Select(validatedClaim => (Validated: validatedClaim, Assessment: assessments.FirstOrDefault(x => x.ClaimId == validatedClaim.ClaimId)))
             .Where(x => x.Assessment is not null && x.Validated.ValidationErrors.Count == 0 && x.Validated.EvidenceIndexes.Count > 0 &&
                 (x.Validated.Status == "Contradicted" || (x.Validated.Status == "Supported" && x.Assessment.AnalysisImpact == "Material")))
             .Select(x => string.IsNullOrWhiteSpace(x.Assessment!.ImpactReason) ? $"Claim {x.Validated.ClaimId} requires reanalysis ({x.Validated.Status})." : x.Assessment.ImpactReason).Distinct().ToList();
         var result = new EvidenceValidationResult(status, validated, unresolved, reanalysisReasons.Count > 0, reanalysisReasons);
-        context.Node.InputJson = AgentNodeJson.Serialize(new { claims = claims.Count, evidence = evidence.Count }); EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.EvidenceValidationResults, result); EvidenceRemediationBoard.Commit(context, board, result); return Task.CompletedTask;
+        context.Node.InputJson = AgentNodeJson.Serialize(new { claims = claims.Count, evidence = evidence.Count }); EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.EvidenceValidationResults, result); EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.MissingResearchDimensions, missingDimensions); EvidenceRemediationBoard.Commit(context, board, result); return Task.CompletedTask;
     }
     private static ValidatedClaimSupport Validate(EvidenceClaim claim, ClaimSupportAssessment? assessment, IReadOnlyList<RemediationEvidenceItem> evidence)
     {
@@ -250,6 +269,8 @@ public sealed class ValidateEvidenceMappingsNodeHandler : IAgentNodeHandler
         if (assessment is null) errors.Add("Missing support assessment."); if (indexes.Count == 0) errors.Add("Evidence mapping is empty."); if (indexes.Any(i => i < 1 || i > evidence.Count)) errors.Add("Evidence index is out of range.");
         if (assessment is not null && (assessment.Confidence < 0 || assessment.Confidence > 1)) errors.Add("Confidence must be between 0 and 1.");
         if (assessment is not null && assessment.AnalysisImpact is not ("None" or "WordingOnly" or "Material")) errors.Add("Analysis impact is invalid.");
+        if (assessment is not null && assessment.QuestionRelevance is not ("None" or "Peripheral" or "Core")) errors.Add("Question relevance is invalid.");
+        if (assessment is not null && assessment.AnswerabilityEffect is not ("NoChange" or "EnablesBoundedAnswer" or "EnablesDirectAnswer")) errors.Add("Answerability effect is invalid.");
         var selectedText = string.Join(" ", indexes.Where(i => i >= 1 && i <= evidence.Count).Select(i => evidence[i - 1].Content)); foreach (var number in claim.NumericValues) if (!selectedText.Contains(number, StringComparison.OrdinalIgnoreCase)) errors.Add($"Numeric value '{number}' is not present in mapped evidence.");
         var status = errors.Count > 0 ? "Unsupported" : assessment?.Status switch { "Supported" => "Supported", "PartiallySupported" => "PartiallySupported", "Contradicted" => "Contradicted", "Unverifiable" => "Unverifiable", _ => "Unsupported" }; return new ValidatedClaimSupport(claim.Id, claim.Text, status, indexes, errors);
     }
@@ -262,12 +283,20 @@ public sealed class RouteEvidenceRemediationNodeHandler : IAgentNodeHandler
     {
         var board = EvidenceRemediationBoard.Parse(context.Run);
         var validation = EvidenceRemediationBoard.Required<EvidenceValidationResult>(board, AgentBlackboardKeys.EvidenceValidationResults);
-        var decision = validation.EvidenceStatus == "Supported" ? "Supported" : "InsufficientEvidence";
+        var runtime = board[AgentBlackboardKeys.Runtime]?.AsObject() ?? new JsonObject();
+        var maxIterations = runtime["maxIterations"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxRetrievalIterations;
+        var decision = context.Run.WorkflowType != AgentWorkflowTypes.ResearchQualityReview
+            ? validation.EvidenceStatus == "Supported" ? "Supported" : "InsufficientEvidence"
+            : validation.RequiresReanalysis ? "RequiresReanalysis"
+            : validation.EvidenceStatus == "Supported" ? "Supported"
+            : validation.EvidenceStatus == "PartiallySupported" && context.Node.Iteration < maxIterations ? "PartiallySupportedNeedsRetrieval"
+            : validation.EvidenceStatus == "PartiallySupported" ? "PartiallySupportedBudgetExhausted"
+            : "InsufficientEvidence";
         board[AgentBlackboardKeys.RouteDecision] = decision;
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.UnresolvedClaims, validation.UnresolvedClaimIds);
         board[AgentBlackboardKeys.RequiresReanalysis] = validation.RequiresReanalysis;
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.ReanalysisReasons, validation.ReanalysisReasons ?? []);
-        var runtime = board[AgentBlackboardKeys.Runtime]?.AsObject() ?? new JsonObject(); runtime["iteration"] = context.Node.Iteration; board[AgentBlackboardKeys.Runtime] = runtime;
+        runtime["iteration"] = context.Node.Iteration; board[AgentBlackboardKeys.Runtime] = runtime;
         context.Node.InputJson = AgentNodeJson.Serialize(new { context.Node.Iteration, validation.EvidenceStatus, unresolvedCount = validation.UnresolvedClaimIds.Count });
         EvidenceRemediationBoard.Commit(context, board, new { decision, context.Node.Iteration, unresolvedClaimIds = validation.UnresolvedClaimIds, validation.RequiresReanalysis, reanalysisReasons = validation.ReanalysisReasons ?? [] });
         context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision, $"Evidence remediation route: {decision}; reanalysis {(validation.RequiresReanalysis ? "recommended" : "not required")}.", new { decision, context.Node.Iteration, validation.RequiresReanalysis, reanalysisReasons = validation.ReanalysisReasons ?? [] });
@@ -294,19 +323,29 @@ public sealed class DraftEvidenceBackedRevisionNodeHandler(IEvidenceBackedRevisi
         var usableEvidence = packet.Claims.Any(x => (x.Status is "Supported" or "PartiallySupported") && x.EvidenceIndexes.Count > 0);
         if (!usableEvidence) result = new(source, "補充檢索後仍無可用的已驗證證據，保留原回答並標示未解決 claims。", [], ["目前沒有足以支持方向性分析的已驗證證據。"]);
         else result = await EvidenceRemediationToolCall.RunAsync(context, "evidenceRevisionLLM", new { evidenceCount = packet.Evidence.Count, promptTemplateId = "evidence-remediation-revision", promptVersion = 2, investigationMode = mode }, () => agent.ReviseAsync(question, source, packet, cancellationToken), x => x.RevisionSummary, cancellationToken);
-        if (usableEvidence) ValidateAnswerQuality(result, packet, mode);
+        var claims = EvidenceRemediationBoard.Required<List<EvidenceClaim>>(board, AgentBlackboardKeys.ExtractedClaims);
+        var requiredDimensions = board[AgentBlackboardKeys.RequiredResearchDimensions]?.AsArray().Select(x => x?.GetValue<string>() ?? string.Empty).Where(x => x.Length > 0).ToList() ?? [];
+        var quality = usableEvidence ? ValidateAnswerQuality(result, packet, mode, claims, requiredDimensions) : new AnswerQualityValidationResult("InsufficientEvidence", 0, [], requiredDimensions, []);
+        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.AnswerQualityValidation, quality);
         board[AgentBlackboardKeys.RevisedAnswer] = result.RevisedAnswer; board[AgentBlackboardKeys.RevisionSummary] = result.RevisionSummary; EvidenceRemediationBoard.Commit(context, board, result);
     }
 
-    private static void ValidateAnswerQuality(EvidenceBackedRevisionResult result, RemediatedEvidencePacket packet, string mode)
+    private static AnswerQualityValidationResult ValidateAnswerQuality(EvidenceBackedRevisionResult result, RemediatedEvidencePacket packet, string mode, IReadOnlyList<EvidenceClaim> claims, IReadOnlyList<string> requiredDimensions)
     {
-        if (string.IsNullOrWhiteSpace(result.RevisedAnswer)) throw new InvalidOperationException("Evidence-backed revision returned an empty answer.");
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(result.RevisedAnswer)) errors.Add("Evidence-backed revision returned an empty answer.");
         var allowed = packet.Claims.Where(x => x.Status is "Supported" or "PartiallySupported").SelectMany(x => x.EvidenceIndexes).ToHashSet();
         var cited = System.Text.RegularExpressions.Regex.Matches(result.RevisedAnswer, @"\[(\d+)\]").Select(x => int.Parse(x.Groups[1].Value)).ToList();
-        if (cited.Count == 0 && allowed.Count > 0) throw new InvalidOperationException("Evidence-backed revision must cite validated evidence.");
-        if (cited.Any(x => !allowed.Contains(x))) throw new InvalidOperationException("Evidence-backed revision cites evidence that was not validated.");
+        if (cited.Count == 0 && allowed.Count > 0) errors.Add("Evidence-backed revision must cite validated evidence.");
+        if (cited.Any(x => !allowed.Contains(x))) errors.Add("Evidence-backed revision cites evidence that was not validated.");
         if (mode == InvestigationModes.RecoverAnswer && LlmEvidenceRemediationAgent.IsMetaClaim(result.RevisedAnswer) && result.RevisedAnswer.Length < 180)
-            throw new InvalidOperationException("Recovered answer still primarily abstains despite available evidence.");
+            errors.Add("Recovered answer still primarily abstains despite available evidence.");
+        if (errors.Count > 0) throw new InvalidOperationException(string.Join(" ", errors));
+        var supportedIds = packet.Claims.Where(x => x.Status == "Supported").Select(x => x.ClaimId).ToHashSet(StringComparer.Ordinal);
+        var answered = claims.Where(x => supportedIds.Contains(x.Id)).Select(x => x.ResearchDimension ?? x.Text).Distinct().ToList();
+        var missing = requiredDimensions.Except(answered, StringComparer.OrdinalIgnoreCase).ToList();
+        var coverage = requiredDimensions.Count == 0 ? 1 : Math.Round((double)answered.Count(x => requiredDimensions.Contains(x, StringComparer.OrdinalIgnoreCase)) / requiredDimensions.Count, 3);
+        return new(missing.Count == 0 ? "Complete" : "Partial", coverage, answered, missing, []);
     }
 }
 
@@ -315,6 +354,6 @@ public sealed class FinalizeEvidenceRemediationNodeHandler : IAgentNodeHandler
     public string NodeType => EvidenceRemediationNodeTypes.Finalize;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = EvidenceRemediationBoard.Parse(context.Run); var validation = EvidenceRemediationBoard.Required<EvidenceValidationResult>(board, AgentBlackboardKeys.EvidenceValidationResults); var packet = EvidenceRemediationBoard.Required<RemediatedEvidencePacket>(board, AgentBlackboardKeys.RemediatedEvidencePacket); var claims = EvidenceRemediationBoard.Required<List<EvidenceClaim>>(board, AgentBlackboardKeys.ExtractedClaims); var sourceAnswer = board[AgentBlackboardKeys.Answer]?.GetValue<string>() ?? string.Empty; var revisionNode = context.Run.Nodes.Where(x => x.NodeType == EvidenceRemediationNodeTypes.DraftRevision && !string.IsNullOrWhiteSpace(x.OutputJson)).OrderByDescending(x => x.CompletedAtUtc).FirstOrDefault(); var revision = string.IsNullOrWhiteSpace(revisionNode?.OutputJson) ? null : JsonSerializer.Deserialize<EvidenceBackedRevisionResult>(revisionNode.OutputJson!, AgentNodeJson.SerializerOptions); var domainClaims = claims.Where(x => x.ClaimType != EvidenceClaimTypes.Answerability && !LlmEvidenceRemediationAgent.IsMetaClaim(x.Text)).ToList(); var supportedIds = validation.Claims.Where(x => x.Status == "Supported").Select(x => x.ClaimId).ToHashSet(StringComparer.Ordinal); var answeredDimensions = domainClaims.Where(x => supportedIds.Contains(x.Id)).Select(x => x.ResearchDimension ?? x.Text).Distinct().ToList(); var unresolvedDimensions = domainClaims.Where(x => !supportedIds.Contains(x.Id)).Select(x => x.ResearchDimension ?? x.Text).Distinct().ToList(); var coverage = domainClaims.Count == 0 ? 0 : Math.Round((double)answeredDimensions.Count / domainClaims.Select(x => x.ResearchDimension ?? x.Text).Distinct().Count(), 3); var mode = LlmEvidenceRemediationAgent.IsAbstention(sourceAnswer) ? InvestigationModes.RecoverAnswer : InvestigationModes.CorrectExistingAnswer; var limitations = revision?.InferenceLimitations?.ToList() ?? []; if (packet.Evidence.Any(x => x.SourceType == "Web")) limitations.Add("Web 搜尋摘要屬次級證據，方向性結論仍應以公司原始文件核對。"); if (validation.EvidenceStatus != "Supported") limitations.Add("部分研究面向仍缺少足夠的已驗證證據。"); var output = new EvidenceRemediationOutput(sourceAnswer, board[AgentBlackboardKeys.RevisedAnswer]?.GetValue<string>() ?? string.Empty, board[AgentBlackboardKeys.RevisionSummary]?.GetValue<string>() ?? string.Empty, validation.EvidenceStatus, packet.Evidence, validation.UnresolvedClaimIds, validation.RequiresReanalysis, validation.ReanalysisReasons ?? [], mode, coverage, answeredDimensions, unresolvedDimensions, limitations.Distinct().ToList()); context.Node.InputJson = AgentNodeJson.Serialize(new { validation.EvidenceStatus, unresolvedCount = validation.UnresolvedClaimIds.Count, validation.RequiresReanalysis, investigationMode = mode, answerCoverage = coverage }); EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.FinalOutput, output); EvidenceRemediationBoard.Commit(context, board, output); context.Run.OutputJson = context.Node.OutputJson; return Task.CompletedTask;
+        var board = EvidenceRemediationBoard.Parse(context.Run); var validation = EvidenceRemediationBoard.Required<EvidenceValidationResult>(board, AgentBlackboardKeys.EvidenceValidationResults); var packet = EvidenceRemediationBoard.Required<RemediatedEvidencePacket>(board, AgentBlackboardKeys.RemediatedEvidencePacket); var claims = board[AgentBlackboardKeys.ExtractedClaims] is JsonArray ? EvidenceRemediationBoard.Required<List<EvidenceClaim>>(board, AgentBlackboardKeys.ExtractedClaims) : []; var quality = board[AgentBlackboardKeys.AnswerQualityValidation] is null ? null : EvidenceRemediationBoard.Required<AnswerQualityValidationResult>(board, AgentBlackboardKeys.AnswerQualityValidation); var sourceAnswer = board[AgentBlackboardKeys.Answer]?.GetValue<string>() ?? string.Empty; var revisionNode = context.Run.Nodes.Where(x => x.NodeType == EvidenceRemediationNodeTypes.DraftRevision && !string.IsNullOrWhiteSpace(x.OutputJson)).OrderByDescending(x => x.CompletedAtUtc).FirstOrDefault(); var revision = string.IsNullOrWhiteSpace(revisionNode?.OutputJson) ? null : JsonSerializer.Deserialize<EvidenceBackedRevisionResult>(revisionNode.OutputJson!, AgentNodeJson.SerializerOptions); var domainClaims = claims.Where(x => x.ClaimType != EvidenceClaimTypes.Answerability && !LlmEvidenceRemediationAgent.IsMetaClaim(x.Text)).ToList(); var supportedIds = validation.Claims.Where(x => x.Status == "Supported").Select(x => x.ClaimId).ToHashSet(StringComparer.Ordinal); var answeredDimensions = quality?.AnsweredDimensions.ToList() ?? domainClaims.Where(x => supportedIds.Contains(x.Id)).Select(x => x.ResearchDimension ?? x.Text).Distinct().ToList(); var unresolvedDimensions = quality?.MissingDimensions.ToList() ?? domainClaims.Where(x => !supportedIds.Contains(x.Id)).Select(x => x.ResearchDimension ?? x.Text).Distinct().ToList(); var coverage = quality?.Coverage ?? (domainClaims.Count == 0 ? 0 : Math.Round((double)answeredDimensions.Count / domainClaims.Select(x => x.ResearchDimension ?? x.Text).Distinct().Count(), 3)); var mode = LlmEvidenceRemediationAgent.IsAbstention(sourceAnswer) ? InvestigationModes.RecoverAnswer : InvestigationModes.CorrectExistingAnswer; var limitations = revision?.InferenceLimitations?.ToList() ?? []; if (packet.Evidence.Any(x => x.SourceType == "Web")) limitations.Add("Web 搜尋摘要屬次級證據，方向性結論仍應以公司原始文件核對。"); if (validation.EvidenceStatus != "Supported") limitations.Add("部分研究面向仍缺少足夠的已驗證證據。"); var output = new EvidenceRemediationOutput(sourceAnswer, board[AgentBlackboardKeys.RevisedAnswer]?.GetValue<string>() ?? string.Empty, board[AgentBlackboardKeys.RevisionSummary]?.GetValue<string>() ?? string.Empty, validation.EvidenceStatus, packet.Evidence, validation.UnresolvedClaimIds, validation.RequiresReanalysis, validation.ReanalysisReasons ?? [], mode, coverage, answeredDimensions, unresolvedDimensions, limitations.Distinct().ToList(), quality?.Status ?? "NotEvaluated"); context.Node.InputJson = AgentNodeJson.Serialize(new { validation.EvidenceStatus, unresolvedCount = validation.UnresolvedClaimIds.Count, validation.RequiresReanalysis, investigationMode = mode, answerCoverage = coverage, answerQualityStatus = quality?.Status }); EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.FinalOutput, output); EvidenceRemediationBoard.Commit(context, board, output); context.Run.OutputJson = context.Node.OutputJson; return Task.CompletedTask;
     }
 }

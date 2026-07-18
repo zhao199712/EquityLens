@@ -35,6 +35,11 @@ public static class AgentBlackboardKeys
     public const string RetrievalPlan = "retrievalPlan";
     public const string RetrievedEvidence = "retrievedEvidence";
     public const string ExtractedClaims = "extractedClaims";
+    public const string ClaimSetValidation = "claimSetValidation";
+    public const string RequiredResearchDimensions = "requiredResearchDimensions";
+    public const string MissingResearchDimensions = "missingResearchDimensions";
+    public const string ClaimRepairHistory = "claimRepairHistory";
+    public const string AnswerQualityValidation = "answerQualityValidation";
     public const string ClaimSupportAssessments = "claimSupportAssessments";
     public const string EvidenceValidationResults = "evidenceValidationResults";
     public const string RemediatedEvidencePacket = "remediatedEvidencePacket";
@@ -114,6 +119,11 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.RetrievalPlan] = null,
         [AgentBlackboardKeys.RetrievedEvidence] = new JsonArray(),
         [AgentBlackboardKeys.ExtractedClaims] = new JsonArray(),
+        [AgentBlackboardKeys.ClaimSetValidation] = null,
+        [AgentBlackboardKeys.RequiredResearchDimensions] = new JsonArray(),
+        [AgentBlackboardKeys.MissingResearchDimensions] = new JsonArray(),
+        [AgentBlackboardKeys.ClaimRepairHistory] = new JsonArray(),
+        [AgentBlackboardKeys.AnswerQualityValidation] = null,
         [AgentBlackboardKeys.ClaimSupportAssessments] = new JsonArray(),
         [AgentBlackboardKeys.EvidenceValidationResults] = null,
         [AgentBlackboardKeys.RemediatedEvidencePacket] = null,
@@ -227,6 +237,11 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.RetrievalPlan] = null,
         [AgentBlackboardKeys.RetrievedEvidence] = new JsonArray(),
         [AgentBlackboardKeys.ExtractedClaims] = new JsonArray(),
+        [AgentBlackboardKeys.ClaimSetValidation] = null,
+        [AgentBlackboardKeys.RequiredResearchDimensions] = new JsonArray(),
+        [AgentBlackboardKeys.MissingResearchDimensions] = new JsonArray(),
+        [AgentBlackboardKeys.ClaimRepairHistory] = new JsonArray(),
+        [AgentBlackboardKeys.AnswerQualityValidation] = null,
         [AgentBlackboardKeys.ClaimSupportAssessments] = new JsonArray(),
         [AgentBlackboardKeys.EvidenceValidationResults] = null,
         [AgentBlackboardKeys.RemediatedEvidencePacket] = null,

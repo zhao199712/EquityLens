@@ -32,19 +32,22 @@ public sealed record ClaimSupportAssessment(
     string Reason,
     double Confidence = 0,
     string AnalysisImpact = "None",
-    string ImpactReason = "");
+    string ImpactReason = "",
+    string QuestionRelevance = "Core",
+    string AnswerabilityEffect = "NoChange");
 public sealed record ValidatedClaimSupport(string ClaimId, string ClaimText, string Status, IReadOnlyList<int> EvidenceIndexes, IReadOnlyList<string> ValidationErrors);
 public sealed record EvidenceValidationResult(string EvidenceStatus, IReadOnlyList<ValidatedClaimSupport> Claims, IReadOnlyList<string> UnresolvedClaimIds, bool RequiresReanalysis = false, IReadOnlyList<string>? ReanalysisReasons = null);
 public sealed record RemediatedEvidencePacket(string EvidenceStatus, IReadOnlyList<ValidatedClaimSupport> Claims, IReadOnlyList<RemediationEvidenceItem> Evidence, IReadOnlyList<string> UnresolvedClaimIds, bool RequiresReanalysis = false, IReadOnlyList<string>? ReanalysisReasons = null);
 public sealed record EvidenceBackedRevisionResult(string RevisedAnswer, string RevisionSummary, IReadOnlyList<string>? AnsweredDimensions = null, IReadOnlyList<string>? InferenceLimitations = null);
-public sealed record EvidenceRemediationOutput(string SourceAnswer, string RevisedAnswer, string RevisionSummary, string EvidenceStatus, IReadOnlyList<RemediationEvidenceItem> Citations, IReadOnlyList<string> UnresolvedClaimIds, bool RequiresReanalysis = false, IReadOnlyList<string>? ReanalysisReasons = null, string InvestigationMode = InvestigationModes.CorrectExistingAnswer, double AnswerCoverage = 0, IReadOnlyList<string>? AnsweredDimensions = null, IReadOnlyList<string>? UnresolvedDimensions = null, IReadOnlyList<string>? InferenceLimitations = null);
+public sealed record AnswerQualityValidationResult(string Status, double Coverage, IReadOnlyList<string> AnsweredDimensions, IReadOnlyList<string> MissingDimensions, IReadOnlyList<string> Errors);
+public sealed record EvidenceRemediationOutput(string SourceAnswer, string RevisedAnswer, string RevisionSummary, string EvidenceStatus, IReadOnlyList<RemediationEvidenceItem> Citations, IReadOnlyList<string> UnresolvedClaimIds, bool RequiresReanalysis = false, IReadOnlyList<string>? ReanalysisReasons = null, string InvestigationMode = InvestigationModes.CorrectExistingAnswer, double AnswerCoverage = 0, IReadOnlyList<string>? AnsweredDimensions = null, IReadOnlyList<string>? UnresolvedDimensions = null, IReadOnlyList<string>? InferenceLimitations = null, string AnswerQualityStatus = "NotEvaluated");
 
 public interface IClaimExtractionAgent
 {
     Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(ClaimExtractionInput input, CancellationToken cancellationToken = default);
 }
 
-public sealed record ClaimExtractionInput(string Question, string Answer, IReadOnlyList<CriticFinding> CriticFindings);
+public sealed record ClaimExtractionInput(string Question, string Answer, IReadOnlyList<CriticFinding> CriticFindings, IReadOnlyList<string>? ValidationErrors = null, bool IsRepair = false);
 
 public interface IEvidenceBackedRevisionAgent
 {
@@ -62,11 +65,10 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
     {
         if (string.IsNullOrWhiteSpace(input.Answer) && string.IsNullOrWhiteSpace(input.Question) && input.CriticFindings.Count == 0)
             throw new InvalidOperationException("Claim extraction requires an answer, question, or Critic finding.");
-        var content = await CompleteAsync("Extract domain claims that help answer the user's research question. If the answer abstains, ignore its meta claim and decompose the question and Critic findings into answerable factual, mechanism, and judgment investigation claims. Answerability statements such as 'data is insufficient' may be labelled Answerability but must not be the only claims. Output JSON only: {\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"numericValues\":[\"123\"],\"kind\":\"AnswerClaim|InvestigationClaim\",\"claimType\":\"Factual|Mechanism|Judgment|Answerability\",\"researchDimension\":\"...\"}]}. Keep exact numbers, dates, percentages and currencies. Never return an empty claims array when a research question exists.", JsonSerializer.Serialize(input, JsonOptions), cancellationToken);
+        var content = await CompleteAsync("Extract domain claims that help answer the user's research question. If the answer abstains, ignore its meta claim and decompose the question and Critic findings into answerable factual, mechanism, and judgment investigation claims. Cover every required research dimension identified by the question; claims must directly support retrieval or analysis, not merely say historical data may be useful. When validationErrors are supplied, repair every listed defect. Answerability statements such as 'data is insufficient' may be labelled Answerability but must not dominate. Output JSON only: {\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"numericValues\":[\"123\"],\"kind\":\"AnswerClaim|InvestigationClaim\",\"claimType\":\"Factual|Mechanism|Judgment|Answerability\",\"researchDimension\":\"...\"}]}. Keep exact numbers, dates, percentages and currencies. Never return an empty claims array when a research question exists.", JsonSerializer.Serialize(input, JsonOptions), cancellationToken);
         var claims = JsonSerializer.Deserialize<ClaimEnvelope>(content, JsonOptions)?.Claims;
         var normalized = claims is { Count: > 0 } ? Normalize(claims) : [];
-        if (IsAbstention(input.Answer) && !HasUsableInvestigationClaims(normalized)) return CreateInvestigationFallback(input);
-        return normalized.Count > 0 ? normalized : CreateInvestigationFallback(input);
+        return normalized;
     }
 
     public async Task<EvidenceBackedRevisionResult> ReviseAsync(string question, string sourceAnswer, RemediatedEvidencePacket packet, CancellationToken cancellationToken = default)
@@ -90,9 +92,6 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
         .Where(x => !string.IsNullOrWhiteSpace(x.Text))
         .Select((x, index) => x with { Id = string.IsNullOrWhiteSpace(x.Id) ? $"claim-{index + 1}" : x.Id, Kind = x.Kind is EvidenceClaimKinds.AnswerClaim or EvidenceClaimKinds.InvestigationClaim ? x.Kind : EvidenceClaimKinds.AnswerClaim, ClaimType = x.ClaimType is EvidenceClaimTypes.Factual or EvidenceClaimTypes.Mechanism or EvidenceClaimTypes.Judgment or EvidenceClaimTypes.Answerability ? x.ClaimType : EvidenceClaimTypes.Factual })
         .ToList();
-
-    private static bool HasUsableInvestigationClaims(IReadOnlyList<EvidenceClaim> claims) =>
-        claims.Any(x => x.Kind == EvidenceClaimKinds.InvestigationClaim && x.ClaimType != EvidenceClaimTypes.Answerability && !IsMetaClaim(x.Text));
 
     internal static IReadOnlyList<EvidenceClaim> CreateInvestigationFallback(ClaimExtractionInput input)
     {

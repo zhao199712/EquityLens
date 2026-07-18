@@ -128,11 +128,48 @@ public sealed class EvidenceRemediationWorkflowTests
     }
 
     [Fact]
-    public async Task LlmClaimExtraction_EmptyClaims_UsesInvestigationFallback()
+    public async Task LlmClaimExtraction_EmptyClaims_DefersFallbackToClaimSetGate()
     {
         var agent = new LlmEvidenceRemediationAgent(new EmptyClaimsChat());
         var claims = await agent.ExtractAsync(new("未來資本支出？", "目前資料不足。", []));
-        Assert.Equal(6, claims.Count); Assert.All(claims, claim => Assert.NotEqual(EvidenceClaimTypes.Answerability, claim.ClaimType));
+        Assert.Empty(claims);
+    }
+
+    [Fact]
+    public void ClaimSetValidator_RejectsCoarseWeakRecoverAnswerClaims()
+    {
+        var claims = new[]
+        {
+            new EvidenceClaim("claim-1", "歷史資本支出可作為預測未來趨勢的基礎。", [], EvidenceClaimKinds.InvestigationClaim, EvidenceClaimTypes.Factual, "Financial Analysis"),
+            new EvidenceClaim("claim-2", "資本支出增加會減少自由現金流。", [], EvidenceClaimKinds.InvestigationClaim, EvidenceClaimTypes.Mechanism, "Capital Allocation"),
+            new EvidenceClaim("claim-3", "自由現金流下降可能壓縮股東回報。", [], EvidenceClaimKinds.InvestigationClaim, EvidenceClaimTypes.Judgment, "Shareholder Returns")
+        };
+
+        var result = new ClaimSetValidator().Validate(new("台積電未來兩年的資本支出是否會壓縮自由現金流與股東回報？", "資料不足。", [], InvestigationModes.RecoverAnswer, claims));
+
+        Assert.False(result.IsValid); Assert.Contains(result.Errors, x => x.Contains("weak research propositions")); Assert.Contains("Depreciation impact", result.MissingDimensions); Assert.True(result.Coverage < 1);
+    }
+
+    [Fact]
+    public void ClaimSetValidator_DeterministicCapexDecomposition_CoversSixDimensions()
+    {
+        var input = new ClaimExtractionInput("台積電未來兩年的資本支出是否會壓縮自由現金流與股東回報？", "資料不足。", []);
+        var claims = LlmEvidenceRemediationAgent.CreateInvestigationFallback(input);
+
+        var result = new ClaimSetValidator().Validate(new(input.Question, input.Answer, input.CriticFindings, InvestigationModes.RecoverAnswer, claims));
+
+        Assert.True(result.IsValid); Assert.Equal(1, result.Coverage); Assert.Equal(6, result.RequiredDimensions.Count); Assert.Empty(result.MissingDimensions);
+    }
+
+    [Fact]
+    public async Task ExtractClaims_InvalidInitialSet_RepairsOnceAndPersistsAuditData()
+    {
+        await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.ExtractClaims); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.Question] = "台積電未來兩年的資本支出是否會壓縮自由現金流與股東回報？"; board[AgentBlackboardKeys.Answer] = "目前資料不足。"; run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); db.AgentRuns.Add(run); await db.SaveChangesAsync(); var agent = new RepairingClaimAgent();
+
+        await new ExtractAnswerClaimsNodeHandler(agent, new ClaimSetValidator()).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); var validation = EvidenceRemediationBoardForTest.Required<ClaimSetValidationResult>(board, AgentBlackboardKeys.ClaimSetValidation);
+        Assert.Equal(2, agent.CallCount); Assert.Equal("LlmRepair", validation.Resolution); Assert.Equal(2, board[AgentBlackboardKeys.ClaimRepairHistory]!.AsArray().Count); Assert.Equal(6, board[AgentBlackboardKeys.RequiredResearchDimensions]!.AsArray().Count); Assert.Contains(run.ToolCalls, x => x.ToolName == "claimExtractionRepairLLM");
     }
 
     [Fact]
@@ -158,6 +195,18 @@ public sealed class EvidenceRemediationWorkflowTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new DraftEvidenceBackedRevisionNodeHandler(new FixedRevisionAgent("目前資料不足，無法回答。[1]")).ExecuteAsync(new AgentNodeExecutionContext(db, run, draft, (_, _, _, _, _) => { })));
 
         Assert.Contains("still primarily abstains", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(1, "PartiallySupportedNeedsRetrieval")]
+    [InlineData(2, "PartiallySupportedBudgetExhausted")]
+    public async Task DynamicRoute_PreservesPartialEvidenceBudgetState(int iteration, string expected)
+    {
+        await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); run.WorkflowType = AgentWorkflowTypes.ResearchQualityReview; var route = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.Route && x.Iteration == iteration); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.EvidenceValidationResults] = JsonSerializerNode(new EvidenceValidationResult("PartiallySupported", [new("claim-1", "claim", "PartiallySupported", [1], [])], ["claim-1"])); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+
+        await new RouteEvidenceRemediationNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, route, (_, _, _, _, _) => { }));
+
+        Assert.Equal(expected, AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.RouteDecision]!.GetValue<string>());
     }
 
     [Fact]
@@ -206,6 +255,17 @@ public sealed class EvidenceRemediationWorkflowTests
     private sealed class EmptyClaimAgent : IClaimExtractionAgent
     {
         public Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(ClaimExtractionInput input, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<EvidenceClaim>>([]);
+    }
+    private sealed class RepairingClaimAgent : IClaimExtractionAgent
+    {
+        public int CallCount { get; private set; }
+        public Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(ClaimExtractionInput input, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(CallCount == 1
+                ? (IReadOnlyList<EvidenceClaim>)[new("weak", "歷史資料可作為參考。", [], EvidenceClaimKinds.InvestigationClaim, EvidenceClaimTypes.Factual, "Financial Analysis")]
+                : LlmEvidenceRemediationAgent.CreateInvestigationFallback(input));
+        }
     }
     private sealed class EmptyClaimsChat : IChatCompletionService
     {
