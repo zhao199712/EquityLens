@@ -313,7 +313,7 @@ public sealed class BuildRemediatedEvidencePacketNodeHandler : IAgentNodeHandler
     }
 }
 
-public sealed class DraftEvidenceBackedRevisionNodeHandler(IEvidenceBackedRevisionAgent agent) : IAgentNodeHandler
+public sealed class DraftEvidenceBackedRevisionNodeHandler(IEvidenceBackedRevisionAgent agent, IAnswerQualityValidator? qualityValidator = null) : IAgentNodeHandler
 {
     public string NodeType => EvidenceRemediationNodeTypes.DraftRevision;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
@@ -325,28 +325,13 @@ public sealed class DraftEvidenceBackedRevisionNodeHandler(IEvidenceBackedRevisi
         else result = await EvidenceRemediationToolCall.RunAsync(context, "evidenceRevisionLLM", new { evidenceCount = packet.Evidence.Count, promptTemplateId = "evidence-remediation-revision", promptVersion = 2, investigationMode = mode }, () => agent.ReviseAsync(question, source, packet, cancellationToken), x => x.RevisionSummary, cancellationToken);
         var claims = EvidenceRemediationBoard.Required<List<EvidenceClaim>>(board, AgentBlackboardKeys.ExtractedClaims);
         var requiredDimensions = board[AgentBlackboardKeys.RequiredResearchDimensions]?.AsArray().Select(x => x?.GetValue<string>() ?? string.Empty).Where(x => x.Length > 0).ToList() ?? [];
-        var quality = usableEvidence ? ValidateAnswerQuality(result, packet, mode, claims, requiredDimensions) : new AnswerQualityValidationResult("InsufficientEvidence", 0, [], requiredDimensions, []);
+        var supportedClaimIds = packet.Claims.Where(x => x.Status == "Supported").Select(x => x.ClaimId).ToHashSet(StringComparer.Ordinal);
+        var allowedEvidenceIndexes = packet.Claims.Where(x => x.Status is "Supported" or "PartiallySupported").SelectMany(x => x.EvidenceIndexes).ToHashSet();
+        var quality = usableEvidence ? (qualityValidator ?? new AnswerQualityValidator()).Validate(result.RevisedAnswer, mode, claims, requiredDimensions, supportedClaimIds, allowedEvidenceIndexes) : new AnswerQualityValidationResult("InsufficientEvidence", 0, [], requiredDimensions, []);
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.AnswerQualityValidation, quality);
         board[AgentBlackboardKeys.RevisedAnswer] = result.RevisedAnswer; board[AgentBlackboardKeys.RevisionSummary] = result.RevisionSummary; EvidenceRemediationBoard.Commit(context, board, result);
     }
 
-    private static AnswerQualityValidationResult ValidateAnswerQuality(EvidenceBackedRevisionResult result, RemediatedEvidencePacket packet, string mode, IReadOnlyList<EvidenceClaim> claims, IReadOnlyList<string> requiredDimensions)
-    {
-        var errors = new List<string>();
-        if (string.IsNullOrWhiteSpace(result.RevisedAnswer)) errors.Add("Evidence-backed revision returned an empty answer.");
-        var allowed = packet.Claims.Where(x => x.Status is "Supported" or "PartiallySupported").SelectMany(x => x.EvidenceIndexes).ToHashSet();
-        var cited = System.Text.RegularExpressions.Regex.Matches(result.RevisedAnswer, @"\[(\d+)\]").Select(x => int.Parse(x.Groups[1].Value)).ToList();
-        if (cited.Count == 0 && allowed.Count > 0) errors.Add("Evidence-backed revision must cite validated evidence.");
-        if (cited.Any(x => !allowed.Contains(x))) errors.Add("Evidence-backed revision cites evidence that was not validated.");
-        if (mode == InvestigationModes.RecoverAnswer && LlmEvidenceRemediationAgent.IsMetaClaim(result.RevisedAnswer) && result.RevisedAnswer.Length < 180)
-            errors.Add("Recovered answer still primarily abstains despite available evidence.");
-        if (errors.Count > 0) throw new InvalidOperationException(string.Join(" ", errors));
-        var supportedIds = packet.Claims.Where(x => x.Status == "Supported").Select(x => x.ClaimId).ToHashSet(StringComparer.Ordinal);
-        var answered = claims.Where(x => supportedIds.Contains(x.Id)).Select(x => x.ResearchDimension ?? x.Text).Distinct().ToList();
-        var missing = requiredDimensions.Except(answered, StringComparer.OrdinalIgnoreCase).ToList();
-        var coverage = requiredDimensions.Count == 0 ? 1 : Math.Round((double)answered.Count(x => requiredDimensions.Contains(x, StringComparer.OrdinalIgnoreCase)) / requiredDimensions.Count, 3);
-        return new(missing.Count == 0 ? "Complete" : "Partial", coverage, answered, missing, []);
-    }
 }
 
 public sealed class FinalizeEvidenceRemediationNodeHandler : IAgentNodeHandler

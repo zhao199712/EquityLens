@@ -187,6 +187,7 @@ builder.Services.AddScoped<IDraftRevisionAgent, LlmDraftRevisionAgent>();
 builder.Services.AddScoped<LlmEvidenceRemediationAgent>();
 builder.Services.AddScoped<IClaimExtractionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
 builder.Services.AddSingleton<IClaimSetValidator, ClaimSetValidator>();
+builder.Services.AddSingleton<IAnswerQualityValidator, AnswerQualityValidator>();
 builder.Services.AddScoped<IEvidenceBackedRevisionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
 builder.Services.AddScoped<IEvidenceAssessor, LlmEvidenceAssessor>();
 builder.Services.AddScoped<IInvestmentReanalysisAgent, LlmInvestmentReanalysisAgent>();

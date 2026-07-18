@@ -10,7 +10,7 @@ public sealed record ReanalysisClaim(string ClaimId, string ClaimText, string St
 public sealed record InvestmentReanalysisContext(string? Ticker, string Question, string SourceAnswer, string RemediationAnswer, IReadOnlyList<ReanalysisClaim> AffectedClaims, IReadOnlyList<RemediationEvidenceItem> Evidence, IReadOnlyList<string> ReanalysisReasons);
 public sealed record InvestmentReanalysisDraft(string ReanalyzedAnswer, string AnalysisChangeSummary, IReadOnlyList<string> ChangedClaimIds, IReadOnlyList<string> KeyConclusionChanges);
 public sealed record InvestmentReanalysisAgentResult(InvestmentReanalysisDraft Draft, string AgentIdentity, string Provider, string Model, int PromptTokens, int CompletionTokens, decimal? EstimatedCostUsd);
-public sealed record EvidenceReanalysisOutput(string SourceAnswer, string RemediationAnswer, string ReanalyzedAnswer, string FinalAnswer, string AnalysisChangeSummary, IReadOnlyList<string> ChangedClaimIds, IReadOnlyList<string> KeyConclusionChanges, IReadOnlyList<RemediationEvidenceItem> Citations, CriticReviewResult CriticReview, bool RequiresMoreEvidence, string RecommendedNextAction, IReadOnlyList<string> ReanalysisReasons);
+public sealed record EvidenceReanalysisOutput(string SourceAnswer, string RemediationAnswer, string ReanalyzedAnswer, string FinalAnswer, string AnalysisChangeSummary, IReadOnlyList<string> ChangedClaimIds, IReadOnlyList<string> KeyConclusionChanges, IReadOnlyList<RemediationEvidenceItem> Citations, CriticReviewResult CriticReview, bool RequiresMoreEvidence, string RecommendedNextAction, IReadOnlyList<string> ReanalysisReasons, string AnswerQualityStatus = "NotEvaluated", double AnswerCoverage = 0, IReadOnlyList<string>? AnsweredDimensions = null, IReadOnlyList<string>? UnresolvedDimensions = null);
 
 public interface IInvestmentReanalysisAgent
 {
@@ -108,7 +108,7 @@ public sealed class LoadEvidenceRemediationNodeHandler : IAgentNodeHandler
         var board = EvidenceReanalysisBoard.Parse(context.Run); var sourceId = board[AgentBlackboardKeys.EvidenceRemediationRunId]?.GetValue<Guid>() ?? throw new InvalidOperationException("Evidence remediation run id is missing.");
         var snapshot = await EvidenceReanalysisSourceValidator.ValidateAsync(context.DbContext, context.Run.UserId, sourceId, cancellationToken); var source = snapshot.Run; var output = snapshot.Output; var sourceBoard = snapshot.Blackboard;
         board[AgentBlackboardKeys.EvidenceRemediationRun] = JsonSerializer.SerializeToNode(new { source.Id, source.WorkflowType, source.Status }, AgentNodeJson.SerializerOptions); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.EvidenceRemediationOutput, output);
-        foreach (var key in new[] { AgentBlackboardKeys.ResearchRunId, AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question, AgentBlackboardKeys.Answer, AgentBlackboardKeys.CriticFindings, AgentBlackboardKeys.EvidenceValidationResults, AgentBlackboardKeys.RemediatedEvidencePacket }) board[key] = sourceBoard[key]?.DeepClone();
+        foreach (var key in new[] { AgentBlackboardKeys.ResearchRunId, AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question, AgentBlackboardKeys.Answer, AgentBlackboardKeys.CriticFindings, AgentBlackboardKeys.ExtractedClaims, AgentBlackboardKeys.RequiredResearchDimensions, AgentBlackboardKeys.MissingResearchDimensions, AgentBlackboardKeys.EvidenceValidationResults, AgentBlackboardKeys.RemediatedEvidencePacket }) if (sourceBoard[key] is not null) board[key] = sourceBoard[key]!.DeepClone();
         board[AgentBlackboardKeys.RequiresReanalysis] = true; EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.ReanalysisReasons, output.ReanalysisReasons ?? []);
         var result = new { sourceRunId = source.Id, output.RequiresReanalysis, reasonCount = output.ReanalysisReasons?.Count ?? 0 }; context.Node.InputJson = AgentNodeJson.Serialize(new { evidenceRemediationRunId = sourceId }); EvidenceReanalysisBoard.Commit(context, board, result);
     }
@@ -174,12 +174,19 @@ public sealed class ReviseReanalysisNodeHandler(IDraftRevisionAgent revision) : 
     }
 }
 
-public sealed class FinalizeReanalysisNodeHandler : IAgentNodeHandler
+public sealed class FinalizeReanalysisNodeHandler(IAnswerQualityValidator? qualityValidator = null) : IAgentNodeHandler
 {
     public string NodeType => EvidenceReanalysisNodeTypes.Finalize;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = EvidenceReanalysisBoard.Parse(context.Run); var analysis = EvidenceReanalysisBoard.Required<InvestmentReanalysisContext>(board, AgentBlackboardKeys.AnalysisContext); var draft = EvidenceReanalysisBoard.Required<InvestmentReanalysisDraft>(board, AgentBlackboardKeys.ReanalysisDraft); var review = EvidenceReanalysisBoard.Required<CriticReviewResult>(board, AgentBlackboardKeys.ReanalysisCriticReview); var decision = EvidenceReanalysisBoard.Required<WorkflowPolicyDecision>(board, AgentBlackboardKeys.ReanalysisPolicyDecision); var revision = EvidenceReanalysisBoard.Required<DraftRevisionResult>(board, AgentBlackboardKeys.ReanalysisFinalRevision);
-        var output = new EvidenceReanalysisOutput(analysis.SourceAnswer, analysis.RemediationAnswer, draft.ReanalyzedAnswer, revision.RevisedAnswer, draft.AnalysisChangeSummary, draft.ChangedClaimIds, draft.KeyConclusionChanges, analysis.Evidence, review, decision.RequiresMoreEvidence, decision.RequiresMoreEvidence ? "EvidenceRemediation" : decision.RecommendedNextAction, analysis.ReanalysisReasons); context.Node.InputJson = AgentNodeJson.Serialize(new { decision.RequiresMoreEvidence, citationCount = analysis.Evidence.Count }); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.FinalOutput, output); EvidenceReanalysisBoard.Commit(context, board, output); context.Run.OutputJson = context.Node.OutputJson; return Task.CompletedTask;
+        var claims = board[AgentBlackboardKeys.ExtractedClaims] is JsonArray ? EvidenceReanalysisBoard.Required<List<EvidenceClaim>>(board, AgentBlackboardKeys.ExtractedClaims) : [];
+        var required = board[AgentBlackboardKeys.RequiredResearchDimensions]?.AsArray().Select(x => x?.GetValue<string>() ?? string.Empty).Where(x => x.Length > 0).ToList() ?? [];
+        var supportedIds = analysis.AffectedClaims.Where(x => x.Status == "Supported").Select(x => x.ClaimId).ToHashSet(StringComparer.Ordinal);
+        var allowedIndexes = analysis.Evidence.Select(x => x.Index).ToHashSet();
+        var mode = LlmEvidenceRemediationAgent.IsAbstention(analysis.SourceAnswer) ? InvestigationModes.RecoverAnswer : InvestigationModes.CorrectExistingAnswer;
+        var quality = (qualityValidator ?? new AnswerQualityValidator()).Validate(revision.RevisedAnswer, mode, claims, required, supportedIds, allowedIndexes);
+        EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.AnswerQualityValidation, quality);
+        var output = new EvidenceReanalysisOutput(analysis.SourceAnswer, analysis.RemediationAnswer, draft.ReanalyzedAnswer, revision.RevisedAnswer, draft.AnalysisChangeSummary, draft.ChangedClaimIds, draft.KeyConclusionChanges, analysis.Evidence, review, decision.RequiresMoreEvidence, decision.RequiresMoreEvidence ? "EvidenceRemediation" : decision.RecommendedNextAction, analysis.ReanalysisReasons, quality.Status, quality.Coverage, quality.AnsweredDimensions, quality.MissingDimensions); context.Node.InputJson = AgentNodeJson.Serialize(new { decision.RequiresMoreEvidence, citationCount = analysis.Evidence.Count, answerQualityStatus = quality.Status, answerCoverage = quality.Coverage }); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.FinalOutput, output); EvidenceReanalysisBoard.Commit(context, board, output); context.Run.OutputJson = context.Node.OutputJson; return Task.CompletedTask;
     }
 }

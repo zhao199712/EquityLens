@@ -78,3 +78,27 @@ public sealed class ClaimSetValidator : IClaimSetValidator
 
     private static bool ContainsAny(string value, params string[] markers) => markers.Any(x => value.Contains(x, StringComparison.OrdinalIgnoreCase));
 }
+
+public interface IAnswerQualityValidator
+{
+    AnswerQualityValidationResult Validate(string answer, string investigationMode, IReadOnlyList<EvidenceClaim> claims, IReadOnlyList<string> requiredDimensions, IReadOnlySet<string> supportedClaimIds, IReadOnlySet<int> allowedEvidenceIndexes);
+}
+
+public sealed class AnswerQualityValidator : IAnswerQualityValidator
+{
+    public AnswerQualityValidationResult Validate(string answer, string investigationMode, IReadOnlyList<EvidenceClaim> claims, IReadOnlyList<string> requiredDimensions, IReadOnlySet<string> supportedClaimIds, IReadOnlySet<int> allowedEvidenceIndexes)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(answer)) errors.Add("Final answer is empty.");
+        var cited = System.Text.RegularExpressions.Regex.Matches(answer, @"\[(\d+)\]").Select(x => int.Parse(x.Groups[1].Value)).ToList();
+        if (cited.Count == 0 && allowedEvidenceIndexes.Count > 0) errors.Add("Final answer must cite validated evidence.");
+        if (cited.Any(x => !allowedEvidenceIndexes.Contains(x))) errors.Add("Final answer cites evidence that was not validated.");
+        if (investigationMode == InvestigationModes.RecoverAnswer && LlmEvidenceRemediationAgent.IsMetaClaim(answer) && answer.Length < 180)
+            errors.Add("Recovered answer still primarily abstains despite available evidence.");
+        if (errors.Count > 0) throw new InvalidOperationException(string.Join(" ", errors));
+        var answered = claims.Where(x => supportedClaimIds.Contains(x.Id)).Select(x => x.ResearchDimension ?? x.Text).Distinct().ToList();
+        var missing = requiredDimensions.Except(answered, StringComparer.OrdinalIgnoreCase).ToList();
+        var coverage = requiredDimensions.Count == 0 ? 1 : Math.Round((double)answered.Count(x => requiredDimensions.Contains(x, StringComparer.OrdinalIgnoreCase)) / requiredDimensions.Count, 3);
+        return new(missing.Count == 0 ? "Complete" : "Partial", coverage, answered, missing, []);
+    }
+}
