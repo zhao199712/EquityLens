@@ -32,6 +32,12 @@ public static class AgentBlackboardKeys
     public const string RiskAnalysisPriorities = "riskAnalysisPriorities";
     public const string PortfolioEvidencePacket = "portfolioEvidencePacket";
     public const string PortfolioDiagnosisDraft = "portfolioDiagnosisDraft";
+    public const string RetrievalPlan = "retrievalPlan";
+    public const string RetrievedEvidence = "retrievedEvidence";
+    public const string ExtractedClaims = "extractedClaims";
+    public const string ClaimSupportAssessments = "claimSupportAssessments";
+    public const string EvidenceValidationResults = "evidenceValidationResults";
+    public const string RemediatedEvidencePacket = "remediatedEvidencePacket";
 }
 
 public static class EvidenceCheckFields
@@ -171,6 +177,29 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.RevisedAnswer] = null,
         [AgentBlackboardKeys.RevisionSummary] = null,
         [AgentBlackboardKeys.AppliedRecommendation] = null,
+        [AgentBlackboardKeys.FinalOutput] = null
+    };
+
+    public static JsonObject CreateInitialEvidenceRemediationBlackboard(Guid criticReviewRunId) => new()
+    {
+        [AgentBlackboardKeys.CriticReviewRunId] = criticReviewRunId,
+        [AgentBlackboardKeys.CriticReviewRun] = null,
+        [AgentBlackboardKeys.ResearchRunId] = null,
+        [AgentBlackboardKeys.Ticker] = null,
+        [AgentBlackboardKeys.Question] = null,
+        [AgentBlackboardKeys.Answer] = null,
+        [AgentBlackboardKeys.Citations] = new JsonArray(),
+        [AgentBlackboardKeys.Candidates] = new JsonArray(),
+        [AgentBlackboardKeys.CriticFindings] = new JsonArray(),
+        [AgentBlackboardKeys.CriticReview] = null,
+        [AgentBlackboardKeys.RetrievalPlan] = null,
+        [AgentBlackboardKeys.RetrievedEvidence] = new JsonArray(),
+        [AgentBlackboardKeys.ExtractedClaims] = new JsonArray(),
+        [AgentBlackboardKeys.ClaimSupportAssessments] = new JsonArray(),
+        [AgentBlackboardKeys.EvidenceValidationResults] = null,
+        [AgentBlackboardKeys.RemediatedEvidencePacket] = null,
+        [AgentBlackboardKeys.RevisedAnswer] = null,
+        [AgentBlackboardKeys.RevisionSummary] = null,
         [AgentBlackboardKeys.FinalOutput] = null
     };
 

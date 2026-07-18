@@ -758,6 +758,19 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
+    public async Task CreateEvidenceRemediationAsync_Creates9NodeRunWithPolicySnapshot()
+    {
+        await using var db = CreateDbContext(); var queue = new RecordingAgentRunQueue(); var state = new AgentRunStateMachine(); var nodeState = new AgentNodeStateMachine();
+        var service = new AgentRunService(db, [new EvidenceRemediationWorkflowDefinitionProvider()], state, nodeState, queue);
+
+        var summary = await service.CreateEvidenceRemediationAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(AgentWorkflowTypes.EvidenceRemediation, summary.WorkflowType); Assert.Equal(AgentRunStatuses.Pending, summary.Status); Assert.Single(queue.Messages);
+        var detail = await service.GetByIdAsync(summary.Id, null, CancellationToken.None); Assert.NotNull(detail); Assert.Equal(9, detail.Nodes.Count);
+        using var definition = JsonDocument.Parse(detail.WorkflowDefinitionJson); Assert.All(definition.RootElement.GetProperty("nodes").EnumerateArray(), node => Assert.True(node.TryGetProperty("executionPolicy", out _)));
+    }
+
+    [Fact]
     public async Task GetByIdAsync_DifferentUser_ReturnsNull()
     {
         await using var db = CreateDbContext();

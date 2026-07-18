@@ -80,6 +80,29 @@ public sealed class AgentWorkflowPlannerTests
     }
 
     [Fact]
+    public void GetExecutionOrder_EvidenceRemediationWorkflow_ReturnsExpected9NodeOrder()
+    {
+        var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var order = new AgentWorkflowPlanner().GetExecutionOrder(run.WorkflowDefinitionJson);
+
+        Assert.Equal(
+        [
+            EvidenceRemediationNodeKeys.LoadContext,
+            EvidenceRemediationNodeKeys.PlanRetrieval,
+            EvidenceRemediationNodeKeys.RetrieveEvidence,
+            EvidenceRemediationNodeKeys.ExtractClaims,
+            EvidenceRemediationNodeKeys.AssessSupport,
+            EvidenceRemediationNodeKeys.ValidateMappings,
+            EvidenceRemediationNodeKeys.BuildPacket,
+            EvidenceRemediationNodeKeys.DraftRevision,
+            EvidenceRemediationNodeKeys.Finalize
+        ], order);
+        var catalog = new AgentWorkflowCatalog().GetWorkflow(AgentWorkflowTypes.EvidenceRemediation);
+        Assert.Equal(9, catalog.NodeTypes.Count);
+        Assert.Equal(8, catalog.Edges.Count);
+    }
+
+    [Fact]
     public void Catalog_AllNodeContracts_AreCompleteAndUnique()
     {
         var catalog = new AgentWorkflowCatalog();

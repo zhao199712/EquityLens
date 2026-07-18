@@ -5,6 +5,7 @@ public sealed record CreateCriticReviewRequest(Guid ResearchRunId);
 public sealed record CreateDraftRevisionRequest(Guid CriticReviewRunId);
 
 public sealed record CreateResearchQualityReviewRequest(Guid ResearchRunId);
+public sealed record CreateEvidenceRemediationRequest(Guid CriticReviewRunId);
 
 public sealed record CreatePortfolioDiagnosisRequest(DateOnly? From = null, DateOnly? To = null);
 

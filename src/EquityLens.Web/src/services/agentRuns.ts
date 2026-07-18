@@ -107,6 +107,11 @@ export async function createDraftRevision(criticReviewRunId: string): Promise<Ag
   return response.data
 }
 
+export async function createEvidenceRemediation(criticReviewRunId: string): Promise<AgentRunCreatedResponse> {
+  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/evidence-remediation', { criticReviewRunId })
+  return response.data
+}
+
 export async function retryAgentRun(id: string): Promise<AgentRunCreatedResponse> {
   const response = await http.post<AgentRunCreatedResponse>(`/agent-runs/${id}/retry`)
   return response.data

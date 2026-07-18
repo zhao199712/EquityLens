@@ -6,6 +6,7 @@ public static class AgentWorkflowTypes
     public const string DraftRevision = "DraftRevision";
     public const string ResearchQualityReview = "ResearchQualityReview";
     public const string PortfolioDiagnosis = "PortfolioDiagnosis";
+    public const string EvidenceRemediation = "EvidenceRemediation";
 }
 
 public static class AgentTypes
@@ -13,6 +14,7 @@ public static class AgentTypes
     public const string Critic = "CriticAgent";
     public const string Draft = "DraftAgent";
     public const string Portfolio = "PortfolioDiagnosisAgent";
+    public const string Research = "ResearchAgent";
 }
 
 public static class CriticReviewWorkflow
@@ -33,6 +35,37 @@ public static class ResearchQualityReviewWorkflow
 public static class PortfolioDiagnosisWorkflow
 {
     public const int Version = 1;
+}
+
+public static class EvidenceRemediationWorkflow
+{
+    public const int Version = 1;
+}
+
+public static class EvidenceRemediationNodeKeys
+{
+    public const string LoadContext = "loadEvidenceRemediationContext";
+    public const string PlanRetrieval = "planEvidenceRetrieval";
+    public const string RetrieveEvidence = "retrieveRemediationEvidence";
+    public const string ExtractClaims = "extractAnswerClaims";
+    public const string AssessSupport = "assessClaimSupport";
+    public const string ValidateMappings = "validateEvidenceMappings";
+    public const string BuildPacket = "buildRemediatedEvidencePacket";
+    public const string DraftRevision = "draftEvidenceBackedRevision";
+    public const string Finalize = "finalizeEvidenceRemediation";
+}
+
+public static class EvidenceRemediationNodeTypes
+{
+    public const string LoadContext = "LoadEvidenceRemediationContext";
+    public const string PlanRetrieval = "PlanEvidenceRetrieval";
+    public const string RetrieveEvidence = "RetrieveRemediationEvidence";
+    public const string ExtractClaims = "ExtractAnswerClaims";
+    public const string AssessSupport = "AssessClaimSupport";
+    public const string ValidateMappings = "ValidateEvidenceMappings";
+    public const string BuildPacket = "BuildRemediatedEvidencePacket";
+    public const string DraftRevision = "DraftEvidenceBackedRevision";
+    public const string Finalize = "FinalizeEvidenceRemediation";
 }
 
 public static class PortfolioDiagnosisNodeKeys

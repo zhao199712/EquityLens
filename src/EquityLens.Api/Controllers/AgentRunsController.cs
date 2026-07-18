@@ -94,6 +94,22 @@ public sealed class AgentRunsController : ControllerBase
     }
 
     /// <summary>
+    /// 從需要更多證據的 CriticReview 建立 EvidenceRemediation workflow。
+    /// </summary>
+    [HttpPost("evidence-remediation")]
+    public async Task<ActionResult<AgentRunSummaryResponse>> CreateEvidenceRemediation(
+        CreateEvidenceRemediationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.CriticReviewRunId == Guid.Empty)
+        {
+            return BadRequest(new ApiError("critic_review_run_id_required", "請指定 criticReviewRunId。"));
+        }
+        var response = await _agentRunService.CreateEvidenceRemediationAsync(_currentUser.UserId, request.CriticReviewRunId, cancellationToken);
+        return Ok(response);
+    }
+
+    /// <summary>
     /// 查詢 Agent runs 清單，可依 workflow type 與狀態篩選。
     /// </summary>
     [HttpGet]

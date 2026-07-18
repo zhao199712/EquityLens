@@ -19,6 +19,11 @@ public interface IAgentRunService
         Guid researchRunId,
         CancellationToken cancellationToken = default);
 
+    Task<AgentRunSummaryResponse> CreateEvidenceRemediationAsync(
+        Guid userId,
+        Guid criticReviewRunId,
+        CancellationToken cancellationToken = default);
+
     Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(
         Guid userId,
         Guid portfolioId,

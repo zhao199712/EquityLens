@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   NSpin,
   NTag,
@@ -17,14 +18,16 @@ import {
   ReloadOutline,
   CloseOutline,
 } from '@vicons/ionicons5'
-import { getAgentRun, retryAgentRun, cancelAgentRun, type AgentRunDetail, type AgentRunNodeDto } from '../../../services/agentRuns'
+import { getAgentRun, retryAgentRun, cancelAgentRun, createEvidenceRemediation, type AgentRunDetail, type AgentRunNodeDto } from '../../../services/agentRuns'
 
 const props = defineProps<{ runId: string }>()
 const message = useMessage()
+const router = useRouter()
 
 const run = ref<AgentRunDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
+const creatingRemediation = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
 const TERMINAL_STATUSES = new Set(['Succeeded', 'Failed', 'Cancelled'])
 
@@ -32,6 +35,10 @@ const isTerminal = computed(() => {
   if (!run.value) return false
   return TERMINAL_STATUSES.has(run.value.run.status)
 })
+
+const canRemediateEvidence = computed(() => run.value?.run.workflowType === 'CriticReview'
+  && run.value.run.status === 'Succeeded'
+  && run.value.outputJson?.requiresMoreEvidence === true)
 
 onMounted(() => {
   loadRun()
@@ -93,6 +100,20 @@ async function handleCancel() {
     await loadRun()
   } catch {
     message.error('取消失敗。')
+  }
+}
+
+async function handleEvidenceRemediation() {
+  if (!run.value || creatingRemediation.value) return
+  creatingRemediation.value = true
+  try {
+    const created = await createEvidenceRemediation(run.value.run.id)
+    message.success('證據補強流程已建立。')
+    await router.push({ name: 'admin-agent-run-detail', params: { id: created.id } })
+  } catch {
+    message.error('無法建立證據補強流程，請確認 Critic Review 已完成且需要更多證據。')
+  } finally {
+    creatingRemediation.value = false
   }
 }
 
@@ -192,6 +213,9 @@ const nodeMap = computed(() => {
             取消
           </button>
         </NSpace>
+        <button v-if="canRemediateEvidence" type="button" class="prestige-btn detail-remediation-btn" :disabled="creatingRemediation" @click="handleEvidenceRemediation">
+          {{ creatingRemediation ? '建立中…' : '補充證據並修訂' }}
+        </button>
       </section>
 
       <section class="prestige-panel prestige-panel-pad detail-section">
@@ -316,6 +340,8 @@ const nodeMap = computed(() => {
 .detail-actions {
   margin-top: 12px;
 }
+
+.detail-remediation-btn { margin-top: 12px; }
 
 .detail-btn-danger {
   color: var(--down);

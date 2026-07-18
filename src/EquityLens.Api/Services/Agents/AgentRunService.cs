@@ -91,6 +91,22 @@ public sealed class AgentRunService : IAgentRunService
         return MapSummary(run);
     }
 
+    public async Task<AgentRunSummaryResponse> CreateEvidenceRemediationAsync(
+        Guid userId,
+        Guid criticReviewRunId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.EvidenceRemediation, cancellationToken);
+        var provider = GetWorkflowProvider(AgentWorkflowTypes.EvidenceRemediation);
+        var run = provider.CreateRun(userId, criticReviewRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
+        _dbContext.AgentRuns.Add(run);
+        AddEvent(run, null, AgentEventTypes.RunCreated, "EvidenceRemediation run created.", new { criticReviewRunId });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await EnqueueAsync(run, userId, cancellationToken);
+        return MapSummary(run);
+    }
+
     public async Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(
         Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
     {
