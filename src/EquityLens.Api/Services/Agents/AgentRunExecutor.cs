@@ -260,7 +260,13 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 finally { completed.Set(); }
             }) { IsBackground = true, Name = $"workflow-planner-{run.Id:N}" };
             plannerThread.Start();
-            if (!completed.Wait(TimeSpan.FromSeconds(45), cancellationToken)) proposal = DeterministicDynamicWorkflowPlanner.Create(context, "Workflow planner exceeded the orchestrator 45 second deadline.");
+            var deadline = Stopwatch.StartNew();
+            while (!completed.IsSet && deadline.Elapsed < TimeSpan.FromSeconds(45))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Thread.Sleep(100);
+            }
+            if (!completed.IsSet) proposal = DeterministicDynamicWorkflowPlanner.Create(context, "Workflow planner exceeded the orchestrator 45 second deadline.");
             else if (planningError is not null) throw planningError;
             else proposal = planned ?? throw new InvalidOperationException("Workflow planner returned no proposal.");
             plannerCall.Status = AgentToolCallStatuses.Succeeded; plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180); plannerCall.ResultJson = Serialize(proposal); plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
