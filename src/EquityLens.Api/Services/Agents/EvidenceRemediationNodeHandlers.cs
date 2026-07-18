@@ -291,9 +291,10 @@ public sealed class DraftEvidenceBackedRevisionNodeHandler(IEvidenceBackedRevisi
     {
         var board = EvidenceRemediationBoard.Parse(context.Run); var packet = EvidenceRemediationBoard.Required<RemediatedEvidencePacket>(board, AgentBlackboardKeys.RemediatedEvidencePacket); var source = board[AgentBlackboardKeys.Answer]?.GetValue<string>() ?? string.Empty; var question = board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty; var mode = LlmEvidenceRemediationAgent.IsAbstention(source) ? InvestigationModes.RecoverAnswer : InvestigationModes.CorrectExistingAnswer; context.Node.InputJson = AgentNodeJson.Serialize(new { packet.EvidenceStatus, evidenceCount = packet.Evidence.Count, investigationMode = mode });
         EvidenceBackedRevisionResult result;
-        if (packet.EvidenceStatus == "InsufficientEvidence") result = new(source, "補充檢索後仍無足夠證據，保留原回答並標示未解決 claims。");
+        var usableEvidence = packet.Claims.Any(x => (x.Status is "Supported" or "PartiallySupported") && x.EvidenceIndexes.Count > 0);
+        if (!usableEvidence) result = new(source, "補充檢索後仍無可用的已驗證證據，保留原回答並標示未解決 claims。", [], ["目前沒有足以支持方向性分析的已驗證證據。"]);
         else result = await EvidenceRemediationToolCall.RunAsync(context, "evidenceRevisionLLM", new { evidenceCount = packet.Evidence.Count, promptTemplateId = "evidence-remediation-revision", promptVersion = 2, investigationMode = mode }, () => agent.ReviseAsync(question, source, packet, cancellationToken), x => x.RevisionSummary, cancellationToken);
-        ValidateAnswerQuality(result, packet, mode);
+        if (usableEvidence) ValidateAnswerQuality(result, packet, mode);
         board[AgentBlackboardKeys.RevisedAnswer] = result.RevisedAnswer; board[AgentBlackboardKeys.RevisionSummary] = result.RevisionSummary; EvidenceRemediationBoard.Commit(context, board, result);
     }
 
