@@ -98,15 +98,28 @@ function formatDate(iso: string | null) {
 
 function statusColor(status: string) {
   switch (status) {
-    case 'Succeeded': return '#34d399'
-    case 'Failed': return '#f87171'
-    case 'Running': return '#60a5fa'
-    case 'Cancelled': return '#999999'
-    case 'Pending': return '#fbbf24'
-    case 'WaitingForFeedback': return '#c084fc'
-    case 'Skipped': return '#666666'
-    default: return '#666666'
+    case 'Succeeded': return '#7fa387'
+    case 'Failed': return '#b05c5c'
+    case 'Running': return '#d4a24e'
+    case 'Cancelled': return '#9a917c'
+    case 'Pending': return '#9a917c'
+    case 'WaitingForFeedback': return '#c9a86a'
+    case 'Skipped': return '#9a917c'
+    default: return '#9a917c'
   }
+}
+
+function severityColor(severity: string) {
+  if (severity === 'Critical' || severity === 'High') return '#b05c5c'
+  if (severity === 'Medium') return '#d4a24e'
+  return '#7fa387'
+}
+
+function eventColor(eventType: string) {
+  if (eventType.includes('Failed')) return '#b05c5c'
+  if (eventType.includes('Succeed')) return '#7fa387'
+  if (eventType.includes('Started')) return '#d4a24e'
+  return '#9a917c'
 }
 
 function prettyJson(obj: unknown): string {
@@ -156,167 +169,177 @@ const nextActionLabel = computed(() => {
   const action = criticOutput.value?.recommendedNextAction
   if (!action) return null
   switch (action) {
-    case 'AcceptAnswer': return { text: '答案可接受', color: '#34d399', bg: 'rgba(52,211,153,0.1)' }
-    case 'ReviseAnswer': return { text: '建議修正答案', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' }
-    case 'CollectMoreEvidenceThenReviseAnswer': return { text: '需要更多證據後修正', color: '#f87171', bg: 'rgba(248,113,113,0.1)' }
-    default: return { text: action, color: '#666666', bg: 'transparent' }
+    case 'AcceptAnswer': return { text: '答案可接受', color: '#7fa387', bg: 'rgba(127,163,135,0.1)' }
+    case 'ReviseAnswer': return { text: '建議修正答案', color: '#d4a24e', bg: 'rgba(212,162,78,0.1)' }
+    case 'CollectMoreEvidenceThenReviseAnswer': return { text: '需要更多證據後修正', color: '#b05c5c', bg: 'rgba(176,92,92,0.1)' }
+    default: return { text: action, color: '#9a917c', bg: 'transparent' }
   }
 })
 </script>
 
 <template>
-  <div class="kimi-page-vscode">
-    <div class="kimi-content">
-      <div style="margin-top: 60px; margin-bottom: 12px">
-        <button class="kimi-btn" @click="router.push({ name: 'agent-runs' })">← 返回列表</button>
+  <div class="prestige-page">
+    <div class="prestige-section">
+      <div class="back-row">
+        <button class="prestige-btn" @click="router.push({ name: 'agent-runs' })">← 返回列表</button>
       </div>
 
-      <div v-if="isLoading" style="padding: 40px 0; color: var(--kimi-muted); font-size: 14px; text-align: center">載入中...</div>
-      <div v-else-if="error || pollError" style="padding: 20px; color: #f87171; font-size: 14px">{{ error || pollError }}</div>
+      <div v-if="isLoading" class="prestige-skeleton detail-skeleton" />
+      <div v-else-if="error || pollError" class="prestige-error">{{ error || pollError }}</div>
 
       <template v-else-if="run">
-        <!-- Header -->
         <ScrollReveal>
-          <div class="kimi-section">
-            <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap">
-                <span class="kimi-tag" style="font-family: var(--kimi-font-mono)">{{ run.run.workflowType }}</span>
-                <span class="kimi-tag">{{ run.run.agentType }}</span>
-                <span class="kimi-tag" :style="{ borderColor: statusColor(run.run.status), color: statusColor(run.run.status) }">{{ run.run.status }}</span>
-                <span v-if="duration" style="font-size: 12px; color: var(--kimi-muted)">{{ duration }}</span>
-              </div>
-              <div style="font-family: var(--kimi-font-mono); font-size: 12px; color: var(--kimi-muted); margin-bottom: 12px">{{ run.run.id }}</div>
+          <!-- Header -->
+          <div class="prestige-panel prestige-panel-pad header-panel">
+            <div class="run-tags">
+              <span class="prestige-tag prestige-mono">{{ run.run.workflowType }}</span>
+              <span class="prestige-tag">{{ run.run.agentType }}</span>
+              <span
+                class="prestige-tag"
+                :style="{ borderColor: statusColor(run.run.status), color: statusColor(run.run.status) }"
+              >{{ run.run.status }}</span>
+              <span v-if="duration" class="run-duration prestige-mono">{{ duration }}</span>
+            </div>
+            <div class="run-id prestige-mono">{{ run.run.id }}</div>
 
-              <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                <button v-if="run.run.status === 'Failed'" class="kimi-btn kimi-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
-                <button v-if="run.run.status === 'Running' || run.run.status === 'Pending'" class="kimi-btn" style="border-color: #f87171; color: #f87171" :disabled="actionLoading" @click="handleCancel">取消</button>
-                <button v-if="canCreateDraftRevision" class="kimi-btn kimi-btn-solid" :disabled="actionLoading" @click="handleCreateDraftRevision">產生修訂稿</button>
-                <button class="kimi-btn" :disabled="actionLoading" @click="refresh">重新整理</button>
-              </div>
+            <div class="action-row">
+              <button v-if="run.run.status === 'Failed'" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
+              <button v-if="run.run.status === 'Running' || run.run.status === 'Pending'" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
+              <button v-if="canCreateDraftRevision" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleCreateDraftRevision">產生修訂稿</button>
+              <button class="prestige-btn" :disabled="actionLoading" @click="refresh">重新整理</button>
+            </div>
 
-              <div style="display: flex; gap: 20px; margin-top: 12px; font-size: 12px; color: var(--kimi-muted); flex-wrap: wrap">
-                <span>建立：{{ formatDate(run.run.createdAtUtc) }}</span>
-                <span>開始：{{ formatDate(run.run.startedAtUtc) }}</span>
-                <span>完成：{{ formatDate(run.run.completedAtUtc) }}</span>
-              </div>
+            <div class="run-dates prestige-mono">
+              <span>建立：{{ formatDate(run.run.createdAtUtc) }}</span>
+              <span>開始：{{ formatDate(run.run.startedAtUtc) }}</span>
+              <span>完成：{{ formatDate(run.run.completedAtUtc) }}</span>
+            </div>
 
-              <div v-if="!isTerminalStatus || run.run.errorMessage" style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; flex-wrap: wrap">
-                <span v-if="!isTerminalStatus" style="display: inline-flex; align-items: center; gap: 6px; color: #60a5fa">
-                  <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #60a5fa; animation: pulse 1.5s infinite" />
-                  {{ run.run.status === 'Pending' ? '已加入背景執行佇列，正在等待執行' : '背景執行中，頁面會自動更新' }}
-                </span>
-                <span v-if="run.run.errorMessage" style="color: #f87171">{{ run.run.errorMessage }}</span>
-              </div>
+            <div v-if="!isTerminalStatus || run.run.errorMessage" class="live-row">
+              <span v-if="!isTerminalStatus" class="live-status">
+                <span class="live-dot" />
+                {{ run.run.status === 'Pending' ? '已加入背景執行佇列，正在等待執行' : '背景執行中，頁面會自動更新' }}
+              </span>
+              <span v-if="run.run.errorMessage" class="run-error">{{ run.run.errorMessage }}</span>
+            </div>
 
-              <div v-if="isPolling" style="display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--kimi-muted)">
-                <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #60a5fa; animation: pulse 1.5s infinite" />
-                自動重新整理中
+            <div v-if="isPolling" class="polling-row">
+              <span class="live-dot live-dot-small" />
+              自動重新整理中
+            </div>
+          </div>
+
+          <!-- Waiting for output -->
+          <div v-if="!isTerminalStatus || run.outputJson === null" class="prestige-empty waiting-block">
+            <div style="font-size: 14px; margin-bottom: 8px">等待背景工作完成</div>
+            <div style="font-size: 12px">結果產出後會自動顯示在這裡</div>
+          </div>
+
+          <!-- CriticReview Result -->
+          <div v-if="criticOutput" class="prestige-panel prestige-panel-pad result-panel">
+            <h3 class="panel-title">Critic Review 結果</h3>
+
+            <div
+              v-if="nextActionLabel"
+              class="next-action"
+              :style="{ color: nextActionLabel.color, background: nextActionLabel.bg, border: `1px solid ${nextActionLabel.color}` }"
+            >
+              {{ nextActionLabel.text }}
+            </div>
+
+            <div class="stat-grid">
+              <div>
+                <div class="prestige-label stat-caption">Overall Severity</div>
+                <div class="stat-value">{{ criticOutput.overallSeverity ?? '-' }}</div>
+              </div>
+              <div>
+                <div class="prestige-label stat-caption">Requires Revision</div>
+                <div class="stat-value" :style="{ color: criticOutput.requiresRevision ? '#b05c5c' : '#7fa387' }">{{ criticOutput.requiresRevision ? '是' : '否' }}</div>
+              </div>
+              <div>
+                <div class="prestige-label stat-caption">Requires More Evidence</div>
+                <div class="stat-value" :style="{ color: criticOutput.requiresMoreEvidence ? '#d4a24e' : '#7fa387' }">{{ criticOutput.requiresMoreEvidence ? '是' : '否' }}</div>
+              </div>
+              <div v-if="criticOutput.routeBackTo">
+                <div class="prestige-label stat-caption">Route Back To</div>
+                <div class="stat-value">{{ criticOutput.routeBackTo }}</div>
               </div>
             </div>
 
-            <!-- Waiting for output -->
-            <div v-if="!isTerminalStatus || run.outputJson === null" style="padding: 40px 20px; border-bottom: 1px solid var(--kimi-border-light); text-align: center; color: var(--kimi-muted)">
-              <div style="font-size: 14px; margin-bottom: 8px">等待背景工作完成</div>
-              <div style="font-size: 12px">結果產出後會自動顯示在這裡</div>
+            <div class="summary-block">
+              <div class="prestige-label stat-caption">Summary</div>
+              <div class="body-text">{{ criticOutput.summary ?? '-' }}</div>
             </div>
 
-            <!-- CriticReview Result -->
-            <div v-if="criticOutput" style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
-              <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600">Critic Review 結果</h3>
-
-              <div v-if="nextActionLabel" style="display: inline-block; padding: 6px 14px; margin-bottom: 16px; font-size: 13px; font-weight: 600" :style="{ color: nextActionLabel.color, background: nextActionLabel.bg, border: `1px solid ${nextActionLabel.color}` }">
-                {{ nextActionLabel.text }}
-              </div>
-
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px">
-                <div>
-                  <div class="kimi-caption" style="margin-bottom: 4px">Overall Severity</div>
-                  <div style="font-size: 14px; font-weight: 600">{{ criticOutput.overallSeverity ?? '-' }}</div>
-                </div>
-                <div>
-                  <div class="kimi-caption" style="margin-bottom: 4px">Requires Revision</div>
-                  <div :style="{ color: criticOutput.requiresRevision ? '#f87171' : '#34d399', fontSize: '14px', fontWeight: '600' }">{{ criticOutput.requiresRevision ? '是' : '否' }}</div>
-                </div>
-                <div>
-                  <div class="kimi-caption" style="margin-bottom: 4px">Requires More Evidence</div>
-                  <div :style="{ color: criticOutput.requiresMoreEvidence ? '#fbbf24' : '#34d399', fontSize: '14px', fontWeight: '600' }">{{ criticOutput.requiresMoreEvidence ? '是' : '否' }}</div>
-                </div>
-                <div v-if="criticOutput.routeBackTo">
-                  <div class="kimi-caption" style="margin-bottom: 4px">Route Back To</div>
-                  <div style="font-size: 14px">{{ criticOutput.routeBackTo }}</div>
-                </div>
-              </div>
-
-              <div style="margin-bottom: 16px">
-                <div class="kimi-caption" style="margin-bottom: 4px">Summary</div>
-                <div style="font-size: 14px; line-height: 1.6">{{ criticOutput.summary ?? '-' }}</div>
-              </div>
-
-              <div v-if="criticOutput.findings && criticOutput.findings.length > 0">
-                <div class="kimi-caption" style="margin-bottom: 8px">Findings ({{ criticOutput.findings.length }})</div>
-                <div style="display: flex; flex-direction: column; gap: 8px">
-                  <div v-for="(finding, fi) in criticOutput.findings" :key="fi" style="padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light)">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
-                      <span class="kimi-tag" :style="{ borderColor: finding.severity === 'Critical' || finding.severity === 'High' ? '#f87171' : finding.severity === 'Medium' ? '#fbbf24' : '#34d399', color: finding.severity === 'Critical' || finding.severity === 'High' ? '#f87171' : finding.severity === 'Medium' ? '#fbbf24' : '#34d399', fontSize: '11px' }">{{ finding.severity }}</span>
-                      <span class="kimi-tag" style="font-size: 11px">{{ finding.category }}</span>
-                    </div>
-                    <div style="font-size: 13px; margin-bottom: 4px">{{ finding.message }}</div>
-                    <div style="font-size: 12px; color: var(--kimi-muted)">建議：{{ finding.recommendation }}</div>
+            <div v-if="criticOutput.findings && criticOutput.findings.length > 0">
+              <div class="prestige-label stat-caption">Findings ({{ criticOutput.findings.length }})</div>
+              <div class="finding-list">
+                <div v-for="(finding, fi) in criticOutput.findings" :key="fi" class="finding-item">
+                  <div class="run-tags finding-tags">
+                    <span
+                      class="prestige-tag finding-tag"
+                      :style="{ borderColor: severityColor(finding.severity), color: severityColor(finding.severity) }"
+                    >{{ finding.severity }}</span>
+                    <span class="prestige-tag finding-tag">{{ finding.category }}</span>
                   </div>
+                  <div class="finding-msg">{{ finding.message }}</div>
+                  <div class="finding-rec">建議：{{ finding.recommendation }}</div>
                 </div>
-              </div>
-
-              <div v-if="criticOutput.suggestedAnswerRevision" style="margin-top: 16px">
-                <div class="kimi-caption" style="margin-bottom: 4px">Suggested Revision</div>
-                <div style="font-size: 13px; color: #b45309; line-height: 1.6; padding: 12px; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2)">{{ criticOutput.suggestedAnswerRevision }}</div>
               </div>
             </div>
 
-            <!-- DraftRevision Result -->
-            <div v-if="draftOutput" style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
-              <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600">修訂結果</h3>
+            <div v-if="criticOutput.suggestedAnswerRevision" class="revision-block">
+              <div class="prestige-label stat-caption">Suggested Revision</div>
+              <div class="suggested-revision">{{ criticOutput.suggestedAnswerRevision }}</div>
+            </div>
+          </div>
 
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px">
-                <div>
-                  <div class="kimi-caption" style="margin-bottom: 4px">Revision Required</div>
-                  <div :style="{ color: draftOutput.revisionRequired ? '#fbbf24' : '#34d399', fontSize: '14px', fontWeight: '600' }">{{ draftOutput.revisionRequired ? '是' : '否' }}</div>
-                </div>
-                <div v-if="draftOutput.appliedRecommendation">
-                  <div class="kimi-caption" style="margin-bottom: 4px">Applied Recommendation</div>
-                  <div style="font-size: 14px">{{ draftOutput.appliedRecommendation }}</div>
-                </div>
+          <!-- DraftRevision Result -->
+          <div v-if="draftOutput" class="prestige-panel prestige-panel-pad result-panel">
+            <h3 class="panel-title">修訂結果</h3>
+
+            <div class="stat-grid">
+              <div>
+                <div class="prestige-label stat-caption">Revision Required</div>
+                <div class="stat-value" :style="{ color: draftOutput.revisionRequired ? '#d4a24e' : '#7fa387' }">{{ draftOutput.revisionRequired ? '是' : '否' }}</div>
               </div>
-
-              <div v-if="draftOutput.revisionSummary" style="margin-bottom: 16px">
-                <div class="kimi-caption" style="margin-bottom: 4px">修正說明</div>
-                <div style="font-size: 14px; line-height: 1.6">{{ draftOutput.revisionSummary }}</div>
-              </div>
-
-              <div v-if="draftOutput.sourceAnswer" style="margin-bottom: 16px">
-                <div class="kimi-caption" style="margin-bottom: 4px">原始答案</div>
-                <div style="font-size: 13px; color: var(--kimi-muted); line-height: 1.6; padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); white-space: pre-wrap">{{ draftOutput.sourceAnswer }}</div>
-              </div>
-
-              <div v-if="draftOutput.revisedAnswer">
-                <div class="kimi-caption" style="margin-bottom: 4px">修正版答案</div>
-                <div style="font-size: 14px; line-height: 1.7; padding: 16px; background: rgba(52,211,153,0.06); border: 1px solid rgba(52,211,153,0.2); white-space: pre-wrap">{{ draftOutput.revisedAnswer }}</div>
+              <div v-if="draftOutput.appliedRecommendation">
+                <div class="prestige-label stat-caption">Applied Recommendation</div>
+                <div class="stat-value">{{ draftOutput.appliedRecommendation }}</div>
               </div>
             </div>
 
-            <!-- Debug Toggle -->
-            <div style="padding: 12px 20px; border-bottom: 1px solid var(--kimi-border-light)">
-              <button class="kimi-btn" style="font-size: 12px" @click="debugExpanded = !debugExpanded">
+            <div v-if="draftOutput.revisionSummary" class="summary-block">
+              <div class="prestige-label stat-caption">修正說明</div>
+              <div class="body-text">{{ draftOutput.revisionSummary }}</div>
+            </div>
+
+            <div v-if="draftOutput.sourceAnswer" class="summary-block">
+              <div class="prestige-label stat-caption">原始答案</div>
+              <div class="source-answer">{{ draftOutput.sourceAnswer }}</div>
+            </div>
+
+            <div v-if="draftOutput.revisedAnswer">
+              <div class="prestige-label stat-caption">修正版答案</div>
+              <div class="revised-answer">{{ draftOutput.revisedAnswer }}</div>
+            </div>
+          </div>
+
+          <!-- Debug Panel -->
+          <div class="prestige-panel debug-panel">
+            <div class="debug-toggle-row">
+              <button class="prestige-btn debug-toggle" @click="debugExpanded = !debugExpanded">
                 {{ debugExpanded ? '收合除錯資訊 ▲' : '展開除錯資訊 ▼' }}
               </button>
             </div>
 
-            <!-- Debug Tabs -->
             <template v-if="debugExpanded">
-              <div style="display: flex; border-bottom: 1px solid var(--kimi-border-light); overflow-x: auto">
+              <div class="tab-bar">
                 <button
                   v-for="tab in (['timeline', 'nodes', 'toolCalls', 'feedback', 'blackboard', 'workflow'] as const)"
                   :key="tab"
-                  :style="{ padding: '10px 16px', background: activeTab === tab ? 'var(--kimi-text-light)' : 'transparent', border: 'none', color: activeTab === tab ? 'var(--kimi-bg-light)' : 'var(--kimi-muted)', cursor: 'pointer', fontSize: '12px', fontWeight: activeTab === tab ? '600' : '400', fontFamily: 'var(--kimi-font-body)', letterSpacing: '0.05em' }"
+                  class="tab-btn"
+                  :class="{ active: activeTab === tab }"
                   @click="activeTab = tab"
                 >
                   {{ tab === 'timeline' ? '時間線' : tab === 'nodes' ? '節點' : tab === 'toolCalls' ? '工具' : tab === 'feedback' ? 'Feedback' : tab === 'blackboard' ? 'Blackboard' : 'Workflow' }}
@@ -324,100 +347,478 @@ const nextActionLabel = computed(() => {
               </div>
 
               <!-- Timeline -->
-              <div v-if="activeTab === 'timeline'" style="padding: 0">
-                <div v-for="evt in sortedEvents" :key="evt.id" style="display: flex; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--kimi-border-light)">
-                  <div :style="{ width: '8px', height: '8px', borderRadius: '50%', marginTop: '5px', flexShrink: 0, background: evt.eventType.includes('Failed') ? '#f87171' : evt.eventType.includes('Succeed') ? '#34d399' : evt.eventType.includes('Started') ? '#60a5fa' : '#ccc' }" />
-                  <div style="flex: 1; min-width: 0">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px; flex-wrap: wrap">
-                      <span style="font-family: var(--kimi-font-mono); font-size: 12px; font-weight: 600">{{ evt.eventType }}</span>
-                      <span v-if="evt.agentRunNodeId" style="font-family: var(--kimi-font-mono); font-size: 11px; color: var(--kimi-muted)">node: {{ nodeMap.get(evt.agentRunNodeId)?.nodeKey ?? evt.agentRunNodeId.slice(0, 8) }}</span>
+              <div v-if="activeTab === 'timeline'">
+                <div v-for="evt in sortedEvents" :key="evt.id" class="list-row event-row">
+                  <div class="event-dot" :style="{ background: eventColor(evt.eventType) }" />
+                  <div class="event-main">
+                    <div class="event-head">
+                      <span class="prestige-mono event-type">{{ evt.eventType }}</span>
+                      <span v-if="evt.agentRunNodeId" class="prestige-mono event-node">node: {{ nodeMap.get(evt.agentRunNodeId)?.nodeKey ?? evt.agentRunNodeId.slice(0, 8) }}</span>
                     </div>
-                    <div v-if="evt.message" style="font-size: 13px; color: var(--kimi-muted)">{{ evt.message }}</div>
-                    <pre v-if="evt.payloadJson" style="margin-top: 4px; font-family: var(--kimi-font-mono); font-size: 11px; color: var(--kimi-muted); white-space: pre-wrap; word-break: break-all; background: var(--kimi-bg-alt); padding: 8px; border: 1px solid var(--kimi-border-light)">{{ prettyJson(evt.payloadJson) }}</pre>
+                    <div v-if="evt.message" class="event-msg">{{ evt.message }}</div>
+                    <pre v-if="evt.payloadJson" class="code-block prestige-mono">{{ prettyJson(evt.payloadJson) }}</pre>
                   </div>
-                  <div style="font-size: 11px; color: var(--kimi-muted); white-space: nowrap">{{ formatDate(evt.createdAtUtc) }}</div>
+                  <div class="event-time prestige-mono">{{ formatDate(evt.createdAtUtc) }}</div>
                 </div>
-                <div v-if="sortedEvents.length === 0" style="padding: 40px 20px; color: var(--kimi-muted); text-align: center">暫無事件記錄。</div>
+                <div v-if="sortedEvents.length === 0" class="prestige-empty inner-empty">暫無事件記錄。</div>
               </div>
 
               <!-- Nodes -->
               <div v-if="activeTab === 'nodes'">
-                <div v-for="node in run.nodes" :key="node.id" style="padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light)">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 12px">
-                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-                      <span style="font-family: var(--kimi-font-mono); font-size: 14px; font-weight: 600">{{ node.nodeKey }}</span>
-                      <span class="kimi-tag" style="font-size: 11px">{{ node.nodeType }}</span>
+                <div v-for="node in run.nodes" :key="node.id" class="list-row">
+                  <div class="row-head">
+                    <div class="run-tags">
+                      <span class="prestige-mono node-key">{{ node.nodeKey }}</span>
+                      <span class="prestige-tag finding-tag">{{ node.nodeType }}</span>
                     </div>
-                    <span class="kimi-tag" :style="{ borderColor: statusColor(node.status), color: statusColor(node.status) }">{{ node.status }}</span>
+                    <span
+                      class="prestige-tag"
+                      :style="{ borderColor: statusColor(node.status), color: statusColor(node.status) }"
+                    >{{ node.status }}</span>
                   </div>
-                  <div v-if="node.errorMessage" style="color: #f87171; font-size: 13px; margin-bottom: 8px">{{ node.errorMessage }}</div>
-                  <div style="display: flex; gap: 16px; font-size: 12px; color: var(--kimi-muted); flex-wrap: wrap">
+                  <div v-if="node.errorMessage" class="run-error">{{ node.errorMessage }}</div>
+                  <div class="row-meta prestige-mono">
                     <span>開始：{{ formatDate(node.startedAtUtc) }}</span>
                     <span>完成：{{ formatDate(node.completedAtUtc) }}</span>
                     <span v-if="node.durationMs !== null">耗時：{{ node.durationMs }}ms</span>
                   </div>
-                  <pre v-if="node.outputJson" style="margin-top: 12px; padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); color: var(--kimi-muted); overflow-x: auto; font-size: 12px">{{ prettyJson(node.outputJson) }}</pre>
+                  <pre v-if="node.outputJson" class="code-block prestige-mono">{{ prettyJson(node.outputJson) }}</pre>
                 </div>
               </div>
 
               <!-- Tool Calls -->
               <div v-if="activeTab === 'toolCalls'">
-                <div v-for="tc in run.toolCalls" :key="tc.id" style="padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light)">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 12px">
-                    <span style="font-family: var(--kimi-font-mono); font-size: 14px">{{ tc.toolName }}</span>
-                    <span class="kimi-tag" :style="{ borderColor: statusColor(tc.status), color: statusColor(tc.status) }">{{ tc.status }}</span>
+                <div v-for="tc in run.toolCalls" :key="tc.id" class="list-row">
+                  <div class="row-head">
+                    <span class="prestige-mono node-key">{{ tc.toolName }}</span>
+                    <span
+                      class="prestige-tag"
+                      :style="{ borderColor: statusColor(tc.status), color: statusColor(tc.status) }"
+                    >{{ tc.status }}</span>
                   </div>
-                  <div v-if="tc.resultPreview" style="font-size: 13px; color: var(--kimi-muted); margin-bottom: 8px">{{ tc.resultPreview }}</div>
-                  <div v-if="tc.errorMessage" style="color: #f87171; font-size: 13px; margin-bottom: 8px">{{ tc.errorMessage }}</div>
-                  <pre style="padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); color: var(--kimi-muted); overflow-x: auto; font-size: 12px">{{ prettyJson(tc.argumentsJson) }}</pre>
+                  <div v-if="tc.resultPreview" class="event-msg">{{ tc.resultPreview }}</div>
+                  <div v-if="tc.errorMessage" class="run-error">{{ tc.errorMessage }}</div>
+                  <pre class="code-block prestige-mono">{{ prettyJson(tc.argumentsJson) }}</pre>
                 </div>
-                <div v-if="run.toolCalls.length === 0" style="padding: 40px 20px; color: var(--kimi-muted); text-align: center">暫無工具呼叫。</div>
+                <div v-if="run.toolCalls.length === 0" class="prestige-empty inner-empty">暫無工具呼叫。</div>
               </div>
 
               <!-- Feedback -->
               <div v-if="activeTab === 'feedback'">
-                <div v-for="item in run.feedback" :key="item.id" style="padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light)">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 12px">
-                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-                      <span style="font-family: var(--kimi-font-mono); font-size: 14px">{{ item.feedbackType }}</span>
-                      <span v-if="item.agentRunNodeId" style="font-family: var(--kimi-font-mono); font-size: 11px; color: var(--kimi-muted)">node: {{ nodeMap.get(item.agentRunNodeId)?.nodeKey ?? item.agentRunNodeId.slice(0, 8) }}</span>
+                <div v-for="item in run.feedback" :key="item.id" class="list-row">
+                  <div class="row-head">
+                    <div class="run-tags">
+                      <span class="prestige-mono node-key">{{ item.feedbackType }}</span>
+                      <span v-if="item.agentRunNodeId" class="prestige-mono event-node">node: {{ nodeMap.get(item.agentRunNodeId)?.nodeKey ?? item.agentRunNodeId.slice(0, 8) }}</span>
                     </div>
-                    <span class="kimi-tag" :style="{ borderColor: statusColor(item.status), color: statusColor(item.status) }">{{ item.status }}</span>
+                    <span
+                      class="prestige-tag"
+                      :style="{ borderColor: statusColor(item.status), color: statusColor(item.status) }"
+                    >{{ item.status }}</span>
                   </div>
-                  <div style="font-size: 13px; color: var(--kimi-muted); margin-bottom: 8px">{{ item.prompt }}</div>
-                  <div style="display: flex; gap: 16px; font-size: 12px; color: var(--kimi-muted); flex-wrap: wrap">
+                  <div class="event-msg">{{ item.prompt }}</div>
+                  <div class="row-meta prestige-mono">
                     <span>建立：{{ formatDate(item.createdAtUtc) }}</span>
                     <span>回覆：{{ formatDate(item.respondedAtUtc) }}</span>
                   </div>
-                  <pre v-if="item.responseJson" style="margin-top: 12px; padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); color: var(--kimi-muted); overflow-x: auto; font-size: 12px">{{ prettyJson(item.responseJson) }}</pre>
+                  <pre v-if="item.responseJson" class="code-block prestige-mono">{{ prettyJson(item.responseJson) }}</pre>
                 </div>
-                <div v-if="run.feedback.length === 0" style="padding: 40px 20px; color: var(--kimi-muted); text-align: center">暫無 feedback。</div>
+                <div v-if="run.feedback.length === 0" class="prestige-empty inner-empty">暫無 feedback。</div>
               </div>
 
               <!-- Blackboard -->
-              <div v-if="activeTab === 'blackboard'" style="padding: 20px">
-                <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600">Blackboard</h3>
-                <pre style="padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); color: var(--kimi-muted); overflow-x: auto; white-space: pre-wrap; font-size: 12px">{{ prettyJson(run.blackboardJson) }}</pre>
-                <h3 style="margin: 16px 0 8px 0; font-size: 14px; font-weight: 600">Output</h3>
-                <pre style="padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); color: var(--kimi-muted); overflow-x: auto; white-space: pre-wrap; font-size: 12px">{{ prettyJson(run.outputJson) }}</pre>
+              <div v-if="activeTab === 'blackboard'" class="tab-pad">
+                <h3 class="sub-title">Blackboard</h3>
+                <pre class="code-block prestige-mono">{{ prettyJson(run.blackboardJson) }}</pre>
+                <h3 class="sub-title sub-title-gap">Output</h3>
+                <pre class="code-block prestige-mono">{{ prettyJson(run.outputJson) }}</pre>
               </div>
 
               <!-- Workflow -->
-              <div v-if="activeTab === 'workflow'" style="padding: 20px">
-                <pre style="padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); color: var(--kimi-muted); overflow-x: auto; white-space: pre-wrap; font-size: 12px">{{ prettyJson(run.workflowDefinitionJson) }}</pre>
+              <div v-if="activeTab === 'workflow'" class="tab-pad">
+                <pre class="code-block prestige-mono">{{ prettyJson(run.workflowDefinitionJson) }}</pre>
               </div>
             </template>
           </div>
         </ScrollReveal>
-
-        <div style="height: 80px" />
       </template>
     </div>
-
-    <footer class="kimi-footer">
-      <span>RISE VISION 2026</span>
-      <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px">AGENT RUN DETAIL</span>
-      <span>數據僅供參考</span>
-    </footer>
   </div>
 </template>
+
+<style scoped>
+.prestige-page {
+  min-height: calc(100vh - 60px);
+}
+
+.back-row {
+  margin-bottom: 16px;
+}
+
+.detail-skeleton {
+  min-height: 240px;
+}
+
+.header-panel,
+.result-panel,
+.debug-panel,
+.waiting-block {
+  margin-bottom: 16px;
+}
+
+.run-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.run-duration {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.run-id {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+  word-break: break-all;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-danger {
+  border-color: rgba(176, 92, 92, 0.5);
+  color: var(--down);
+}
+
+.btn-danger:hover {
+  border-color: var(--down);
+  background: rgba(176, 92, 92, 0.08);
+}
+
+.run-dates {
+  display: flex;
+  gap: 20px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.live-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #d4a24e;
+}
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d4a24e;
+  animation: prestige-dot-pulse 1.5s ease-in-out infinite;
+}
+
+.live-dot-small {
+  width: 6px;
+  height: 6px;
+}
+
+@keyframes prestige-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.polling-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.run-error {
+  color: var(--down);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.panel-title {
+  margin: 0 0 16px;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.next-action {
+  display: inline-block;
+  padding: 6px 14px;
+  margin-bottom: 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.stat-caption {
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.summary-block {
+  margin-bottom: 16px;
+}
+
+.body-text {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.finding-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.finding-item {
+  padding: 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+}
+
+.finding-tags {
+  margin-bottom: 4px;
+}
+
+.finding-tag {
+  font-size: 11px;
+}
+
+.finding-msg {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.finding-rec {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.revision-block {
+  margin-top: 16px;
+}
+
+.suggested-revision {
+  font-size: 13px;
+  color: #d4a24e;
+  line-height: 1.6;
+  padding: 12px;
+  background: rgba(212, 162, 78, 0.08);
+  border: 1px solid rgba(212, 162, 78, 0.25);
+  border-radius: 4px;
+}
+
+.source-answer {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  padding: 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.revised-answer {
+  font-size: 14px;
+  line-height: 1.7;
+  padding: 16px;
+  background: rgba(127, 163, 135, 0.06);
+  border: 1px solid rgba(127, 163, 135, 0.25);
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.debug-toggle-row {
+  padding: 12px 20px;
+}
+
+.debug-toggle {
+  font-size: 12px;
+}
+
+.tab-bar {
+  display: flex;
+  border-top: 1px solid var(--gold-border-soft);
+  border-bottom: 1px solid var(--gold-border-soft);
+  overflow-x: auto;
+}
+
+.tab-btn {
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: var(--ivory);
+}
+
+.tab-btn.active {
+  color: var(--gold);
+  font-weight: 600;
+  border-bottom-color: var(--gold);
+}
+
+.list-row {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gold-border-soft);
+}
+
+.list-row:last-child {
+  border-bottom: none;
+}
+
+.event-row {
+  display: flex;
+  gap: 12px;
+}
+
+.event-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.event-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+  flex-wrap: wrap;
+}
+
+.event-type {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.event-node {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.event-msg {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.event-time {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.row-head .run-tags {
+  margin-bottom: 0;
+}
+
+.node-key {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.row-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.code-block {
+  margin: 12px 0 0;
+  padding: 12px;
+  background: rgba(11, 18, 32, 0.6);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+  color: var(--ivory);
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.tab-pad {
+  padding: 20px;
+}
+
+.sub-title {
+  margin: 0 0 8px;
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sub-title-gap {
+  margin-top: 16px;
+}
+
+.inner-empty {
+  margin: 16px 20px;
+}
+</style>

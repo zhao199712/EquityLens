@@ -1,11 +1,11 @@
 export default {
   nav: {
+    home: '首頁',
     dashboard: '儀表板',
     portfolios: '投資組合',
     riskRuns: '風險分析',
     reports: '報告',
     research: '研究',
-    equityLines: 'Equity Lines',
     settings: '設定',
     logout: '登出',
   },

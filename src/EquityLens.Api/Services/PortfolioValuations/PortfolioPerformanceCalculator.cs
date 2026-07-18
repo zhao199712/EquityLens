@@ -60,6 +60,53 @@ public static class PortfolioPerformanceCalculator
         return portfolioReturn - (riskFreePeriod + beta * (benchmarkReturn - riskFreePeriod));
     }
 
+    /// <summary>
+    /// 以區間首個正淨值點作為期初流出、區間末淨值作為期末流入,計算年化 XIRR。
+    /// 區間起點尚無持倉(或價格缺失)時,前面的零值點會被跳過,而不是直接回傳 null。
+    /// </summary>
+    public static decimal? CalculatePeriodXirr(IReadOnlyList<PortfolioValuationHistoryPoint> points)
+    {
+        if (points.Count < 2 || points[^1].TotalAssetValue <= 0) return null;
+
+        var openIndex = -1;
+        for (var i = 0; i < points.Count - 1; i++)
+        {
+            if (points[i].TotalAssetValue > 0) { openIndex = i; break; }
+        }
+        if (openIndex < 0) return null;
+
+        var external = new List<(DateOnly Date, decimal Amount)> { (points[openIndex].Date, -points[openIndex].TotalAssetValue) };
+        foreach (var point in points.Skip(openIndex + 1))
+        {
+            if (point.ExternalCashFlow != 0) external.Add((point.Date, -point.ExternalCashFlow));
+        }
+        external.Add((points[^1].Date, points[^1].TotalAssetValue));
+        return CalculateXirr(external);
+    }
+
+    public static decimal? CalculateXirr(IReadOnlyList<(DateOnly Date, decimal Amount)> external)
+    {
+        if (!external.Any(x => x.Amount < 0) || !external.Any(x => x.Amount > 0)) return null;
+
+        var origin = external.Min(x => x.Date);
+        double Npv(double rate) => external.Sum(x => (double)x.Amount / Math.Pow(1d + rate, (x.Date.DayNumber - origin.DayNumber) / 365d));
+        var low = -0.9999d;
+        var high = 10d;
+        var lowValue = Npv(low);
+        var highValue = Npv(high);
+        while (lowValue * highValue > 0 && high < 1_000_000d) { high *= 2; highValue = Npv(high); }
+        if (lowValue * highValue > 0) return null;
+        for (var i = 0; i < 100; i++)
+        {
+            var middle = (low + high) / 2;
+            var middleValue = Npv(middle);
+            if (Math.Abs(middleValue) < 0.000001d) return (decimal)middle;
+            if (lowValue * middleValue <= 0) { high = middle; highValue = middleValue; }
+            else { low = middle; lowValue = middleValue; }
+        }
+        return (decimal)((low + high) / 2);
+    }
+
     private static decimal Mean(IReadOnlyList<decimal> values)
         => values.Sum() / values.Count;
 

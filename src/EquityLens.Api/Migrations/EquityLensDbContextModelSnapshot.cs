@@ -79,6 +79,48 @@ namespace EquityLens.Api.Migrations
                     b.ToTable("agent_feedback", (string)null);
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentNodeSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("MaxRetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("NodeType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("TimeoutSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NodeType")
+                        .IsUnique();
+
+                    b.ToTable("agent_node_setting", (string)null);
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -330,6 +372,39 @@ namespace EquityLens.Api.Migrations
                     b.HasIndex("AgentRunId", "StartedAtUtc");
 
                     b.ToTable("agent_tool_call", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentWorkflowSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WorkflowType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkflowType")
+                        .IsUnique();
+
+                    b.ToTable("agent_workflow_setting", (string)null);
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AiMemo", b =>
@@ -2070,6 +2145,100 @@ namespace EquityLens.Api.Migrations
                     b.ToTable("research_run_step", (string)null);
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskBacktestRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AlgorithmVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("algorithm_version");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("error_code");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date")
+                        .HasColumnName("from_date");
+
+                    b.Property<string>("InputSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("input_snapshot_json");
+
+                    b.Property<Guid>("JobRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_run_id");
+
+                    b.Property<int>("LookbackDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("lookback_days");
+
+                    b.Property<Guid>("PortfolioId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("portfolio_id");
+
+                    b.Property<int>("ProgressPercent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("progress_percent");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result_json");
+
+                    b.Property<int>("Simulations")
+                        .HasColumnType("integer")
+                        .HasColumnName("simulations");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<DateOnly>("ToDate")
+                        .HasColumnType("date")
+                        .HasColumnName("to_date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobRunId")
+                        .IsUnique();
+
+                    b.HasIndex("PortfolioId", "CreatedAtUtc");
+
+                    b.ToTable("risk_backtest_run", (string)null);
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskMetric", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3018,6 +3187,17 @@ namespace EquityLens.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskBacktestRun", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.Portfolio", "Portfolio")
+                        .WithMany()
+                        .HasForeignKey("PortfolioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Portfolio");
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskMetric", b =>

@@ -69,7 +69,7 @@ describe('LoginView', () => {
 
   it('renders brand area', () => {
     const wrapper = mountLogin()
-    expect(wrapper.find('.kimi-login-title').text()).toBe('EQUITYLENS')
+    expect(wrapper.find('.auth-title').text()).toBe('EQUITYLENS')
   })
 
   it('renders register link', () => {
@@ -83,7 +83,7 @@ describe('LoginView', () => {
 
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('Please fill in all fields')
+    expect(wrapper.find('.prestige-error').text()).toBe('Please fill in all fields')
     expect(mockedHttp.post).not.toHaveBeenCalled()
   })
 
@@ -93,7 +93,7 @@ describe('LoginView', () => {
     await wrapper.find('input[type="email"]').setValue('test@test.com')
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('Please fill in all fields')
+    expect(wrapper.find('.prestige-error').text()).toBe('Please fill in all fields')
   })
 
   it('redirects users to dashboard on successful login', async () => {
@@ -162,7 +162,7 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('Invalid email or password.')
+      expect(wrapper.find('.prestige-error').text()).toBe('Invalid email or password.')
     })
   })
 
@@ -176,7 +176,7 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('Login failed, please check your credentials')
+      expect(wrapper.find('.prestige-error').text()).toBe('Login failed, please check your credentials')
     })
   })
 
@@ -193,7 +193,7 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit')
 
     await nextTick()
-    expect(wrapper.find('.kimi-spinner').exists()).toBe(true)
+    expect(wrapper.find('.auth-spinner').exists()).toBe(true)
     expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
 
     resolveLogin!({
@@ -204,7 +204,7 @@ describe('LoginView', () => {
       },
     })
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-spinner').exists()).toBe(false)
+      expect(wrapper.find('.auth-spinner').exists()).toBe(false)
     })
   })
 })

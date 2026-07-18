@@ -926,16 +926,38 @@ public static class RiskMath
         int tradingDays = 252,
         decimal residualCapQuantile = 0m)
     {
+        return RunMultivariateFhsSimulationForConfidenceLevels(
+            returnMatrix, weights, initialPortfolioValue, horizonDays, simulations,
+            [confidenceLevel], lambda, shrinkageAlpha, tradingDays, residualCapQuantile)[0];
+    }
+
+    /// <summary>
+    /// 執行一次 MVEWMA-FHS 路徑模擬，並從同一個已排序的模擬分布計算多個信心水準。
+    /// 這可避免在 VaR 95% 與 99% 同時需要時重複建立 covariance、residuals 與 5,000 條路徑。
+    /// </summary>
+    public static IReadOnlyList<MvewmaFhsResult> RunMultivariateFhsSimulationForConfidenceLevels(
+        IReadOnlyList<IReadOnlyList<decimal>> returnMatrix,
+        IReadOnlyList<decimal> weights,
+        decimal initialPortfolioValue,
+        int horizonDays,
+        int simulations,
+        IReadOnlyList<decimal> confidenceLevels,
+        decimal lambda = 0.94m,
+        decimal shrinkageAlpha = 0.10m,
+        int tradingDays = 252,
+        decimal residualCapQuantile = 0m)
+    {
         var n = returnMatrix.Count;
-        var empty = new MvewmaFhsResult(0, 0, 0, 0, 0, 0, confidenceLevel,
+        var levels = confidenceLevels.Count == 0 ? [0.95m] : confidenceLevels;
+        MvewmaFhsResult Empty(decimal confidence) => new(0, 0, 0, 0, 0, 0, confidence,
             shrinkageAlpha, n, 0, lambda, shrinkageAlpha, residualCapQuantile, 0, true);
 
         if (n == 0 || simulations <= 0 || horizonDays <= 0)
-            return empty;
+            return levels.Select(Empty).ToArray();
 
         var returnLengths = returnMatrix.Select(r => r.Count).ToList();
         var t = returnLengths.Min();
-        if (t < 10) return empty;
+        if (t < 10) return levels.Select(Empty).ToArray();
 
         // Step 1: Build list of N×N EWMA covariance matrices
         var covList = CalculateMultivariateEwmaCovariances(returnMatrix, lambda);
@@ -949,12 +971,12 @@ public static class RiskMath
         // Step 4: Decompose latest covariance
         var latestCov = finalList[^1];
         var L = CholeskyDecompose(latestCov);
-        if (L is null) return empty;
+        if (L is null) return levels.Select(Empty).ToArray();
 
         // Step 5: Build historical residual vectors
         var residuals = BuildFilteredResidualVectors(returnMatrix, finalList);
 
-        if (residuals.Count < 10) return empty;
+        if (residuals.Count < 10) return levels.Select(Empty).ToArray();
         var residualNorms = residuals.Select(ResidualNorm).OrderBy(value => value).ToList();
         var residualCap = residualCapQuantile > 0m ? Quantile(residualNorms, residualCapQuantile) : 0m;
 
@@ -1006,21 +1028,22 @@ public static class RiskMath
         Array.Sort(finalValues);
         var mean = finalValues.Average();
         var median = finalValues[simulations / 2];
-        var upperIndex = (int)(confidenceLevel * simulations);
-        var lowerIndex = (int)((1m - confidenceLevel) * simulations);
-        var bestCase = finalValues[Math.Min(upperIndex, simulations - 1)];
-        var worstCase = finalValues[Math.Max(lowerIndex, 0)];
-
         var returnDist = finalValues
             .Select(v => basePortfolioValue == 0 ? 0 : (v - basePortfolioValue) / basePortfolioValue)
             .ToList();
-        var simulatedVaR = CalculateHistoricalVaR(returnDist, confidenceLevel);
-        var simulatedES = CalculateExpectedShortfall(returnDist, confidenceLevel);
-
-        return new MvewmaFhsResult(
-            mean, median, bestCase, worstCase, simulatedVaR, simulatedES, confidenceLevel,
-            shrinkageAlpha, n, t, lambda, shrinkageAlpha, residualCapQuantile,
-            (decimal)cappedDraws / (simulations * horizonDays), false);
+        return levels.Select(confidence =>
+        {
+            var upperIndex = (int)(confidence * simulations);
+            var lowerIndex = (int)((1m - confidence) * simulations);
+            var bestCase = finalValues[Math.Min(upperIndex, simulations - 1)];
+            var worstCase = finalValues[Math.Max(lowerIndex, 0)];
+            var simulatedVaR = CalculateHistoricalVaR(returnDist, confidence);
+            var simulatedES = CalculateExpectedShortfall(returnDist, confidence);
+            return new MvewmaFhsResult(
+                mean, median, bestCase, worstCase, simulatedVaR, simulatedES, confidence,
+                shrinkageAlpha, n, t, lambda, shrinkageAlpha, residualCapQuantile,
+                (decimal)cappedDraws / (simulations * horizonDays), false);
+        }).ToArray();
     }
 
     /// <summary>

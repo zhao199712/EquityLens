@@ -130,6 +130,27 @@ public static class AgentBlackboardContracts
         };
     }
 
+    public static JsonObject CreateInitialResearchQualityReviewBlackboard(Guid researchRunId) => new()
+    {
+        [AgentBlackboardKeys.Ticker] = null,
+        [AgentBlackboardKeys.Question] = null,
+        [AgentBlackboardKeys.ResearchRunId] = researchRunId,
+        [AgentBlackboardKeys.ResearchRun] = null,
+        [AgentBlackboardKeys.Answer] = null,
+        [AgentBlackboardKeys.Citations] = new JsonArray(),
+        [AgentBlackboardKeys.Steps] = new JsonArray(),
+        [AgentBlackboardKeys.Candidates] = new JsonArray(),
+        [AgentBlackboardKeys.EvidencePacket] = null,
+        [AgentBlackboardKeys.EvidenceChecks] = CreateEvidenceChecks(0, 0, string.Empty, new JsonArray()),
+        [AgentBlackboardKeys.CriticFindings] = new JsonArray(),
+        [AgentBlackboardKeys.CriticReview] = null,
+        [AgentBlackboardKeys.SupervisorDecisions] = new JsonArray(),
+        [AgentBlackboardKeys.RevisedAnswer] = null,
+        [AgentBlackboardKeys.RevisionSummary] = null,
+        [AgentBlackboardKeys.AppliedRecommendation] = null,
+        [AgentBlackboardKeys.FinalOutput] = null
+    };
+
     public static JsonObject CreateFinding(string severity, string category, string message, string recommendation) => new()
     {
         [CriticFindingFields.Severity] = severity,

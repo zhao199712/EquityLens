@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import Footer from '../../components/kimi/Footer.vue'
 import {
   getPortfolio,
   getPortfolioRisk,
-  getPortfolioRiskBacktest,
+  createPortfolioRiskBacktestRun,
+  getPortfolioRiskBacktestRun,
+  getPortfolioRiskBacktestRuns,
   getPortfolioMonteCarlo,
   getPortfolioRiskGovernance,
   calculatePortfolioRiskScenario,
@@ -20,6 +22,7 @@ import {
   type PortfolioRiskReportSnapshotListItem,
   type PortfolioMonteCarloResponse,
   type PortfolioRiskBacktestResponse,
+  type PortfolioRiskBacktestRun,
   type PortfolioRiskResponse,
 } from '../../services/risk.ts'
 
@@ -31,14 +34,11 @@ const portfolioName = ref('投資組合風險分析')
 const risk = ref<PortfolioRiskResponse | null>(null)
 const loading = ref(false)
 const risk99 = ref<PortfolioRiskResponse | null>(null)
-const riskConservative = ref<PortfolioRiskResponse | null>(null)
-const riskConservative99 = ref<PortfolioRiskResponse | null>(null)
 const riskEwma = ref<PortfolioRiskResponse | null>(null)
 const riskEwma99 = ref<PortfolioRiskResponse | null>(null)
 const riskCurve = ref<PortfolioRiskResponse[]>([])
 const backtest = ref<PortfolioRiskBacktestResponse | null>(null)
 const monteCarloBase = ref<PortfolioMonteCarloResponse | null>(null)
-const monteCarloConservative = ref<PortfolioMonteCarloResponse | null>(null)
 const governance = ref<PortfolioRiskGovernanceResponse | null>(null)
 const targetWeights = ref<Record<string, number>>({})
 const scenarioResult = ref<PortfolioRiskScenarioResponse | null>(null)
@@ -48,14 +48,29 @@ const reportSnapshots = ref<PortfolioRiskReportSnapshotListItem[]>([])
 const selectedReportSnapshot = ref<PortfolioRiskReportSnapshotDetail | null>(null)
 const reportActionMessage = ref('')
 const reportCreating = ref(false)
-const selectedMonteCarloModel = ref<'base' | 'conservative'>('base')
-const monteCarlo = computed(() => selectedMonteCarloModel.value === 'conservative' ? monteCarloConservative.value : monteCarloBase.value)
+const monteCarlo = computed(() => monteCarloBase.value)
 const stressTest = ref<Awaited<ReturnType<typeof getPortfolioStressTest>> | null>(null)
-const selectedBacktestModel = ref<'Historical' | 'MVEWMA-FHS' | 'MVEWMA-FHS（保守 p99）'>('Historical')
+const selectedBacktestModel = ref<'Historical' | 'MVEWMA-FHS'>('Historical')
 const selectedBacktestConfidence = ref<0.95 | 0.99>(0.95)
-const backtestModels: Array<'Historical' | 'MVEWMA-FHS' | 'MVEWMA-FHS（保守 p99）'> = ['Historical', 'MVEWMA-FHS', 'MVEWMA-FHS（保守 p99）']
+const backtestModels: Array<'Historical' | 'MVEWMA-FHS'> = ['Historical', 'MVEWMA-FHS']
 const backtestConfidences: Array<0.95 | 0.99> = [0.95, 0.99]
 const error = ref('')
+type DeferredLoadState = 'idle' | 'loading' | 'ready' | 'error'
+const modelComparisonState = ref<DeferredLoadState>('idle')
+const stressTestState = ref<DeferredLoadState>('idle')
+const backtestState = ref<DeferredLoadState>('idle')
+const monteCarloState = ref<DeferredLoadState>('idle')
+const modelComparisonError = ref('')
+const stressTestError = ref('')
+const backtestError = ref('')
+const monteCarloError = ref('')
+const modelComparisonSentinel = ref<HTMLElement | null>(null)
+const stressTestSentinel = ref<HTMLElement | null>(null)
+const backtestSentinel = ref<HTMLElement | null>(null)
+const monteCarloSentinel = ref<HTMLElement | null>(null)
+let sectionObserver: IntersectionObserver | null = null
+let viewIsActive = true
+let backtestPollTimer: ReturnType<typeof setTimeout> | null = null
 const governanceAlerts = computed(() => (governance.value?.alerts ?? []).filter(alert => alert.status !== 'normal').sort((a, b) => (a.status === 'critical' ? -1 : 1) - (b.status === 'critical' ? -1 : 1)))
 const governanceLabel = (code: string) => ({
   'concentration.largest_holding': '最大單一持倉',
@@ -130,14 +145,14 @@ const backtestStats = computed(() => {
   const model = backtestModel.value
   if (!model) return []
   const p = (value: number | null) => value == null ? '資料不足' : `p=${value.toFixed(2)}`
-  const pColor = (value: number | null) => value == null ? '#666666' : value < 0.05 ? '#f87171' : value < 0.10 ? '#facc15' : '#34d399'
-  const esColor = model.esTailLossRatio == null ? '#666666' : model.esTailLossRatio > 1.10 ? '#f87171' : model.esTailLossRatio < 0.90 ? '#facc15' : '#34d399'
+  const pColor = (value: number | null) => value == null ? '#9a917c' : value < 0.05 ? '#b05c5c' : value < 0.10 ? '#d4a24e' : '#7fa387'
+  const esColor = model.esTailLossRatio == null ? '#9a917c' : model.esTailLossRatio > 1.10 ? '#b05c5c' : model.esTailLossRatio < 0.90 ? '#d4a24e' : '#7fa387'
   const esValue = model.esTailLossRatio == null ? '資料不足' : `${model.esTailLossRatio.toFixed(2)}×`
   return [
-    { label: '觀察期間', value: `${model.observationCount} 交易日`, color: '#FFFFFF' }, { label: '例外次數', value: `${model.breachCount} 次`, color: '#FFFFFF' },
-    { label: '例外比率', value: `${(model.breachRate * 100).toFixed(1)}%`, color: '#FFFFFF' }, { label: '預期比率', value: `${(model.expectedBreachRate * 100).toFixed(1)}%`, color: '#FFFFFF' },
+    { label: '觀察期間', value: `${model.observationCount} 交易日`, color: '#f5efe0' }, { label: '例外次數', value: `${model.breachCount} 次`, color: '#f5efe0' },
+    { label: '例外比率', value: `${(model.breachRate * 100).toFixed(1)}%`, color: '#f5efe0' }, { label: '預期比率', value: `${(model.expectedBreachRate * 100).toFixed(1)}%`, color: '#f5efe0' },
     { label: 'Kupiec 檢定', value: p(model.kupiecPValue), color: pColor(model.kupiecPValue) }, { label: 'Christoffersen', value: p(model.christoffersenPValue), color: pColor(model.christoffersenPValue) },
-    { label: 'ES 尾端樣本', value: `${model.tailObservationCount} 日`, color: '#FFFFFF' }, { label: 'ES 尾端損失比', value: esValue, color: esColor },
+    { label: 'ES 尾端樣本', value: `${model.tailObservationCount} 日`, color: '#f5efe0' }, { label: 'ES 尾端損失比', value: esValue, color: esColor },
   ]
 })
 
@@ -198,43 +213,37 @@ const riskKPIData = computed(() => {
       label: 'DAILY VaR (95%)',
       value: h1 ? `${(h1.historicalVaR * 100).toFixed(2)}%` : '—',
       sub: varAmount ? `${formatMoney(varAmount)} ${r?.baseCurrency ?? ''}` : '—',
-      color: '#FF6B00',
+      color: '#b05c5c',
     },
     {
       label: 'DAILY ES (95%)',
       value: h1 ? `${(h1.historicalES * 100).toFixed(2)}%` : '—',
       sub: esAmount ? `預期損失 ${formatMoney(esAmount)}` : '—',
-      color: '#8B1A2B',
-    },
-    {
-      label: 'STRESS VaR',
-      value: '-18.52%',
-      sub: 'AI泡沫情境（示範資料）',
-      color: '#8B1A2B',
+      color: '#b05c5c',
     },
     {
       label: 'MAX DRAWDOWN',
       value: r ? `${(r.maxDrawdown * 100).toFixed(2)}%` : '—',
       sub: '歷史最大回撤',
-      color: '#666666',
+      color: '#b05c5c',
     },
     {
       label: 'SHARPE RATIO',
       value: r ? r.sharpeRatio.toFixed(2) : '—',
       sub: '風險調整後報酬',
-      color: '#666666',
+      color: '#7fa387',
     },
     {
       label: 'CONCENTRATION HHI',
       value: r ? r.concentrationHhi.toFixed(4) : '—',
       sub: '持倉集中度',
-      color: '#666666',
+      color: '#c9a86a',
     },
     {
       label: 'LARGEST HOLDING',
       value: r ? `${(r.largestHoldingWeight * 100).toFixed(2)}%` : '—',
       sub: '最大單一持倉',
-      color: '#666666',
+      color: '#c9a86a',
     },
   ]
 })
@@ -242,14 +251,11 @@ const riskKPIData = computed(() => {
 const varTableRows = computed(() => {
   const h95 = risk.value?.horizons.find((h) => h.horizonDays === 1)
   const h99 = risk99.value?.horizons.find((h) => h.horizonDays === 1)
-  const conservative95 = riskConservative.value?.horizons.find((h) => h.horizonDays === 1)
-  const conservative99 = riskConservative99.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma99 = riskEwma99.value?.horizons.find((h) => h.horizonDays === 1)
   return [
     { method: '歷史模擬法', var95: h95?.historicalVaR ?? 0, var99: h99?.historicalVaR ?? 0, note: '1日' },
     { method: 'MVEWMA-FHS', var95: h95?.monteCarloVaR ?? 0, var99: h99?.monteCarloVaR ?? 0, note: '1日' },
-    { method: 'MVEWMA-FHS（保守 p99）', var95: conservative95?.monteCarloVaR ?? 0, var99: conservative99?.monteCarloVaR ?? 0, note: '比較模型' },
     { method: 'EWMA 常態蒙地卡羅', var95: ewma95?.monteCarloVaR ?? 0, var99: ewma99?.monteCarloVaR ?? 0, note: 'λ=0.94' },
   ]
 })
@@ -257,14 +263,11 @@ const varTableRows = computed(() => {
 const esTableRows = computed(() => {
   const h95 = risk.value?.horizons.find((h) => h.horizonDays === 1)
   const h99 = risk99.value?.horizons.find((h) => h.horizonDays === 1)
-  const conservative95 = riskConservative.value?.horizons.find((h) => h.horizonDays === 1)
-  const conservative99 = riskConservative99.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma99 = riskEwma99.value?.horizons.find((h) => h.horizonDays === 1)
   return [
     { method: '歷史模擬法', es95: h95?.historicalES ?? 0, es99: h99?.historicalES ?? 0 },
     { method: 'MVEWMA-FHS', es95: h95?.monteCarloES ?? 0, es99: h99?.monteCarloES ?? 0 },
-    { method: 'MVEWMA-FHS（保守 p99）', es95: conservative95?.monteCarloES ?? 0, es99: conservative99?.monteCarloES ?? 0 },
     { method: 'EWMA 常態蒙地卡羅', es95: ewma95?.monteCarloES ?? 0, es99: ewma99?.monteCarloES ?? 0 },
   ]
 })
@@ -327,12 +330,12 @@ const monteCarloStats = computed(() => {
   const percent = (value: number) => `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%`
   const medianFinalReturn = data.bands.at(-1)?.p50 ?? 0
   return [
-    { label: '一年正報酬機率', value: `${(data.positiveReturnProbability * 100).toFixed(1)}%`, color: '#34d399' },
-    { label: '期望報酬', value: percent(data.expectedReturn), color: data.expectedReturn >= 0 ? '#34d399' : '#f87171' },
-    { label: '中位數期末情境', value: percent(medianFinalReturn), color: medianFinalReturn >= 0 ? '#34d399' : '#f87171' },
-    { label: '5% 最差期末情境', value: percent(data.p5FinalReturn), color: '#f87171' },
-    { label: '1% 最差期末情境', value: percent(data.p1FinalReturn), color: '#f87171' },
-    { label: '共同日資料', value: `${data.commonTradingDays} 日`, color: '#FFFFFF' },
+    { label: '一年正報酬機率', value: `${(data.positiveReturnProbability * 100).toFixed(1)}%`, color: '#7fa387' },
+    { label: '期望報酬', value: percent(data.expectedReturn), color: data.expectedReturn >= 0 ? '#7fa387' : '#b05c5c' },
+    { label: '中位數期末情境', value: percent(medianFinalReturn), color: medianFinalReturn >= 0 ? '#7fa387' : '#b05c5c' },
+    { label: '5% 最差期末情境', value: percent(data.p5FinalReturn), color: '#b05c5c' },
+    { label: '1% 最差期末情境', value: percent(data.p1FinalReturn), color: '#b05c5c' },
+    { label: '共同日資料', value: `${data.commonTradingDays} 日`, color: '#f5efe0' },
   ]
 })
 const monteCarloDiagnostics = computed(() => {
@@ -348,19 +351,6 @@ const monteCarloDiagnostics = computed(() => {
     { label: '期望－中位數', value: percent(diagnostics.expectedMedianGap) },
   ]
 })
-const monteCarloComparison = computed(() => [
-  { label: '原始 FHS', data: monteCarloBase.value },
-  { label: '保守 FHS（p99）', data: monteCarloConservative.value },
-].filter((item): item is { label: string; data: PortfolioMonteCarloResponse } => item.data?.status === 'ready').map(item => ({
-  label: item.label,
-  positive: `${(item.data.positiveReturnProbability * 100).toFixed(1)}%`,
-  median: `${item.data.diagnostics.p50FinalReturn >= 0 ? '+' : ''}${(item.data.diagnostics.p50FinalReturn * 100).toFixed(1)}%`,
-  expected: `${item.data.expectedReturn >= 0 ? '+' : ''}${(item.data.expectedReturn * 100).toFixed(1)}%`,
-  p5: `${(item.data.p5FinalReturn * 100).toFixed(1)}%`,
-  p1: `${(item.data.p1FinalReturn * 100).toFixed(1)}%`,
-  capped: item.data.residualCapQuantile > 0 ? `${(item.data.cappedDrawRate * 100).toFixed(2)}%` : '未截尾',
-})))
-
 function formatMoney(n: number) {
   if (n === 0) return '0'
   const abs = Math.abs(n)
@@ -381,38 +371,62 @@ function riskErrorMessage(e: unknown) {
   }
 }
 
+async function loadDeferred(state: typeof modelComparisonState, message: typeof modelComparisonError, request: () => Promise<void>) {
+  if (state.value === 'loading' || state.value === 'ready') return
+  state.value = 'loading'; message.value = ''
+  try { await request(); if (viewIsActive) state.value = 'ready' }
+  catch (e) { if (viewIsActive) { message.value = riskErrorMessage(e); state.value = 'error' } }
+}
+const loadModelComparison = () => loadDeferred(modelComparisonState, modelComparisonError, async () => {
+  const [at99, ewma95, ewma99, ...curve] = await Promise.all([
+    getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .99, simulations: 10000, model: 'mvewma_fhs' }),
+    getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .95, simulations: 10000, model: 'gbm_ewma_normal' }),
+    getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .99, simulations: 10000, model: 'gbm_ewma_normal' }),
+    ...[.90, .95, .975, .99, .995].map(confidenceLevel => getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 1, confidenceLevel, simulations: 5000, model: 'mvewma_fhs' })),
+  ])
+  risk99.value = at99; riskEwma.value = ewma95; riskEwma99.value = ewma99; riskCurve.value = curve
+})
+const loadStressTest = () => loadDeferred(stressTestState, stressTestError, async () => { stressTest.value = await getPortfolioStressTest(portfolioId.value) })
+const loadBacktest = () => loadDeferred(backtestState, backtestError, async () => {
+  const runs = await getPortfolioRiskBacktestRuns(portfolioId.value)
+  const existing = runs.find(run => run.from === backtestFromDate.value && run.to === toDate.value && run.status !== 'Failed')
+  await waitForBacktestRun(existing ?? await createPortfolioRiskBacktestRun(portfolioId.value, backtestFromDate.value, toDate.value))
+})
+async function waitForBacktestRun(initialRun: PortfolioRiskBacktestRun) {
+  let run = initialRun
+  while (viewIsActive) {
+    if (run.status === 'Completed') {
+      if (!run.result) throw new Error('回測已完成，但找不到結果快照。')
+      backtest.value = run.result
+      return
+    }
+    if (run.status === 'Failed') throw new Error(run.errorMessage || '回測失敗，請重新執行。')
+    await new Promise<void>(resolve => { backtestPollTimer = setTimeout(resolve, 1500) })
+    if (!viewIsActive) return
+    run = await getPortfolioRiskBacktestRun(portfolioId.value, run.id)
+  }
+}
+const loadMonteCarlo = () => loadDeferred(monteCarloState, monteCarloError, async () => { monteCarloBase.value = await getPortfolioMonteCarlo(portfolioId.value) })
+
+function observeDeferredSections() {
+  const targets: Array<[HTMLElement | null, () => Promise<void>]> = [[modelComparisonSentinel.value, loadModelComparison], [stressTestSentinel.value, loadStressTest], [backtestSentinel.value, loadBacktest], [monteCarloSentinel.value, loadMonteCarlo]]
+  if (typeof IntersectionObserver === 'undefined') { targets.forEach(([, loader]) => void loader()); return }
+  sectionObserver = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { sectionObserver?.unobserve(entry.target); const target = targets.find(([element]) => element === entry.target); if (target) void target[1]() } }), { rootMargin: '300px 0px' })
+  targets.forEach(([element]) => { if (element) sectionObserver?.observe(element) })
+}
+
 onMounted(async () => {
   loading.value = true
   try {
-    const [portfolio, riskData, riskData99, conservativeData, conservativeData99, backtestDataResponse, ewmaData, ewmaData99, stressData, monteCarloData, monteCarloConservativeData, governanceData, ...curve] = await Promise.all([
+    const [portfolio, riskData, governanceData] = await Promise.all([
       getPortfolio(portfolioId.value),
       getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'mvewma_fhs' }),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'mvewma_fhs' }),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'mvewma_fhs_conservative' }),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'mvewma_fhs_conservative' }),
-      getPortfolioRiskBacktest(portfolioId.value, backtestFromDate.value, toDate.value),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'gbm_ewma_normal' }),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.99, simulations: 10000, model: 'gbm_ewma_normal' }),
-      getPortfolioStressTest(portfolioId.value),
-      getPortfolioMonteCarlo(portfolioId.value),
-      getPortfolioMonteCarlo(portfolioId.value, 'mvewma_fhs_conservative'),
       getPortfolioRiskGovernance(portfolioId.value),
-      ...[0.90, 0.95, 0.975, 0.99, 0.995].map(confidenceLevel => getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 1, confidenceLevel, simulations: 5000, model: 'mvewma_fhs' })),
     ])
     portfolioName.value = portfolio.name
     risk.value = riskData
-    risk99.value = riskData99
-    riskConservative.value = conservativeData
-    riskConservative99.value = conservativeData99
-    riskEwma.value = ewmaData
-    riskEwma99.value = ewmaData99
-    stressTest.value = stressData
-    monteCarloBase.value = monteCarloData
-    monteCarloConservative.value = monteCarloConservativeData
     governance.value = governanceData
     targetWeights.value = Object.fromEntries(riskData.holdings.map(holding => [holding.securityId, Number((holding.weight * 100).toFixed(2))]))
-    backtest.value = backtestDataResponse
-    riskCurve.value = curve
     try {
       reportSnapshots.value = await getPortfolioRiskReportSnapshots(portfolioId.value)
     } catch {
@@ -422,463 +436,179 @@ onMounted(async () => {
     error.value = riskErrorMessage(e)
   } finally {
     loading.value = false
+    await nextTick()
+    if (viewIsActive && risk.value) observeDeferredSections()
   }
 })
+
+onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeout(backtestPollTimer); sectionObserver?.disconnect() })
 </script>
 
 <template>
-  <div class="kimi-page-dark" style="padding-top: 40px">
-    <div class="kimi-content" style="margin-top: 0; padding-top: 20px">
-      <button class="kimi-btn kimi-btn-dark" style="margin-bottom: 24px" @click="router.push({ name: 'risk-runs' })">
+  <div class="prestige-page">
+    <div class="prestige-section">
+      <button class="prestige-btn back-btn" @click="router.push({ name: 'risk-runs' })">
         ← BACK TO RISK RUNS
       </button>
 
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
+      <div class="page-head">
         <div>
-          <h1 style="font-size: 28px; font-weight: 700; margin: 0; color: #FFFFFF">{{ runInfo.portfolio }}</h1>
-          <span class="kimi-caption" style="margin-top: 4px; display: block">RISK ANALYSIS RUN — {{ runInfo.id }}</span>
+          <span class="prestige-label">Risk Analysis Run — <span class="prestige-mono">{{ runInfo.id }}</span></span>
+          <h1 class="page-title">{{ runInfo.portfolio }}</h1>
         </div>
-        <span class="kimi-tag" style="border-color: #34d399; color: #34d399">COMPLETED</span>
+        <span class="prestige-tag tag-completed"><span class="dot" />COMPLETED</span>
       </div>
 
       <!-- Loading / Error -->
       <ScrollReveal v-if="loading">
-        <div class="kimi-section-dark" style="padding: 40px; text-align: center; color: #666666">載入風險分析資料中...</div>
+        <div class="prestige-skeleton" style="min-height: 280px; display: flex; align-items: center; justify-content: center; color: var(--muted)">
+          載入風險分析資料中...
+        </div>
       </ScrollReveal>
 
       <ScrollReveal v-if="error && !loading">
-        <div class="kimi-section-dark" style="padding: 40px; text-align: center; color: #f87171">{{ error }}</div>
+        <div class="prestige-error" style="text-align: center">{{ error }}</div>
       </ScrollReveal>
 
       <template v-if="!loading && risk">
+        <!-- Risk Governance -->
         <ScrollReveal v-if="governance" style="margin-bottom: 24px">
-          <div class="kimi-section-dark" style="padding: 20px; border-left: 3px solid #FACC15">
-            <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:12px"><div><h2 style="font-size:20px; margin:0; color:#FFFFFF">風險治理摘要</h2><span class="kimi-caption">RISK GOVERNANCE · {{ governanceDataStatus(governance.dataStatus) }} · {{ governance.commonTradingDays }} 個共同交易日</span></div><span :style="{ color: governanceAlerts.some(a => a.status === 'critical') ? '#F87171' : '#FACC15' }">{{ governanceAlerts.some(a => a.status === 'critical') ? '需處理' : governanceAlerts.length ? '需注意' : '無門檻警示' }}</span></div>
-            <div v-if="governanceAlerts.length" style="display:grid; gap:8px"><div v-for="alert in governanceAlerts" :key="alert.code" :style="{ padding:'10px 12px', background: alert.status === 'critical' ? 'rgba(248,113,113,.10)' : 'rgba(250,204,21,.10)', borderLeft: `3px solid ${alert.status === 'critical' ? '#F87171' : '#FACC15'}` }"><strong :style="{ color: alert.status === 'critical' ? '#FCA5A5' : '#FDE68A' }">{{ governanceLabel(alert.code) }}</strong><span style="margin-left:12px; color:#E2E8F0">目前 {{ alert.code.includes('age') ? `${alert.currentValue} 日` : `${(alert.currentValue * 100).toFixed(1)}%` }} · 注意 {{ alert.code.includes('age') ? `${alert.warningThreshold} 日` : `${(alert.warningThreshold * 100).toFixed(1)}%` }} · 嚴重 {{ alert.code.includes('age') ? `${alert.criticalThreshold} 日` : `${(alert.criticalThreshold * 100).toFixed(1)}%` }}</span><div style="color:#A8B1C1; font-size:12px; margin-top:4px">{{ alert.message }}</div></div></div>
-            <p v-else style="margin:0; color:#A8B1C1">目前沒有觸發已設定的集中度與資料品質門檻；這不代表投組沒有風險。</p>
-            <div style="margin-top:16px; padding-top:16px; border-top:1px solid #2B2B2B"><button class="kimi-btn kimi-btn-dark" :disabled="reportCreating" @click="createReportSnapshot">{{ reportCreating ? '建立中…' : '建立風險報告快照' }}</button><span v-if="reportActionMessage" style="margin-left:10px; color:#A8B1C1; font-size:12px">{{ reportActionMessage }}</span><div v-if="reportSnapshots.length" style="margin-top:14px; display:grid; gap:6px"><span class="kimi-caption">歷史快照（最新在前）</span><button v-for="report in reportSnapshots" :key="report.id" class="kimi-btn kimi-btn-dark" style="text-align:left; font-size:12px" @click="openReportSnapshot(report.id)"> {{ reportCreatedAt(report.createdAtUtc) }} · {{ report.model }} · {{ reportStatusLabel(report.overallStatus) }} </button></div></div>
-            <div style="margin-top:16px; padding-top:16px; border-top:1px solid #2B2B2B"><h3 style="margin:0 0 10px;color:#fff">調整試算</h3><span class="kimi-caption">僅試算，不會修改真實投組；現金為負時代表融資，不含融資利率、保證金與追繳規則。</span><div style="display:grid; gap:7px; margin-top:12px"><label v-for="holding in risk.holdings" :key="holding.securityId" style="display:grid; grid-template-columns:1fr 100px; gap:10px; align-items:center; color:#E2E8F0"><span>{{ holding.ticker }} · 目前 {{ (holding.weight * 100).toFixed(1) }}%</span><input v-model.number="targetWeights[holding.securityId]" type="number" min="0" step="0.1" style="background:#111;color:#fff;border:1px solid #444;padding:7px" /></label></div><div style="margin-top:10px;color:#A8B1C1">目標持股 {{ targetWeightTotal.toFixed(1) }}% · <span :style="{ color: targetCashWeight < 0 ? '#FACC15' : '#A8B1C1' }">{{ targetCashWeight < 0 ? `融資 ${(Math.abs(targetCashWeight) * 100).toFixed(1)}%` : `現金 ${(targetCashWeight * 100).toFixed(1)}%` }}</span></div><p v-if="targetCashWeight < 0" style="margin:6px 0;color:#FACC15;font-size:12px">槓桿試算：融資不作為風險資產加入價格序列。</p><button class="kimi-btn kimi-btn-dark" style="margin-top:10px" :disabled="scenarioLoading" @click="runTargetWeightScenario">{{ scenarioLoading ? '試算中…' : '開始試算' }}</button><button class="kimi-btn kimi-btn-dark" style="margin:10px 0 0 8px" :disabled="scenarioLoading" @click="resetTargetWeights">重設為目前權重</button><div v-if="scenarioMessage" style="margin-top:8px;color:#F87171">{{ scenarioMessage }}</div><div v-if="scenarioResult" style="margin-top:14px; display:grid; grid-template-columns:repeat(4,1fr); gap:8px"><div v-for="metric in [{label:'年化波動率',current:scenarioResult.current.historicalAnnualizedVolatility,scenario:scenarioResult.scenario.historicalAnnualizedVolatility},{label:'VaR 95%',current:scenarioResult.current.horizons[0]?.monteCarloVaR,scenario:scenarioResult.scenario.horizons[0]?.monteCarloVaR},{label:'HHI',current:scenarioResult.current.concentrationHhi,scenario:scenarioResult.scenario.concentrationHhi},{label:'最大持倉',current:scenarioResult.current.largestHoldingWeight,scenario:scenarioResult.scenario.largestHoldingWeight}]" :key="metric.label" style="padding:10px;background:#111"><span class="kimi-caption">{{ metric.label }}</span><strong style="display:block;color:#fff">{{ ((metric.current ?? 0)*100).toFixed(1) }}% → {{ ((metric.scenario ?? 0)*100).toFixed(1) }}%</strong></div></div>
-            <div v-if="scenarioResult" style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="padding:12px;background:#111"><h4 style="margin:0 0 8px;color:#fff">治理警示變化</h4><div v-for="alert in scenarioResult.scenarioGovernance?.alerts.filter(a => a.status !== 'normal') ?? []" :key="alert.code" :style="{color:alert.status==='critical'?'#F87171':'#FACC15'}">{{ governanceLabel(alert.code) }} · {{ scenarioAlertValue(alert) }} · {{ alert.status==='critical'?'嚴重':'注意' }}</div></div><div style="padding:12px;background:#111"><h4 style="margin:0 0 8px;color:#fff">壓力情境變化</h4><div v-for="stress in scenarioResult.scenarioStress" :key="stress.id" style="color:#E2E8F0">{{ stress.name }} · {{ ((stress.totalImpact-(scenarioResult.currentStress.find(x=>x.id===stress.id)?.totalImpact??0))*100).toFixed(1) }} 個百分點</div></div></div>
-            </div>
-          </div>
-        </ScrollReveal>
-        <ScrollReveal v-if="selectedReportSnapshot" style="margin-bottom:24px"><section class="kimi-section-dark" style="padding:20px"><div style="display:flex; justify-content:space-between; gap:12px; align-items:center"><div><h2 style="font-size:20px; margin:0; color:#FFFFFF">風險報告快照</h2><span class="kimi-caption">{{ reportCreatedAt(selectedReportSnapshot.createdAtUtc) }} · 資料截止 {{ selectedReportSnapshot.dataAsOfDate ?? '—' }} · {{ selectedReportSnapshot.model }} · {{ selectedReportSnapshot.thresholdVersion }}</span></div><button class="kimi-btn kimi-btn-dark" @click="printReportSnapshot">列印／另存 PDF</button></div><p style="color:#A8B1C1; font-size:12px; margin:14px 0">此內容從建立當下的資料庫快照讀取，市場資料後續更新不會改寫它。</p><pre style="margin:0; padding:14px; overflow:auto; max-height:420px; background:#0B0B0B; color:#CBD5E1; font-size:12px; line-height:1.5">{{ JSON.stringify(selectedReportSnapshot.snapshot, null, 2) }}</pre></section></ScrollReveal>
-        <!-- Run Info -->
-        <ScrollReveal>
-          <div class="kimi-section-dark" style="margin-bottom: 40px">
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr)">
-              <div
-                v-for="(item, i) in [
-                  { label: 'MODEL', value: runInfo.model },
-                  { label: 'CONFIDENCE', value: runInfo.confidence },
-                  { label: 'LOOKBACK', value: runInfo.lookback },
-                  { label: 'DATE RANGE', value: `${fromDate} ~ ${toDate}` },
-                ]"
-                :key="i"
-                style="padding: 20px; border-right: 1px solid #333333; border-bottom: 1px solid #333333"
+          <div class="prestige-panel prestige-panel-pad">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">風險治理摘要</h2>
+                <span class="prestige-label">Risk Governance · {{ governanceDataStatus(governance.dataStatus) }} · {{ governance.commonTradingDays }} 個共同交易日</span>
+              </div>
+              <span
+                class="prestige-tag"
+                :class="governanceAlerts.some(a => a.status === 'critical') ? 'tag-critical' : governanceAlerts.length ? 'tag-warning' : 'tag-normal'"
               >
-                <span class="kimi-caption" style="margin-bottom: 4px; display: block; color: #666666">{{ item.label }}</span>
-                <span style="font-size: 16px; font-weight: 600; color: #FFFFFF">{{ item.value }}</span>
-              </div>
+                <span class="dot" :class="{ pulse: governanceAlerts.some(a => a.status === 'critical') }" />
+                {{ governanceAlerts.some(a => a.status === 'critical') ? '需處理' : governanceAlerts.length ? '需注意' : '無門檻警示' }}
+              </span>
             </div>
-          </div>
-        </ScrollReveal>
 
-        <!-- Model Metadata -->
-        <ScrollReveal :delay="0.05">
-          <div class="kimi-section-dark" style="margin-bottom: 40px">
-            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 600; color: #FFFFFF">模型細節</h3>
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr)">
+            <div v-if="governanceAlerts.length" class="alert-list">
               <div
-                v-for="(item, i) in [
-                  { label: 'COVARIANCE METHOD', value: risk.covarianceMethod ?? '—' },
-                  { label: 'RESIDUAL SAMPLING', value: risk.residualSampling ?? '—' },
-                  { label: 'COMMON TRADING DAYS', value: risk.commonTradingDays ? `${risk.commonTradingDays} 天` : '—' },
-                  { label: 'SHRINKAGE ALPHA', value: risk.shrinkageAlpha != null ? `${(risk.shrinkageAlpha * 100).toFixed(2)}%` : '—' },
-                ]"
-                :key="i"
-                style="padding: 20px; border-right: 1px solid #333333"
+                v-for="alert in governanceAlerts"
+                :key="alert.code"
+                class="alert-item"
+                :class="alert.status === 'critical' ? 'critical' : 'warning'"
               >
-                <span class="kimi-caption" style="margin-bottom: 4px; display: block; color: #666666">{{ item.label }}</span>
-                <span style="font-size: 16px; font-weight: 600; color: #FFFFFF">{{ item.value }}</span>
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <!-- KPI Cards -->
-        <ScrollReveal :delay="0.1">
-          <div class="kimi-section-dark" style="margin-bottom: 40px">
-            <div class="kimi-kpi-grid-5">
-              <div
-                v-for="(kpi, i) in riskKPIData"
-                :key="i"
-                class="kimi-kpi-cell kimim-kpi-cell-dark"
-                :class="{ 'kimi-kpi-cell-dark': true }"
-              >
-                <span class="kimi-caption" style="margin-bottom: 8px; display: block">{{ kpi.label }}</span>
-                <span class="kimi-data" :style="{ color: kpi.color }">{{ kpi.value }}</span>
-                <span style="font-size: 11px; color: #666666; margin-top: 4px; display: block">{{ kpi.sub }}</span>
-                <div class="accent-bar" style="background-color: #8B1A2B" />
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <!-- Core Metrics -->
-        <ScrollReveal :delay="0.15">
-          <div class="kimi-section-dark" style="margin-bottom: 40px">
-            <div class="kimi-kpi-grid">
-              <div
-                v-for="(m, i) in metrics"
-                :key="i"
-                class="kimi-kpi-cell kimi-kpi-cell-dark"
-              >
-                <span class="kimi-caption" style="color: #666666; margin-bottom: 8px; display: block">{{ m.label }}</span>
-                <span class="kimi-data" style="color: #FFFFFF">{{ m.value }}</span>
-                <span style="font-size: 12px; color: #666666; margin-top: 4px; display: block">{{ m.sub }}</span>
-                <div class="accent-bar" style="background-color: #8B1A2B" />
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <!-- VaR Results Table -->
-        <ScrollReveal class="mt-20">
-          <div class="kimi-section-dark">
-            <div class="kimi-section-header" style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="font-size: 24px; font-weight: 600; margin: 0; color: #FFFFFF">Value at Risk 分析</h2>
-              <span class="kimi-caption" style="margin-top: 4px; display: block">VALUE AT RISK — 95% & 99% 信賴區間</span>
-            </div>
-            <div style="padding: 20px">
-              <div style="display: grid; gap: 32px">
-                <div>
-                  <table                   class="kimi-table kimi-table-dark" style="border-collapse: collapse">
-                    <thead>
-                      <tr>
-                        <th style="text-align: left">計算方法</th>
-                        <th style="text-align: right">VaR 95%</th>
-                        <th style="text-align: right">VaR 99%</th>
-                        <th style="text-align: left; padding-left: 16px">備註</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(v, i) in varTableRows" :key="i">
-                        <td style="color: #FFFFFF">{{ v.method }}</td>
-                        <td class="kimi-font-mono" style="text-align: right; color: v.var95 < -0.048 ? '#FF6B00' : '#FFFFFF'">{{ (v.var95 * 100).toFixed(2) }}%</td>
-                        <td class="kimi-font-mono" style="text-align: right; color: '#8B1A2B'">{{ (v.var99 * 100).toFixed(2) }}%</td>
-                        <td style="color: #666666; padding-left: 16px">{{ v.note }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <p style="font-size: 11px; color: #666666; margin-top: 12px">
-                    所有方法皆使用正式 API 資料；保守 FHS 僅將標準化殘差向量的最極端 1% 徑向截尾，原始 FHS 仍為預設模型。
-                  </p>
+                <div class="alert-line">
+                  <strong class="alert-name">{{ governanceLabel(alert.code) }}</strong>
+                  <span class="alert-thresholds prestige-mono">目前 {{ alert.code.includes('age') ? `${alert.currentValue} 日` : `${(alert.currentValue * 100).toFixed(1)}%` }} · 注意 {{ alert.code.includes('age') ? `${alert.warningThreshold} 日` : `${(alert.warningThreshold * 100).toFixed(1)}%` }} · 嚴重 {{ alert.code.includes('age') ? `${alert.criticalThreshold} 日` : `${(alert.criticalThreshold * 100).toFixed(1)}%` }}</span>
                 </div>
-
-                <div>
-                  <h3 style="font-size: 14px; font-weight: 500; margin: 0 0 12px; color: #FFFFFF">日報酬分布直方圖（共同日資料）</h3>
-                  <svg width="100%" height="270" viewBox="0 0 400 270" style="display: block; width: min(100%, 760px)">
-                    <line v-for="value in histogramChart.ticks" :key="'g-' + value" x1="50" :y1="histogramChart.y(value)" x2="380" :y2="histogramChart.y(value)" stroke="#333333" stroke-width="1" stroke-dasharray="4 4" />
-                    <text v-for="value in histogramChart.ticks" :key="'gy-' + value" x="45" :y="histogramChart.y(value) + 4" text-anchor="end" fill="#666666" font-size="10">{{ Math.round(value) }}</text>
-
-                    <g v-for="(bin, i) in officialHistogram" :key="i">
-                      <rect
-                        :x="50 + i * 23"
-                        :y="histogramChart.y(bin.count)"
-                        width="19"
-                        :height="histogramChart.height(bin.count)"
-                        :fill="bin.isTail99 ? '#8B1A2B' : bin.isTail95 ? '#FF6B00' : '#333333'"
-                        class="transition-all"
-                      />
-                      <text :x="50 + i * 23 + 9.5" y="228" text-anchor="middle" fill="#666666" font-size="7">{{ bin.bin }}</text>
-                    </g>
-
-                    <g transform="translate(55, 12)">
-                      <rect x="0" y="-6" width="10" height="8" fill="#333333" />
-                      <text x="14" y="0" fill="#666666" font-size="9">正常區間</text>
-                      <rect x="70" y="-6" width="10" height="8" fill="#FF6B00" />
-                      <text x="84" y="0" fill="#666666" font-size="9">95% 尾部</text>
-                      <rect x="145" y="-6" width="10" height="8" fill="#8B1A2B" />
-                      <text x="159" y="0" fill="#666666" font-size="9">99% 尾部</text>
-                    </g>
-                  </svg>
-                </div>
+                <div class="alert-msg">{{ alert.message }}</div>
               </div>
             </div>
-          </div>
-        </ScrollReveal>
+            <p v-else class="muted-text">目前沒有觸發已設定的集中度與資料品質門檻；這不代表投組沒有風險。</p>
 
-        <!-- ES / CVaR Analysis -->
-        <ScrollReveal class="mt-20">
-          <div class="kimi-section-dark">
-            <div class="kimi-section-header" style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="font-size: 24px; font-weight: 600; margin: 0; color: #FFFFFF">Expected Shortfall (ES) 分析</h2>
-              <span class="kimi-caption" style="margin-top: 4px; display: block">CONDITIONAL VaR — 尾部損失期望值</span>
-            </div>
-            <div style="padding: 20px">
-              <div style="display: grid; gap: 32px">
-                <div>
-                  <table class="kimi-table kimi-table-dark">
-                    <thead>
-                      <tr>
-                        <th style="text-align: left">計算方法</th>
-                        <th style="text-align: right">ES 95%</th>
-                        <th style="text-align: right">ES 99%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(e, i) in esTableRows" :key="i">
-                        <td style="color: #FFFFFF">{{ e.method }}</td>
-                        <td class="kimi-font-mono" style="text-align: right; color: '#FF6B00'">{{ (e.es95 * 100).toFixed(2) }}%</td>
-                        <td class="kimi-font-mono" style="text-align: right; color: '#8B1A2B'">{{ (e.es99 * 100).toFixed(2) }}%</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div class="kimi-panel-dark" style="margin-top: 16px">
-                    <p style="font-size: 12px; color: #666666; margin: 0">
-                      ES（Expected Shortfall）衡量當損失超過 VaR 閾值時的
-                      <strong style="color: #FFFFFF">平均損失程度</strong>。
-                      相較於 VaR 僅反映單一分位數點，ES 更完整地捕捉尾部風險。
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 style="font-size: 14px; font-weight: 500; margin: 0 0 12px; color: #FFFFFF">VaR vs ES 比較（MVEWMA-FHS）</h3>
-                  <svg width="100%" height="340" viewBox="0 0 400 340" style="display: block; width: min(100%, 760px); overflow: hidden">
-                    <line v-for="value in varEsChart.ticks" :key="'g-' + value" x1="80" :y1="varEsChart.y(value)" x2="380" :y2="varEsChart.y(value)" stroke="#333333" stroke-width="1" stroke-dasharray="4 4" />
-                    <text v-for="value in varEsChart.ticks" :key="'y-' + value" x="75" :y="varEsChart.y(value) + 4" text-anchor="end" fill="#666666" font-size="10">{{ value.toFixed(0) }}%</text>
-
-                    <g v-for="(d, i) in officialVarEsComparison" :key="i">
-                      <rect :x="85 + i * 58" :y="varEsChart.y(0)" width="22" :height="varEsChart.height(d.var)" fill="#FF6B00" opacity="0.8" />
-                      <rect :x="110 + i * 58" :y="varEsChart.y(0)" width="22" :height="varEsChart.height(d.es)" fill="#8B1A2B" opacity="0.8" />
-                      <text :x="85 + i * 58 + 22" y="255" text-anchor="middle" fill="#666666" font-size="9">{{ d.confidence }}</text>
-                    </g>
-
-                    <g transform="translate(90, 285)">
-                      <rect x="0" y="-6" width="12" height="8" fill="#FF6B00" opacity="0.8" />
-                      <text x="16" y="0" fill="#666666" font-size="9">VaR</text>
-                      <rect x="50" y="-6" width="12" height="8" fill="#8B1A2B" opacity="0.8" />
-                      <text x="66" y="0" fill="#666666" font-size="9">ES</text>
-                    </g>
-                  </svg>
-                </div>
+            <!-- Report snapshots -->
+            <div class="sub-block">
+              <div class="btn-row">
+                <button class="prestige-btn" :disabled="reportCreating" @click="createReportSnapshot">{{ reportCreating ? '建立中…' : '建立風險報告快照' }}</button>
+                <span v-if="reportActionMessage" class="muted-text snap-msg">{{ reportActionMessage }}</span>
               </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <!-- Stress Test Scenarios -->
-        <ScrollReveal class="mt-20">
-          <div class="kimi-section-dark">
-            <div class="kimi-section-header" style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="font-size: 24px; font-weight: 600; margin: 0; color: #FFFFFF">壓力測試情境</h2>
-              <span class="kimi-caption" style="margin-top: 4px; display: block">STRESS TESTING — 六大極端情境模擬</span>
-            </div>
-            <div style="padding: 20px">
-              <div class="kimi-grid-3">
-                <div
-                  v-for="s in formalStressScenarios"
-                  :key="s.id"
-                  class="kimi-panel-dark"
-                  style="cursor: pointer; transition: all 0.2s ease"
-                  :style="{ borderColor: selectedScenario === s.id ? '#8B1A2B' : '#333333', backgroundColor: selectedScenario === s.id ? '#111111' : '#0A0A0A' }"
-                  @click="selectedScenario = selectedScenario === s.id ? null : s.id"
+              <div v-if="reportSnapshots.length" class="snap-list">
+                <span class="prestige-label">歷史快照（最新在前）</span>
+                <button
+                  v-for="report in reportSnapshots"
+                  :key="report.id"
+                  class="prestige-btn snap-btn"
+                  @click="openReportSnapshot(report.id)"
                 >
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
-                    <span style="font-size: 14px; font-weight: 500; color: #FFFFFF">{{ s.name }}</span>
-                    <span class="kimi-tag" :style="{ borderColor: s.type === 'historical' ? '#FF6B00' : '#8B1A2B', color: s.type === 'historical' ? '#FF6B00' : '#8B1A2B' }">{{ s.type === 'historical' ? '歷史回放' : '假設情境' }}</span>
-                  </div>
+                  {{ reportCreatedAt(report.createdAtUtc) }} · {{ report.model }} · {{ reportStatusLabel(report.overallStatus) }}
+                </button>
+              </div>
+            </div>
 
-                  <p style="font-size: 12px; color: #666666; margin: 0 0 12px">{{ s.methodology }}</p>
-
-                  <div style="display: flex; align-items: baseline; gap: 8px">
-                    <span style="font-size: 22px; font-weight: 600; color: #8B1A2B">{{ (s.totalImpact * 100).toFixed(1) }}%</span>
-                    <span class="kimi-caption">投組衝擊</span>
-                  </div>
-
-                  <div v-if="selectedScenario === s.id" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333333">
-                    <div v-for="h in s.holdings" :key="h.ticker" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0">
-                      <span style="font-size: 12px; color: #666666">{{ h.ticker }} · {{ h.industry }}</span>
-                      <span style="font-size: 12px; color: #FFFFFF; font-family: var(--kimi-font-mono)">{{ (h.contribution * 100).toFixed(1) }}%</span>
-                    </div>
-                    <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px">
-                      <span v-for="industry in s.industries" :key="industry.industry" class="kimi-tag" style="border-color: #333333; color: #999999">{{ industry.industry }} {{ (industry.contribution * 100).toFixed(1) }}%</span>
-                    </div>
-                  </div>
+            <!-- What-if scenario -->
+            <div class="sub-block">
+              <h3 class="sub-title">調整試算</h3>
+              <p class="muted-text">僅試算，不會修改真實投組；現金為負時代表融資，不含融資利率、保證金與追繳規則。</p>
+              <div class="weight-grid">
+                <label v-for="holding in risk.holdings" :key="holding.securityId" class="weight-row">
+                  <span class="weight-label">{{ holding.ticker }} · 目前 <span class="prestige-mono">{{ (holding.weight * 100).toFixed(1) }}%</span></span>
+                  <input
+                    v-model.number="targetWeights[holding.securityId]"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    class="prestige-input weight-input"
+                  />
+                </label>
+              </div>
+              <div class="weight-total">
+                目標持股 <span class="prestige-mono">{{ targetWeightTotal.toFixed(1) }}%</span> ·
+                <span class="prestige-mono" :class="{ neg: targetCashWeight < 0 }">{{ targetCashWeight < 0 ? `融資 ${(Math.abs(targetCashWeight) * 100).toFixed(1)}%` : `現金 ${(targetCashWeight * 100).toFixed(1)}%` }}</span>
+              </div>
+              <p v-if="targetCashWeight < 0" class="leverage-note">槓桿試算：融資不作為風險資產加入價格序列。</p>
+              <div class="btn-row" style="margin-top: 12px">
+                <button class="prestige-btn" :disabled="scenarioLoading" @click="runTargetWeightScenario">{{ scenarioLoading ? '試算中…' : '開始試算' }}</button>
+                <button class="prestige-btn" :disabled="scenarioLoading" @click="resetTargetWeights">重設為目前權重</button>
+              </div>
+              <div v-if="scenarioMessage" class="prestige-error" style="margin-top: 10px">{{ scenarioMessage }}</div>
+              <div v-if="scenarioResult" class="scenario-metrics">
+                <div
+                  v-for="metric in [{label:'年化波動率',current:scenarioResult.current.historicalAnnualizedVolatility,scenario:scenarioResult.scenario.historicalAnnualizedVolatility},{label:'VaR 95%',current:scenarioResult.current.horizons[0]?.monteCarloVaR,scenario:scenarioResult.scenario.horizons[0]?.monteCarloVaR},{label:'HHI',current:scenarioResult.current.concentrationHhi,scenario:scenarioResult.scenario.concentrationHhi},{label:'最大持倉',current:scenarioResult.current.largestHoldingWeight,scenario:scenarioResult.scenario.largestHoldingWeight}]"
+                  :key="metric.label"
+                  class="mini-cell"
+                >
+                  <span class="prestige-label">{{ metric.label }}</span>
+                  <strong class="mini-value prestige-mono">{{ ((metric.current ?? 0)*100).toFixed(1) }}% → {{ ((metric.scenario ?? 0)*100).toFixed(1) }}%</strong>
                 </div>
               </div>
-              <div v-if="selectedStressScenario" class="kimi-panel-dark" style="margin-top: 20px">
-                <h3 style="margin: 0 0 6px; color: #FFFFFF">持股壓力明細 — {{ selectedStressScenario.name }}</h3>
-                <p style="font-size: 12px; color: #666666; margin: 0 0 14px">{{ selectedStressScenario.methodology }}</p>
-                <table class="kimi-table kimi-table-dark" style="width: 100%">
-                  <thead><tr><th>代號／名稱</th><th>產業</th><th style="text-align:right">當前權重</th><th style="text-align:right">情境起始價</th><th style="text-align:right">情境結束價</th><th style="text-align:right">情境期間報酬</th><th style="text-align:right">對投組衝擊貢獻</th></tr></thead>
-                  <tbody><tr v-for="h in selectedStressScenario.holdings.slice().sort((a,b)=>a.contribution-b.contribution)" :key="h.ticker"><td>{{ h.ticker }} · {{ h.securityName }}</td><td>{{ h.industry }}</td><td style="text-align:right">{{ (h.weight*100).toFixed(1) }}%</td><td style="text-align:right">{{ h.basePrice.toFixed(2) }}</td><td style="text-align:right">{{ h.stressedPrice.toFixed(2) }}</td><td style="text-align:right">{{ (h.shock*100).toFixed(1) }}%</td><td style="text-align:right">{{ (h.contribution*100).toFixed(1) }}%</td></tr></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <!-- Backtest Results -->
-        <ScrollReveal class="mt-20">
-          <div class="kimi-section-dark">
-            <div class="kimi-section-header" style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="font-size: 24px; font-weight: 600; margin: 0; color: #FFFFFF">VaR 回測驗證</h2>
-              <span class="kimi-caption" style="margin-top: 4px; display: block">BACKTESTING — 252 日滾動 VaR / ES</span>
-            </div>
-            <div style="padding: 20px">
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px">
-                <button v-for="model in backtestModels" :key="model" class="kimi-btn kimi-btn-dark" :style="{ borderColor: selectedBacktestModel === model ? '#FF6B00' : '#333333', color: selectedBacktestModel === model ? '#FF6B00' : '#999999' }" @click="selectedBacktestModel = model">{{ model }}</button>
-                <button v-for="confidence in backtestConfidences" :key="confidence" class="kimi-btn kimi-btn-dark" :style="{ borderColor: selectedBacktestConfidence === confidence ? '#FF6B00' : '#333333', color: selectedBacktestConfidence === confidence ? '#FF6B00' : '#999999' }" @click="selectedBacktestConfidence = confidence">{{ (confidence * 100).toFixed(0) }}%</button>
-              </div>
-              <div class="kimi-grid-2" style="gap: 32px">
-                <svg width="100%" height="280" viewBox="0 0 500 280">
-                  <line v-for="value in backtestChart.ticks" :key="'g-' + value" x1="50" :y1="backtestChart.y(value)" x2="480" :y2="backtestChart.y(value)" stroke="#333333" stroke-width="1" stroke-dasharray="4 4" />
-                  <text v-for="value in backtestChart.ticks" :key="value" x="45" :y="backtestChart.y(value) + 4" text-anchor="end" fill="#666666" font-size="10">{{ value }}%</text>
-
-                  <line x1="50" :y1="backtestChart.y(0)" x2="480" :y2="backtestChart.y(0)" stroke="#666666" stroke-width="2" />
-
-                  <line x1="50" :y1="backtestChart.y(backtestVaRLine)" x2="480" :y2="backtestChart.y(backtestVaRLine)" stroke="#FF6B00" stroke-width="1" stroke-dasharray="4 4" />
-                  <text x="485" :y="backtestChart.y(backtestVaRLine) + 3" fill="#FF6B00" font-size="9">VaR {{ (selectedBacktestConfidence * 100).toFixed(0) }}%</text>
-
-                  <g v-for="(d, i) in backtestData" :key="i">
-                    <line
-                      :x1="d.x"
-                      :y1="backtestChart.y(0)"
-                      :x2="d.x"
-                      :y2="backtestChart.y(d.actual)"
-                      :stroke="d.breached ? '#8B1A2B' : d.actual >= 0 ? '#FFFFFF' : '#666666'"
-                      stroke-width="4"
-                    />
-                    <text v-if="d.breached" :x="d.x" :y="backtestChart.y(d.actual) - 6" text-anchor="middle" fill="#8B1A2B" font-size="8">!</text>
-                  </g>
-
-                  <template v-for="(d, i) in backtestData" :key="'xl-' + i">
-                    <text v-if="i % 5 === 0 || i === backtestData.length - 1" :x="d.x" y="260" text-anchor="middle" fill="#666666" font-size="8">{{ d.date.slice(5) }}</text>
-                  </template>
-                </svg>
-
-                <div style="display: flex; flex-direction: column; justify-content: center">
-                  <div class="kimi-panel-dark" style="margin-bottom: 16px">
-                    <div class="kimi-grid-2" style="gap: 16px">
-                      <div v-for="stat in backtestStats" :key="stat.label"
-                      >
-                        <span class="kimi-caption" style="display: block; margin-bottom: 4px">{{ stat.label }}</span>
-                        <span style="font-size: 18px; font-weight: 600" :style="{ color: stat.color }">{{ stat.value }}</span>
-                      </div>
-                    </div>
+              <div v-if="scenarioResult" class="scenario-panels">
+                <div class="mini-panel">
+                  <h4 class="mini-title">治理警示變化</h4>
+                  <div
+                    v-for="alert in scenarioResult.scenarioGovernance?.alerts.filter(a => a.status !== 'normal') ?? []"
+                    :key="alert.code"
+                    class="mini-line"
+                    :class="alert.status === 'critical' ? 'critical' : 'warning'"
+                    >
+                    {{ governanceLabel(alert.code) }} · <span class="prestige-mono">{{ scenarioAlertValue(alert) }}</span> · {{ alert.status === 'critical' ? '嚴重' : '注意' }}
                   </div>
-
-                  <p style="font-size: 12px; color: #666666; margin: 0">
-                    使用目前持倉權重回放近三年共同日價格；圖表顯示最近 60 個有效回測日。可切換正式 Historical 與 MVEWMA-FHS 的 95%／99% 回測結果。
-                  </p>
+                </div>
+                <div class="mini-panel">
+                  <h4 class="mini-title">壓力情境變化</h4>
+                  <div v-for="stress in scenarioResult.scenarioStress" :key="stress.id" class="mini-line">
+                    {{ stress.name }} · <span class="prestige-mono">{{ ((stress.totalImpact-(scenarioResult.currentStress.find(x=>x.id===stress.id)?.totalImpact??0))*100).toFixed(1) }} 個百分點</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </ScrollReveal>
 
-        <!-- Monte Carlo Simulation -->
-        <ScrollReveal class="mt-20" style="margin-bottom: 80px">
-          <div class="kimi-section-dark">
-            <div class="kimi-section-header" style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="font-size: 24px; font-weight: 600; margin: 0; color: #FFFFFF">蒙地卡羅模擬</h2>
-              <span class="kimi-caption" style="margin-top: 4px; display: block">{{ monteCarlo?.model ?? 'MVEWMA-FHS' }} — {{ monteCarlo?.simulations?.toLocaleString() ?? '10,000' }} 次、{{ monteCarlo?.horizonDays ?? 252 }} 個交易日路徑模擬</span>
+        <!-- Report snapshot detail -->
+        <ScrollReveal v-if="selectedReportSnapshot" style="margin-bottom: 24px">
+          <section class="prestige-panel prestige-panel-pad">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">風險報告快照</h2>
+                <span class="prestige-label">{{ reportCreatedAt(selectedReportSnapshot.createdAtUtc) }} · 資料截止 {{ selectedReportSnapshot.dataAsOfDate ?? '—' }} · {{ selectedReportSnapshot.model }} · {{ selectedReportSnapshot.thresholdVersion }}</span>
+              </div>
+              <button class="prestige-btn" @click="printReportSnapshot">列印／另存 PDF</button>
             </div>
-            <div style="padding: 20px">
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px">
-                <button v-for="choice in [{ id: 'base', label: '原始 FHS' }, { id: 'conservative', label: '保守 FHS（p99）' }]" :key="choice.id" class="kimi-btn kimi-btn-dark" :style="{ borderColor: selectedMonteCarloModel === choice.id ? '#FF6B00' : '#333333', color: selectedMonteCarloModel === choice.id ? '#FF6B00' : '#999999' }" @click="selectedMonteCarloModel = choice.id as 'base' | 'conservative'">{{ choice.label }}</button>
-              </div>
-              <template v-if="monteCarlo?.status === 'ready'">
-              <svg width="100%" height="400" viewBox="0 0 900 400" preserveAspectRatio="xMidYMid meet">
-                <line v-for="tick in monteCarloChart.ticks" :key="'g-' + tick" x1="70" :y1="monteCarloChart.y(tick)" x2="850" :y2="monteCarloChart.y(tick)" :stroke="tick === 0 ? '#E2E8F0' : '#4B5563'" :stroke-width="tick === 0 ? 1.5 : 1" :stroke-dasharray="tick === 0 ? 'none' : '4 4'" />
-                <text
-                  v-for="tick in monteCarloChart.ticks"
-                  :key="'t-' + tick"
-                  x="65"
-                  :y="monteCarloChart.y(tick) + 4"
-                  text-anchor="end"
-                  fill="#A8B1C1"
-                  font-size="10"
-                >{{ `${tick > 0 ? '+' : ''}${(tick * 100).toFixed(0)}%` }}</text>
-
-                <!-- 98% band first, then the narrower 90% band so both remain distinguishable. -->
-                <polygon :points="monteCarloChart.p1" fill="#2563EB" fill-opacity="0.26" stroke="#60A5FA" stroke-opacity="0.72" stroke-width="0.8" />
-                <polygon :points="monteCarloChart.p5" fill="#F97316" fill-opacity="0.30" stroke="#FDBA74" stroke-opacity="0.82" stroke-width="0.8" />
-
-                <polyline :points="monteCarloChart.p50" fill="none" stroke="#FFFFFF" stroke-width="2" />
-
-                <polyline
-                  v-for="path in monteCarlo.samplePaths"
-                  :key="path.pathIndex"
-                  :points="path.cumulativeReturns.map((value, day) => `${monteCarloChart.x(day)},${monteCarloChart.y(value)}`).join(' ')"
-                  fill="none"
-                  :stroke="['#94A3B8', '#A78BFA', '#38BDF8', '#FBBF24'][(path.pathIndex - 1) % 4]"
-                  stroke-width="1"
-                  opacity="0.58"
-                />
-
-                <g transform="translate(80, 18)">
-                  <line x1="0" y1="0" x2="20" y2="0" stroke="#FFFFFF" stroke-width="2" />
-                  <text x="25" y="4" fill="#FFFFFF" font-size="10">中位數路徑</text>
-                  <rect x="100" y="-6" width="16" height="10" fill="#2563EB" fill-opacity="0.8" />
-                  <text x="120" y="4" fill="#BFDBFE" font-size="10">98% 區間</text>
-                  <rect x="180" y="-6" width="16" height="10" fill="#F97316" fill-opacity="0.9" />
-                  <text x="200" y="4" fill="#FED7AA" font-size="10">90% 區間</text>
-                </g>
-              </svg>
-              <div class="kimi-kpi-grid-5" style="margin-top: 20px">
-                <div v-for="stat in monteCarloStats" :key="stat.label" class="kimi-kpi-cell kimi-kpi-cell-dark">
-                  <span class="kimi-caption" style="display: block; margin-bottom: 4px">{{ stat.label }}</span>
-                  <span style="font-size: 18px; font-weight: 600; font-family: var(--kimi-font-mono)" :style="{ color: stat.color }">{{ stat.value }}</span>
-                </div>
-              </div>
-              <div style="margin-top: 20px; overflow-x: auto">
-                <div class="kimi-caption" style="margin-bottom: 8px">MODEL COMPARISON — 原始模型為預設，保守版僅供比較</div>
-                <table class="kimi-table kimi-table-dark" style="min-width: 760px">
-                  <thead><tr><th>模型</th><th>正報酬機率</th><th>中位數</th><th>期望</th><th>5% 情境</th><th>1% 情境</th><th>殘差截尾比例</th></tr></thead>
-                  <tbody><tr v-for="item in monteCarloComparison" :key="item.label"><td style="color: #FFFFFF">{{ item.label }}</td><td>{{ item.positive }}</td><td>{{ item.median }}</td><td>{{ item.expected }}</td><td style="color: #FCA5A5">{{ item.p5 }}</td><td style="color: #F87171">{{ item.p1 }}</td><td>{{ item.capped }}</td></tr></tbody>
-                </table>
-              </div>
-              <div class="kimi-panel-dark" style="margin-top: 20px; padding: 16px">
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px">
-                  <span style="font-size: 15px; font-weight: 600; color: #FFFFFF">模型診斷</span>
-                  <span class="kimi-caption">MODEL DIAGNOSTICS</span>
-                </div>
-                <div v-if="monteCarlo.diagnostics.rightSkewWarning" style="margin-bottom: 14px; padding: 12px; border-left: 3px solid #FACC15; background: rgba(250, 204, 21, 0.10); color: #FDE68A; font-size: 13px">
-                  {{ monteCarlo.diagnostics.rightSkewMessage }}
-                </div>
-                <p v-else style="margin: 0 0 14px; color: #A8B1C1; font-size: 13px">期望值與中位數差距未達 25 個百分點右偏警示門檻；仍請一併參考下行情境。</p>
-                <div class="kimi-grid-2" style="gap: 12px 24px">
-                  <div v-for="item in monteCarloDiagnostics" :key="item.label" style="display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #2B2B2B; padding-bottom: 8px">
-                    <span class="kimi-caption">{{ item.label }}</span>
-                    <span class="kimi-font-mono" style="color: #E2E8F0">{{ item.value }}</span>
-                  </div>
-                </div>
-              </div>
-              <p style="font-size: 12px; color: #666666; margin: 16px 0 0">以目前持倉權重與共同日價格資料推演未來報酬分布；區間不代表發生機率保證。</p>
-              </template>
-              <div v-else class="kimi-panel-dark" style="color: #999999">
-                {{ monteCarlo?.message ?? '蒙地卡羅路徑資料載入中。' }}
-              </div>
-            </div>
-          </div>
+            <p class="muted-text" style="margin-bottom: 14px">此內容從建立當下的資料庫快照讀取，市場資料後續更新不會改寫它。</p>
+            <pre class="snapshot-pre">{{ JSON.stringify(selectedReportSnapshot.snapshot, null, 2) }}</pre>
+          </section>
         </ScrollReveal>
 
         <!-- Holdings Risk Contribution -->
         <ScrollReveal class="mt-20">
-          <div class="kimi-section-dark" style="margin-bottom: 40px">
-            <div class="kimi-section-header" style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="font-size: 24px; font-weight: 600; margin: 0; color: #FFFFFF">持倉風險摘要</h2>
-              <span class="kimi-caption" style="margin-top: 4px; display: block">HOLDING RISK SUMMARY — 後端資料</span>
+          <div class="prestige-panel" style="margin-bottom: 40px">
+            <div class="section-head">
+              <h2 class="panel-title">持倉風險摘要</h2>
+              <span class="prestige-label">Holding Risk Summary — 後端資料</span>
             </div>
-            <div style="padding: 20px; overflow-x: auto">
-              <div style="margin-bottom: 16px; color: #FFFFFF; font-size: 14px">
-                風險來源模型年化波動率：<span class="kimi-font-mono" style="color: #FF6B00">{{ (risk.riskSourceAnnualizedVolatility * 100).toFixed(2) }}%</span>
+            <div class="section-body table-wrap">
+              <div class="holdings-headline">
+                風險來源模型年化波動率：<span class="prestige-mono hl">{{ (risk.riskSourceAnnualizedVolatility * 100).toFixed(2) }}%</span>
               </div>
-              <table class="kimi-table kimi-table-dark">
+              <table class="prestige-table">
                 <thead>
                   <tr>
                     <th>代號</th>
@@ -895,47 +625,489 @@ onMounted(async () => {
                 </thead>
                 <tbody>
                   <tr v-for="h in risk.holdings" :key="h.securityId">
-                    <td style="color: #FFFFFF">{{ h.ticker }}</td>
-                    <td style="color: #FFFFFF">{{ h.securityName }}</td>
-                    <td style="color: #666666">{{ h.industry }}</td>
-                    <td class="kimi-font-mono" style="text-align: right; color: #FFFFFF">{{ (h.weight * 100).toFixed(2) }}%</td>
-                    <td class="kimi-font-mono" style="text-align: right; color: h.annualizedVolatility > 0.3 ? '#FF6B00' : '#FFFFFF'">{{ (h.annualizedVolatility * 100).toFixed(2) }}%</td>
-                    <td class="kimi-font-mono" style="text-align: right; color: #FFFFFF">{{ (h.componentVolatility * 100).toFixed(2) }}%</td>
-                    <td class="kimi-font-mono" style="text-align: right; color: h.componentRiskShare < 0 ? '#34d399' : '#FF6B00'">{{ (h.componentRiskShare * 100).toFixed(1) }}%</td>
-                    <td class="kimi-font-mono" style="text-align: right; color: #FFFFFF">{{ h.marginalVolatility.toFixed(2) }}%</td>
-                    <td class="kimi-font-mono" style="text-align: right; color: #FFFFFF">{{ (h.incrementalVolatility * 100).toFixed(2) }}%</td>
-                    <td class="kimi-font-mono" style="text-align: right; color: #FFFFFF">{{ h.dataPointCount }}</td>
+                    <td>{{ h.ticker }}</td>
+                    <td>{{ h.securityName }}</td>
+                    <td class="td-muted">{{ h.industry }}</td>
+                    <td class="prestige-mono td-num">{{ (h.weight * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num" :class="{ 'td-warn': h.annualizedVolatility > 0.3 }">{{ (h.annualizedVolatility * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ (h.componentVolatility * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num" :class="h.componentRiskShare < 0 ? 'td-pos' : 'td-danger'">{{ (h.componentRiskShare * 100).toFixed(1) }}%</td>
+                    <td class="prestige-mono td-num">{{ h.marginalVolatility.toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ (h.incrementalVolatility * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ h.dataPointCount }}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <p style="padding: 0 20px 20px; margin: 0; font-size: 11px; color: #666666">
+            <p class="table-note" style="padding: 0 24px 20px; margin-top: 0">
               Component 可加總為上方的風險來源模型年化波動率；Marginal 為權重增加 1 個百分點的年化波動率變化；Incremental 假設移除部位後轉為現金。負值代表分散效果。
             </p>
           </div>
         </ScrollReveal>
 
         <ScrollReveal class="mt-20" v-if="risk.industries?.length">
-          <div class="kimi-section-dark" style="margin-bottom: 40px">
-            <div class="kimi-section-header" style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="font-size: 24px; font-weight: 600; margin: 0; color: #FFFFFF">產業風險來源</h2>
-              <span class="kimi-caption" style="margin-top: 4px; display: block">INDUSTRY RISK SOURCES — 後端資料</span>
+          <div class="prestige-panel" style="margin-bottom: 40px">
+            <div class="section-head">
+              <h2 class="panel-title">產業風險來源</h2>
+              <span class="prestige-label">Industry Risk Sources — 後端資料</span>
             </div>
-            <div style="padding: 20px; overflow-x: auto">
-              <table class="kimi-table kimi-table-dark">
-                <thead><tr><th>產業</th><th style="text-align: right">持倉數</th><th style="text-align: right">權重</th><th style="text-align: right">Component</th><th style="text-align: right">風險占比</th><th style="text-align: right">Marginal（+1%）</th><th style="text-align: right">Incremental</th></tr></thead>
+            <div class="section-body table-wrap">
+              <table class="prestige-table">
+                <thead>
+                  <tr>
+                    <th>產業</th>
+                    <th style="text-align: right">持倉數</th>
+                    <th style="text-align: right">權重</th>
+                    <th style="text-align: right">Component</th>
+                    <th style="text-align: right">風險占比</th>
+                    <th style="text-align: right">Marginal（+1%）</th>
+                    <th style="text-align: right">Incremental</th>
+                  </tr>
+                </thead>
                 <tbody>
                   <tr v-for="industry in risk.industries" :key="industry.industry">
-                    <td style="color: #FFFFFF">{{ industry.industry }}</td><td class="kimi-font-mono" style="text-align: right">{{ industry.holdingCount }}</td><td class="kimi-font-mono" style="text-align: right">{{ (industry.weight * 100).toFixed(2) }}%</td><td class="kimi-font-mono" style="text-align: right">{{ (industry.componentVolatility * 100).toFixed(2) }}%</td><td class="kimi-font-mono" style="text-align: right" :style="{ color: industry.componentRiskShare < 0 ? '#34d399' : '#FF6B00' }">{{ (industry.componentRiskShare * 100).toFixed(1) }}%</td><td class="kimi-font-mono" style="text-align: right">{{ industry.marginalVolatility.toFixed(2) }}%</td><td class="kimi-font-mono" style="text-align: right">{{ (industry.incrementalVolatility * 100).toFixed(2) }}%</td>
+                    <td>{{ industry.industry }}</td>
+                    <td class="prestige-mono td-num">{{ industry.holdingCount }}</td>
+                    <td class="prestige-mono td-num">{{ (industry.weight * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ (industry.componentVolatility * 100).toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num" :class="industry.componentRiskShare < 0 ? 'td-pos' : 'td-danger'">{{ (industry.componentRiskShare * 100).toFixed(1) }}%</td>
+                    <td class="prestige-mono td-num">{{ industry.marginalVolatility.toFixed(2) }}%</td>
+                    <td class="prestige-mono td-num">{{ (industry.incrementalVolatility * 100).toFixed(2) }}%</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
         </ScrollReveal>
+
+        <!-- Run Info -->
+        <ScrollReveal>
+          <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
+            <div class="info-grid info-grid-2">
+              <div
+                v-for="(item, i) in [
+                  { label: 'MODEL', value: runInfo.model },
+                  { label: 'CONFIDENCE', value: runInfo.confidence },
+                  { label: 'LOOKBACK', value: runInfo.lookback },
+                  { label: 'DATE RANGE', value: `${fromDate} ~ ${toDate}` },
+                ]"
+                :key="i"
+                class="info-cell"
+              >
+                <span class="prestige-label cell-label">{{ item.label }}</span>
+                <span class="info-value prestige-mono">{{ item.value }}</span>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <!-- Model Metadata -->
+        <ScrollReveal :delay="0.05">
+          <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
+            <h3 class="panel-sub-title">模型細節</h3>
+            <div class="info-grid info-grid-4">
+              <div
+                v-for="(item, i) in [
+                  { label: 'COVARIANCE METHOD', value: risk.covarianceMethod ?? '—' },
+                  { label: 'RESIDUAL SAMPLING', value: risk.residualSampling ?? '—' },
+                  { label: 'COMMON TRADING DAYS', value: risk.commonTradingDays ? `${risk.commonTradingDays} 天` : '—' },
+                  { label: 'SHRINKAGE ALPHA', value: risk.shrinkageAlpha != null ? `${(risk.shrinkageAlpha * 100).toFixed(2)}%` : '—' },
+                ]"
+                :key="i"
+                class="info-cell"
+              >
+                <span class="prestige-label cell-label">{{ item.label }}</span>
+                <span class="info-value prestige-mono">{{ item.value }}</span>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <!-- KPI Cards -->
+        <ScrollReveal :delay="0.1">
+          <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
+            <div class="kpi-grid kpi-grid-5">
+              <div v-for="(kpi, i) in riskKPIData" :key="i" class="kpi-cell">
+                <span class="prestige-label cell-label">{{ kpi.label }}</span>
+                <span class="kpi-value prestige-mono" :style="{ color: kpi.color }">{{ kpi.value }}</span>
+                <span class="kpi-sub">{{ kpi.sub }}</span>
+                <div class="accent-bar" :style="{ backgroundColor: kpi.color }" />
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <!-- Core Metrics -->
+        <ScrollReveal :delay="0.15">
+          <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
+            <div class="kpi-grid">
+              <div v-for="(m, i) in metrics" :key="i" class="kpi-cell">
+                <span class="prestige-label cell-label">{{ m.label }}</span>
+                <span class="kpi-value prestige-mono metric-value">{{ m.value }}</span>
+                <span class="kpi-sub">{{ m.sub }}</span>
+                <div class="accent-bar metric-accent" />
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <div ref="modelComparisonSentinel" class="deferred-sentinel" />
+        <!-- VaR Results Table -->
+        <ScrollReveal class="mt-20">
+          <div class="prestige-panel">
+            <div class="section-head">
+              <h2 class="panel-title">Value at Risk 分析</h2>
+              <span class="prestige-label">Value at Risk — 95% & 99% 信賴區間</span>
+            </div>
+            <div class="section-body">
+              <div class="stack">
+                <div class="table-wrap">
+                  <table class="prestige-table">
+                    <thead>
+                      <tr>
+                        <th style="text-align: left">計算方法</th>
+                        <th style="text-align: right">VaR 95%</th>
+                        <th style="text-align: right">VaR 99%</th>
+                        <th style="text-align: left; padding-left: 16px">備註</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(v, i) in varTableRows" :key="i">
+                        <td>{{ v.method }}</td>
+                        <td class="prestige-mono td-num" :class="{ 'td-warn': v.var95 < -0.048 }">{{ (v.var95 * 100).toFixed(2) }}%</td>
+                        <td class="prestige-mono td-num td-danger">{{ (v.var99 * 100).toFixed(2) }}%</td>
+                        <td class="td-muted" style="padding-left: 16px">{{ v.note }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">
+                    所有方法皆使用正式 API 資料。
+                  </p>
+                </div>
+
+                <div>
+                  <h3 class="chart-title">日報酬分布直方圖（共同日資料）</h3>
+                  <svg width="100%" height="270" viewBox="0 0 400 270" style="display: block; width: min(100%, 760px)">
+                    <line v-for="value in histogramChart.ticks" :key="'g-' + value" x1="50" :y1="histogramChart.y(value)" x2="380" :y2="histogramChart.y(value)" stroke="rgba(201,168,106,0.12)" stroke-width="1" stroke-dasharray="4 4" />
+                    <text v-for="value in histogramChart.ticks" :key="'gy-' + value" x="45" :y="histogramChart.y(value) + 4" text-anchor="end" fill="#9a917c" font-size="10">{{ Math.round(value) }}</text>
+
+                    <g v-for="(bin, i) in officialHistogram" :key="i">
+                      <rect
+                        :x="50 + i * 23"
+                        :y="histogramChart.y(bin.count)"
+                        width="19"
+                        :height="histogramChart.height(bin.count)"
+                        :fill="bin.isTail99 ? '#b05c5c' : bin.isTail95 ? '#d4a24e' : 'rgba(201,168,106,0.35)'"
+                        class="transition-all"
+                      />
+                      <text :x="50 + i * 23 + 9.5" y="228" text-anchor="middle" fill="#9a917c" font-size="7">{{ bin.bin }}</text>
+                    </g>
+
+                    <g transform="translate(55, 12)">
+                      <rect x="0" y="-6" width="10" height="8" fill="rgba(201,168,106,0.35)" />
+                      <text x="14" y="0" fill="#9a917c" font-size="9">正常區間</text>
+                      <rect x="70" y="-6" width="10" height="8" fill="#d4a24e" />
+                      <text x="84" y="0" fill="#9a917c" font-size="9">95% 尾部</text>
+                      <rect x="145" y="-6" width="10" height="8" fill="#b05c5c" />
+                      <text x="159" y="0" fill="#9a917c" font-size="9">99% 尾部</text>
+                    </g>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <!-- ES / CVaR Analysis -->
+        <ScrollReveal class="mt-20">
+          <div class="prestige-panel">
+            <div class="section-head">
+              <h2 class="panel-title">Expected Shortfall (ES) 分析</h2>
+              <span class="prestige-label">Conditional VaR — 尾部損失期望值</span>
+            </div>
+            <div class="section-body">
+              <div class="stack">
+                <div>
+                  <div class="table-wrap">
+                    <table class="prestige-table">
+                      <thead>
+                        <tr>
+                          <th style="text-align: left">計算方法</th>
+                          <th style="text-align: right">ES 95%</th>
+                          <th style="text-align: right">ES 99%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(e, i) in esTableRows" :key="i">
+                          <td>{{ e.method }}</td>
+                          <td class="prestige-mono td-num td-warn">{{ (e.es95 * 100).toFixed(2) }}%</td>
+                          <td class="prestige-mono td-num td-danger">{{ (e.es99 * 100).toFixed(2) }}%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="note-panel">
+                    <p class="note-text">
+                      ES（Expected Shortfall）衡量當損失超過 VaR 閾值時的
+                      <strong class="note-strong">平均損失程度</strong>。
+                      相較於 VaR 僅反映單一分位數點，ES 更完整地捕捉尾部風險。
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 class="chart-title">VaR vs ES 比較（MVEWMA-FHS）</h3>
+                  <svg width="100%" height="340" viewBox="0 0 400 340" style="display: block; width: min(100%, 760px); overflow: hidden">
+                    <line v-for="value in varEsChart.ticks" :key="'g-' + value" x1="80" :y1="varEsChart.y(value)" x2="380" :y2="varEsChart.y(value)" stroke="rgba(201,168,106,0.12)" stroke-width="1" stroke-dasharray="4 4" />
+                    <text v-for="value in varEsChart.ticks" :key="'y-' + value" x="75" :y="varEsChart.y(value) + 4" text-anchor="end" fill="#9a917c" font-size="10">{{ value.toFixed(0) }}%</text>
+
+                    <g v-for="(d, i) in officialVarEsComparison" :key="i">
+                      <rect :x="85 + i * 58" :y="varEsChart.y(0)" width="22" :height="varEsChart.height(d.var)" fill="#c9a86a" opacity="0.85" />
+                      <rect :x="110 + i * 58" :y="varEsChart.y(0)" width="22" :height="varEsChart.height(d.es)" fill="#b05c5c" opacity="0.85" />
+                      <text :x="85 + i * 58 + 22" y="255" text-anchor="middle" fill="#9a917c" font-size="9">{{ d.confidence }}</text>
+                    </g>
+
+                    <g transform="translate(90, 285)">
+                      <rect x="0" y="-6" width="12" height="8" fill="#c9a86a" opacity="0.85" />
+                      <text x="16" y="0" fill="#9a917c" font-size="9">VaR</text>
+                      <rect x="50" y="-6" width="12" height="8" fill="#b05c5c" opacity="0.85" />
+                      <text x="66" y="0" fill="#9a917c" font-size="9">ES</text>
+                    </g>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <div ref="stressTestSentinel" class="deferred-sentinel" />
+        <!-- Stress Test Scenarios -->
+        <ScrollReveal class="mt-20">
+          <div class="prestige-panel">
+            <div class="section-head">
+              <h2 class="panel-title">壓力測試情境</h2>
+              <span class="prestige-label">Stress Testing — 六大極端情境模擬</span>
+            </div>
+            <div class="section-body">
+              <div class="grid-3">
+                <div
+                  v-for="s in formalStressScenarios"
+                  :key="s.id"
+                  class="prestige-panel stress-card"
+                  :class="{ selected: selectedScenario === s.id }"
+                  @click="selectedScenario = selectedScenario === s.id ? null : s.id"
+                >
+                  <div class="stress-top">
+                    <span class="stress-name">{{ s.name }}</span>
+                    <span class="prestige-tag" :class="s.type === 'historical' ? 'tag-historical' : 'tag-hypo'">{{ s.type === 'historical' ? '歷史回放' : '假設情境' }}</span>
+                  </div>
+
+                  <p class="stress-method">{{ s.methodology }}</p>
+
+                  <div class="stress-impact">
+                    <span class="impact-value prestige-mono">{{ (s.totalImpact * 100).toFixed(1) }}%</span>
+                    <span class="prestige-label">投組衝擊</span>
+                  </div>
+
+                  <div v-if="selectedScenario === s.id" class="stress-detail">
+                    <div v-for="h in s.holdings" :key="h.ticker" class="stress-holding">
+                      <span>{{ h.ticker }} · {{ h.industry }}</span>
+                      <span class="prestige-mono stress-holding-value">{{ (h.contribution * 100).toFixed(1) }}%</span>
+                    </div>
+                    <div class="stress-industries">
+                      <span v-for="industry in s.industries" :key="industry.industry" class="prestige-tag">{{ industry.industry }} <span class="prestige-mono">{{ (industry.contribution * 100).toFixed(1) }}%</span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="selectedStressScenario" class="mini-panel stress-detail-panel">
+                <h3 class="mini-title" style="font-size: 15px">持股壓力明細 — {{ selectedStressScenario.name }}</h3>
+                <p class="muted-text" style="margin-bottom: 14px">{{ selectedStressScenario.methodology }}</p>
+                <div class="table-wrap">
+                  <table class="prestige-table">
+                    <thead>
+                      <tr>
+                        <th>代號／名稱</th>
+                        <th>產業</th>
+                        <th style="text-align: right">當前權重</th>
+                        <th style="text-align: right">情境起始價</th>
+                        <th style="text-align: right">情境結束價</th>
+                        <th style="text-align: right">情境期間報酬</th>
+                        <th style="text-align: right">對投組衝擊貢獻</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="h in selectedStressScenario.holdings.slice().sort((a,b)=>a.contribution-b.contribution)" :key="h.ticker">
+                        <td>{{ h.ticker }} · {{ h.securityName }}</td>
+                        <td class="td-muted">{{ h.industry }}</td>
+                        <td class="prestige-mono td-num">{{ (h.weight*100).toFixed(1) }}%</td>
+                        <td class="prestige-mono td-num">{{ h.basePrice.toFixed(2) }}</td>
+                        <td class="prestige-mono td-num">{{ h.stressedPrice.toFixed(2) }}</td>
+                        <td class="prestige-mono td-num">{{ (h.shock*100).toFixed(1) }}%</td>
+                        <td class="prestige-mono td-num td-danger">{{ (h.contribution*100).toFixed(1) }}%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <div ref="backtestSentinel" class="deferred-sentinel" />
+        <!-- Backtest Results -->
+        <ScrollReveal class="mt-20">
+          <div class="prestige-panel">
+            <div class="section-head">
+              <h2 class="panel-title">VaR 回測驗證</h2>
+              <span class="prestige-label">Backtesting — 252 日滾動 VaR / ES</span>
+            </div>
+            <div class="section-body">
+              <div class="btn-row" style="margin-bottom: 20px">
+                <button
+                  v-for="model in backtestModels"
+                  :key="model"
+                  class="prestige-btn chip-btn prestige-mono"
+                  :class="{ active: selectedBacktestModel === model }"
+                  @click="selectedBacktestModel = model"
+                >{{ model }}</button>
+                <button
+                  v-for="confidence in backtestConfidences"
+                  :key="confidence"
+                  class="prestige-btn chip-btn prestige-mono"
+                  :class="{ active: selectedBacktestConfidence === confidence }"
+                  @click="selectedBacktestConfidence = confidence"
+                >{{ (confidence * 100).toFixed(0) }}%</button>
+              </div>
+              <div class="grid-2">
+                <svg width="100%" height="280" viewBox="0 0 500 280">
+                  <line v-for="value in backtestChart.ticks" :key="'g-' + value" x1="50" :y1="backtestChart.y(value)" x2="480" :y2="backtestChart.y(value)" stroke="rgba(201,168,106,0.12)" stroke-width="1" stroke-dasharray="4 4" />
+                  <text v-for="value in backtestChart.ticks" :key="value" x="45" :y="backtestChart.y(value) + 4" text-anchor="end" fill="#9a917c" font-size="10">{{ value }}%</text>
+
+                  <line x1="50" :y1="backtestChart.y(0)" x2="480" :y2="backtestChart.y(0)" stroke="rgba(245,239,224,0.45)" stroke-width="1.5" />
+
+                  <line x1="50" :y1="backtestChart.y(backtestVaRLine)" x2="480" :y2="backtestChart.y(backtestVaRLine)" stroke="#b05c5c" stroke-width="1" stroke-dasharray="4 4" />
+                  <text x="485" :y="backtestChart.y(backtestVaRLine) + 3" fill="#b05c5c" font-size="9">VaR {{ (selectedBacktestConfidence * 100).toFixed(0) }}%</text>
+
+                  <g v-for="(d, i) in backtestData" :key="i">
+                    <line
+                      :x1="d.x"
+                      :y1="backtestChart.y(0)"
+                      :x2="d.x"
+                      :y2="backtestChart.y(d.actual)"
+                      :stroke="d.breached ? '#b05c5c' : d.actual >= 0 ? '#c9a86a' : 'rgba(154,145,124,0.75)'"
+                      stroke-width="4"
+                    />
+                    <text v-if="d.breached" :x="d.x" :y="backtestChart.y(d.actual) - 6" text-anchor="middle" fill="#b05c5c" font-size="8">!</text>
+                  </g>
+
+                  <template v-for="(d, i) in backtestData" :key="'xl-' + i">
+                    <text v-if="i % 5 === 0 || i === backtestData.length - 1" :x="d.x" y="260" text-anchor="middle" fill="#9a917c" font-size="8">{{ d.date.slice(5) }}</text>
+                  </template>
+                </svg>
+
+                <div class="backtest-side">
+                  <div class="mini-panel" style="margin-bottom: 16px">
+                    <div class="stat-grid-2">
+                      <div v-for="stat in backtestStats" :key="stat.label">
+                        <span class="prestige-label cell-label">{{ stat.label }}</span>
+                        <span class="stat-value prestige-mono" :style="{ color: stat.color }">{{ stat.value }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p class="muted-text">
+                    使用目前持倉權重回放近三年共同日價格；圖表顯示最近 60 個有效回測日。可切換正式 Historical 與 MVEWMA-FHS 的 95%／99% 回測結果。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <div ref="monteCarloSentinel" class="deferred-sentinel" />
+        <!-- Monte Carlo Simulation -->
+        <ScrollReveal class="mt-20" style="margin-bottom: 80px">
+          <div class="prestige-panel">
+            <div class="section-head">
+              <h2 class="panel-title">蒙地卡羅模擬</h2>
+              <span class="prestige-label">{{ monteCarlo?.model ?? 'MVEWMA-FHS' }} — {{ monteCarlo?.simulations?.toLocaleString() ?? '10,000' }} 次、{{ monteCarlo?.horizonDays ?? 252 }} 個交易日路徑模擬</span>
+            </div>
+            <div class="section-body">
+              <template v-if="monteCarlo?.status === 'ready'">
+                <svg width="100%" height="400" viewBox="0 0 900 400" preserveAspectRatio="xMidYMid meet">
+                  <line v-for="tick in monteCarloChart.ticks" :key="'g-' + tick" x1="70" :y1="monteCarloChart.y(tick)" x2="850" :y2="monteCarloChart.y(tick)" :stroke="tick === 0 ? 'rgba(245,239,224,0.55)' : 'rgba(201,168,106,0.12)'" :stroke-width="tick === 0 ? 1.5 : 1" :stroke-dasharray="tick === 0 ? 'none' : '4 4'" />
+                  <text
+                    v-for="tick in monteCarloChart.ticks"
+                    :key="'t-' + tick"
+                    x="65"
+                    :y="monteCarloChart.y(tick) + 4"
+                    text-anchor="end"
+                    fill="#9a917c"
+                    font-size="10"
+                  >{{ `${tick > 0 ? '+' : ''}${(tick * 100).toFixed(0)}%` }}</text>
+
+                  <!-- 98% band first, then the narrower 90% band so both remain distinguishable. -->
+                  <polygon :points="monteCarloChart.p1" fill="rgba(154,145,124,0.14)" stroke="#9a917c" stroke-opacity="0.72" stroke-width="0.8" />
+                  <polygon :points="monteCarloChart.p5" fill="rgba(201,168,106,0.18)" stroke="#c9a86a" stroke-opacity="0.82" stroke-width="0.8" />
+
+                  <polyline :points="monteCarloChart.p50" fill="none" stroke="#ddc18a" stroke-width="2" />
+
+                  <polyline
+                    v-for="path in monteCarlo.samplePaths"
+                    :key="path.pathIndex"
+                    :points="path.cumulativeReturns.map((value, day) => `${monteCarloChart.x(day)},${monteCarloChart.y(value)}`).join(' ')"
+                    fill="none"
+                    :stroke="['#9a917c', '#c9a86a', '#7fa387', '#ddc18a'][(path.pathIndex - 1) % 4]"
+                    stroke-width="1"
+                    opacity="0.58"
+                  />
+
+                  <g transform="translate(80, 18)">
+                    <line x1="0" y1="0" x2="20" y2="0" stroke="#ddc18a" stroke-width="2" />
+                    <text x="25" y="4" fill="#f5efe0" font-size="10">中位數路徑</text>
+                    <rect x="100" y="-6" width="16" height="10" fill="rgba(154,145,124,0.5)" />
+                    <text x="120" y="4" fill="#9a917c" font-size="10">98% 區間</text>
+                    <rect x="180" y="-6" width="16" height="10" fill="rgba(201,168,106,0.55)" />
+                    <text x="200" y="4" fill="#c9a86a" font-size="10">90% 區間</text>
+                  </g>
+                </svg>
+                <div class="prestige-panel flush-panel" style="margin-top: 20px">
+                  <div class="kpi-grid kpi-grid-5">
+                    <div v-for="stat in monteCarloStats" :key="stat.label" class="kpi-cell kpi-cell-sm">
+                      <span class="prestige-label cell-label">{{ stat.label }}</span>
+                      <span class="stat-value prestige-mono" :style="{ color: stat.color }">{{ stat.value }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mini-panel" style="margin-top: 20px">
+                  <div class="panel-head" style="margin-bottom: 12px">
+                    <span class="mini-title" style="margin: 0">模型診斷</span>
+                    <span class="prestige-label">Model Diagnostics</span>
+                  </div>
+                  <div v-if="monteCarlo.diagnostics.rightSkewWarning" class="warn-box">
+                    {{ monteCarlo.diagnostics.rightSkewMessage }}
+                  </div>
+                  <p v-else class="muted-text" style="margin-bottom: 14px">期望值與中位數差距未達 25 個百分點右偏警示門檻；仍請一併參考下行情境。</p>
+                  <div class="diag-grid">
+                    <div v-for="item in monteCarloDiagnostics" :key="item.label" class="diag-row">
+                      <span class="prestige-label">{{ item.label }}</span>
+                      <span class="prestige-mono diag-value">{{ item.value }}</span>
+                    </div>
+                  </div>
+                </div>
+                <p class="table-note" style="margin-top: 16px">以目前持倉權重與共同日價格資料推演未來報酬分布；區間不代表發生機率保證。</p>
+              </template>
+              <div v-else class="prestige-empty">
+                {{ monteCarlo?.message ?? '蒙地卡羅路徑資料載入中。' }}
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
       </template>
 
-      <div style="height: 80px" />
+      <div style="height: 60px" />
     </div>
 
     <Footer :dark="true" label="RISK" />
@@ -943,6 +1115,12 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.prestige-page {
+  min-height: calc(100vh - 60px);
+}
+
+.deferred-sentinel { height: 1px; }
+
 .mt-20 {
   margin-top: 40px;
 }
@@ -951,21 +1129,696 @@ onMounted(async () => {
   transition: all 0.3s ease;
 }
 
-.kimi-mock-label {
-  display: inline-block;
-  padding: 2px 8px;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  border: 1px solid #8B1A2B;
-  color: #8B1A2B;
-  margin-bottom: 8px;
+/* ---- Header ---- */
+.back-btn {
+  margin-bottom: 28px;
 }
 
-@media (max-width: 1024px) {
-  .kimi-grid-2 > * {
-    border-right: none !important;
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 36px;
+}
+
+.page-title {
+  font-family: var(--serif);
+  font-size: 28px;
+  font-weight: 600;
+  margin: 6px 0 0;
+  letter-spacing: 0.01em;
+}
+
+/* 細金狀態點（pulse 僅以透明度呼吸，不使用光暈） */
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.dot.pulse {
+  animation: dot-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.tag-completed {
+  color: var(--up);
+  border-color: rgba(127, 163, 135, 0.4);
+}
+
+/* ---- Panel primitives ---- */
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.panel-title {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.panel-sub-title {
+  margin: 0;
+  padding: 20px 20px 16px;
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.section-head {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--gold-border-soft);
+}
+
+.section-body {
+  padding: 24px;
+}
+
+.flush-panel {
+  overflow: hidden;
+}
+
+.muted-text {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.7;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ---- Governance status tags ---- */
+.tag-critical {
+  color: var(--down);
+  border-color: rgba(176, 92, 92, 0.45);
+}
+
+.tag-warning {
+  color: #d4a24e;
+  border-color: rgba(212, 162, 78, 0.45);
+}
+
+.tag-normal {
+  color: var(--up);
+  border-color: rgba(127, 163, 135, 0.4);
+}
+
+.tag-historical {
+  color: #d4a24e;
+  border-color: rgba(212, 162, 78, 0.45);
+}
+
+.tag-hypo {
+  color: var(--gold);
+  border-color: var(--gold-border);
+}
+
+/* ---- Governance alerts ---- */
+.alert-list {
+  display: grid;
+  gap: 8px;
+}
+
+.alert-item {
+  padding: 12px 14px;
+  border-left: 2px solid;
+  border-radius: 0 6px 6px 0;
+}
+
+.alert-item.critical {
+  background: rgba(176, 92, 92, 0.08);
+  border-color: var(--down);
+}
+
+.alert-item.critical .alert-name {
+  color: var(--down);
+}
+
+.alert-item.warning {
+  background: rgba(212, 162, 78, 0.08);
+  border-color: #d4a24e;
+}
+
+.alert-item.warning .alert-name {
+  color: #d4a24e;
+}
+
+.alert-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+
+.alert-thresholds {
+  color: var(--ivory);
+  font-size: 13px;
+}
+
+.alert-msg {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* ---- Sub blocks (snapshots / what-if) ---- */
+.sub-block {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--gold-border-soft);
+}
+
+.sub-title {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.snap-msg {
+  font-size: 12px;
+}
+
+.snap-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.snap-btn {
+  text-align: left;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 9px 14px;
+}
+
+.weight-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.weight-row {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 10px;
+  align-items: center;
+}
+
+.weight-label {
+  font-size: 13px;
+  color: var(--ivory);
+}
+
+.weight-input {
+  text-align: right;
+  font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
+}
+
+.weight-total {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.weight-total .neg {
+  color: #d4a24e;
+}
+
+.leverage-note {
+  margin: 6px 0 0;
+  color: #d4a24e;
+  font-size: 12px;
+}
+
+.scenario-metrics {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.scenario-panels {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ---- Mini panels / cells ---- */
+.mini-panel {
+  padding: 16px 18px;
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 6px;
+  background: var(--panel-bg);
+}
+
+.mini-cell {
+  padding: 12px 14px;
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 6px;
+  background: rgba(11, 18, 32, 0.5);
+}
+
+.mini-title {
+  margin: 0 0 8px;
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ivory);
+}
+
+.mini-value {
+  display: block;
+  margin-top: 6px;
+  color: var(--ivory);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mini-line {
+  font-size: 13px;
+  color: var(--ivory);
+  padding: 3px 0;
+}
+
+.mini-line.critical {
+  color: var(--down);
+}
+
+.mini-line.warning {
+  color: #d4a24e;
+}
+
+.snapshot-pre {
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  max-height: 420px;
+  background: rgba(11, 18, 32, 0.85);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 6px;
+  color: var(--ivory);
+  font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---- Info grids (run info / metadata) ---- */
+.info-grid {
+  display: grid;
+  gap: 1px;
+  background: var(--gold-border-soft);
+}
+
+.info-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.info-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.info-cell {
+  background: rgba(11, 18, 32, 0.6);
+  padding: 20px;
+}
+
+.cell-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.info-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ivory);
+}
+
+/* ---- KPI grids ---- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--gold-border-soft);
+}
+
+.kpi-grid-5 {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.kpi-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 130px;
+  padding: 24px 12px;
+  background: rgba(11, 18, 32, 0.6);
+  transition: background 0.3s ease;
+}
+
+.kpi-cell:hover {
+  background: rgba(201, 168, 106, 0.07);
+}
+
+.kpi-cell-sm {
+  min-height: 96px;
+  padding: 16px 10px;
+}
+
+.kpi-value {
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.kpi-sub {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 4px;
+}
+
+.metric-value {
+  color: var(--ivory);
+}
+
+.accent-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  transition: width 0.3s ease;
+}
+
+.kpi-cell:hover .accent-bar {
+  width: 2px;
+}
+
+.metric-accent {
+  background: var(--gold);
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* ---- Tables ---- */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.prestige-table th,
+.prestige-table td {
+  white-space: nowrap;
+}
+
+.td-num {
+  text-align: right;
+}
+
+.td-muted {
+  color: var(--muted);
+}
+
+.td-warn {
+  color: #d4a24e;
+}
+
+.td-danger {
+  color: var(--down);
+}
+
+.td-pos {
+  color: var(--up);
+}
+
+.table-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 12px 0 0;
+}
+
+/* ---- Charts ---- */
+.stack {
+  display: grid;
+  gap: 32px;
+}
+
+.chart-title {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--ivory);
+}
+
+.note-panel {
+  margin-top: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 6px;
+  background: var(--panel-bg);
+}
+
+.note-text {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.7;
+}
+
+.note-strong {
+  color: var(--ivory);
+}
+
+/* ---- Stress cards ---- */
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+
+.stress-card {
+  padding: 20px;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.3s ease, background 0.3s ease;
+}
+
+.stress-card:hover {
+  transform: translateY(-2px);
+}
+
+.stress-card.selected {
+  border-color: var(--gold);
+  background: rgba(201, 168, 106, 0.07);
+}
+
+.stress-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.stress-name {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ivory);
+}
+
+.stress-method {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 12px;
+  line-height: 1.6;
+}
+
+.stress-impact {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.impact-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--down);
+}
+
+.stress-detail {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gold-border-soft);
+}
+
+.stress-holding {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stress-holding-value {
+  color: var(--ivory);
+}
+
+.stress-industries {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stress-detail-panel {
+  margin-top: 20px;
+}
+
+/* ---- Toggle chips ---- */
+.chip-btn {
+  padding: 8px 16px;
+  font-size: 12px;
+}
+
+.chip-btn.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #0b1220;
+}
+
+/* ---- Backtest / Monte Carlo ---- */
+.backtest-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.stat-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.warn-box {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-left: 2px solid #d4a24e;
+  border-radius: 0 6px 6px 0;
+  background: rgba(212, 162, 78, 0.08);
+  color: #d4a24e;
+  font-size: 13px;
+}
+
+.diag-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px 24px;
+}
+
+.diag-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--gold-border-soft);
+  padding-bottom: 8px;
+}
+
+.diag-value {
+  color: var(--ivory);
+}
+
+.holdings-headline {
+  margin-bottom: 16px;
+  color: var(--ivory);
+  font-size: 14px;
+}
+
+.hl {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+/* ---- Responsive ---- */
+@media (min-width: 768px) {
+  .grid-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1024px) {
+  .kpi-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .kpi-grid-5 {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .diag-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .scenario-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .scenario-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .info-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .section-head {
+    padding: 16px;
+  }
+
+  .section-body {
+    padding: 16px;
   }
 }
 </style>

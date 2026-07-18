@@ -112,7 +112,7 @@ const showBenchmark = ref(false)
 const hoveredSegment = ref<number | null>(null)
 const hoveredIndustrySegment = ref<number | null>(null)
 const timeRanges = ['1Y', '6M', '3M', '1M', 'YTD']
-const allocationColors = ['#FF6B00', '#8B1A2B', '#D4AF37', '#4C78A8', '#54A24B', '#B279A2']
+const allocationColors = ['#c9a86a', '#a8905e', '#8a7348', '#3d5470', '#2a3d55', '#1d2c42']
 const securityResultGroups = computed(() => {
   const stocks: SecuritySearchResult[] = []
   const etfs: SecuritySearchResult[] = []
@@ -252,13 +252,13 @@ const performanceSeries = computed(() => {
 const kpiData = computed(() => {
   const v = valuation.value
   const pnlPercent = v?.totalUnrealizedPnlPercent ?? 0
-  const pnlColor = pnlPercent >= 0 ? '#34d399' : '#f87171'
+  const pnlColor = pnlPercent >= 0 ? '#7fa387' : '#b05c5c'
   return [
     {
       label: 'TOTAL VALUE',
       value: v ? formatMoney(v.totalAssetValue ?? v.totalMarketValue, v.currency) : '—',
       sub: v ? `持股 ${formatMoney(v.totalMarketValue, v.currency)} · 現金 ${formatMoney(v.cashBalance ?? 0, v.currency)}` : '',
-      valueStyle: { color: '#FFFFFF' },
+      valueStyle: { color: '#f5efe0' },
     },
     {
       label: 'UNREALIZED PNL',
@@ -270,27 +270,27 @@ const kpiData = computed(() => {
       label: 'REALIZED / TODAY',
       value: v ? formatMoney(v.totalRealizedPnl ?? 0, v.currency) : '—',
       sub: v?.todayPnl == null ? '今日損益 —' : `今日 ${formatMoney(v.todayPnl, v.currency)}`,
-      valueStyle: { color: (v?.totalRealizedPnl ?? 0) >= 0 ? '#34d399' : '#f87171' },
+      valueStyle: { color: (v?.totalRealizedPnl ?? 0) >= 0 ? '#7fa387' : '#b05c5c' },
     },
     {
       label: `${timeRange.value} TWR`,
       value: valuationHistory.value?.twr == null ? '—' : formatPercent(valuationHistory.value.twr),
-      valueStyle: { color: (valuationHistory.value?.twr ?? 0) >= 0 ? '#34d399' : '#f87171' },
+      valueStyle: { color: (valuationHistory.value?.twr ?? 0) >= 0 ? '#7fa387' : '#b05c5c' },
     },
     {
       label: `${timeRange.value} 年化 XIRR`,
       value: valuationHistory.value?.xirr == null ? '—' : formatPercent(valuationHistory.value.xirr),
-      valueStyle: { color: (valuationHistory.value?.xirr ?? 0) >= 0 ? '#34d399' : '#f87171' },
+      valueStyle: { color: (valuationHistory.value?.xirr ?? 0) >= 0 ? '#7fa387' : '#b05c5c' },
     },
     {
       label: 'BETA',
       value: valuationHistory.value?.beta == null ? '—' : valuationHistory.value.beta.toFixed(2),
-      valueStyle: { color: '#FFFFFF' },
+      valueStyle: { color: '#f5efe0' },
     },
     {
       label: "JENSEN'S ALPHA",
       value: valuationHistory.value?.jensenAlpha == null ? '—' : formatPercent(valuationHistory.value.jensenAlpha),
-      valueStyle: { color: (valuationHistory.value?.jensenAlpha ?? 0) >= 0 ? '#34d399' : '#f87171' },
+      valueStyle: { color: (valuationHistory.value?.jensenAlpha ?? 0) >= 0 ? '#7fa387' : '#b05c5c' },
     },
   ]
 })
@@ -1006,77 +1006,77 @@ async function handleAddStock() {
 onMounted(loadPortfolioData)
 </script>
 
+
 <template>
-  <div class="kimi-page-dark" style="padding-top: 40px">
-    <!-- Back + Header -->
-    <div class="kimi-content" style="margin-top: 0; padding-top: 20px">
-      <button class="kimi-btn kimi-btn-dark" style="margin-bottom: 24px" @click="router.push({ name: 'portfolios' })">
+  <div class="prestige-page">
+    <div class="prestige-section" style="padding-top: 48px">
+      <!-- Back + Header -->
+      <button class="prestige-btn small back-btn" @click="router.push({ name: 'portfolios' })">
         ← BACK TO PORTFOLIOS
       </button>
 
-      <div v-if="loading" style="color: #666666; padding: 40px 0">載入中...</div>
-      <div v-else-if="error" style="color: #f87171; padding: 40px 0">{{ error }}</div>
+      <div v-if="loading" class="skeleton-stack">
+        <div v-for="i in 3" :key="i" class="prestige-skeleton" />
+      </div>
+      <div v-else-if="error" class="prestige-error">{{ error }}</div>
 
       <template v-if="!loading && portfolio">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
+        <div class="detail-header prestige-fade">
           <div>
-            <h1 style="font-size: 28px; font-weight: 700; margin: 0; color: #FFFFFF">{{ portfolio.name }}</h1>
-            <span class="kimi-caption" style="margin-top: 4px; display: block">{{ portfolio.description || portfolio.baseCurrency }} PORTFOLIO</span>
+            <h1 class="detail-title">{{ portfolio.name }}</h1>
+            <span class="caption" style="margin-top: 4px; display: block">{{ portfolio.description || portfolio.baseCurrency }} PORTFOLIO</span>
           </div>
           <div style="display: flex; gap: 8px">
-            <span class="kimi-tag" style="border-color: #FF6B00; color: #FF6B00">{{ portfolio.baseCurrency }}</span>
-            <span class="kimi-caption" style="align-self: center; color: #666666">Last updated: {{ new Date(portfolio.updatedAtUtc).toLocaleDateString('zh-TW') }}</span>
+            <span class="prestige-tag prestige-mono">{{ portfolio.baseCurrency }}</span>
+            <span class="caption" style="align-self: center">Last updated: {{ new Date(portfolio.updatedAtUtc).toLocaleDateString('zh-TW') }}</span>
           </div>
         </div>
 
-        <div v-if="valuationError" class="kimi-panel-dark" style="margin-bottom: 20px; color: #fbbf24">
+        <div v-if="valuationError" class="prestige-warning" style="margin-bottom: 20px">
           {{ valuationError }}
         </div>
 
-        <div v-if="riskError" class="kimi-panel-dark" style="margin-bottom: 20px; color: #fbbf24">
+        <div v-if="riskError" class="prestige-warning" style="margin-bottom: 20px">
           {{ riskError }}
         </div>
 
         <!-- Portfolio Value Trend -->
         <ScrollReveal :delay="0.1" style="margin-top: 60px">
-          <div class="kimi-section-dark trend-section">
+          <div class="prestige-panel trend-section">
             <!-- Header -->
             <div class="trend-header">
-              <div class="trend-title-group">
-                <div class="trend-title">
-                  <h2 class="trend-main-title">投資組合價值走勢</h2>
-                  <span class="kimi-caption" style="margin-top: 6px; display: block">PORTFOLIO VALUE TREND · {{ fromDate }} — {{ toDate }}</span>
-                </div>
-                <div class="trend-metrics">
-                  <div v-for="(kpi, i) in kpiData" :key="i" class="trend-metric-item"
-                  >
-                    <span class="kimi-caption">{{ kpi.label }}</span>
-                    <span class="trend-metric-value" :style="kpi.valueStyle">{{ kpi.value }}</span>
-                    <span v-if="kpi.sub" class="trend-metric-sub">{{ kpi.sub }}</span>
-                  </div>
-                </div>
+              <div class="trend-title">
+                <h2 class="trend-main-title">投資組合價值走勢</h2>
+                <span class="caption" style="margin-top: 6px; display: block">PORTFOLIO VALUE TREND · {{ fromDate }} — {{ toDate }}</span>
               </div>
-              <div class="trend-pnl-range">
-                <div v-if="periodReturn !== null" class="trend-pnl">
-                  <div class="trend-pnl-value" :style="{ color: periodReturn >= 0 ? '#34d399' : '#f87171' }">
-                    {{ formatPercent(periodReturn) }}
+              <div class="trend-body">
+                <div v-for="(kpi, i) in kpiData" :key="i" class="trend-metric-item">
+                  <span class="caption">{{ kpi.label }}</span>
+                  <span class="trend-metric-value prestige-mono" :style="kpi.valueStyle">{{ kpi.value }}</span>
+                  <span v-if="kpi.sub" class="trend-metric-sub">{{ kpi.sub }}</span>
+                </div>
+                <div class="trend-pnl-range">
+                  <div v-if="periodReturn !== null" class="trend-pnl">
+                    <div class="trend-pnl-value prestige-mono" :class="periodReturn >= 0 ? 'pnl-up' : 'pnl-down'">
+                      {{ formatPercent(periodReturn) }}
+                    </div>
+                    <span class="caption">區間報酬</span>
                   </div>
-                  <span class="kimi-caption">區間報酬</span>
+                  <div class="time-range">
+                    <button
+                      v-for="r in timeRanges"
+                      :key="r"
+                      :class="['time-btn', timeRange === r && 'active']"
+                      :disabled="loadingPeriodData"
+                      @click="selectTimeRange(r)"
+                    >
+                      {{ r }}
+                    </button>
+                  </div>
+                  <button class="time-btn" :class="{ active: showBenchmark }" @click="showBenchmark = !showBenchmark">與台股加權含息指數比較</button>
+                  <span v-if="showBenchmark && !benchmarkTrendData" class="caption" style="display:block; margin-top:8px">基準暫時不可用，僅顯示組合走勢。</span>
+                  <span v-if="timeRange !== '1Y' && timeRange !== 'ALL'" class="caption" style="display:block; margin-top:8px">XIRR 為年化報酬，非本區間累積報酬。</span>
                 </div>
-                <div class="kimi-time-range">
-                  <button
-                    v-for="r in timeRanges"
-                    :key="r"
-                    :class="['kimi-time-btn', 'kimi-time-btn-dark', timeRange === r && 'active']"
-                    :disabled="loadingPeriodData"
-                    @click="selectTimeRange(r)"
-                  >
-                    {{ r }}
-                  </button>
-                </div>
-                <button class="kimi-time-btn kimi-time-btn-dark" :class="{ active: showBenchmark }" @click="showBenchmark = !showBenchmark">與台股加權含息指數比較</button>
-                <span v-if="showBenchmark && !benchmarkTrendData" class="kimi-caption" style="display:block; margin-top:8px">基準暫時不可用，僅顯示組合走勢。</span>
-                <span v-if="timeRange !== '1Y' && timeRange !== 'ALL'" class="kimi-caption" style="display:block; margin-top:8px">XIRR 為年化報酬，非本區間累積報酬。</span>
               </div>
             </div>
 
@@ -1089,16 +1089,17 @@ onMounted(loadPortfolioData)
                 :labels="valueTrendData.labels"
                 :y-axis-labels="valueTrendData.yAxisLabels"
                 :height="420"
-                line-color="#FFFFFF"
-                grid-color="#333333"
-                text-color="#888888"
+                line-color="#c9a86a"
+                fill-color="rgba(201, 168, 106, 0.08)"
+                grid-color="rgba(201, 168, 106, 0.14)"
+                text-color="#9a917c"
                 :dark="true"
                 :show-area="true"
                 :point-threshold="25"
                 :show-tooltip="true"
                 :tooltip-formatter="portfolioTrendTooltip"
                 :second-line="benchmarkTrendData ?? undefined"
-                second-line-color="#FF6B00"
+                second-line-color="#7fa387"
               />
               <div v-else class="insufficient-history">
                 {{ valuationHistoryError || '歷史估值資料不足兩筆，暫時無法顯示走勢圖。' }}
@@ -1108,68 +1109,68 @@ onMounted(loadPortfolioData)
             <!-- Performance & Risk grid -->
             <div class="trend-perf-grid">
               <!-- Cumulative Return -->
-              <div class="kimi-panel-dark perf-card">
+              <div class="perf-card">
                 <div class="perf-card-header">
                   <span class="perf-card-title">累積報酬率</span>
-                  <span class="kimi-caption">CUMULATIVE RETURN</span>
+                  <span class="caption">CUMULATIVE RETURN</span>
                 </div>
                 <div class="perf-chart-wrap">
                   <svg v-if="cumReturnPoints" width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="none">
-                    <line v-for="i in 5" :key="'g-' + i" x1="50" :y1="16 + (i - 1) * 34" x2="380" :y2="16 + (i - 1) * 34" stroke="#333333" stroke-width="1" stroke-dasharray="4 4" />
-                    <line v-if="0 >= cumReturnPoints!.min && 0 <= cumReturnPoints!.max" x1="50" :y1="16 + ((cumReturnPoints!.max - 0) / cumReturnPoints!.range) * 136" x2="380" :y2="16 + ((cumReturnPoints!.max - 0) / cumReturnPoints!.range) * 136" stroke="#666666" stroke-width="1" />
-                    <polyline :points="cumReturnPoints!.values.map((v, i) => `${50 + (i / (cumReturnPoints!.values.length - 1)) * 330},${16 + ((cumReturnPoints!.max - v) / cumReturnPoints!.range) * 136}`).join(' ')" fill="none" stroke="#FFFFFF" stroke-width="1.5" />
-                    <text v-for="i in 6" :key="'y-' + i" x="45" :y="16 + (i - 1) * 34 + 4" text-anchor="end" fill="#666666" font-size="9">{{ (cumReturnPoints!.max - ((i - 1) / 5) * cumReturnPoints!.range).toFixed(1) }}%</text>
+                    <line v-for="i in 5" :key="'g-' + i" x1="50" :y1="16 + (i - 1) * 34" x2="380" :y2="16 + (i - 1) * 34" stroke="rgba(201, 168, 106, 0.14)" stroke-width="1" stroke-dasharray="4 4" />
+                    <line v-if="0 >= cumReturnPoints!.min && 0 <= cumReturnPoints!.max" x1="50" :y1="16 + ((cumReturnPoints!.max - 0) / cumReturnPoints!.range) * 136" x2="380" :y2="16 + ((cumReturnPoints!.max - 0) / cumReturnPoints!.range) * 136" stroke="rgba(154, 145, 124, 0.5)" stroke-width="1" />
+                    <polyline :points="cumReturnPoints!.values.map((v, i) => `${50 + (i / (cumReturnPoints!.values.length - 1)) * 330},${16 + ((cumReturnPoints!.max - v) / cumReturnPoints!.range) * 136}`).join(' ')" fill="none" stroke="#c9a86a" stroke-width="1.5" />
+                    <text v-for="i in 6" :key="'y-' + i" x="45" :y="16 + (i - 1) * 34 + 4" text-anchor="end" fill="#9a917c" font-size="9">{{ (cumReturnPoints!.max - ((i - 1) / 5) * cumReturnPoints!.range).toFixed(1) }}%</text>
                   </svg>
                   <div v-else class="insufficient-history-sm">資料不足</div>
                 </div>
               </div>
 
               <!-- EWMA Rolling Volatility -->
-              <div class="kimi-panel-dark perf-card">
+              <div class="perf-card">
                 <div class="perf-card-header">
                   <span class="perf-card-title">滾動波動率 EWMA</span>
-                  <span class="kimi-caption">ROLLING VOLATILITY</span>
+                  <span class="caption">ROLLING VOLATILITY</span>
                 </div>
                 <div class="perf-chart-wrap">
                   <svg v-if="ewmaPoints" width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="none">
-                    <line v-for="i in 5" :key="'g-' + i" x1="50" :y1="16 + (i - 1) * 34" x2="380" :y2="16 + (i - 1) * 34" stroke="#333333" stroke-width="1" stroke-dasharray="4 4" />
-                    <polyline :points="ewmaPoints!.values.map((v, i) => `${50 + (i / (ewmaPoints!.values.length - 1)) * 330},${16 + ((ewmaPoints!.max - v) / ewmaPoints!.range) * 136}`).join(' ')" fill="none" stroke="#8B1A2B" stroke-width="1.5" />
-                    <text v-for="i in 6" :key="'y-' + i" x="45" :y="16 + (i - 1) * 34 + 4" text-anchor="end" fill="#666666" font-size="9">{{ (ewmaPoints!.max - ((i - 1) / 5) * ewmaPoints!.range).toFixed(1) }}%</text>
+                    <line v-for="i in 5" :key="'g-' + i" x1="50" :y1="16 + (i - 1) * 34" x2="380" :y2="16 + (i - 1) * 34" stroke="rgba(201, 168, 106, 0.14)" stroke-width="1" stroke-dasharray="4 4" />
+                    <polyline :points="ewmaPoints!.values.map((v, i) => `${50 + (i / (ewmaPoints!.values.length - 1)) * 330},${16 + ((ewmaPoints!.max - v) / ewmaPoints!.range) * 136}`).join(' ')" fill="none" stroke="#a8905e" stroke-width="1.5" />
+                    <text v-for="i in 6" :key="'y-' + i" x="45" :y="16 + (i - 1) * 34 + 4" text-anchor="end" fill="#9a917c" font-size="9">{{ (ewmaPoints!.max - ((i - 1) / 5) * ewmaPoints!.range).toFixed(1) }}%</text>
                   </svg>
                   <div v-else class="insufficient-history-sm">至少需要 22 筆資料</div>
                 </div>
               </div>
 
               <!-- Historical Drawdown -->
-              <div class="kimi-panel-dark perf-card">
+              <div class="perf-card">
                 <div class="perf-card-header">
                   <span class="perf-card-title">歷史回撤</span>
-                  <span class="kimi-caption">DRAWDOWN</span>
+                  <span class="caption">DRAWDOWN</span>
                 </div>
                 <div class="perf-chart-wrap">
                   <svg v-if="drawdownPoints" width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="none">
-                    <line v-for="i in 5" :key="'g-' + i" x1="50" :y1="16 + (i - 1) * 34" x2="380" :y2="16 + (i - 1) * 34" stroke="#333333" stroke-width="1" stroke-dasharray="4 4" />
-                    <polygon :points="`50,152 ${drawdownPoints!.values.map((v, i) => `${50 + (i / (drawdownPoints!.values.length - 1)) * 330},${16 + ((0 - v) / drawdownPoints!.range) * 136}`).join(' ')} 380,152`" fill="rgba(139,26,43,0.15)" />
-                    <polyline :points="drawdownPoints!.values.map((v, i) => `${50 + (i / (drawdownPoints!.values.length - 1)) * 330},${16 + ((0 - v) / drawdownPoints!.range) * 136}`).join(' ')" fill="none" stroke="#8B1A2B" stroke-width="1.5" />
-                    <line v-if="drawdownPoints!.maxIndex >= 0" :x1="50 + (drawdownPoints!.maxIndex / (drawdownPoints!.values.length - 1)) * 330" :y1="16 + ((0 - drawdownPoints!.maxDrawdown) / drawdownPoints!.range) * 136" :x2="50 + (drawdownPoints!.maxIndex / (drawdownPoints!.values.length - 1)) * 330" :y2="152" stroke="#FFFFFF" stroke-width="1" stroke-dasharray="4 4" />
-                    <text v-if="drawdownPoints!.maxIndex >= 0" :x="Math.min(370, Math.max(30, 50 + (drawdownPoints!.maxIndex / (drawdownPoints!.values.length - 1)) * 330))" :y="Math.max(20, 16 + ((0 - drawdownPoints!.maxDrawdown) / drawdownPoints!.range) * 136 - 6)" fill="#FFFFFF" font-size="9" font-weight="600" text-anchor="middle">{{ drawdownPoints!.maxDrawdown.toFixed(2) }}%</text>
-                    <text v-for="i in 5" :key="'y-' + i" x="45" :y="16 + (i - 1) * 34 + 4" text-anchor="end" fill="#666666" font-size="9">{{ (-(i - 1) / 4 * drawdownPoints!.range).toFixed(1) }}%</text>
+                    <line v-for="i in 5" :key="'g-' + i" x1="50" :y1="16 + (i - 1) * 34" x2="380" :y2="16 + (i - 1) * 34" stroke="rgba(201, 168, 106, 0.14)" stroke-width="1" stroke-dasharray="4 4" />
+                    <polygon :points="`50,152 ${drawdownPoints!.values.map((v, i) => `${50 + (i / (drawdownPoints!.values.length - 1)) * 330},${16 + ((0 - v) / drawdownPoints!.range) * 136}`).join(' ')} 380,152`" fill="rgba(176, 92, 92, 0.12)" />
+                    <polyline :points="drawdownPoints!.values.map((v, i) => `${50 + (i / (drawdownPoints!.values.length - 1)) * 330},${16 + ((0 - v) / drawdownPoints!.range) * 136}`).join(' ')" fill="none" stroke="#b05c5c" stroke-width="1.5" />
+                    <line v-if="drawdownPoints!.maxIndex >= 0" :x1="50 + (drawdownPoints!.maxIndex / (drawdownPoints!.values.length - 1)) * 330" :y1="16 + ((0 - drawdownPoints!.maxDrawdown) / drawdownPoints!.range) * 136" :x2="50 + (drawdownPoints!.maxIndex / (drawdownPoints!.values.length - 1)) * 330" :y2="152" stroke="#f5efe0" stroke-width="1" stroke-dasharray="4 4" />
+                    <text v-if="drawdownPoints!.maxIndex >= 0" :x="Math.min(370, Math.max(30, 50 + (drawdownPoints!.maxIndex / (drawdownPoints!.values.length - 1)) * 330))" :y="Math.max(20, 16 + ((0 - drawdownPoints!.maxDrawdown) / drawdownPoints!.range) * 136 - 6)" fill="#f5efe0" font-size="9" font-weight="600" text-anchor="middle">{{ drawdownPoints!.maxDrawdown.toFixed(2) }}%</text>
+                    <text v-for="i in 5" :key="'y-' + i" x="45" :y="16 + (i - 1) * 34 + 4" text-anchor="end" fill="#9a917c" font-size="9">{{ (-(i - 1) / 4 * drawdownPoints!.range).toFixed(1) }}%</text>
                   </svg>
                   <div v-else class="insufficient-history-sm">資料不足</div>
                 </div>
               </div>
 
               <!-- Risk Metrics -->
-              <div class="kimi-panel-dark perf-card perf-card-metrics">
+              <div class="perf-card perf-card-metrics">
                 <div class="perf-card-header">
                   <span class="perf-card-title">風險指標</span>
-                  <span class="kimi-caption">RISK METRICS</span>
+                  <span class="caption">RISK METRICS</span>
                 </div>
                 <div class="perf-metrics-list">
                   <div v-for="(r, i) in riskMetrics" :key="i" class="perf-metric-row"
                   >
-                    <span class="kimi-caption">{{ r.label }}</span>
-                    <span class="perf-metric-value">{{ r.value }}</span>
+                    <span class="caption">{{ r.label }}</span>
+                    <span class="perf-metric-value prestige-mono">{{ r.value }}</span>
                   </div>
                 </div>
               </div>
@@ -1179,7 +1180,7 @@ onMounted(loadPortfolioData)
 
         <!-- Asset Allocation -->
         <ScrollReveal :delay="0.15" style="margin-top: 60px">
-          <div class="kimi-section-dark allocation-section">
+          <div class="prestige-panel allocation-section">
             <!-- Donut -->
             <div class="allocation-chart">
               <DonutChart
@@ -1188,6 +1189,7 @@ onMounted(loadPortfolioData)
                 :center-sub-label="`${allocationRows.length} 檔持倉`"
                 :active-index="hoveredSegment"
                 :dark="true"
+                :label-threshold="1.1"
                 @segment-hover="(i) => hoveredSegment = i"
               />
             </div>
@@ -1195,34 +1197,34 @@ onMounted(loadPortfolioData)
             <div class="allocation-holdings">
               <div class="allocation-holdings-header">
                 <div>
-                  <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #FFFFFF">持倉明細</h2>
-                  <span class="kimi-caption">HOLDINGS</span>
+                  <h2 class="panel-title">持倉明細</h2>
+                  <span class="caption">HOLDINGS</span>
                 </div>
-                <button class="kimi-btn kimi-btn-solid-dark" @click="toggleNewStockForm">
+                <button class="prestige-btn prestige-btn-solid small" @click="toggleNewStockForm">
                   {{ showAddStock ? 'CANCEL' : '+ ADD STOCK' }}
                 </button>
               </div>
 
-              <div v-if="selectedHolding && !showAddStock" class="kimi-panel-dark" style="margin-bottom: 20px">
-                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px">
+              <div v-if="selectedHolding && !showAddStock" class="prestige-panel prestige-panel-pad inner-panel">
+                <div class="inner-panel-head">
                   <div>
-                    <h3 style="margin: 0 0 4px; color: #FFFFFF; font-size: 16px; font-weight: 600">
+                    <h3 class="inner-panel-title">
                       {{ selectedHolding.ticker }} 交易紀錄
                     </h3>
-                    <span class="kimi-caption">{{ selectedHolding.exchange }} · {{ selectedHolding.securityName }}</span>
+                    <span class="caption">{{ selectedHolding.exchange }} · {{ selectedHolding.securityName }}</span>
                   </div>
                   <div style="display: flex; gap: 8px">
-                    <button class="kimi-btn kimi-btn-dark" @click="openTransactionForm('Buy')">買入</button>
-                    <button class="kimi-btn kimi-btn-solid-dark" @click="openTransactionForm('Sell')">賣出</button>
-                    <button class="kimi-btn kimi-btn-dark" @click="openClosePositionForm">平倉</button>
+                    <button class="prestige-btn small" @click="openTransactionForm('Buy')">買入</button>
+                    <button class="prestige-btn prestige-btn-solid small" @click="openTransactionForm('Sell')">賣出</button>
+                    <button class="prestige-btn small" @click="openClosePositionForm">平倉</button>
                   </div>
                 </div>
 
                 <div v-if="loadingTransactions" class="transaction-empty">載入交易紀錄中...</div>
-                <div v-else-if="transactionsError" class="transaction-error">{{ transactionsError }}</div>
+                <div v-else-if="transactionsError" class="prestige-error">{{ transactionsError }}</div>
                 <div v-else-if="!holdingTransactions.length" class="transaction-empty">尚無交易紀錄。</div>
                 <div v-else style="overflow-x: auto">
-                  <table class="kimi-table kimi-table-dark transaction-table">
+                  <table class="prestige-table transaction-table">
                     <thead>
                       <tr>
                         <th>日期</th>
@@ -1238,7 +1240,7 @@ onMounted(loadPortfolioData)
                     <tbody>
                       <tr v-for="transaction in paginatedHoldingTransactions" :key="transaction.id">
                         <td>{{ transaction.transactionDate }}</td>
-                        <td :style="{ color: transaction.transactionType === 'BUY' ? '#34d399' : '#fbbf24' }">
+                        <td :class="transaction.transactionType === 'BUY' ? 'tx-buy' : 'tx-sell'">
                           {{ transaction.transactionType === 'BUY' ? '買入' : '賣出' }}
                         </td>
                         <td>{{ formatNumber(transaction.quantity) }}</td>
@@ -1271,25 +1273,25 @@ onMounted(loadPortfolioData)
                 </div>
               </div>
 
-              <div v-if="showAddStock" class="kimi-panel-dark" style="margin-bottom: 20px">
+              <div v-if="showAddStock" class="prestige-panel prestige-panel-pad inner-panel">
                 <div style="margin-bottom: 14px">
-                  <h3 style="margin: 0 0 4px; color: #FFFFFF; font-size: 16px; font-weight: 600">新增股票交易</h3>
-                  <span class="kimi-caption">先搜尋股票，選取結果後填入交易資料</span>
+                  <h3 class="inner-panel-title">新增股票交易</h3>
+                  <span class="caption">先搜尋股票，選取結果後填入交易資料</span>
                 </div>
 
                 <label class="field-label">股票搜尋</label>
                 <div style="display: grid; grid-template-columns: 2fr auto; gap: 12px; margin-bottom: 12px">
                   <input
                     v-model="securityQuery"
-                    class="kimi-input-dark"
+                    class="prestige-input"
                     placeholder="搜尋股票代號或名稱，例如 TSM / AAPL / 2330"
                     @keyup.enter="handleSearchSecurities"
                   />
-                  <button class="kimi-btn kimi-btn-dark" :disabled="searchingSecurities" @click="handleSearchSecurities">
+                  <button class="prestige-btn small" :disabled="searchingSecurities" @click="handleSearchSecurities">
                     {{ searchingSecurities ? 'SEARCHING...' : 'SEARCH' }}
                   </button>
                 </div>
-                <div v-if="securityResults.length" style="border: 1px solid #333333; margin-bottom: 16px; max-height: 240px; overflow-y: auto">
+                <div v-if="securityResults.length" class="security-results">
                   <template v-for="group in securityResultGroups" :key="group.label">
                     <div class="security-result-group-label">{{ group.label }}</div>
                     <button
@@ -1298,37 +1300,37 @@ onMounted(loadPortfolioData)
                       class="security-result-btn"
                       @click="selectSecurity(security)"
                     >
-                      <span style="font-weight: 600; color: #FFFFFF">{{ security.ticker }}</span>
-                      <span style="color: #666666">{{ security.exchange }}</span>
-                      <span style="color: #FFFFFF">{{ security.name }}</span>
-                      <span style="margin-left: auto; color: #666666">{{ security.source }}</span>
+                      <span class="sr-ticker">{{ security.ticker }}</span>
+                      <span class="sr-dim">{{ security.exchange }}</span>
+                      <span>{{ security.name }}</span>
+                      <span class="sr-source">{{ security.source }}</span>
                     </button>
                   </template>
                 </div>
 
-                <div v-if="selectedSecurity" style="margin-bottom: 16px; color: #34d399; font-size: 13px">
+                <div v-if="selectedSecurity" class="selected-security">
                   已選擇：{{ selectedSecurity.ticker }} / {{ selectedSecurity.exchange }} / {{ selectedSecurity.name }}
                 </div>
 
-                <div style="margin-bottom: 16px; color: #999999; font-size: 12px; line-height: 1.6">
+                <div class="form-note" style="margin-bottom: 16px">
                   成交價只用於計算交易成本與平均成本；目前市值、損益與風險分析會使用市場價格資料。
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 12px">
                   <label>
                     <span class="field-label">交易類型</span>
-                    <select v-model="addStockForm.transactionType" class="kimi-input-dark">
+                    <select v-model="addStockForm.transactionType" class="prestige-input">
                       <option value="Buy">Buy 買入</option>
                       <option value="Sell">Sell 賣出</option>
                     </select>
                   </label>
                   <label>
                     <span class="field-label">數量</span>
-                    <input v-model.number="addStockForm.quantity" class="kimi-input-dark" type="number" min="0" step="0.0001" placeholder="例如 10" />
+                    <input v-model.number="addStockForm.quantity" class="prestige-input" type="number" min="0" step="0.0001" placeholder="例如 10" />
                   </label>
                   <label>
                     <span class="field-label">成交價來源</span>
-                    <select v-model="priceSource" class="kimi-input-dark" @change="handlePriceSourceChange">
+                    <select v-model="priceSource" class="prestige-input" @change="handlePriceSourceChange">
                       <option value="Manual">自訂成交價</option>
                       <option value="Close">收盤價</option>
                     </select>
@@ -1337,7 +1339,7 @@ onMounted(loadPortfolioData)
                     <span class="field-label">成交價（交易成本）</span>
                     <input
                       v-model.number="addStockForm.price"
-                      class="kimi-input-dark"
+                      class="prestige-input"
                       type="number"
                       min="0"
                       step="0.0001"
@@ -1347,53 +1349,54 @@ onMounted(loadPortfolioData)
                   </label>
                   <label>
                     <span class="field-label">手續費</span>
-                    <input v-model.number="addStockForm.fee" class="kimi-input-dark" type="number" min="0" step="0.01" placeholder="可填 0" />
+                    <input v-model.number="addStockForm.fee" class="prestige-input" type="number" min="0" step="0.01" placeholder="可填 0" />
                   </label>
                 </div>
 
-                <div v-if="priceSource === 'Close'" style="margin: -4px 0 12px; color: #999999; font-size: 12px">
+                <div v-if="priceSource === 'Close'" class="form-note" style="margin: -4px 0 12px">
                   {{ loadingClosePrice ? '正在帶入收盤價...' : (closingPriceStatus || '使用交易日期當日或之前最近一個交易日的收盤價。') }}
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: center">
                   <label>
                     <span class="field-label">交易日期</span>
-                    <input v-model="addStockForm.transactionDate" class="kimi-input-dark" type="date" @change="handleTransactionDateChange" />
+                    <input v-model="addStockForm.transactionDate" class="prestige-input" type="date" @change="handleTransactionDateChange" />
                   </label>
                   <label>
                     <span class="field-label">備註</span>
-                    <input v-model="addStockForm.note" class="kimi-input-dark" placeholder="選填，例如首次買入" />
+                    <input v-model="addStockForm.note" class="prestige-input" placeholder="選填，例如首次買入" />
                   </label>
-                  <button class="kimi-btn kimi-btn-solid-dark" :disabled="addingStock" @click="handleAddStock">
+                  <button class="prestige-btn prestige-btn-solid small" :disabled="addingStock" @click="handleAddStock">
                     {{ addingStock ? 'ADDING...' : 'ADD' }}
                   </button>
                 </div>
 
-                <div v-if="addStockError" style="margin-top: 12px; color: #f87171; font-size: 13px">
+                <div v-if="addStockError" class="prestige-error" style="margin-top: 12px">
                   {{ addStockError }}
                 </div>
-                <div v-if="addStockStatus" style="margin-top: 12px; color: #999999; font-size: 13px">
+                <div v-if="addStockStatus" class="form-note" style="margin-top: 12px">
                   {{ addStockStatus }}
                 </div>
               </div>
 
-              <div v-if="addStockWarning" style="margin-bottom: 12px; color: #fbbf24; font-size: 13px; line-height: 1.6">
+              <div v-if="addStockWarning" class="prestige-warning" style="margin-bottom: 12px">
                 {{ addStockWarning }}
               </div>
 
-              <DataTable
-                v-if="allocationRows.length"
-                :headers="['代碼', '名稱', '交易所', '持有股數', '現價', '價格狀態', '市值', '占比', '損益']"
-                :rows="allocationRows"
-                :highlight-row="hoveredSegment"
-                :dark="true"
-                @row-hover="(i) => hoveredSegment = i"
-                @row-click="openHoldingTransactions"
-              />
-              <div v-if="hasMissingPrices" style="margin-top: 12px; color: #fbbf24; font-size: 13px; line-height: 1.6">
+              <div v-if="allocationRows.length" class="prestige-data-table">
+                <DataTable
+                  :headers="['代碼', '名稱', '交易所', '持有股數', '現價', '價格狀態', '市值', '占比', '損益']"
+                  :rows="allocationRows"
+                  :highlight-row="hoveredSegment"
+                  :dark="true"
+                  @row-hover="(i) => hoveredSegment = i"
+                  @row-click="openHoldingTransactions"
+                />
+              </div>
+              <div v-if="hasMissingPrices" class="prestige-warning" style="margin-top: 12px">
                 部分持倉尚無市場價格，因此市值、損益、資產走勢與風險分析可能暫不可用或不完整。
               </div>
-              <div v-if="!allocationRows.length" style="padding: 32px 0; color: #666666; font-size: 14px">
+              <div v-if="!allocationRows.length" class="prestige-empty">
                 此投資組合尚無持倉。新增持倉後會顯示估值與權重明細。
               </div>
             </div>
@@ -1402,11 +1405,11 @@ onMounted(loadPortfolioData)
 
         <!-- Industry Allocation -->
         <ScrollReveal :delay="0.1" style="margin-top: 60px">
-          <div class="kimi-section-dark allocation-section">
+          <div class="prestige-panel allocation-section">
             <div class="allocation-chart">
               <div style="text-align: center; margin-bottom: 16px">
-                <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #FFFFFF">產業配置</h2>
-                <span class="kimi-caption">INDUSTRY ALLOCATION</span>
+                <h2 class="panel-title">產業配置</h2>
+                <span class="caption">INDUSTRY ALLOCATION</span>
               </div>
               <DonutChart
                 v-if="industrySegments.length"
@@ -1415,6 +1418,7 @@ onMounted(loadPortfolioData)
                 :center-sub-label="`${industrySegments.length} 個產業`"
                 :active-index="hoveredIndustrySegment"
                 :dark="true"
+                :label-threshold="1.1"
                 @segment-hover="(i) => hoveredIndustrySegment = i"
               />
               <div v-else class="insufficient-history" style="min-height: 300px">
@@ -1424,19 +1428,20 @@ onMounted(loadPortfolioData)
             <div class="allocation-holdings">
               <div class="allocation-holdings-header">
                 <div>
-                  <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #FFFFFF">產業明細</h2>
-                  <span class="kimi-caption">INDUSTRY BREAKDOWN</span>
+                  <h2 class="panel-title">產業明細</h2>
+                  <span class="caption">INDUSTRY BREAKDOWN</span>
                 </div>
               </div>
-              <DataTable
-                v-if="industryRows.length"
-                :headers="['產業', '市值', '占比']"
-                :rows="industryRows"
-                :highlight-row="hoveredIndustrySegment"
-                :dark="true"
-                @row-hover="(i) => hoveredIndustrySegment = i"
-              />
-              <div v-else style="padding: 32px 0; color: #666666; font-size: 14px">
+              <div v-if="industryRows.length" class="prestige-data-table">
+                <DataTable
+                  :headers="['產業', '市值', '占比']"
+                  :rows="industryRows"
+                  :highlight-row="hoveredIndustrySegment"
+                  :dark="true"
+                  @row-hover="(i) => hoveredIndustrySegment = i"
+                />
+              </div>
+              <div v-else class="prestige-empty">
                 此投資組合尚無產業分類資料。
               </div>
             </div>
@@ -1445,17 +1450,17 @@ onMounted(loadPortfolioData)
 
         <!-- Transaction Ledger -->
         <ScrollReveal :delay="0.1" style="margin-top: 60px">
-          <div class="kimi-section-dark">
-            <div style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #FFFFFF">交易帳</h2>
-              <span class="kimi-caption">TRANSACTION LEDGER — 所有買賣紀錄</span>
+          <div class="prestige-panel">
+            <div class="panel-head">
+              <h2 class="panel-title">交易帳</h2>
+              <span class="caption">TRANSACTION LEDGER — 所有買賣紀錄</span>
             </div>
-            <div style="padding: 20px">
+            <div class="panel-body">
               <div v-if="loadingAllTransactions" class="transaction-empty">載入交易紀錄中...</div>
-              <div v-else-if="allTransactionsError" class="transaction-error">{{ allTransactionsError }}</div>
+              <div v-else-if="allTransactionsError" class="prestige-error">{{ allTransactionsError }}</div>
               <div v-else-if="!allTransactions.length" class="transaction-empty">尚無交易紀錄。</div>
               <div v-else style="overflow-x: auto">
-                <table class="kimi-table kimi-table-dark transaction-table">
+                <table class="prestige-table transaction-table">
                   <thead>
                     <tr>
                       <th>日期</th>
@@ -1474,7 +1479,7 @@ onMounted(loadPortfolioData)
                   <tbody>
                     <tr v-for="transaction in paginatedAllTransactions" :key="transaction.id">
                       <td>{{ transaction.transactionDate }}</td>
-                      <td :style="{ color: transaction.transactionType === 'BUY' ? '#34d399' : '#fbbf24' }">
+                      <td :class="transaction.transactionType === 'BUY' ? 'tx-buy' : 'tx-sell'">
                         {{ transaction.transactionType === 'BUY' ? '買入' : '賣出' }}
                       </td>
                       <td>{{ transaction.ticker }}</td>
@@ -1498,7 +1503,7 @@ onMounted(loadPortfolioData)
                   </tbody>
                 </table>
                 <div
-                  v-if="allTransactionPageCount >  1"
+                  v-if="allTransactionPageCount > 1"
                   style="margin-top: 16px; display: flex; justify-content: flex-end"
                 >
                   <NPagination
@@ -1514,21 +1519,21 @@ onMounted(loadPortfolioData)
 
         <!-- Manual cash flows -->
         <ScrollReveal :delay="0.1" style="margin-top: 60px">
-          <div class="kimi-section-dark">
-            <div style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #FFFFFF">現金流帳</h2>
-              <span class="kimi-caption">CASH LEDGER — 現金變動</span>
+          <div class="prestige-panel">
+            <div class="panel-head">
+              <h2 class="panel-title">現金流帳</h2>
+              <span class="caption">CASH LEDGER — 現金變動</span>
             </div>
-            <div style="padding: 20px">
+            <div class="panel-body">
               <div style="display: grid; grid-template-columns: 1fr 160px auto; gap: 10px; margin-bottom: 18px">
-                <input v-model.number="cashFlowAmount" class="kimi-input-dark" type="number" step="0.01" placeholder="金額（正數入金、負數出金）" />
-                <input v-model="cashFlowForm.effectiveDate" class="kimi-input-dark" type="date" />
-                <button class="kimi-btn kimi-btn-solid-dark" :disabled="savingCashFlow" @click="saveCashFlow">{{ savingCashFlow ? '儲存中...' : '新增' }}</button>
+                <input v-model.number="cashFlowAmount" class="prestige-input" type="number" step="0.01" placeholder="金額（正數入金、負數出金）" />
+                <input v-model="cashFlowForm.effectiveDate" class="prestige-input" type="date" />
+                <button class="prestige-btn prestige-btn-solid small" :disabled="savingCashFlow" @click="saveCashFlow">{{ savingCashFlow ? '儲存中...' : '新增' }}</button>
               </div>
-              <div v-if="cashFlowsError" class="transaction-error">{{ cashFlowsError }}</div>
+              <div v-if="cashFlowsError" class="prestige-error">{{ cashFlowsError }}</div>
               <div v-else-if="!manualCashFlows.length" class="transaction-empty">尚無現金變動紀錄。</div>
-              <div v-else style="overflow-x: auto"><table class="kimi-table kimi-table-dark transaction-table"><thead><tr><th>日期</th><th>現金變動</th><th aria-label="操作" /></tr></thead><tbody>
-                <tr v-for="flow in manualCashFlows" :key="flow.id"><td>{{ flow.effectiveDate }}</td><td :style="{ color: flow.flowType === 'Withdrawal' || flow.flowType === 'Fee' || flow.flowType === 'DividendTax' ? '#f87171' : '#34d399' }">{{ flow.flowType === 'Withdrawal' || flow.flowType === 'Fee' || flow.flowType === 'DividendTax' ? '−' : '+' }}{{ formatMoney(flow.amount, flow.currency) }} <span v-if="flow.isSystemDerived" class="kimi-caption">系統推導</span></td><td style="white-space: nowrap"><template v-if="!flow.isSystemDerived"><button class="transaction-delete" @click="editCashFlow(flow)">修改</button><button class="transaction-delete" @click="removeCashFlow(flow)">刪除</button></template></td></tr>
+              <div v-else style="overflow-x: auto"><table class="prestige-table transaction-table"><thead><tr><th>日期</th><th>現金變動</th><th aria-label="操作" /></tr></thead><tbody>
+                <tr v-for="flow in manualCashFlows" :key="flow.id"><td>{{ flow.effectiveDate }}</td><td :class="flow.flowType === 'Withdrawal' || flow.flowType === 'Fee' || flow.flowType === 'DividendTax' ? 'pnl-down' : 'pnl-up'">{{ flow.flowType === 'Withdrawal' || flow.flowType === 'Fee' || flow.flowType === 'DividendTax' ? '−' : '+' }}{{ formatMoney(flow.amount, flow.currency) }} <span v-if="flow.isSystemDerived" class="caption">系統推導</span></td><td style="white-space: nowrap"><template v-if="!flow.isSystemDerived"><button class="transaction-delete" @click="editCashFlow(flow)">修改</button><button class="transaction-delete" @click="removeCashFlow(flow)">刪除</button></template></td></tr>
               </tbody></table></div>
             </div>
           </div>
@@ -1536,17 +1541,17 @@ onMounted(loadPortfolioData)
 
         <!-- Dividend cash flows -->
         <ScrollReveal :delay="0.1" style="margin-top: 60px">
-          <div class="kimi-section-dark">
-            <div style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #FFFFFF">股息紀錄</h2>
-              <span class="kimi-caption">DIVIDEND CASH FLOWS — 自動入帳</span>
+          <div class="prestige-panel">
+            <div class="panel-head">
+              <h2 class="panel-title">股息紀錄</h2>
+              <span class="caption">DIVIDEND CASH FLOWS — 自動入帳</span>
             </div>
-            <div style="padding: 20px">
+            <div class="panel-body">
               <div v-if="loadingDividendCashFlows" class="transaction-empty">載入中...</div>
-              <div v-else-if="dividendCashFlowsError" class="transaction-error">{{ dividendCashFlowsError }}</div>
+              <div v-else-if="dividendCashFlowsError" class="prestige-error">{{ dividendCashFlowsError }}</div>
               <div v-else-if="!dividendCashFlows.length" class="transaction-empty">目前沒有符合持倉的股息紀錄。</div>
               <div v-else style="overflow-x: auto">
-                <table class="kimi-table kimi-table-dark transaction-table">
+                <table class="prestige-table transaction-table">
                   <thead>
                     <tr>
                       <th>股票</th>
@@ -1560,7 +1565,7 @@ onMounted(loadPortfolioData)
                   </thead>
                   <tbody>
                     <tr v-for="flow in dividendCashFlows" :key="flow.id">
-                      <td><strong style="color: #FFFFFF">{{ flow.ticker }}</strong><br><span class="kimi-caption">{{ flow.securityName }}</span></td>
+                      <td><strong class="cell-strong">{{ flow.ticker }}</strong><br><span class="caption">{{ flow.securityName }}</span></td>
                       <td>{{ flow.exDividendDate }}</td>
                       <td>{{ flow.paymentDate || '—' }}</td>
                       <td>{{ formatNumber(flow.sharesEntitled) }}</td>
@@ -1577,29 +1582,29 @@ onMounted(loadPortfolioData)
 
         <!-- Latest dividend reference data -->
         <ScrollReveal :delay="0.1" style="margin-top: 60px">
-          <div class="kimi-section-dark">
-            <div style="padding: 20px; border-bottom: 1px solid #333333">
-              <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #FFFFFF">市場最新股息</h2>
-              <span class="kimi-caption">LATEST DIVIDEND REFERENCE DATA</span>
+          <div class="prestige-panel">
+            <div class="panel-head">
+              <h2 class="panel-title">市場最新股息</h2>
+              <span class="caption">LATEST DIVIDEND REFERENCE DATA</span>
             </div>
-            <div style="padding: 20px">
+            <div class="panel-body">
               <div
                 v-if="loadingLatestDividends"
-                style="color: #666666; text-align: center; padding: 40px 0">
+                class="transaction-empty">
                 載入中...
               </div>
               <div
                 v-else-if="latestDividendsError"
-                style="color: #f87171; text-align: center; padding: 40px 0">
+                class="prestige-error">
                 {{ latestDividendsError }}
               </div>
               <div
                 v-else-if="!latestDividends.length"
-                style="color: #666666; text-align: center; padding: 40px 0">
+                class="transaction-empty">
                 目前沒有符合的股息資訊。
               </div>
               <div v-else style="overflow-x: auto">
-                <table class="kimi-table kimi-table-dark">
+                <table class="prestige-table">
                   <thead>
                     <tr>
                       <th>股票</th>
@@ -1612,8 +1617,8 @@ onMounted(loadPortfolioData)
                   <tbody>
                     <tr v-for="dividend in latestDividends" :key="dividend.securityId">
                       <td>
-                        <div style="font-weight: 600; color: #FFFFFF">{{ dividend.ticker }}</div>
-                        <div style="font-size: 12px; color: #666666">{{ dividend.securityName }}</div>
+                        <div class="cell-strong">{{ dividend.ticker }}</div>
+                        <div class="cell-sub">{{ dividend.securityName }}</div>
                       </td>
                       <td>{{ dividend.exDividendDate }}</td>
                       <td>{{ dividend.paymentDate || '—' }}</td>
@@ -1626,70 +1631,256 @@ onMounted(loadPortfolioData)
             </div>
           </div>
         </ScrollReveal>
-
-        <div style="height: 80px" />
       </template>
     </div>
 
-    <footer class="kimi-footer kimi-footer-dark">
-      <span style="color: #666666">EQUITYLENS 2026</span>
-      <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px; color: #666666">PORTFOLIO</span>
-      <span style="color: #666666">數據僅供參考</span>
+    <footer class="detail-footer">
+      <span class="prestige-mono">EQUITYLENS 2026</span>
+      <span class="prestige-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px">PORTFOLIO</span>
+      <span>數據僅供參考</span>
     </footer>
   </div>
 </template>
 
 <style scoped>
+.prestige-page {
+  min-height: calc(100vh - 60px);
+}
+
+.back-btn {
+  margin-bottom: 24px;
+}
+
+.skeleton-stack {
+  display: grid;
+  gap: 16px;
+}
+
+/* ---- Typography helpers ---- */
+.caption {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.detail-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ---- Status colors ---- */
+.prestige-warning {
+  padding: 14px 18px;
+  border: 1px solid var(--gold-border);
+  border-radius: 6px;
+  background: rgba(201, 168, 106, 0.07);
+  color: var(--gold-strong);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.pnl-up {
+  color: var(--up);
+}
+
+.pnl-down {
+  color: var(--down);
+}
+
+.tx-buy {
+  color: var(--up);
+}
+
+.tx-sell {
+  color: var(--gold);
+}
+
+/* ---- Buttons ---- */
+.prestige-btn.small {
+  padding: 8px 16px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+/* ---- Time range buttons ---- */
+.time-range {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.time-btn {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.time-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.time-btn.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #0b1220;
+}
+
+.time-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 .period-loading {
   display: inline-block;
   margin-top: 8px;
-  color: #fbbf24;
+  color: var(--gold);
   font-size: 12px;
 }
 
-.kimi-input-dark {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #333333;
-  background: transparent;
-  color: #ffffff;
-  outline: none;
+/* ---- Panel building blocks ---- */
+.panel-head {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--gold-border-soft);
+}
+
+.panel-body {
+  padding: 20px 24px;
+}
+
+.panel-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.inner-panel {
+  margin-bottom: 20px;
+}
+
+.inner-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.inner-panel-title {
+  margin: 0 0 4px;
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ---- Tables ---- */
+.transaction-table th,
+.transaction-table td {
+  white-space: nowrap;
+}
+
+.cell-strong {
+  font-weight: 600;
+  color: var(--ivory);
+}
+
+.cell-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.transaction-empty {
+  padding: 20px 0;
   font-size: 14px;
-  font-family: var(--kimi-font-body);
+  text-align: center;
+  color: var(--muted);
 }
 
-.kimi-input-dark:focus {
-  border-color: #ffffff;
+.transaction-delete {
+  border: 1px solid rgba(176, 92, 92, 0.4);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--down);
+  padding: 5px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  transition: all 0.2s ease;
 }
 
-.kimi-input-dark::placeholder {
-  color: #666666;
+.transaction-delete:hover {
+  border-color: var(--down);
+  background: rgba(176, 92, 92, 0.1);
 }
 
+.transaction-delete:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* ---- Add stock form ---- */
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.form-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.selected-security {
+  margin-bottom: 16px;
+  color: var(--up);
+  font-size: 13px;
+}
+
+.security-results {
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 6px;
+  margin-bottom: 16px;
+  max-height: 240px;
+  overflow-y: auto;
+}
 
 .security-result-group-label {
   position: sticky;
   top: 0;
   z-index: 1;
   padding: 7px 10px;
-  border-bottom: 1px solid #333333;
-  background: #171717;
-  color: #999999;
+  border-bottom: 1px solid var(--gold-border-soft);
+  background: #101a2e;
+  color: var(--gold);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
-}
-.field-label {
-  display: block;
-  margin-bottom: 6px;
-  color: #999999;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-select.kimi-input-dark {
-  cursor: pointer;
 }
 
 .security-result-btn {
@@ -1699,62 +1890,37 @@ select.kimi-input-dark {
   gap: 12px;
   padding: 10px 12px;
   border: none;
-  border-bottom: 1px solid #333333;
+  border-bottom: 1px solid var(--gold-border-soft);
   background: transparent;
   text-align: left;
   cursor: pointer;
-  font-family: var(--kimi-font-body);
+  font-family: inherit;
+  color: var(--ivory);
+  font-size: 13px;
+  transition: background 0.2s ease;
 }
 
 .security-result-btn:hover {
-  background: #111111;
+  background: rgba(201, 168, 106, 0.07);
 }
 
-.insufficient-history {
-  min-height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  color: #999999;
-  font-size: 14px;
-  line-height: 1.6;
-  text-align: center;
+.sr-ticker {
+  font-weight: 600;
+  color: var(--gold);
 }
 
-.transaction-empty,
-.transaction-error {
-  padding: 20px 0;
-  font-size: 14px;
-  text-align: center;
+.sr-dim {
+  color: var(--muted);
 }
 
-.transaction-empty {
-  color: #999999;
-}
-
-.transaction-error {
-  color: #f87171;
-}
-
-.transaction-table th,
-.transaction-table td {
-  white-space: nowrap;
-}
-
-.transaction-delete {
-  border: 1px solid #7f1d1d;
-  background: transparent;
-  color: #fca5a5;
-  padding: 5px 8px;
-  cursor: pointer;
-  font: inherit;
+.sr-source {
+  margin-left: auto;
+  color: var(--muted);
   font-size: 12px;
 }
 
-.transaction-delete:disabled {
-  cursor: wait;
-  opacity: 0.6;
+.prestige-input[type='date'] {
+  color-scheme: dark;
 }
 
 /* ---- Portfolio Value Trend Section ---- */
@@ -1765,20 +1931,18 @@ select.kimi-input-dark {
 
 .trend-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 20px;
   padding: 24px;
-  border-bottom: 1px solid #333333;
-  flex-wrap: wrap;
+  border-bottom: 1px solid var(--gold-border-soft);
 }
 
-.trend-title-group {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  flex: 1 1 auto;
-  min-width: 260px;
+.trend-body {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr)) auto;
+  gap: 20px 24px;
+  align-items: start;
 }
 
 .trend-title {
@@ -1788,16 +1952,10 @@ select.kimi-input-dark {
 
 .trend-main-title {
   margin: 0;
+  font-family: var(--serif);
   font-size: clamp(24px, 4vw, 32px);
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: -0.02em;
-}
-
-.trend-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px 40px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .trend-metric-item {
@@ -1805,7 +1963,7 @@ select.kimi-input-dark {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  min-width: 130px;
+  min-width: 0;
 }
 
 .trend-metric-value {
@@ -1816,7 +1974,7 @@ select.kimi-input-dark {
 
 .trend-metric-sub {
   font-size: 11px;
-  color: #666666;
+  color: var(--muted);
 }
 
 .trend-pnl-range {
@@ -1825,6 +1983,8 @@ select.kimi-input-dark {
   align-items: flex-end;
   gap: 12px;
   flex-shrink: 0;
+  grid-row: 1 / span 2;
+  grid-column: 6;
 }
 
 .trend-pnl {
@@ -1847,7 +2007,7 @@ select.kimi-input-dark {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0;
-  border-top: 1px solid #333333;
+  border-top: 1px solid var(--gold-border-soft);
 }
 
 @media (min-width: 768px) {
@@ -1866,9 +2026,10 @@ select.kimi-input-dark {
   display: flex;
   flex-direction: column;
   min-height: 260px;
-  border-right: 1px solid #333333;
-  border-bottom: 1px solid #333333;
-  background: #0a0a0a;
+  padding: 20px;
+  border-right: 1px solid var(--gold-border-soft);
+  border-bottom: 1px solid var(--gold-border-soft);
+  background: rgba(11, 18, 32, 0.35);
 }
 
 .perf-card:last-child {
@@ -1885,7 +2046,6 @@ select.kimi-input-dark {
 .perf-card-title {
   font-size: 16px;
   font-weight: 600;
-  color: #ffffff;
 }
 
 .perf-chart-wrap {
@@ -1916,7 +2076,7 @@ select.kimi-input-dark {
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid var(--gold-border-soft);
 }
 
 .perf-metric-row:last-child {
@@ -1926,25 +2086,32 @@ select.kimi-input-dark {
 .perf-metric-value {
   font-size: 20px;
   font-weight: 600;
-  color: #ffffff;
+}
+
+.insufficient-history {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
 }
 
 .insufficient-history-sm {
-  color: #666666;
+  color: var(--muted);
   font-size: 13px;
   text-align: center;
   padding: 20px;
 }
 
 @media (max-width: 1024px) {
-  .trend-header {
+  .trend-body {
+    display: flex;
     flex-direction: column;
-    align-items: flex-start;
     gap: 24px;
-  }
-
-  .trend-title-group {
-    width: 100%;
   }
 
   .trend-pnl-range {
@@ -1960,7 +2127,7 @@ select.kimi-input-dark {
 }
 
 @media (max-width: 768px) {
-  .trend-metrics {
+  .trend-body {
     gap: 12px 24px;
   }
 
@@ -1970,6 +2137,7 @@ select.kimi-input-dark {
   }
 }
 
+/* ---- Allocation sections ---- */
 .allocation-section {
   display: grid;
   grid-template-columns: minmax(320px, 2fr) 3fr;
@@ -1981,7 +2149,7 @@ select.kimi-input-dark {
   align-items: center;
   justify-content: center;
   padding: 32px 20px;
-  border-right: 1px solid #333333;
+  border-right: 1px solid var(--gold-border-soft);
   min-height: 420px;
 }
 
@@ -2010,29 +2178,59 @@ select.kimi-input-dark {
 
   .allocation-chart {
     border-right: none;
-    border-bottom: 1px solid #333333;
+    border-bottom: 1px solid var(--gold-border-soft);
     min-height: auto;
     padding: 24px;
   }
 }
 
-@media (max-width: 1024px) {
-  .kimi-grid-2 > * {
-    border-right: none !important;
-  }
-  .kimi-grid-2 {
-    display: block;
-  }
-  .kimi-section-dark > div[style*="grid-template-columns: 2fr 3fr"] {
-    display: block;
-  }
+/* ---- DataTable (kimi shared component) prestige overrides ---- */
+.prestige-data-table :deep(.kimi-table) {
+  font-size: 13px;
 }
 
-.kimi-grid-4 > * {
-  height: 100%;
+.prestige-data-table :deep(.kimi-table-dark th) {
+  background: rgba(201, 168, 106, 0.05);
+  color: var(--gold);
+  border-bottom: 1px solid var(--gold-border);
+  font-weight: 600;
 }
 
-.kimi-grid-4 .kimi-panel-dark {
-  height: 100%;
+.prestige-data-table :deep(.kimi-table-dark td) {
+  border-bottom: 1px solid var(--gold-border-soft);
+  color: var(--ivory);
+}
+
+.prestige-data-table :deep(.kimi-table-dark tbody tr:nth-child(even)) {
+  background: rgba(201, 168, 106, 0.03);
+}
+
+.prestige-data-table :deep(.kimi-table-dark tbody tr:hover) {
+  background: rgba(201, 168, 106, 0.07);
+}
+
+.prestige-data-table :deep(.kimi-table-dark tbody tr.highlight) {
+  background: rgba(201, 168, 106, 0.12) !important;
+}
+
+/* ---- Footer ---- */
+.detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: min(1200px, calc(100% - 48px));
+  margin: 48px auto 0;
+  padding: 20px 0 28px;
+  border-top: 1px solid var(--gold-border-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .detail-footer {
+    flex-direction: column;
+    gap: 6px;
+  }
 }
 </style>
