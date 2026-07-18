@@ -61,6 +61,25 @@ public sealed class AgentWorkflowPlannerTests
     }
 
     [Fact]
+    public void GetExecutionOrder_PortfolioDiagnosisWorkflow_ReturnsExpectedOrder()
+    {
+        var provider = new PortfolioDiagnosisWorkflowDefinitionProvider();
+        var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 6, 1), new DateOnly(2026, 7, 1));
+        var planner = new AgentWorkflowPlanner();
+
+        Assert.Equal(
+        [
+            PortfolioDiagnosisNodeKeys.LoadContext,
+            PortfolioDiagnosisNodeKeys.CalculateAttribution,
+            PortfolioDiagnosisNodeKeys.LoadRiskProfile,
+            PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses,
+            PortfolioDiagnosisNodeKeys.BuildEvidencePacket,
+            PortfolioDiagnosisNodeKeys.DraftDiagnosis,
+            PortfolioDiagnosisNodeKeys.FinalizeDiagnosis
+        ], planner.GetExecutionOrder(run.WorkflowDefinitionJson));
+    }
+
+    [Fact]
     public void GetExecutionOrder_EdgeReferencesUnknownNode_Throws()
     {
         var planner = new AgentWorkflowPlanner();

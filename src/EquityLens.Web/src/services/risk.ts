@@ -112,6 +112,28 @@ export async function getPortfolio(id: string): Promise<PortfolioDetail> {
   return response.data
 }
 
+export interface AgentRunCreatedResponse {
+  id: string
+  workflowType: string
+  agentType: string
+  status: string
+  createdAtUtc: string
+  startedAtUtc: string | null
+  completedAtUtc: string | null
+  errorMessage: string | null
+}
+
+export async function createPortfolioDiagnosis(
+  portfolioId: string,
+  input: { from?: string; to?: string } = {},
+): Promise<AgentRunCreatedResponse> {
+  const response = await http.post<AgentRunCreatedResponse>(
+    `/portfolios/${portfolioId}/agent-diagnoses`,
+    input,
+  )
+  return response.data
+}
+
 export interface PortfolioRiskParams {
   from: string
   to: string

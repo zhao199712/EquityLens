@@ -19,6 +19,13 @@ public interface IAgentRunService
         Guid researchRunId,
         CancellationToken cancellationToken = default);
 
+    Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(
+        Guid userId,
+        Guid portfolioId,
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(
         Guid? userId,
         int limit = 50,

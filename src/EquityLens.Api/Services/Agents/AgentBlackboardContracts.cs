@@ -23,6 +23,15 @@ public static class AgentBlackboardKeys
     public const string RevisionSummary = "revisionSummary";
     public const string AppliedRecommendation = "appliedRecommendation";
     public const string FinalOutput = "finalOutput";
+    public const string PortfolioId = "portfolioId";
+    public const string DiagnosisFrom = "diagnosisFrom";
+    public const string DiagnosisTo = "diagnosisTo";
+    public const string PortfolioContext = "portfolioContext";
+    public const string PerformanceAttribution = "performanceAttribution";
+    public const string RiskProfile = "riskProfile";
+    public const string RiskAnalysisPriorities = "riskAnalysisPriorities";
+    public const string PortfolioEvidencePacket = "portfolioEvidencePacket";
+    public const string PortfolioDiagnosisDraft = "portfolioDiagnosisDraft";
 }
 
 public static class EvidenceCheckFields
@@ -82,6 +91,20 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.CriticFindings] = new JsonArray(),
         [AgentBlackboardKeys.CriticReview] = null,
         [AgentBlackboardKeys.SupervisorDecisions] = new JsonArray(),
+        [AgentBlackboardKeys.FinalOutput] = null
+    };
+
+    public static JsonObject CreateInitialPortfolioDiagnosisBlackboard(Guid portfolioId, DateOnly from, DateOnly to) => new()
+    {
+        [AgentBlackboardKeys.PortfolioId] = portfolioId,
+        [AgentBlackboardKeys.DiagnosisFrom] = from.ToString("yyyy-MM-dd"),
+        [AgentBlackboardKeys.DiagnosisTo] = to.ToString("yyyy-MM-dd"),
+        [AgentBlackboardKeys.PortfolioContext] = null,
+        [AgentBlackboardKeys.PerformanceAttribution] = null,
+        [AgentBlackboardKeys.RiskProfile] = null,
+        [AgentBlackboardKeys.RiskAnalysisPriorities] = new JsonArray(),
+        [AgentBlackboardKeys.PortfolioEvidencePacket] = null,
+        [AgentBlackboardKeys.PortfolioDiagnosisDraft] = null,
         [AgentBlackboardKeys.FinalOutput] = null
     };
 

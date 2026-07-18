@@ -12,6 +12,7 @@ import {
   getPortfolioValuation,
   getPortfolioValuationHistory,
   getPortfolioRisk,
+  createPortfolioDiagnosis,
   type PortfolioDetail,
   type PortfolioValuationHistoryResponse,
   type PortfolioValuationResponse,
@@ -57,6 +58,8 @@ const error = ref('')
 const valuationError = ref('')
 const valuationHistoryError = ref('')
 const riskError = ref('')
+const creatingDiagnosis = ref(false)
+const diagnosisError = ref('')
 const loadingPeriodData = ref(false)
 const showAddStock = ref(false)
 const securityQuery = ref('')
@@ -553,6 +556,19 @@ async function loadPortfolioData(showPageLoading = true) {
   }
 }
 
+async function startPortfolioDiagnosis() {
+  creatingDiagnosis.value = true
+  diagnosisError.value = ''
+  try {
+    const run = await createPortfolioDiagnosis(portfolioId.value, { from: dateDaysBefore(toDate.value, 31), to: toDate.value })
+    await router.push({ name: 'agent-run-detail', params: { id: run.id } })
+  } catch (e) {
+    diagnosisError.value = getApiErrorMessage(e, '無法建立 AI 投組診斷，請稍後再試。')
+  } finally {
+    creatingDiagnosis.value = false
+  }
+}
+
 async function loadCashFlows() {
   try {
     cashFlows.value = await getPortfolioCashFlows(portfolioId.value)
@@ -1027,10 +1043,15 @@ onMounted(loadPortfolioData)
             <span class="caption" style="margin-top: 4px; display: block">{{ portfolio.description || portfolio.baseCurrency }} PORTFOLIO</span>
           </div>
           <div style="display: flex; gap: 8px">
+            <button class="prestige-btn small" :disabled="creatingDiagnosis" @click="startPortfolioDiagnosis">
+              {{ creatingDiagnosis ? '建立診斷中…' : 'AI 投組診斷' }}
+            </button>
             <span class="prestige-tag prestige-mono">{{ portfolio.baseCurrency }}</span>
             <span class="caption" style="align-self: center">Last updated: {{ new Date(portfolio.updatedAtUtc).toLocaleDateString('zh-TW') }}</span>
           </div>
         </div>
+
+        <div v-if="diagnosisError" class="prestige-warning" style="margin-bottom: 20px">{{ diagnosisError }}</div>
 
         <div v-if="valuationError" class="prestige-warning" style="margin-bottom: 20px">
           {{ valuationError }}

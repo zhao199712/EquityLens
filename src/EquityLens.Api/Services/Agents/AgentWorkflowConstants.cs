@@ -5,12 +5,14 @@ public static class AgentWorkflowTypes
     public const string CriticReview = "CriticReview";
     public const string DraftRevision = "DraftRevision";
     public const string ResearchQualityReview = "ResearchQualityReview";
+    public const string PortfolioDiagnosis = "PortfolioDiagnosis";
 }
 
 public static class AgentTypes
 {
     public const string Critic = "CriticAgent";
     public const string Draft = "DraftAgent";
+    public const string Portfolio = "PortfolioDiagnosisAgent";
 }
 
 public static class CriticReviewWorkflow
@@ -26,6 +28,33 @@ public static class DraftRevisionWorkflow
 public static class ResearchQualityReviewWorkflow
 {
     public const int Version = 1;
+}
+
+public static class PortfolioDiagnosisWorkflow
+{
+    public const int Version = 1;
+}
+
+public static class PortfolioDiagnosisNodeKeys
+{
+    public const string LoadContext = "loadPortfolioDiagnosisContext";
+    public const string CalculateAttribution = "calculatePerformanceAttribution";
+    public const string LoadRiskProfile = "loadRiskProfile";
+    public const string PrioritizeRiskAnalyses = "prioritizeRiskAnalyses";
+    public const string BuildEvidencePacket = "buildPortfolioEvidencePacket";
+    public const string DraftDiagnosis = "draftPortfolioDiagnosis";
+    public const string FinalizeDiagnosis = "finalizePortfolioDiagnosis";
+}
+
+public static class PortfolioDiagnosisNodeTypes
+{
+    public const string LoadContext = "LoadPortfolioDiagnosisContext";
+    public const string CalculateAttribution = "CalculatePerformanceAttribution";
+    public const string LoadRiskProfile = "LoadRiskProfile";
+    public const string PrioritizeRiskAnalyses = "PrioritizeRiskAnalyses";
+    public const string BuildEvidencePacket = "BuildPortfolioEvidencePacket";
+    public const string DraftDiagnosis = "DraftPortfolioDiagnosis";
+    public const string FinalizeDiagnosis = "FinalizePortfolioDiagnosis";
 }
 
 public static class CriticReviewNodeKeys

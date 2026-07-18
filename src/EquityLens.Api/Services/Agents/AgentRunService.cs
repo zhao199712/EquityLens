@@ -17,6 +17,7 @@ public sealed class AgentRunService : IAgentRunService
     private readonly IAgentNodeStateMachine _nodeStateMachine;
     private readonly IAgentRunQueue _agentRunQueue;
     private readonly IAgentWorkflowAdminService? _workflowAdminService;
+    private readonly PortfolioDiagnosisWorkflowDefinitionProvider? _portfolioDiagnosisProvider;
 
     public AgentRunService(
         EquityLensDbContext dbContext,
@@ -24,7 +25,8 @@ public sealed class AgentRunService : IAgentRunService
         IAgentRunStateMachine runStateMachine,
         IAgentNodeStateMachine nodeStateMachine,
         IAgentRunQueue agentRunQueue,
-        IAgentWorkflowAdminService? workflowAdminService = null)
+        IAgentWorkflowAdminService? workflowAdminService = null,
+        PortfolioDiagnosisWorkflowDefinitionProvider? portfolioDiagnosisProvider = null)
     {
         _dbContext = dbContext;
         _workflowProviders = CreateWorkflowProviderRegistry(workflowProviders);
@@ -32,6 +34,7 @@ public sealed class AgentRunService : IAgentRunService
         _nodeStateMachine = nodeStateMachine;
         _agentRunQueue = agentRunQueue;
         _workflowAdminService = workflowAdminService;
+        _portfolioDiagnosisProvider = portfolioDiagnosisProvider;
     }
 
     public async Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
@@ -79,6 +82,23 @@ public sealed class AgentRunService : IAgentRunService
         AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchQualityReview run created.", new { researchRunId });
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await EnqueueAsync(run, userId, cancellationToken);
+        return MapSummary(run);
+    }
+
+    public async Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(
+        Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
+    {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.PortfolioDiagnosis, cancellationToken);
+        var provider = _portfolioDiagnosisProvider ?? throw new InvalidOperationException("PortfolioDiagnosis workflow provider is not registered.");
+        var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var start = from ?? end.AddMonths(-1);
+        if (start >= end) throw new InvalidOperationException("Diagnosis start date must be before end date.");
+        var run = provider.CreateRun(userId, portfolioId, start, end);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
+        _dbContext.AgentRuns.Add(run);
+        AddEvent(run, null, AgentEventTypes.RunCreated, "PortfolioDiagnosis run created.", new { portfolioId, from = start, to = end });
+        await _dbContext.SaveChangesAsync(cancellationToken);
         await EnqueueAsync(run, userId, cancellationToken);
         return MapSummary(run);
     }
@@ -258,6 +278,7 @@ public sealed class AgentRunService : IAgentRunService
         {
             return criticReviewRunId.GetGuid();
         }
+        if (root.TryGetProperty("portfolioId", out var portfolioId)) return portfolioId.GetGuid();
 
         throw new InvalidOperationException("Agent run input is missing source id.");
     }

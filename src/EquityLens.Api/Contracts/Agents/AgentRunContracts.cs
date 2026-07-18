@@ -6,6 +6,8 @@ public sealed record CreateDraftRevisionRequest(Guid CriticReviewRunId);
 
 public sealed record CreateResearchQualityReviewRequest(Guid ResearchRunId);
 
+public sealed record CreatePortfolioDiagnosisRequest(DateOnly? From = null, DateOnly? To = null);
+
 public sealed record AgentRunSummaryResponse(
     Guid Id,
     string WorkflowType,

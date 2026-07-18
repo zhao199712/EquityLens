@@ -24,6 +24,15 @@ public sealed class AgentRunsController : ControllerBase
         _currentUser = currentUser;
     }
 
+    [HttpPost("/api/portfolios/{portfolioId:guid}/agent-diagnoses")]
+    public async Task<ActionResult<AgentRunSummaryResponse>> CreatePortfolioDiagnosis(
+        Guid portfolioId, CreatePortfolioDiagnosisRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _agentRunService.CreatePortfolioDiagnosisAsync(
+            _currentUser.UserId, portfolioId, request.From, request.To, cancellationToken);
+        return Accepted(response);
+    }
+
     /// <summary>
     /// 建立並執行 CriticReview workflow，檢查既有 research run 的回答品質與證據覆蓋。
     /// </summary>
