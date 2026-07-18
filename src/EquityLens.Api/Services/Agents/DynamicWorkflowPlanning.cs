@@ -147,12 +147,12 @@ public static class DeterministicDynamicWorkflowPlanner
         }
         else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted && board[AgentBlackboardKeys.RequiresReanalysis]?.GetValue<bool>() == true)
         {
-            actions = Chain([A("buildEvidencePacket", "build-evidence-packet", EvidenceRemediationNodeTypes.BuildPacket), A("buildAnalysisContext", "build-analysis-context", EvidenceReanalysisNodeTypes.BuildContext), A("reanalyzeAnswer", "reanalyze-investment-answer", EvidenceReanalysisNodeTypes.Reanalyze), A("critiqueReanalysis", "critique-reanalysis", EvidenceReanalysisNodeTypes.Critique), A("reviseReanalysis", "revise-reanalysis", EvidenceReanalysisNodeTypes.Revise), A("finalizeReanalysis", "finalize-reanalysis", EvidenceReanalysisNodeTypes.Finalize)], Last(c));
+            actions = Chain([A("buildRemediatedPacket", "build-evidence-packet", EvidenceRemediationNodeTypes.BuildPacket), A("buildAnalysisContext", "build-analysis-context", EvidenceReanalysisNodeTypes.BuildContext), A("reanalyzeAnswer", "reanalyze-investment-answer", EvidenceReanalysisNodeTypes.Reanalyze), A("critiqueReanalysis", "critique-reanalysis", EvidenceReanalysisNodeTypes.Critique), A("reviseReanalysis", "revise-reanalysis", EvidenceReanalysisNodeTypes.Revise), A("finalizeReanalysis", "finalize-reanalysis", EvidenceReanalysisNodeTypes.Finalize)], Last(c));
             skills = ["evidence-driven-reanalysis"]; goal = DynamicGoalStatuses.Continue; reason = "Validated evidence materially changes the analysis.";
         }
         else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted)
         {
-            actions = Chain([A("buildEvidencePacket", "build-evidence-packet", EvidenceRemediationNodeTypes.BuildPacket), A("draftEvidenceRevision", "revise-with-evidence", EvidenceRemediationNodeTypes.DraftRevision), A("finalizeQuality", "finalize-quality", EvidenceRemediationNodeTypes.Finalize)], Last(c));
+            actions = Chain([A("buildRemediatedPacket", "build-evidence-packet", EvidenceRemediationNodeTypes.BuildPacket), A("draftEvidenceRevision", "revise-with-evidence", EvidenceRemediationNodeTypes.DraftRevision), A("finalizeQuality", "finalize-quality", EvidenceRemediationNodeTypes.Finalize)], Last(c));
             skills = ["evidence-remediation", "quality-finalization"]; goal = DynamicGoalStatuses.Continue; reason = c.RetrievalIterations >= 2 ? "Retrieval budget exhausted; finalize with explicit insufficiency." : "Validated evidence is ready for revision.";
         }
         else if (requiresRevision)
