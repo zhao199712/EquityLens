@@ -79,6 +79,48 @@ namespace EquityLens.Api.Migrations
                     b.ToTable("agent_feedback", (string)null);
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentNodeSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("MaxRetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("NodeType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("TimeoutSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NodeType")
+                        .IsUnique();
+
+                    b.ToTable("agent_node_setting", (string)null);
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -330,6 +372,39 @@ namespace EquityLens.Api.Migrations
                     b.HasIndex("AgentRunId", "StartedAtUtc");
 
                     b.ToTable("agent_tool_call", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentWorkflowSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WorkflowType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkflowType")
+                        .IsUnique();
+
+                    b.ToTable("agent_workflow_setting", (string)null);
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AiMemo", b =>

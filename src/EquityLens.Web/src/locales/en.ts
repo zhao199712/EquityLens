@@ -1,11 +1,11 @@
 export default {
   nav: {
+    home: 'Home',
     dashboard: 'Dashboard',
     portfolios: 'Portfolios',
     riskRuns: 'Risk Runs',
     reports: 'Reports',
     research: 'Research',
-    equityLines: 'Equity Lines',
     settings: 'Settings',
     logout: 'Logout',
   },

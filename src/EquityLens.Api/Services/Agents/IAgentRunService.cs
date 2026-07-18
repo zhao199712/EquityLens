@@ -14,6 +14,11 @@ public interface IAgentRunService
         Guid criticReviewRunId,
         CancellationToken cancellationToken = default);
 
+    Task<AgentRunSummaryResponse> CreateResearchQualityReviewAsync(
+        Guid userId,
+        Guid researchRunId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(
         Guid? userId,
         int limit = 50,

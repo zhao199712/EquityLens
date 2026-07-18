@@ -7,7 +7,6 @@ import {
   NSelect,
   NTag,
   NSpin,
-  NEmpty,
   NDataTable,
   NSpace,
   NIcon,
@@ -21,7 +20,6 @@ import {
 } from 'naive-ui'
 import {
   RefreshOutline,
-  SearchOutline,
   AddOutline,
   CloseCircleOutline,
   EyeOutline,
@@ -288,62 +286,49 @@ watch(() => route.params.id, (id) => {
 </script>
 
 <template>
-  <main class="page animate-fade-in">
-    <section class="page-heading">
+  <main class="prestige-section prestige-fade admin-view">
+    <div class="prestige-section-head">
       <div>
-        <p class="eyebrow">IMPORT JOBS</p>
-        <h1>資料匯入工作管理</h1>
+        <p class="prestige-label view-eyebrow">Import Jobs</p>
+        <h1 class="prestige-section-title">資料匯入工作管理</h1>
       </div>
       <NSpace>
-        <NButton type="primary" @click="loadJobs">
-          <template #icon>
-            <NIcon><RefreshOutline /></NIcon>
-          </template>
+        <button type="button" class="prestige-btn" @click="loadJobs">
+          <NIcon size="16"><RefreshOutline /></NIcon>
           重新整理
-        </NButton>
-        <NButton type="primary" @click="() => { resetCreateForm(); createModalOpen = true }">
-          <template #icon>
-            <NIcon><AddOutline /></NIcon>
-          </template>
+        </button>
+        <button type="button" class="prestige-btn prestige-btn-solid" @click="() => { resetCreateForm(); createModalOpen = true }">
+          <NIcon size="16"><AddOutline /></NIcon>
           建立工作
-        </NButton>
-      </NSpace>
-    </section>
-
-    <div class="glass-panel" style="padding: 16px 20px;">
-      <NSpace>
-        <NInput
-          v-model:value="search"
-          placeholder="搜尋 job type / ID..."
-          clearable
-          style="width: 300px"
-        >
-          <template #prefix>
-            <NIcon><SearchOutline /></NIcon>
-          </template>
-        </NInput>
-        <NSelect
-          v-model:value="filterJobType"
-          :options="jobTypeOptions as SelectMixedOption[]"
-          style="width: 200px"
-        />
-        <NSelect
-          v-model:value="filterStatus"
-          :options="[
-            { label: '全部狀態', value: '' },
-            { label: 'Queued', value: 'Queued' },
-            { label: 'Running', value: 'Running' },
-            { label: 'Completed', value: 'Completed' },
-            { label: 'Failed', value: 'Failed' },
-            { label: 'Cancelled', value: 'Cancelled' },
-          ]"
-          style="width: 160px"
-        />
+        </button>
       </NSpace>
     </div>
 
-    <div class="glass-panel" style="margin-top: 24px; padding: 0; overflow: hidden;">
-      <NSpin :show="loading">
+    <div class="prestige-panel admin-filter-panel">
+      <div class="admin-filter-row">
+        <input
+          v-model="search"
+          class="prestige-input admin-search"
+          placeholder="搜尋 job type / ID..."
+        />
+        <select v-model="filterJobType" class="prestige-input admin-select">
+          <option v-for="option in jobTypeOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+        <select v-model="filterStatus" class="prestige-input admin-select">
+          <option value="">全部狀態</option>
+          <option value="Queued">Queued</option>
+          <option value="Running">Running</option>
+          <option value="Completed">Completed</option>
+          <option value="Failed">Failed</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="prestige-panel admin-table-panel">
+      <NSpin :show="loading" class="admin-spin">
         <NDataTable
           :columns="columns"
           :data="filteredJobs"
@@ -353,8 +338,8 @@ watch(() => route.params.id, (id) => {
           :pagination="{ pageSize: 20 }"
         />
       </NSpin>
-      <div v-if="!loading && filteredJobs.length === 0" style="padding: 60px 20px;">
-        <NEmpty description="沒有符合條件的 Job" />
+      <div v-if="!loading && filteredJobs.length === 0" class="prestige-empty admin-empty">
+        沒有符合條件的 Job
       </div>
     </div>
 
@@ -363,44 +348,53 @@ watch(() => route.params.id, (id) => {
       v-model:show="detailModalOpen"
       preset="card"
       title="Job 詳情"
-      style="width: 90vw; max-width: 900px; max-height: 90vh; overflow: auto"
+      style="width: 90vw; max-width: 900px; max-height: 90vh; overflow: auto; --n-color-modal: #101a2e; --n-text-color: #f5efe0; --n-title-text-color: #f5efe0; --n-title-font-weight: 600; --n-border-color: rgba(201,168,106,.25); --n-close-icon-color: #9a917c; --n-close-icon-color-hover: #c9a86a; --n-close-color-hover: rgba(201,168,106,.12); --gold: #c9a86a; --gold-strong: #ddc18a; --gold-border: rgba(201,168,106,.25); --gold-border-soft: rgba(201,168,106,.14); --ivory: #f5efe0; --muted: #9a917c; --up: #7fa387; --down: #b05c5c; --panel-bg: rgba(201,168,106,.04); --serif: Georgia, 'Noto Serif TC', serif; --sans: 'Inter', 'Noto Sans TC', sans-serif"
       :mask-closable="false"
       @close="closeDetail"
     >
-      <NSpin :show="detailLoading">
-        <div v-if="selectedJob" style="line-height: 1.6">
-          <div style="margin-bottom: 12px">
-            <strong>ID:</strong> {{ selectedJob.id }}
+      <NSpin :show="detailLoading" class="admin-spin">
+        <div v-if="selectedJob" class="admin-modal-body">
+          <div class="admin-field">
+            <span class="admin-field-label">ID</span>
+            <span class="admin-field-value prestige-mono">{{ selectedJob.id }}</span>
           </div>
-          <div style="margin-bottom: 12px">
-            <strong>Type:</strong> {{ selectedJob.jobType }}
+          <div class="admin-field">
+            <span class="admin-field-label">Type</span>
+            <span class="admin-field-value">{{ selectedJob.jobType }}</span>
           </div>
-          <div style="margin-bottom: 12px">
-            <strong>Status:</strong>
-            <NTag :type="statusType(selectedJob.status)" size="small" style="margin-left: 8px">{{ selectedJob.status }}</NTag>
+          <div class="admin-field">
+            <span class="admin-field-label">Status</span>
+            <div>
+              <NTag :type="statusType(selectedJob.status)" size="small">{{ selectedJob.status }}</NTag>
+            </div>
           </div>
-          <div style="margin-bottom: 12px">
-            <strong>Progress:</strong> {{ selectedJob.progressPercent }}%
+          <div class="admin-field">
+            <span class="admin-field-label">Progress</span>
+            <span class="admin-field-value prestige-mono">{{ selectedJob.progressPercent }}%</span>
           </div>
-          <div style="margin-bottom: 12px">
-            <strong>Created:</strong> {{ formatDate(selectedJob.createdAtUtc) }}
+          <div class="admin-field">
+            <span class="admin-field-label">Created</span>
+            <span class="admin-field-value prestige-mono">{{ formatDate(selectedJob.createdAtUtc) }}</span>
           </div>
-          <div style="margin-bottom: 12px">
-            <strong>Started:</strong> {{ formatDate(selectedJob.startedAtUtc) }}
+          <div class="admin-field">
+            <span class="admin-field-label">Started</span>
+            <span class="admin-field-value prestige-mono">{{ formatDate(selectedJob.startedAtUtc) }}</span>
           </div>
-          <div style="margin-bottom: 12px">
-            <strong>Completed:</strong> {{ formatDate(selectedJob.completedAtUtc) }}
+          <div class="admin-field">
+            <span class="admin-field-label">Completed</span>
+            <span class="admin-field-value prestige-mono">{{ formatDate(selectedJob.completedAtUtc) }}</span>
           </div>
-          <div v-if="selectedJob.errorMessage" style="margin-bottom: 12px; color: #f87171">
-            <strong>Error:</strong> {{ selectedJob.errorMessage }}
+          <div v-if="selectedJob.errorMessage" class="admin-field">
+            <span class="admin-field-label">Error</span>
+            <span class="admin-field-value admin-down">{{ selectedJob.errorMessage }}</span>
           </div>
-          <div v-if="selectedJob.payloadJson" style="margin-bottom: 12px">
-            <strong>Payload:</strong>
-            <pre style="margin-top: 8px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 12px; overflow: auto">{{ prettyJson(selectedJob.payloadJson) }}</pre>
+          <div v-if="selectedJob.payloadJson" class="admin-field">
+            <span class="admin-field-label">Payload</span>
+            <pre class="admin-json">{{ prettyJson(selectedJob.payloadJson) }}</pre>
           </div>
-          <div v-if="selectedJob.resultJson">
-            <strong>Result:</strong>
-            <pre style="margin-top: 8px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 12px; overflow: auto">{{ prettyJson(selectedJob.resultJson) }}</pre>
+          <div v-if="selectedJob.resultJson" class="admin-field">
+            <span class="admin-field-label">Result</span>
+            <pre class="admin-json">{{ prettyJson(selectedJob.resultJson) }}</pre>
           </div>
         </div>
       </NSpin>
@@ -411,56 +405,341 @@ watch(() => route.params.id, (id) => {
       v-model:show="createModalOpen"
       preset="card"
       title="建立資料匯入工作"
-      style="width: 500px"
+      style="width: 500px; --n-color-modal: #101a2e; --n-text-color: #f5efe0; --n-title-text-color: #f5efe0; --n-title-font-weight: 600; --n-border-color: rgba(201,168,106,.25); --n-close-icon-color: #9a917c; --n-close-icon-color-hover: #c9a86a; --n-close-color-hover: rgba(201,168,106,.12); --gold: #c9a86a; --gold-strong: #ddc18a; --gold-border: rgba(201,168,106,.25); --gold-border-soft: rgba(201,168,106,.14); --ivory: #f5efe0; --muted: #9a917c; --up: #7fa387; --down: #b05c5c; --panel-bg: rgba(201,168,106,.04); --serif: Georgia, 'Noto Serif TC', serif; --sans: 'Inter', 'Noto Sans TC', sans-serif"
       :mask-closable="false"
     >
-      <NForm label-placement="left" label-width="120">
-        <NFormItem label="Job Type">
-          <NSelect
-            v-model:value="createForm.jobType"
-            :options="createJobTypeOptions as SelectMixedOption[]"
-          />
-        </NFormItem>
-
-        <NFormItem v-if="needsDateRange(createForm.jobType)" label="Date Range">
-          <NSpace>
-            <NDatePicker
-              v-model:formatted-value="createForm.from"
-              value-format="yyyy-MM-dd"
-              placeholder="From"
+      <div class="admin-modal-form">
+        <NForm label-placement="left" label-width="120">
+          <NFormItem label="Job Type">
+            <NSelect
+              v-model:value="createForm.jobType"
+              :options="createJobTypeOptions as SelectMixedOption[]"
+              :to="false"
             />
-            <NDatePicker
-              v-model:formatted-value="createForm.to"
-              value-format="yyyy-MM-dd"
-              placeholder="To"
+          </NFormItem>
+
+          <NFormItem v-if="needsDateRange(createForm.jobType)" label="Date Range">
+            <NSpace>
+              <NDatePicker
+                v-model:formatted-value="createForm.from"
+                value-format="yyyy-MM-dd"
+                placeholder="From"
+              />
+              <NDatePicker
+                v-model:formatted-value="createForm.to"
+                value-format="yyyy-MM-dd"
+                placeholder="To"
+              />
+            </NSpace>
+          </NFormItem>
+
+          <NFormItem v-if="needsTicker(createForm.jobType)" label="Ticker">
+            <NInput v-model:value="createForm.ticker" placeholder="例如 2330" />
+          </NFormItem>
+
+          <NFormItem v-if="needsTicker(createForm.jobType)" label="Exchange">
+            <NSelect
+              v-model:value="createForm.exchange"
+              :options="[
+                { label: 'TWSE', value: 'TWSE' },
+                { label: 'TPEX', value: 'TPEX' },
+                { label: 'NASDAQ', value: 'NASDAQ' },
+                { label: 'NYSE', value: 'NYSE' },
+              ]"
+              style="width: 200px"
+              :to="false"
             />
-          </NSpace>
-        </NFormItem>
-
-        <NFormItem v-if="needsTicker(createForm.jobType)" label="Ticker">
-          <NInput v-model:value="createForm.ticker" placeholder="例如 2330" />
-        </NFormItem>
-
-        <NFormItem v-if="needsTicker(createForm.jobType)" label="Exchange">
-          <NSelect
-            v-model:value="createForm.exchange"
-            :options="[
-              { label: 'TWSE', value: 'TWSE' },
-              { label: 'TPEX', value: 'TPEX' },
-              { label: 'NASDAQ', value: 'NASDAQ' },
-              { label: 'NYSE', value: 'NYSE' },
-            ]"
-            style="width: 200px"
-          />
-        </NFormItem>
-      </NForm>
+          </NFormItem>
+        </NForm>
+      </div>
 
       <template #footer>
         <NSpace justify="end">
-          <NButton @click="createModalOpen = false">取消</NButton>
-          <NButton type="primary" @click="handleCreate">建立</NButton>
+          <button type="button" class="prestige-btn" @click="createModalOpen = false">取消</button>
+          <button type="button" class="prestige-btn prestige-btn-solid" @click="handleCreate">建立</button>
         </NSpace>
       </template>
     </NModal>
   </main>
 </template>
+
+<style scoped>
+.admin-view {
+  padding-top: 8px;
+}
+
+.view-eyebrow {
+  margin: 0 0 10px;
+}
+
+/* ---- Filter bar ---- */
+.admin-filter-panel {
+  padding: 16px 20px;
+}
+
+.admin-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-search {
+  width: 300px;
+  max-width: 100%;
+}
+
+.admin-select {
+  width: 200px;
+  max-width: 100%;
+}
+
+/* ---- Table panel ---- */
+.admin-table-panel {
+  margin-top: 24px;
+  overflow: hidden;
+}
+
+.admin-empty {
+  margin: 20px;
+}
+
+.admin-table-panel :deep(.n-data-table) {
+  background: transparent;
+  color: var(--ivory);
+  font-size: 13px;
+}
+
+.admin-table-panel :deep(.n-data-table-th) {
+  background: transparent;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.admin-table-panel :deep(.n-data-table-td) {
+  background: transparent;
+  color: var(--ivory);
+  border-bottom: 1px solid var(--gold-border-soft);
+}
+
+.admin-table-panel :deep(.n-data-table-tr:hover .n-data-table-td) {
+  background: rgba(201, 168, 106, 0.05);
+}
+
+.admin-table-panel :deep(.n-data-table-empty) {
+  color: var(--muted);
+}
+
+.admin-table-panel :deep(.n-pagination-item) {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--gold-border-soft);
+}
+
+.admin-table-panel :deep(.n-pagination .n-pagination-item:hover),
+.admin-table-panel :deep(.n-pagination .n-pagination-item--active) {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(201, 168, 106, 0.08);
+}
+
+/* ---- Tags ---- */
+.admin-table-panel :deep(.n-tag),
+.admin-modal-body :deep(.n-tag) {
+  background: transparent;
+  color: var(--muted);
+}
+
+.admin-table-panel :deep(.n-tag .n-tag__border),
+.admin-modal-body :deep(.n-tag .n-tag__border) {
+  border-color: var(--gold-border-soft);
+}
+
+.admin-table-panel :deep(.n-tag--success-type),
+.admin-modal-body :deep(.n-tag--success-type) {
+  color: var(--up);
+}
+
+.admin-table-panel :deep(.n-tag--success-type .n-tag__border),
+.admin-modal-body :deep(.n-tag--success-type .n-tag__border) {
+  border-color: rgba(127, 163, 135, 0.45);
+}
+
+.admin-table-panel :deep(.n-tag--error-type),
+.admin-modal-body :deep(.n-tag--error-type) {
+  color: var(--down);
+}
+
+.admin-table-panel :deep(.n-tag--error-type .n-tag__border),
+.admin-modal-body :deep(.n-tag--error-type .n-tag__border) {
+  border-color: rgba(176, 92, 92, 0.45);
+}
+
+.admin-table-panel :deep(.n-tag--warning-type),
+.admin-table-panel :deep(.n-tag--info-type),
+.admin-modal-body :deep(.n-tag--warning-type),
+.admin-modal-body :deep(.n-tag--info-type) {
+  color: #d4a24e;
+}
+
+.admin-table-panel :deep(.n-tag--warning-type .n-tag__border),
+.admin-table-panel :deep(.n-tag--info-type .n-tag__border),
+.admin-modal-body :deep(.n-tag--warning-type .n-tag__border),
+.admin-modal-body :deep(.n-tag--info-type .n-tag__border) {
+  border-color: rgba(212, 162, 78, 0.45);
+}
+
+/* ---- Table action buttons ---- */
+.admin-table-panel :deep(.n-button) {
+  background-color: transparent;
+  color: var(--gold);
+  border-color: var(--gold-border);
+}
+
+.admin-table-panel :deep(.n-button:hover) {
+  background-color: rgba(201, 168, 106, 0.08);
+  border-color: var(--gold);
+  color: var(--gold-strong);
+}
+
+.admin-table-panel :deep(.n-button--error-type) {
+  color: var(--down);
+  border-color: rgba(176, 92, 92, 0.45);
+}
+
+.admin-table-panel :deep(.n-button--error-type:hover) {
+  background-color: rgba(176, 92, 92, 0.1);
+  border-color: var(--down);
+  color: var(--down);
+}
+
+/* ---- Spin ---- */
+.admin-spin :deep(.n-spin-body) {
+  color: var(--gold);
+}
+
+/* ---- Modal detail fields ---- */
+.admin-field {
+  margin-bottom: 16px;
+}
+
+.admin-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+
+.admin-field-value {
+  color: var(--ivory);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.admin-down {
+  color: var(--down);
+}
+
+.admin-json {
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  background: rgba(11, 18, 32, 0.6);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+  color: var(--ivory);
+  font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow: auto;
+}
+
+/* ---- Modal form naive overrides ---- */
+.admin-modal-form :deep(.n-form-item-label__text) {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.admin-modal-form :deep(.n-input) {
+  background-color: rgba(11, 18, 32, 0.6);
+}
+
+.admin-modal-form :deep(.n-input .n-input__input-el) {
+  color: var(--ivory);
+}
+
+.admin-modal-form :deep(.n-input .n-input__input-el::placeholder) {
+  color: var(--muted);
+}
+
+.admin-modal-form :deep(.n-input .n-input__border),
+.admin-modal-form :deep(.n-input .n-input__state-border) {
+  border-color: var(--gold-border-soft);
+}
+
+.admin-modal-form :deep(.n-input:hover .n-input__state-border) {
+  border-color: var(--gold-border);
+}
+
+.admin-modal-form :deep(.n-input--focus .n-input__state-border) {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(201, 168, 106, 0.18);
+}
+
+.admin-modal-form :deep(.n-base-selection) {
+  background-color: rgba(11, 18, 32, 0.6);
+  color: var(--ivory);
+}
+
+.admin-modal-form :deep(.n-base-selection .n-base-selection-label) {
+  background-color: transparent;
+  color: var(--ivory);
+}
+
+.admin-modal-form :deep(.n-base-selection .n-base-selection-placeholder) {
+  color: var(--muted);
+}
+
+.admin-modal-form :deep(.n-base-selection .n-base-selection__border),
+.admin-modal-form :deep(.n-base-selection .n-base-selection__state-border) {
+  border-color: var(--gold-border-soft);
+}
+
+.admin-modal-form :deep(.n-base-selection:hover .n-base-selection__state-border),
+.admin-modal-form :deep(.n-base-selection:focus-within .n-base-selection__state-border) {
+  border-color: var(--gold);
+}
+
+.admin-modal-form :deep(.n-base-selection .n-base-arrow) {
+  color: var(--muted);
+}
+
+.admin-modal-form :deep(.n-select-menu) {
+  background-color: #101a2e;
+  border: 1px solid var(--gold-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.admin-modal-form :deep(.n-base-select-option) {
+  color: var(--ivory);
+  background: transparent;
+}
+
+.admin-modal-form :deep(.n-base-select-option:hover) {
+  background: rgba(201, 168, 106, 0.08);
+}
+
+.admin-modal-form :deep(.n-base-select-option--selected) {
+  color: var(--gold);
+}
+
+.admin-modal-form :deep(.n-base-select-option .n-base-select-option__check) {
+  color: var(--gold);
+}
+</style>

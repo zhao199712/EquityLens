@@ -389,7 +389,7 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
             portfolio.BaseCurrency,
             points,
             twr,
-            CalculatePeriodXirr(points),
+            PortfolioPerformanceCalculator.CalculatePeriodXirr(points),
             benchmark,
             benchmarkReturn,
             twr.HasValue && benchmarkReturn.HasValue ? twr.Value - benchmarkReturn.Value : null,
@@ -464,43 +464,7 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
             .Select(x => (Date: x.EffectiveDate, Amount: x.FlowType == "Deposit" ? -x.Amount : x.Amount))
             .ToList();
         if (terminalValue > 0) external.Add((asOf, terminalValue));
-        return CalculateXirr(external);
-    }
-
-    private static decimal? CalculatePeriodXirr(IReadOnlyList<PortfolioValuationHistoryPoint> points)
-    {
-        if (points.Count < 2 || points[0].TotalAssetValue <= 0 || points[^1].TotalAssetValue <= 0) return null;
-
-        var external = new List<(DateOnly Date, decimal Amount)> { (points[0].Date, -points[0].TotalAssetValue) };
-        foreach (var point in points.Skip(1))
-        {
-            if (point.ExternalCashFlow != 0) external.Add((point.Date, -point.ExternalCashFlow));
-        }
-        external.Add((points[^1].Date, points[^1].TotalAssetValue));
-        return CalculateXirr(external);
-    }
-
-    private static decimal? CalculateXirr(IReadOnlyList<(DateOnly Date, decimal Amount)> external)
-    {
-        if (!external.Any(x => x.Amount < 0) || !external.Any(x => x.Amount > 0)) return null;
-
-        var origin = external.Min(x => x.Date);
-        double Npv(double rate) => external.Sum(x => (double)x.Amount / Math.Pow(1d + rate, (x.Date.DayNumber - origin.DayNumber) / 365d));
-        var low = -0.9999d;
-        var high = 10d;
-        var lowValue = Npv(low);
-        var highValue = Npv(high);
-        while (lowValue * highValue > 0 && high < 1_000_000d) { high *= 2; highValue = Npv(high); }
-        if (lowValue * highValue > 0) return null;
-        for (var i = 0; i < 100; i++)
-        {
-            var middle = (low + high) / 2;
-            var middleValue = Npv(middle);
-            if (Math.Abs(middleValue) < 0.000001d) return (decimal)middle;
-            if (lowValue * middleValue <= 0) { high = middle; highValue = middleValue; }
-            else { low = middle; lowValue = middleValue; }
-        }
-        return (decimal)((low + high) / 2);
+        return PortfolioPerformanceCalculator.CalculateXirr(external);
     }
 
     private async Task EnsureImplicitFundingAsync(Guid portfolioId, CancellationToken cancellationToken)

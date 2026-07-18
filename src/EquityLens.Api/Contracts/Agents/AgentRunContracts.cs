@@ -4,6 +4,8 @@ public sealed record CreateCriticReviewRequest(Guid ResearchRunId);
 
 public sealed record CreateDraftRevisionRequest(Guid CriticReviewRunId);
 
+public sealed record CreateResearchQualityReviewRequest(Guid ResearchRunId);
+
 public sealed record AgentRunSummaryResponse(
     Guid Id,
     string WorkflowType,

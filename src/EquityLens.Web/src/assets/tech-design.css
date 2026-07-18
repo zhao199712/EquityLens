@@ -1,0 +1,350 @@
+/* ========================================
+   Tech Design System — 深色霓虹科技
+   Deep space dark + cyan neon glow
+   ======================================== */
+
+:root {
+  /* Canvas */
+  --tech-bg: #050a14;
+  --tech-bg-alt: #0a1120;
+  --tech-bg-panel: rgba(13, 22, 41, 0.55);
+
+  /* Neon accents */
+  --tech-cyan: #22d3ee;
+  --tech-blue: #38bdf8;
+  --tech-violet: #818cf8;
+  --tech-green: #34d399;
+  --tech-red: #fb7185;
+
+  /* Text */
+  --tech-text: #e6f1ff;
+  --tech-muted: #7d8aa8;
+
+  /* Borders & glow */
+  --tech-border: rgba(56, 189, 248, 0.18);
+  --tech-border-strong: rgba(56, 189, 248, 0.45);
+  --tech-glow-cyan: 0 0 24px rgba(34, 211, 238, 0.35);
+  --tech-glow-sm: 0 0 10px rgba(34, 211, 238, 0.25);
+
+  /* Typography */
+  --tech-font-body: 'Inter', 'Noto Sans TC', sans-serif;
+  --tech-font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Courier New', monospace;
+}
+
+/* ---- Page canvas ---- */
+.tech-page {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 0%, rgba(34, 211, 238, 0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 85% 20%, rgba(129, 140, 248, 0.07) 0%, transparent 70%),
+    var(--tech-bg);
+  color: var(--tech-text);
+  font-family: var(--tech-font-body);
+  overflow-x: hidden;
+}
+
+/* HUD grid overlay */
+.tech-grid-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, black 0%, transparent 100%);
+}
+
+.tech-page h1,
+.tech-page h2,
+.tech-page h3 {
+  color: var(--tech-text);
+}
+
+/* ---- Layout ---- */
+.tech-section {
+  position: relative;
+  width: min(1200px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 72px 0 24px;
+}
+
+.tech-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.tech-section-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Typography helpers ---- */
+.tech-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--tech-muted);
+}
+
+.tech-mono {
+  font-family: var(--tech-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tech-glow-text {
+  background: linear-gradient(120deg, var(--tech-cyan) 0%, var(--tech-blue) 45%, var(--tech-violet) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.35));
+}
+
+/* ---- Panel (glass card) ---- */
+.tech-panel {
+  position: relative;
+  background: var(--tech-bg-panel);
+  border: 1px solid var(--tech-border);
+  border-radius: 14px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.tech-panel:hover {
+  border-color: var(--tech-border-strong);
+  box-shadow: var(--tech-glow-sm);
+}
+
+.tech-panel-pad {
+  padding: 24px;
+}
+
+/* Corner ticks — HUD 風格 */
+.tech-panel-corners::before,
+.tech-panel-corners::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--tech-cyan);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.tech-panel-corners::before {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 14px 0 0 0;
+}
+
+.tech-panel-corners::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: none;
+  border-top: none;
+  border-radius: 0 0 14px 0;
+}
+
+/* ---- Buttons ---- */
+.tech-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 26px;
+  background: transparent;
+  border: 1px solid var(--tech-border-strong);
+  border-radius: 10px;
+  color: var(--tech-cyan);
+  font-family: var(--tech-font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.tech-btn:hover {
+  border-color: var(--tech-cyan);
+  box-shadow: var(--tech-glow-sm);
+  transform: translateY(-1px);
+}
+
+.tech-btn-solid {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.9), rgba(56, 189, 248, 0.9));
+  border: none;
+  color: #04121f;
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.35);
+}
+
+.tech-btn-solid:hover {
+  box-shadow: 0 0 36px rgba(34, 211, 238, 0.55);
+}
+
+/* ---- Tag ---- */
+.tech-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--tech-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--tech-muted);
+}
+
+/* ---- Form inputs ---- */
+.tech-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(5, 10, 20, 0.6);
+  border: 1px solid var(--tech-border);
+  border-radius: 10px;
+  color: var(--tech-text);
+  font-family: var(--tech-font-body);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tech-input::placeholder {
+  color: var(--tech-muted);
+}
+
+.tech-input:focus {
+  border-color: var(--tech-cyan);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+}
+
+select.tech-input {
+  appearance: none;
+  cursor: pointer;
+}
+
+select.tech-input option {
+  background: var(--tech-bg-alt);
+  color: var(--tech-text);
+}
+
+/* ---- Loading / empty / error ---- */
+.tech-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--tech-bg-panel);
+  border: 1px solid var(--tech-border);
+  border-radius: 14px;
+  min-height: 140px;
+}
+
+.tech-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.06), transparent);
+  animation: tech-shimmer 1.6s infinite;
+}
+
+@keyframes tech-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.tech-error {
+  padding: 14px 18px;
+  border: 1px solid rgba(251, 113, 133, 0.35);
+  border-radius: 10px;
+  background: rgba(251, 113, 133, 0.08);
+  color: var(--tech-red);
+  font-size: 13px;
+}
+
+.tech-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--tech-muted);
+  font-size: 14px;
+  border: 1px dashed var(--tech-border);
+  border-radius: 14px;
+}
+
+/* ---- Ticker marquee ---- */
+.tech-ticker {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--tech-border);
+  border-bottom: 1px solid var(--tech-border);
+  background: rgba(10, 17, 32, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.tech-ticker-track {
+  display: flex;
+  width: max-content;
+  animation: tech-ticker-scroll 36s linear infinite;
+}
+
+.tech-ticker:hover .tech-ticker-track {
+  animation-play-state: paused;
+}
+
+@keyframes tech-ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* ---- Status dot ---- */
+.tech-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tech-cyan);
+  box-shadow: 0 0 8px var(--tech-cyan);
+  flex-shrink: 0;
+}
+
+.tech-dot.pulse {
+  animation: tech-dot-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tech-dot-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--tech-cyan); }
+  50% { opacity: 0.35; box-shadow: 0 0 2px var(--tech-cyan); }
+}
+
+/* ---- Scanline shimmer (hero 裝飾) ---- */
+@keyframes tech-scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+.tech-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(180deg, transparent, rgba(34, 211, 238, 0.05), transparent);
+  animation: tech-scanline 7s linear infinite;
+  pointer-events: none;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 900px) {
+  .tech-section {
+    width: calc(100% - 32px);
+    padding: 48px 0 16px;
+  }
+}
