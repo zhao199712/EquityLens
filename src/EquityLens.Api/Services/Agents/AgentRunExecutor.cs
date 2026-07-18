@@ -290,7 +290,18 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         {
             var json = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject(); json["goalStatus"] = DynamicGoalStatuses.Complete; run.WorkflowDefinitionJson = json.ToJsonString(AgentNodeJson.SerializerOptions); return false;
         }
-        materializer.Materialize(run, validated); return true;
+        var existingNodeIds = run.Nodes.Select(x => x.Id).ToHashSet();
+        materializer.Materialize(run, validated);
+        // Appending a graph patch must not rewrite completed executions. Some providers
+        // mark the existing relationship members as modified when new nodes are added;
+        // keeping them unchanged also prevents an unrelated stale node row from rolling
+        // back the otherwise atomic planner/tool-call/graph-patch transaction.
+        foreach (var entry in _dbContext.ChangeTracker.Entries<AgentRunNode>()
+                     .Where(x => existingNodeIds.Contains(x.Entity.Id) && x.State == EntityState.Modified))
+        {
+            entry.State = EntityState.Unchanged;
+        }
+        return true;
     }
 
     private sealed class DeterministicPlannerAdapter : IAgentWorkflowPlanner
