@@ -53,8 +53,14 @@ public sealed class LoadEvidenceRemediationContextNodeHandler : IAgentNodeHandle
         if (source.WorkflowType != AgentWorkflowTypes.CriticReview) throw new InvalidOperationException("Source run is not a CriticReview workflow.");
         if (source.Status != AgentRunStatuses.Succeeded) throw new InvalidOperationException("Critic review run has not succeeded.");
         var sourceBoard = AgentNodeJson.ParseBlackboard(source.BlackboardJson);
-        var review = ResolveFinalReview(source, sourceBoard);
-        if (!(review[CriticReviewFields.RequiresMoreEvidence]?.GetValue<bool>() ?? false)) throw new InvalidOperationException("Critic review does not require more evidence.");
+        var (review, reviewSource) = ResolveFinalReview(source, sourceBoard);
+        var routingValue = review[CriticReviewFields.RequiresMoreEvidence];
+        var requiresMoreEvidence = routingValue is JsonValue jsonValue && jsonValue.TryGetValue<bool>(out var required) && required;
+        if (!requiresMoreEvidence)
+        {
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision, "Critic review routing decision rejected evidence remediation.", new { reviewSource, requiresMoreEvidenceRaw = routingValue?.ToJsonString() });
+            throw new InvalidOperationException("Critic review does not require more evidence.");
+        }
         board[AgentBlackboardKeys.CriticReviewRun] = JsonSerializer.SerializeToNode(new { source.Id, source.WorkflowType, source.Status }, AgentNodeJson.SerializerOptions);
         foreach (var key in new[] { AgentBlackboardKeys.ResearchRunId, AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question, AgentBlackboardKeys.Answer, AgentBlackboardKeys.Citations, AgentBlackboardKeys.Candidates }) board[key] = sourceBoard[key]?.DeepClone();
         board[AgentBlackboardKeys.CriticReview] = review.DeepClone();
@@ -64,14 +70,14 @@ public sealed class LoadEvidenceRemediationContextNodeHandler : IAgentNodeHandle
         context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "CriticReview snapshot loaded for evidence remediation.", output);
     }
 
-    private static JsonObject ResolveFinalReview(AgentRun source, JsonObject sourceBoard)
+    private static (JsonObject Review, string Source) ResolveFinalReview(AgentRun source, JsonObject sourceBoard)
     {
         if (!string.IsNullOrWhiteSpace(source.OutputJson))
         {
             try
             {
-                return JsonNode.Parse(source.OutputJson)?.AsObject()
-                    ?? throw new InvalidOperationException("Critic review output is invalid.");
+                return (JsonNode.Parse(source.OutputJson)?.AsObject()
+                    ?? throw new InvalidOperationException("Critic review output is invalid."), "OutputJson");
             }
             catch (JsonException exception)
             {
@@ -83,9 +89,9 @@ public sealed class LoadEvidenceRemediationContextNodeHandler : IAgentNodeHandle
             }
         }
 
-        return sourceBoard[AgentBlackboardKeys.FinalOutput] as JsonObject
-            ?? sourceBoard[AgentBlackboardKeys.CriticReview] as JsonObject
-            ?? throw new InvalidOperationException("Critic review output is missing.");
+        if (sourceBoard[AgentBlackboardKeys.FinalOutput] is JsonObject finalOutput) return (finalOutput, "Blackboard.FinalOutput");
+        if (sourceBoard[AgentBlackboardKeys.CriticReview] is JsonObject criticReview) return (criticReview, "Blackboard.CriticReview");
+        throw new InvalidOperationException("Critic review output is missing.");
     }
 }
 
