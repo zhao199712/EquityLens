@@ -67,6 +67,8 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public async Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(45));
         string? error = null;
         for (var attempt = 0; attempt < 2; attempt++)
         {
@@ -78,11 +80,12 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
                     blackboard = Summarize(context.Blackboard), context.CompletedNodeTypes,
                     skills = context.Skills, capabilities = context.Capabilities.Select(x => new { x.Id, x.NodeType, x.Description, x.MaxOccurrences }),
                     budget = new { maxRetrievalIterations = 2, maxDynamicNodes = ResearchQualityReviewWorkflow.MaxDynamicNodes }, validationError = error
-                }, Json), .1, 3000, ChatResponseFormat.JsonObject), cancellationToken);
+                }, Json), .1, 3000, ChatResponseFormat.JsonObject), timeout.Token);
                 var parsed = Parse(response.Content, context, attempt == 0 ? "Llm" : "LlmRepair", response);
                 return parsed with { Provider = chat.Provider };
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException) { error = ex.Message; }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { error = "Workflow planner timed out after 45 seconds."; break; }
         }
         return DeterministicDynamicWorkflowPlanner.Create(context, error, chat.Model);
     }

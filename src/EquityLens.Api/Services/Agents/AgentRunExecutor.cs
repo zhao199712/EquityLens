@@ -246,8 +246,17 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         var trigger = last?.NodeType == EvidenceRemediationNodeTypes.Route ? DynamicPlanningTriggers.EvidenceValidated : last?.NodeType == ResearchQualityReviewNodeTypes.FinalizeCriticReport ? DynamicPlanningTriggers.CriticCompleted : DynamicPlanningTriggers.BranchCompleted;
         var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, AgentNodeJson.ParseBlackboard(run.BlackboardJson), run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), skills.Skills, capabilities.Capabilities, run.Nodes.Where(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), run.Nodes.Count - 5);
         var started = DateTime.UtcNow;
-        var proposal = await planner.PlanAsync(context, cancellationToken);
-        _dbContext.AgentToolCalls.Add(new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = run.Id, AgentRunNodeId = last?.Id, ToolName = "workflowPlannerLLM", Status = AgentToolCallStatuses.Succeeded, ArgumentsJson = Serialize(new { trigger, promptTemplateId = LlmAgentWorkflowPlanner.PromptTemplateId, promptVersion = LlmAgentWorkflowPlanner.PromptVersion, context.OrchestrationVersion }), ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180), ResultJson = Serialize(proposal), StartedAtUtc = started, CompletedAtUtc = DateTime.UtcNow, DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds });
+        var plannerCall = new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = run.Id, AgentRunNodeId = last?.Id, ToolName = "workflowPlannerLLM", Status = AgentToolCallStatuses.Running, ArgumentsJson = Serialize(new { trigger, promptTemplateId = LlmAgentWorkflowPlanner.PromptTemplateId, promptVersion = LlmAgentWorkflowPlanner.PromptVersion, timeoutSeconds = 45, context.OrchestrationVersion }), StartedAtUtc = started };
+        _dbContext.AgentToolCalls.Add(plannerCall); AddEvent(run, last, AgentEventTypes.ToolCallStarted, "Tool workflowPlannerLLM started.", new { trigger, timeoutSeconds = 45 }); await _dbContext.SaveChangesAsync(cancellationToken);
+        DynamicPlanProposal proposal;
+        try
+        {
+            proposal = await planner.PlanAsync(context, cancellationToken); plannerCall.Status = AgentToolCallStatuses.Succeeded; plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180); plannerCall.ResultJson = Serialize(proposal); plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
+        }
+        catch (Exception exception)
+        {
+            plannerCall.Status = AgentToolCallStatuses.Failed; plannerCall.ErrorMessage = exception.Message; plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallFailed, "Tool workflowPlannerLLM failed.", new { error = exception.Message }); throw;
+        }
         AddEvent(run, last, AgentEventTypes.PlannerProposed, proposal.Reason, new { proposal.ProposalId, proposal.Trigger, proposal.GoalStatus, proposal.SelectedSkills, proposal.Mode, proposal.Provider, proposal.Model, proposal.PromptTokens, proposal.CompletionTokens, proposal.FallbackReason, actions = proposal.Actions.Select(x => new { x.ClientNodeKey, x.Capability, x.NodeType }) });
         ValidatedDynamicPlan validated;
         try { validated = validator.Validate(run, proposal); AddEvent(run, last, AgentEventTypes.PlanValidated, "Dynamic plan validated.", new { proposal.ProposalId, actionCount = proposal.Actions.Count }); }
