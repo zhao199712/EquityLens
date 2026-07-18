@@ -104,22 +104,26 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             {
                 await RunNodeAsync(run, nodeKey, cancellationToken);
                 run.LeaseOwner = null; run.LeaseExpiresAtUtc = null; run.OrchestrationVersion++;
+                var graphAppended = false;
                 if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped))
                 {
-                    if (!await TryAdvanceDynamicPlanAsync(run, cancellationToken)) CompleteRun(run);
+                    graphAppended = await TryAdvanceDynamicPlanAsync(run, cancellationToken);
+                    if (!graphAppended) CompleteRun(run);
                 }
                 else AddWakeOutbox(run, run.Nodes.Single(x => x.NodeKey == nodeKey));
-                await _dbContext.SaveChangesAsync(cancellationToken);
+                await SaveOrchestrationChangesAsync(graphAppended, cancellationToken);
                 return;
             }
 
+            var appended = false;
             if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped))
             {
-                if (!await TryAdvanceDynamicPlanAsync(run, cancellationToken)) CompleteRun(run);
+                appended = await TryAdvanceDynamicPlanAsync(run, cancellationToken);
+                if (!appended) CompleteRun(run);
             }
             else throw new InvalidOperationException("Workflow has no ready node but is not complete.");
             run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await SaveOrchestrationChangesAsync(appended, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -290,20 +294,38 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         {
             var json = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject(); json["goalStatus"] = DynamicGoalStatuses.Complete; run.WorkflowDefinitionJson = json.ToJsonString(AgentNodeJson.SerializerOptions); return false;
         }
-        var existingNodeIds = run.Nodes.Select(x => x.Id).ToHashSet();
         materializer.Materialize(run, validated);
+        return true;
+    }
+
+    private async Task SaveOrchestrationChangesAsync(bool graphAppended, CancellationToken cancellationToken)
+    {
+        if (!graphAppended)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         // Appending a graph patch must not rewrite completed executions. Some providers
         // mark the existing relationship members as modified when new nodes are added;
         // keeping them unchanged also prevents an unrelated stale node row from rolling
         // back the otherwise atomic planner/tool-call/graph-patch transaction.
         _dbContext.ChangeTracker.DetectChanges();
         foreach (var entry in _dbContext.ChangeTracker.Entries<AgentRunNode>()
-                     .Where(x => existingNodeIds.Contains(x.Entity.Id) && x.State == EntityState.Modified))
+                     .Where(x => x.State == EntityState.Modified))
         {
             entry.OriginalValues.SetValues(entry.CurrentValues);
             entry.State = EntityState.Unchanged;
         }
-        return true;
+        _dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            _dbContext.ChangeTracker.AutoDetectChangesEnabled = true;
+        }
     }
 
     private sealed class DeterministicPlannerAdapter : IAgentWorkflowPlanner
