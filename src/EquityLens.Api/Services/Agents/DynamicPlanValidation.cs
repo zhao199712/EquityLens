@@ -73,7 +73,9 @@ public sealed class GraphMaterializer(EquityLensDbContext db, IAgentWorkflowCata
         {
             var contract = catalog.GetNode(action.NodeType).Contract;
             var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = action.ClientNodeKey, TemplateNodeKey = action.Capability, Iteration = action.Iteration, NodeType = action.NodeType, Status = AgentNodeStatuses.Pending, InputJson = action.Arguments.ToJsonString(AgentNodeJson.SerializerOptions) };
-            run.Nodes.Add(node); last = node;
+            run.Nodes.Add(node);
+            db.AgentRunNodes.Add(node);
+            last = node;
             nodes.Add(new JsonObject { ["id"] = action.ClientNodeKey, ["templateNodeKey"] = action.Capability, ["type"] = action.NodeType, ["iteration"] = action.Iteration, ["required"] = true, ["plannedArguments"] = action.Arguments.DeepClone(), ["condition"] = action.Condition is null ? null : new JsonObject { ["path"] = action.Condition.Path, ["equals"] = action.Condition.ExpectedValue }, ["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = contract.DefaultPolicy.TimeoutSeconds, ["maxRetryCount"] = contract.DefaultPolicy.MaxRetryCount } });
             foreach (var dependency in action.DependsOn) edges.Add(new JsonObject { ["from"] = dependency, ["to"] = action.ClientNodeKey });
         }
