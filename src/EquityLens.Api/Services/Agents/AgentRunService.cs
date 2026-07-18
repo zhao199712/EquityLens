@@ -79,8 +79,10 @@ public sealed class AgentRunService : IAgentRunService
         Guid researchRunId,
         CancellationToken cancellationToken = default)
     {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.ResearchQualityReview, cancellationToken);
         var provider = GetWorkflowProvider(AgentWorkflowTypes.ResearchQualityReview);
         var run = provider.CreateRun(userId, researchRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchQualityReview run created.", new { researchRunId });
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -246,10 +248,15 @@ public sealed class AgentRunService : IAgentRunService
 
     private async Task SnapshotExecutionPoliciesAsync(AgentRun run, CancellationToken cancellationToken)
     {
-        var policies = _workflowAdminService is null
-            ? run.Nodes.Select(x => x.NodeType).Distinct().ToDictionary(x => x, x => _catalog.GetNode(x).DefaultPolicy)
-            : await _workflowAdminService.GetPoliciesAsync(run.Nodes.Select(x => x.NodeType), cancellationToken);
         var root = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
+        var nodeTypes = root["nodes"]!.AsArray()
+            .OfType<JsonObject>()
+            .Select(x => x["type"]!.GetValue<string>())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var policies = _workflowAdminService is null
+            ? nodeTypes.ToDictionary(x => x, x => _catalog.GetNode(x).DefaultPolicy)
+            : await _workflowAdminService.GetPoliciesAsync(nodeTypes, cancellationToken);
         foreach (var node in root["nodes"]!.AsArray().OfType<JsonObject>())
         {
             var type = node["type"]!.GetValue<string>();

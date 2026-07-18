@@ -616,6 +616,33 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
+    public async Task CreateResearchQualityReviewAsync_DisabledWorkflow_IsRejectedUntilReenabled()
+    {
+        await using var db = CreateDbContext();
+        var researchRunId = Guid.NewGuid();
+        var adminService = new AgentWorkflowAdminService(db, new AgentWorkflowCatalog());
+        await adminService.UpdateWorkflowAsync(
+            AgentWorkflowTypes.ResearchQualityReview,
+            new UpdateAgentWorkflowSettingRequest(false, null, null));
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+            new DeterministicCriticReviewAgent(),
+            workflowAdminService: adminService);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateResearchQualityReviewAsync(Guid.NewGuid(), researchRunId, CancellationToken.None));
+        Assert.Equal("Workflow 'ResearchQualityReview' is disabled.", exception.Message);
+
+        await adminService.UpdateWorkflowAsync(
+            AgentWorkflowTypes.ResearchQualityReview,
+            new UpdateAgentWorkflowSettingRequest(true, null, null));
+        var summary = await service.CreateResearchQualityReviewAsync(Guid.NewGuid(), researchRunId, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Succeeded, summary.Status);
+    }
+
+    [Fact]
     public async Task CreateResearchQualityReviewAsync_CompletedWorkflow_BlackboardContainsRevisionOutput()
     {
         await using var db = CreateDbContext();
@@ -1083,7 +1110,8 @@ public sealed class AgentRunServiceTests
         ICriticReviewAgent criticReviewAgent,
         IAgentRunStateMachine? runStateMachine = null,
         IAgentNodeStateMachine? nodeStateMachine = null,
-        IAgentRunQueue? agentRunQueue = null)
+        IAgentRunQueue? agentRunQueue = null,
+        IAgentWorkflowAdminService? workflowAdminService = null)
     {
         runStateMachine ??= new AgentRunStateMachine();
         nodeStateMachine ??= new AgentNodeStateMachine();
@@ -1095,7 +1123,8 @@ public sealed class AgentRunServiceTests
             [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider(), new ResearchQualityReviewWorkflowDefinitionProvider()],
             runStateMachine,
             nodeStateMachine,
-            agentRunQueue);
+            agentRunQueue,
+            workflowAdminService);
     }
 
     private static AgentRunService CreateServiceWithHandlers(

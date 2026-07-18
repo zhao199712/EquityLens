@@ -98,6 +98,28 @@ public sealed class AgentWorkflowPlannerTests
     }
 
     [Fact]
+    public void Catalog_ResearchQualityReview_UsesExpectedSharedNodeContracts()
+    {
+        var workflow = new AgentWorkflowCatalog().GetWorkflow(AgentWorkflowTypes.ResearchQualityReview);
+
+        Assert.Equal("研究品質審查", workflow.DisplayName);
+        Assert.Equal(AgentTypes.Critic, workflow.AgentType);
+        Assert.Equal(
+        [
+            ResearchQualityReviewNodeTypes.LoadResearchRun,
+            ResearchQualityReviewNodeTypes.BuildEvidencePacket,
+            ResearchQualityReviewNodeTypes.CheckEvidence,
+            ResearchQualityReviewNodeTypes.CritiqueAnswer,
+            ResearchQualityReviewNodeTypes.FinalizeCriticReport,
+            ResearchQualityReviewNodeTypes.DraftRevisedAnswer,
+            ResearchQualityReviewNodeTypes.FinalizeRevision
+        ], workflow.NodeTypes);
+        Assert.Equal(6, workflow.Edges.Count);
+        Assert.Equal((ResearchQualityReviewNodeTypes.FinalizeCriticReport, ResearchQualityReviewNodeTypes.DraftRevisedAnswer), workflow.Edges[4]);
+        Assert.Equal((ResearchQualityReviewNodeTypes.DraftRevisedAnswer, ResearchQualityReviewNodeTypes.FinalizeRevision), workflow.Edges[5]);
+    }
+
+    [Fact]
     public void GetExecutionOrder_EdgeReferencesUnknownNode_Throws()
     {
         var planner = new AgentWorkflowPlanner();
