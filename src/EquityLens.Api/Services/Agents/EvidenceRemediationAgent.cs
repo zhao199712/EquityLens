@@ -9,7 +9,21 @@ public static class EvidenceClaimKinds
     public const string InvestigationClaim = "InvestigationClaim";
 }
 
-public sealed record EvidenceClaim(string Id, string Text, IReadOnlyList<string> NumericValues, string Kind = EvidenceClaimKinds.AnswerClaim);
+public static class EvidenceClaimTypes
+{
+    public const string Factual = "Factual";
+    public const string Mechanism = "Mechanism";
+    public const string Judgment = "Judgment";
+    public const string Answerability = "Answerability";
+}
+
+public static class InvestigationModes
+{
+    public const string CorrectExistingAnswer = "CorrectExistingAnswer";
+    public const string RecoverAnswer = "RecoverAnswer";
+}
+
+public sealed record EvidenceClaim(string Id, string Text, IReadOnlyList<string> NumericValues, string Kind = EvidenceClaimKinds.AnswerClaim, string ClaimType = EvidenceClaimTypes.Factual, string? ResearchDimension = null);
 public sealed record RemediationEvidenceItem(int Index, string SourceType, string? Title, string? DocumentType, string? Url, string Content, double RelevanceScore, DateTimeOffset? PublishedAt = null, string? Query = null, string? Provider = null);
 public sealed record ClaimSupportAssessment(
     string ClaimId,
@@ -22,8 +36,8 @@ public sealed record ClaimSupportAssessment(
 public sealed record ValidatedClaimSupport(string ClaimId, string ClaimText, string Status, IReadOnlyList<int> EvidenceIndexes, IReadOnlyList<string> ValidationErrors);
 public sealed record EvidenceValidationResult(string EvidenceStatus, IReadOnlyList<ValidatedClaimSupport> Claims, IReadOnlyList<string> UnresolvedClaimIds, bool RequiresReanalysis = false, IReadOnlyList<string>? ReanalysisReasons = null);
 public sealed record RemediatedEvidencePacket(string EvidenceStatus, IReadOnlyList<ValidatedClaimSupport> Claims, IReadOnlyList<RemediationEvidenceItem> Evidence, IReadOnlyList<string> UnresolvedClaimIds, bool RequiresReanalysis = false, IReadOnlyList<string>? ReanalysisReasons = null);
-public sealed record EvidenceBackedRevisionResult(string RevisedAnswer, string RevisionSummary);
-public sealed record EvidenceRemediationOutput(string SourceAnswer, string RevisedAnswer, string RevisionSummary, string EvidenceStatus, IReadOnlyList<RemediationEvidenceItem> Citations, IReadOnlyList<string> UnresolvedClaimIds, bool RequiresReanalysis = false, IReadOnlyList<string>? ReanalysisReasons = null);
+public sealed record EvidenceBackedRevisionResult(string RevisedAnswer, string RevisionSummary, IReadOnlyList<string>? AnsweredDimensions = null, IReadOnlyList<string>? InferenceLimitations = null);
+public sealed record EvidenceRemediationOutput(string SourceAnswer, string RevisedAnswer, string RevisionSummary, string EvidenceStatus, IReadOnlyList<RemediationEvidenceItem> Citations, IReadOnlyList<string> UnresolvedClaimIds, bool RequiresReanalysis = false, IReadOnlyList<string>? ReanalysisReasons = null, string InvestigationMode = InvestigationModes.CorrectExistingAnswer, double AnswerCoverage = 0, IReadOnlyList<string>? AnsweredDimensions = null, IReadOnlyList<string>? UnresolvedDimensions = null, IReadOnlyList<string>? InferenceLimitations = null);
 
 public interface IClaimExtractionAgent
 {
@@ -48,17 +62,18 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
     {
         if (string.IsNullOrWhiteSpace(input.Answer) && string.IsNullOrWhiteSpace(input.Question) && input.CriticFindings.Count == 0)
             throw new InvalidOperationException("Claim extraction requires an answer, question, or Critic finding.");
-        var content = await CompleteAsync("Extract factual claims from the answer. If the answer abstains or says evidence is insufficient, create investigation claims from the user question and Critic findings instead. Output JSON only: {\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"numericValues\":[\"123\"],\"kind\":\"AnswerClaim|InvestigationClaim\"}]}. Keep exact numbers, dates, percentages and currencies. Never return an empty claims array when a research question exists.", JsonSerializer.Serialize(input, JsonOptions), cancellationToken);
+        var content = await CompleteAsync("Extract domain claims that help answer the user's research question. If the answer abstains, ignore its meta claim and decompose the question and Critic findings into answerable factual, mechanism, and judgment investigation claims. Answerability statements such as 'data is insufficient' may be labelled Answerability but must not be the only claims. Output JSON only: {\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"numericValues\":[\"123\"],\"kind\":\"AnswerClaim|InvestigationClaim\",\"claimType\":\"Factual|Mechanism|Judgment|Answerability\",\"researchDimension\":\"...\"}]}. Keep exact numbers, dates, percentages and currencies. Never return an empty claims array when a research question exists.", JsonSerializer.Serialize(input, JsonOptions), cancellationToken);
         var claims = JsonSerializer.Deserialize<ClaimEnvelope>(content, JsonOptions)?.Claims;
         var normalized = claims is { Count: > 0 } ? Normalize(claims) : [];
-        if (IsAbstention(input.Answer) && normalized.All(x => x.Kind != EvidenceClaimKinds.InvestigationClaim)) return CreateInvestigationFallback(input);
+        if (IsAbstention(input.Answer) && !HasUsableInvestigationClaims(normalized)) return CreateInvestigationFallback(input);
         return normalized.Count > 0 ? normalized : CreateInvestigationFallback(input);
     }
 
     public async Task<EvidenceBackedRevisionResult> ReviseAsync(string question, string sourceAnswer, RemediatedEvidencePacket packet, CancellationToken cancellationToken = default)
     {
         var input = JsonSerializer.Serialize(new { question, sourceAnswer, packet }, JsonOptions);
-        var content = await CompleteAsync("Revise the answer in Traditional Chinese using only validated evidence. Cite evidence as [n]. Output JSON only: {\"revisedAnswer\":\"...\",\"revisionSummary\":\"...\"}. Do not fabricate facts or citations.", input, cancellationToken);
+        var mode = IsAbstention(sourceAnswer) ? InvestigationModes.RecoverAnswer : InvestigationModes.CorrectExistingAnswer;
+        var content = await CompleteAsync($"Produce the final answer in Traditional Chinese using only validated evidence. Mode={mode}. In RecoverAnswer mode replace the abstention and directly answer the original question with: verified facts, bounded financial mechanisms, a conditional judgment, and explicit uncertainty. Distinguish inability to quantify precisely from inability to analyze. Secondary web sources may support directional analysis but not invented forecasts. Cite evidence as [n]. Output JSON only: {{\"revisedAnswer\":\"...\",\"revisionSummary\":\"...\",\"answeredDimensions\":[\"...\"],\"inferenceLimitations\":[\"...\"]}}. Do not fabricate facts or citations.", input, cancellationToken);
         return JsonSerializer.Deserialize<EvidenceBackedRevisionResult>(content, JsonOptions) ?? throw new InvalidOperationException("Evidence-backed revision returned no result.");
     }
 
@@ -73,8 +88,11 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
 
     private static IReadOnlyList<EvidenceClaim> Normalize(IReadOnlyList<EvidenceClaim> claims) => claims
         .Where(x => !string.IsNullOrWhiteSpace(x.Text))
-        .Select((x, index) => x with { Id = string.IsNullOrWhiteSpace(x.Id) ? $"claim-{index + 1}" : x.Id, Kind = x.Kind is EvidenceClaimKinds.AnswerClaim or EvidenceClaimKinds.InvestigationClaim ? x.Kind : EvidenceClaimKinds.AnswerClaim })
+        .Select((x, index) => x with { Id = string.IsNullOrWhiteSpace(x.Id) ? $"claim-{index + 1}" : x.Id, Kind = x.Kind is EvidenceClaimKinds.AnswerClaim or EvidenceClaimKinds.InvestigationClaim ? x.Kind : EvidenceClaimKinds.AnswerClaim, ClaimType = x.ClaimType is EvidenceClaimTypes.Factual or EvidenceClaimTypes.Mechanism or EvidenceClaimTypes.Judgment or EvidenceClaimTypes.Answerability ? x.ClaimType : EvidenceClaimTypes.Factual })
         .ToList();
+
+    private static bool HasUsableInvestigationClaims(IReadOnlyList<EvidenceClaim> claims) =>
+        claims.Any(x => x.Kind == EvidenceClaimKinds.InvestigationClaim && x.ClaimType != EvidenceClaimTypes.Answerability && !IsMetaClaim(x.Text));
 
     internal static IReadOnlyList<EvidenceClaim> CreateInvestigationFallback(ClaimExtractionInput input)
     {
@@ -82,11 +100,31 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
             ? input.Question.Trim()
             : input.CriticFindings.Select(x => x.Message).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
         if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("Claim extraction returned no claims and no investigation target is available.");
-        return [new EvidenceClaim("investigation-claim-1", text, DeterministicEvidenceRemediationAgent.ExtractNumbers(text), EvidenceClaimKinds.InvestigationClaim)];
+        if (ContainsAny(text, "資本支出", "capex", "自由現金流", "FCF", "股東回報", "股利"))
+        {
+            return
+            [
+                Investigation("capex-guidance", "未來資本支出的規模、期間與公司指引為何？", EvidenceClaimTypes.Factual, "CapEx guidance"),
+                Investigation("fcf-impact", "資本支出增加在其他條件不變下會壓低短期自由現金流。", EvidenceClaimTypes.Mechanism, "FCF impact"),
+                Investigation("cash-flow-coverage", "營業現金流與現金部位是否足以覆蓋資本支出。", EvidenceClaimTypes.Factual, "Cash flow coverage"),
+                Investigation("depreciation-impact", "新增資本支出帶來的折舊可能如何影響獲利與現金流。", EvidenceClaimTypes.Mechanism, "Depreciation impact"),
+                Investigation("shareholder-return", "自由現金流壓力是否會限制股利或其他股東回報的成長。", EvidenceClaimTypes.Judgment, "Shareholder returns"),
+                Investigation("growth-offset", "新增產能帶來的營收與營業現金流成長是否可能抵銷資本支出壓力。", EvidenceClaimTypes.Judgment, "Growth offset")
+            ];
+        }
+        return
+        [
+            Investigation("facts", $"回答「{text}」所需的關鍵可查證事實為何？", EvidenceClaimTypes.Factual, "Key facts"),
+            Investigation("mechanism", $"哪些可驗證的因果機制會影響「{text}」？", EvidenceClaimTypes.Mechanism, "Mechanism"),
+            Investigation("judgment", $"根據已驗證事實，對「{text}」可形成什麼有條件的判斷？", EvidenceClaimTypes.Judgment, "Conditional judgment")
+        ];
     }
 
-    internal static bool IsAbstention(string value) => new[] { "資料不足", "證據不足", "無法回答", "無法判斷", "insufficient evidence", "cannot answer" }
-        .Any(marker => value.Contains(marker, StringComparison.OrdinalIgnoreCase));
+    private static EvidenceClaim Investigation(string id, string text, string type, string dimension) => new($"investigation-{id}", text, DeterministicEvidenceRemediationAgent.ExtractNumbers(text), EvidenceClaimKinds.InvestigationClaim, type, dimension);
+    internal static bool IsMetaClaim(string value) => ContainsAny(value, "資料不足", "證據不足", "無法回答", "需要更多資料", "insufficient evidence", "cannot answer");
+    private static bool ContainsAny(string value, params string[] markers) => markers.Any(marker => value.Contains(marker, StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsAbstention(string value) => ContainsAny(value, "資料不足", "證據不足", "無法回答", "無法判斷", "insufficient evidence", "cannot answer");
 }
 
 public sealed class DeterministicEvidenceRemediationAgent : IClaimExtractionAgent, IEvidenceBackedRevisionAgent
@@ -97,7 +135,7 @@ public sealed class DeterministicEvidenceRemediationAgent : IClaimExtractionAgen
             : LlmEvidenceRemediationAgent.CreateInvestigationFallback(input));
 
     public Task<EvidenceBackedRevisionResult> ReviseAsync(string question, string sourceAnswer, RemediatedEvidencePacket packet, CancellationToken cancellationToken = default) =>
-        Task.FromResult(new EvidenceBackedRevisionResult($"{sourceAnswer}\n\n補充證據：[1] {packet.Evidence[0].Content}", "已依驗證證據補強回答。"));
+        Task.FromResult(new EvidenceBackedRevisionResult(LlmEvidenceRemediationAgent.IsAbstention(sourceAnswer) ? $"根據目前已驗證證據，可對問題作有條件分析：[1] {packet.Evidence[0].Content}" : $"{sourceAnswer}\n\n補充證據：[1] {packet.Evidence[0].Content}", "已依驗證證據補強回答。", packet.Claims.Where(x => x.Status == "Supported").Select(x => x.ClaimText).ToList(), ["未提供精確預測時，結論僅代表方向性分析。"]));
 
     internal static IReadOnlyList<string> ExtractNumbers(string value) =>
         System.Text.RegularExpressions.Regex.Matches(value, @"-?\d+(?:\.\d+)?%?").Select(match => match.Value).Distinct().ToList();

@@ -31,7 +31,7 @@ public static class DraftRevisionWorkflow
 
 public static class ResearchQualityReviewWorkflow
 {
-    public const int Version = 2;
+    public const int Version = 3;
     public const int MaxRetrievalIterations = 2;
     public const int MaxDynamicNodes = 18;
 }

@@ -124,7 +124,7 @@ public sealed class EvidenceRemediationWorkflowTests
         await new ExtractAnswerClaimsNodeHandler(new EmptyClaimAgent()).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
 
         var claims = EvidenceRemediationBoardForTest.Required<List<EvidenceClaim>>(AgentNodeJson.ParseBlackboard(run.BlackboardJson), AgentBlackboardKeys.ExtractedClaims);
-        Assert.Single(claims); Assert.Equal(EvidenceClaimKinds.InvestigationClaim, claims[0].Kind); Assert.Contains("資本支出", claims[0].Text, StringComparison.Ordinal);
+        Assert.Equal(6, claims.Count); Assert.All(claims, claim => Assert.Equal(EvidenceClaimKinds.InvestigationClaim, claim.Kind)); Assert.Contains(claims, claim => claim.ResearchDimension == "FCF impact"); Assert.Contains(claims, claim => claim.ResearchDimension == "Shareholder returns"); Assert.DoesNotContain(claims, claim => claim.ClaimType == EvidenceClaimTypes.Answerability);
     }
 
     [Fact]
@@ -132,7 +132,32 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         var agent = new LlmEvidenceRemediationAgent(new EmptyClaimsChat());
         var claims = await agent.ExtractAsync(new("未來資本支出？", "目前資料不足。", []));
-        Assert.Single(claims); Assert.Equal(EvidenceClaimKinds.InvestigationClaim, claims[0].Kind);
+        Assert.Equal(6, claims.Count); Assert.All(claims, claim => Assert.NotEqual(EvidenceClaimTypes.Answerability, claim.ClaimType));
+    }
+
+    [Fact]
+    public async Task ValidateMappings_PartialAndAnswerabilityClaims_DoNotCompleteResearchGoal()
+    {
+        await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var validate = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.ValidateMappings && x.Iteration == 1); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.ExtractedClaims] = JsonSerializerNode(new[] { new EvidenceClaim("meta", "目前資料不足。", [], EvidenceClaimKinds.InvestigationClaim, EvidenceClaimTypes.Answerability, "Answerability"), new EvidenceClaim("domain", "資本支出可能壓低短期自由現金流。", [], EvidenceClaimKinds.InvestigationClaim, EvidenceClaimTypes.Mechanism, "FCF impact") });
+        board[AgentBlackboardKeys.RetrievedEvidence] = JsonSerializerNode(new[] { new RemediationEvidenceItem(1, "Web", "Capex", "WebSearch", "https://example.test", "Higher capital expenditure may reduce near-term free cash flow.", .8) });
+        board[AgentBlackboardKeys.ClaimSupportAssessments] = JsonSerializerNode(new[] { new ClaimSupportAssessment("meta", "Supported", [1], "The old answer lacked data."), new ClaimSupportAssessment("domain", "PartiallySupported", [1], "Direction is supported but magnitude is unknown.") });
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+
+        await new ValidateEvidenceMappingsNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, validate, (_, _, _, _, _) => { }));
+
+        var result = EvidenceRemediationBoardForTest.Required<EvidenceValidationResult>(AgentNodeJson.ParseBlackboard(run.BlackboardJson), AgentBlackboardKeys.EvidenceValidationResults);
+        Assert.Equal("PartiallySupported", result.EvidenceStatus); Assert.Single(result.UnresolvedClaimIds); Assert.Equal("domain", result.UnresolvedClaimIds[0]);
+    }
+
+    [Fact]
+    public async Task RecoverAnswer_WithValidatedEvidence_RejectsShortAbstention()
+    {
+        await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var draft = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.DraftRevision); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.Question] = "未來資本支出會壓縮自由現金流嗎？"; board[AgentBlackboardKeys.Answer] = "目前資料不足，無法回答。"; board[AgentBlackboardKeys.RemediatedEvidencePacket] = JsonSerializerNode(new RemediatedEvidencePacket("Supported", [new ValidatedClaimSupport("claim-1", "資本支出增加會壓低短期自由現金流。", "Supported", [1], [])], [new RemediationEvidenceItem(1, "Web", "Capex", "WebSearch", "https://example.test", "Higher capex may reduce near-term FCF.", .8)], [])); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new DraftEvidenceBackedRevisionNodeHandler(new FixedRevisionAgent("目前資料不足，無法回答。[1]")).ExecuteAsync(new AgentNodeExecutionContext(db, run, draft, (_, _, _, _, _) => { })));
+
+        Assert.Contains("still primarily abstains", exception.Message);
     }
 
     [Fact]
@@ -191,6 +216,10 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         public int CallCount { get; private set; }
         public Task<EvidenceBackedRevisionResult> ReviseAsync(string question, string sourceAnswer, RemediatedEvidencePacket packet, CancellationToken cancellationToken = default) { CallCount++; return Task.FromResult(new EvidenceBackedRevisionResult("changed", "changed")); }
+    }
+    private sealed class FixedRevisionAgent(string answer) : IEvidenceBackedRevisionAgent
+    {
+        public Task<EvidenceBackedRevisionResult> ReviseAsync(string question, string sourceAnswer, RemediatedEvidencePacket packet, CancellationToken cancellationToken = default) => Task.FromResult(new EvidenceBackedRevisionResult(answer, "test"));
     }
     private sealed class TestDb(DbContextOptions<EquityLensDbContext> options) : EquityLensDbContext(options)
     {
