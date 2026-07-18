@@ -18,6 +18,7 @@ public sealed class AgentRunService : IAgentRunService
     private readonly IAgentRunQueue _agentRunQueue;
     private readonly IAgentWorkflowAdminService? _workflowAdminService;
     private readonly PortfolioDiagnosisWorkflowDefinitionProvider? _portfolioDiagnosisProvider;
+    private readonly IAgentWorkflowCatalog _catalog;
 
     public AgentRunService(
         EquityLensDbContext dbContext,
@@ -26,7 +27,8 @@ public sealed class AgentRunService : IAgentRunService
         IAgentNodeStateMachine nodeStateMachine,
         IAgentRunQueue agentRunQueue,
         IAgentWorkflowAdminService? workflowAdminService = null,
-        PortfolioDiagnosisWorkflowDefinitionProvider? portfolioDiagnosisProvider = null)
+        PortfolioDiagnosisWorkflowDefinitionProvider? portfolioDiagnosisProvider = null,
+        IAgentWorkflowCatalog? catalog = null)
     {
         _dbContext = dbContext;
         _workflowProviders = CreateWorkflowProviderRegistry(workflowProviders);
@@ -35,6 +37,7 @@ public sealed class AgentRunService : IAgentRunService
         _agentRunQueue = agentRunQueue;
         _workflowAdminService = workflowAdminService;
         _portfolioDiagnosisProvider = portfolioDiagnosisProvider;
+        _catalog = catalog ?? new AgentWorkflowCatalog();
     }
 
     public async Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
@@ -243,10 +246,17 @@ public sealed class AgentRunService : IAgentRunService
 
     private async Task SnapshotExecutionPoliciesAsync(AgentRun run, CancellationToken cancellationToken)
     {
-        if (_workflowAdminService is null) return;
-        var policies = await _workflowAdminService.GetPoliciesAsync(run.Nodes.Select(x => x.NodeType), cancellationToken);
+        var policies = _workflowAdminService is null
+            ? run.Nodes.Select(x => x.NodeType).Distinct().ToDictionary(x => x, x => _catalog.GetNode(x).DefaultPolicy)
+            : await _workflowAdminService.GetPoliciesAsync(run.Nodes.Select(x => x.NodeType), cancellationToken);
         var root = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
-        foreach (var node in root["nodes"]!.AsArray().OfType<JsonObject>()) { var p = policies[node["type"]!.GetValue<string>()]; node["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = p.TimeoutSeconds, ["maxRetryCount"] = p.MaxRetryCount }; }
+        foreach (var node in root["nodes"]!.AsArray().OfType<JsonObject>())
+        {
+            var type = node["type"]!.GetValue<string>();
+            var p = policies[type];
+            node["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = p.TimeoutSeconds, ["maxRetryCount"] = p.MaxRetryCount };
+            node["contract"] = JsonSerializer.SerializeToNode(_catalog.GetNode(type).Contract, AgentNodeJson.SerializerOptions);
+        }
         run.WorkflowDefinitionJson = root.ToJsonString(AgentNodeJson.SerializerOptions);
     }
 

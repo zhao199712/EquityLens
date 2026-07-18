@@ -2,7 +2,7 @@
 import { h,onMounted,ref } from 'vue'
 import { NButton,NDataTable,NModal,NSwitch,NSpace,NTag,useMessage,type DataTableColumns } from 'naive-ui'
 import { listNodes,saveNode,type NodeAdmin } from '../../services/agentWorkflowAdmin'
-const rows=ref<NodeAdmin[]>([]);const editing=ref<NodeAdmin|null>(null);const metadataText=ref('');const message=useMessage();async function load(){try{rows.value=await listNodes()}catch{message.error('無法載入 Node Catalog')}}function edit(row:NodeAdmin){editing.value=structuredClone(row);metadataText.value=JSON.stringify(row.metadata??{},null,2)}async function save(){if(!editing.value)return;try{const metadata=JSON.parse(metadataText.value||'{}');if(Array.isArray(metadata)||metadata===null||typeof metadata!=='object')throw new Error('Metadata 必須為 JSON 物件');editing.value.metadata=metadata;const x=await saveNode(editing.value);rows.value=rows.value.map(r=>r.nodeType===x.nodeType?x:r);editing.value=null;message.success('已儲存')}catch(error){message.error(error instanceof SyntaxError?'Metadata 必須是有效的 JSON':error instanceof Error?error.message:'儲存失敗')}}const columns:DataTableColumns<NodeAdmin>=[{title:'Node',key:'displayName'},{title:'Stage',key:'stage'},{title:'Timeout',key:'timeoutSeconds',render:r=>r.timeoutSeconds+'s'},{title:'Retries',key:'maxRetryCount'},{title:'Metadata',key:'metadata',render:r=>r.metadata?JSON.stringify(r.metadata):'—'},{title:'狀態',key:'isEnabled',render:r=>h(NTag,{type:r.isEnabled?'success':'error'},()=>r.isEnabled?'啟用':'停用')},{title:'管理',key:'action',render:r=>h(NButton,{size:'small',onClick:()=>edit(r)},()=> '設定')}];onMounted(load)
+const rows=ref<NodeAdmin[]>([]);const editing=ref<NodeAdmin|null>(null);const metadataText=ref('');const message=useMessage();async function load(){try{rows.value=await listNodes()}catch{message.error('無法載入 Node Catalog')}}function edit(row:NodeAdmin){editing.value=structuredClone(row);metadataText.value=JSON.stringify(row.metadata??{},null,2)}async function save(){if(!editing.value)return;try{const metadata=JSON.parse(metadataText.value||'{}');if(Array.isArray(metadata)||metadata===null||typeof metadata!=='object')throw new Error('Metadata 必須為 JSON 物件');editing.value.metadata=metadata;const x=await saveNode(editing.value);rows.value=rows.value.map(r=>r.nodeType===x.nodeType?x:r);editing.value=null;message.success('已儲存')}catch(error){message.error(error instanceof SyntaxError?'Metadata 必須是有效的 JSON':error instanceof Error?error.message:'儲存失敗')}}const columns:DataTableColumns<NodeAdmin>=[{title:'Node',key:'displayName'},{title:'Stage',key:'stage'},{title:'Contract',key:'contract',render:r=>`${r.contract.inputSchema} → ${r.contract.outputSchema}`},{title:'Timeout',key:'timeoutSeconds',render:r=>r.timeoutSeconds+'s'},{title:'Retries',key:'maxRetryCount'},{title:'狀態',key:'isEnabled',render:r=>h(NTag,{type:r.isEnabled?'success':'error'},()=>r.isEnabled?'啟用':'停用')},{title:'管理',key:'action',render:r=>h(NButton,{size:'small',onClick:()=>edit(r)},()=> '設定')}];onMounted(load)
 </script>
 
 <template>
@@ -52,7 +52,11 @@ const rows=ref<NodeAdmin[]>([]);const editing=ref<NodeAdmin|null>(null);const me
           </label>
         </div>
         <label class="nc-field">
-          <span class="nc-field-label">Metadata(JSON 物件)</span>
+          <span class="nc-field-label">Node Contract（唯讀）</span>
+          <pre class="prestige-input nc-mono">{{ JSON.stringify(editing.contract, null, 2) }}</pre>
+        </label>
+        <label class="nc-field">
+          <span class="nc-field-label">Admin 補充 Metadata(JSON，可選)</span>
           <textarea v-model="metadataText" class="prestige-input nc-mono" rows="8" placeholder='{"key":"value"}' />
         </label>
         <small class="nc-hint">Required: {{ editing.requiredBlackboardKeys.join(', ') }}</small>

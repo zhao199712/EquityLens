@@ -80,6 +80,24 @@ public sealed class AgentWorkflowPlannerTests
     }
 
     [Fact]
+    public void Catalog_AllNodeContracts_AreCompleteAndUnique()
+    {
+        var catalog = new AgentWorkflowCatalog();
+
+        Assert.Equal(catalog.Nodes.Count, catalog.Nodes.Select(x => x.NodeType).Distinct().Count());
+        Assert.All(catalog.Nodes, node =>
+        {
+            var contract = node.Contract;
+            Assert.True(contract.Version > 0);
+            Assert.False(string.IsNullOrWhiteSpace(contract.InputSchema));
+            Assert.False(string.IsNullOrWhiteSpace(contract.OutputSchema));
+            Assert.False(string.IsNullOrWhiteSpace(contract.Stage));
+            Assert.NotNull(contract.RequiredBlackboardKeys);
+            Assert.NotNull(contract.ProducedBlackboardKeys);
+        });
+    }
+
+    [Fact]
     public void GetExecutionOrder_EdgeReferencesUnknownNode_Throws()
     {
         var planner = new AgentWorkflowPlanner();

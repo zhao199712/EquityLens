@@ -8,69 +8,11 @@ public sealed record NodeMetadata(
 
 public static class AgentNodeMetadata
 {
-    public static NodeMetadata LoadResearchRun { get; } = new(
-        CriticReviewNodeTypes.LoadResearchRun,
-        "Load",
-        [AgentBlackboardKeys.ResearchRunId],
-        [AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question, AgentBlackboardKeys.ResearchRun,
-         AgentBlackboardKeys.Answer, AgentBlackboardKeys.Citations, AgentBlackboardKeys.Steps, AgentBlackboardKeys.Candidates]);
-
-    public static NodeMetadata BuildEvidencePacket { get; } = new(
-        CriticReviewNodeTypes.BuildEvidencePacket,
-        "Evidence",
-        [AgentBlackboardKeys.ResearchRun, AgentBlackboardKeys.Answer],
-        [AgentBlackboardKeys.EvidencePacket]);
-
-    public static NodeMetadata CheckEvidence { get; } = new(
-        CriticReviewNodeTypes.CheckEvidence,
-        "Evidence",
-        [AgentBlackboardKeys.EvidencePacket],
-        [AgentBlackboardKeys.EvidenceChecks, AgentBlackboardKeys.CriticFindings]);
-
-    public static NodeMetadata CritiqueAnswer { get; } = new(
-        CriticReviewNodeTypes.CritiqueAnswer,
-        "Critic",
-        [AgentBlackboardKeys.EvidencePacket, AgentBlackboardKeys.EvidenceChecks, AgentBlackboardKeys.Answer],
-        [AgentBlackboardKeys.CriticReview, AgentBlackboardKeys.CriticFindings]);
-
-    public static NodeMetadata FinalizeCriticReport { get; } = new(
-        CriticReviewNodeTypes.FinalizeCriticReport,
-        "Critic",
-        [AgentBlackboardKeys.CriticReview],
-        [AgentBlackboardKeys.FinalOutput]);
-
-    public static NodeMetadata LoadCriticReviewRun { get; } = new(
-        DraftRevisionNodeTypes.LoadCriticReviewRun,
-        "Load",
-        [AgentBlackboardKeys.CriticReviewRunId],
-        [AgentBlackboardKeys.CriticReviewRun, AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question,
-         AgentBlackboardKeys.Answer, AgentBlackboardKeys.CriticReview, AgentBlackboardKeys.CriticFindings]);
-
-    public static NodeMetadata DraftRevisedAnswer { get; } = new(
-        DraftRevisionNodeTypes.DraftRevisedAnswer,
-        "Draft",
-        [AgentBlackboardKeys.CriticReview, AgentBlackboardKeys.CriticFindings, AgentBlackboardKeys.Answer],
-        [AgentBlackboardKeys.RevisedAnswer, AgentBlackboardKeys.RevisionSummary, AgentBlackboardKeys.AppliedRecommendation]);
-
-    public static NodeMetadata FinalizeRevision { get; } = new(
-        DraftRevisionNodeTypes.FinalizeRevision,
-        "Draft",
-        [AgentBlackboardKeys.CriticReview, AgentBlackboardKeys.Answer,
-         AgentBlackboardKeys.RevisedAnswer, AgentBlackboardKeys.RevisionSummary],
-        [AgentBlackboardKeys.FinalOutput]);
-
     private static readonly IReadOnlyDictionary<string, NodeMetadata> ByNodeType =
-        new Dictionary<string, NodeMetadata>(StringComparer.Ordinal)
-        {
-            [LoadResearchRun.NodeType] = LoadResearchRun,
-            [BuildEvidencePacket.NodeType] = BuildEvidencePacket,
-            [CheckEvidence.NodeType] = CheckEvidence,
-            [CritiqueAnswer.NodeType] = CritiqueAnswer,
-            [FinalizeCriticReport.NodeType] = FinalizeCriticReport,
-            [LoadCriticReviewRun.NodeType] = LoadCriticReviewRun,
-            [DraftRevisedAnswer.NodeType] = DraftRevisedAnswer,
-            [FinalizeRevision.NodeType] = FinalizeRevision,
-        };
+        new AgentWorkflowCatalog().Nodes.ToDictionary(
+            x => x.NodeType,
+            x => new NodeMetadata(x.NodeType, x.Stage, x.Contract.RequiredBlackboardKeys, x.Contract.ProducedBlackboardKeys),
+            StringComparer.Ordinal);
 
     public static NodeMetadata? GetByNodeType(string nodeType) =>
         ByNodeType.TryGetValue(nodeType, out var metadata) ? metadata : null;

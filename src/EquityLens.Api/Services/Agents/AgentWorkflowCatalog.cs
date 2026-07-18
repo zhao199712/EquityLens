@@ -1,7 +1,39 @@
 namespace EquityLens.Api.Services.Agents;
 
 public sealed record AgentNodeExecutionPolicy(int TimeoutSeconds, int MaxRetryCount);
-public sealed record AgentNodeCatalogEntry(string NodeType, string DisplayName, string Description, string Stage, string SideEffectLevel, IReadOnlyList<string> RequiredBlackboardKeys, IReadOnlyList<string> ProducedBlackboardKeys, IReadOnlyList<string> AllowedNextNodeTypes, AgentNodeExecutionPolicy DefaultPolicy);
+
+/// <summary>Immutable design-time contract. This is the single source of truth for planner, validator and Admin.</summary>
+public sealed record AgentNodeContract(
+    string NodeType,
+    int Version,
+    string DisplayName,
+    string Description,
+    string Stage,
+    string SideEffectLevel,
+    string InputSchema,
+    string OutputSchema,
+    IReadOnlyList<string> RequiredBlackboardKeys,
+    IReadOnlyList<string> OptionalBlackboardKeys,
+    IReadOnlyList<string> ProducedBlackboardKeys,
+    IReadOnlyList<string> AllowedPreviousNodeTypes,
+    IReadOnlyList<string> AllowedNextNodeTypes,
+    AgentNodeExecutionPolicy DefaultPolicy,
+    bool IsIdempotent,
+    bool SupportsLoop,
+    bool RequiresHumanInput);
+
+public sealed record AgentNodeCatalogEntry(AgentNodeContract Contract)
+{
+    public string NodeType => Contract.NodeType;
+    public string DisplayName => Contract.DisplayName;
+    public string Description => Contract.Description;
+    public string Stage => Contract.Stage;
+    public string SideEffectLevel => Contract.SideEffectLevel;
+    public IReadOnlyList<string> RequiredBlackboardKeys => Contract.RequiredBlackboardKeys;
+    public IReadOnlyList<string> ProducedBlackboardKeys => Contract.ProducedBlackboardKeys;
+    public IReadOnlyList<string> AllowedNextNodeTypes => Contract.AllowedNextNodeTypes;
+    public AgentNodeExecutionPolicy DefaultPolicy => Contract.DefaultPolicy;
+}
 public sealed record AgentWorkflowCatalogEntry(string WorkflowType, string DisplayName, string Description, string AgentType, IReadOnlyList<string> NodeTypes, IReadOnlyList<(string From, string To)> Edges);
 
 public interface IAgentWorkflowCatalog
@@ -16,14 +48,14 @@ public sealed class AgentWorkflowCatalog : IAgentWorkflowCatalog
 {
     public IReadOnlyList<AgentNodeCatalogEntry> Nodes { get; } =
     [
-        N(CriticReviewNodeTypes.LoadResearchRun, "載入研究結果", "載入既有 Research Run。", "Load", "ReadOnly", ["researchRunId"], ["researchRun"], [CriticReviewNodeTypes.BuildEvidencePacket]),
-        N(CriticReviewNodeTypes.BuildEvidencePacket, "建立證據封包", "整理供評論使用的證據。", "Evidence", "ReadOnly", ["researchRun"], ["evidencePacket"], [CriticReviewNodeTypes.CheckEvidence]),
-        N(CriticReviewNodeTypes.CheckEvidence, "檢查證據", "進行 deterministic evidence coverage 檢查。", "Analyze", "ReadOnly", ["evidencePacket"], ["evidenceCoverageReport"], [CriticReviewNodeTypes.CritiqueAnswer]),
-        N(CriticReviewNodeTypes.CritiqueAnswer, "評論答案", "由 Critic Agent 評估答案品質。", "Analyze", "ExternalLlmRead", ["evidencePacket"], ["criticReviewResult"], [CriticReviewNodeTypes.FinalizeCriticReport]),
-        N(CriticReviewNodeTypes.FinalizeCriticReport, "完成評論報告", "產生評論結果與路由決策。", "Finalize", "WritesAgentTrace", ["criticReviewResult"], ["criticPolicyDecision"], []),
-        N(DraftRevisionNodeTypes.LoadCriticReviewRun, "載入評論結果", "載入已完成的 Critic Review。", "Load", "ReadOnly", ["criticReviewRunId"], ["criticReview"], [DraftRevisionNodeTypes.DraftRevisedAnswer]),
-        N(DraftRevisionNodeTypes.DraftRevisedAnswer, "產生修正版", "依評論結果產生修正版答案。", "Act", "ExternalLlmRead", ["criticReview"], ["draftRevisionResult"], [DraftRevisionNodeTypes.FinalizeRevision]),
-        N(DraftRevisionNodeTypes.FinalizeRevision, "完成修正版", "輸出最終修正版。", "Finalize", "WritesAgentTrace", ["draftRevisionResult"], ["finalAnswer"], [])
+        N(CriticReviewNodeTypes.LoadResearchRun, "載入研究結果", "載入既有 Research Run。", "Load", "ReadOnly", [AgentBlackboardKeys.ResearchRunId], [AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question, AgentBlackboardKeys.ResearchRun, AgentBlackboardKeys.Answer, AgentBlackboardKeys.Citations, AgentBlackboardKeys.Steps, AgentBlackboardKeys.Candidates], [CriticReviewNodeTypes.BuildEvidencePacket]),
+        N(CriticReviewNodeTypes.BuildEvidencePacket, "建立證據封包", "整理供評論使用的證據。", "Evidence", "ReadOnly", [AgentBlackboardKeys.ResearchRun, AgentBlackboardKeys.Answer], [AgentBlackboardKeys.EvidencePacket], [CriticReviewNodeTypes.CheckEvidence]),
+        N(CriticReviewNodeTypes.CheckEvidence, "檢查證據", "進行 deterministic evidence coverage 檢查。", "Analyze", "ReadOnly", [AgentBlackboardKeys.EvidencePacket], [AgentBlackboardKeys.EvidenceChecks, AgentBlackboardKeys.CriticFindings], [CriticReviewNodeTypes.CritiqueAnswer]),
+        N(CriticReviewNodeTypes.CritiqueAnswer, "評論答案", "由 Critic Agent 評估答案品質。", "Analyze", "ExternalLlmRead", [AgentBlackboardKeys.EvidencePacket, AgentBlackboardKeys.EvidenceChecks, AgentBlackboardKeys.Answer], [AgentBlackboardKeys.CriticReview, AgentBlackboardKeys.CriticFindings], [CriticReviewNodeTypes.FinalizeCriticReport]),
+        N(CriticReviewNodeTypes.FinalizeCriticReport, "完成評論報告", "產生評論結果與路由決策。", "Finalize", "WritesAgentTrace", [AgentBlackboardKeys.CriticReview], [AgentBlackboardKeys.FinalOutput], []),
+        N(DraftRevisionNodeTypes.LoadCriticReviewRun, "載入評論結果", "載入已完成的 Critic Review。", "Load", "ReadOnly", [AgentBlackboardKeys.CriticReviewRunId], [AgentBlackboardKeys.CriticReviewRun, AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question, AgentBlackboardKeys.Answer, AgentBlackboardKeys.CriticReview, AgentBlackboardKeys.CriticFindings], [DraftRevisionNodeTypes.DraftRevisedAnswer]),
+        N(DraftRevisionNodeTypes.DraftRevisedAnswer, "產生修正版", "依評論結果產生修正版答案。", "Act", "ExternalLlmRead", [AgentBlackboardKeys.CriticReview, AgentBlackboardKeys.CriticFindings, AgentBlackboardKeys.Answer], [AgentBlackboardKeys.RevisedAnswer, AgentBlackboardKeys.RevisionSummary, AgentBlackboardKeys.AppliedRecommendation], [DraftRevisionNodeTypes.FinalizeRevision]),
+        N(DraftRevisionNodeTypes.FinalizeRevision, "完成修正版", "輸出最終修正版。", "Finalize", "WritesAgentTrace", [AgentBlackboardKeys.CriticReview, AgentBlackboardKeys.Answer, AgentBlackboardKeys.RevisedAnswer, AgentBlackboardKeys.RevisionSummary], [AgentBlackboardKeys.FinalOutput], [])
         ,N(PortfolioDiagnosisNodeTypes.LoadContext, "載入投組診斷內容", "驗證投組與診斷期間。", "Load", "ReadOnly", ["portfolioId"], ["portfolioContext"], [PortfolioDiagnosisNodeTypes.CalculateAttribution])
         ,N(PortfolioDiagnosisNodeTypes.CalculateAttribution, "計算績效歸因", "計算投組相對基準及標的／產業貢獻。", "Analyze", "ReadOnly", ["portfolioContext"], ["performanceAttribution"], [PortfolioDiagnosisNodeTypes.LoadRiskProfile])
         ,N(PortfolioDiagnosisNodeTypes.LoadRiskProfile, "載入風險概況", "載入既有風險治理與資料品質結果。", "Analyze", "ReadOnly", ["portfolioContext"], ["riskProfile"], [PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses])
@@ -42,5 +74,8 @@ public sealed class AgentWorkflowCatalog : IAgentWorkflowCatalog
 
     public AgentWorkflowCatalogEntry GetWorkflow(string workflowType) => Workflows.Single(x => x.WorkflowType == workflowType);
     public AgentNodeCatalogEntry GetNode(string nodeType) => Nodes.Single(x => x.NodeType == nodeType);
-    private static AgentNodeCatalogEntry N(string type, string name, string description, string stage, string effect, IReadOnlyList<string> required, IReadOnlyList<string> produced, IReadOnlyList<string> next) => new(type, name, description, stage, effect, required, produced, next, new AgentNodeExecutionPolicy(120, 0));
+    private static AgentNodeCatalogEntry N(string type, string name, string description, string stage, string effect, IReadOnlyList<string> required, IReadOnlyList<string> produced, IReadOnlyList<string> next) => new(new AgentNodeContract(
+        type, 1, name, description, stage, effect,
+        $"{type}Input", $"{type}Output", required, [], produced, [], next,
+        new AgentNodeExecutionPolicy(120, 0), true, false, false));
 }
