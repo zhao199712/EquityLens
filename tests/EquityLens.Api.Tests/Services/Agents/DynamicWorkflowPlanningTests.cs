@@ -18,7 +18,8 @@ public sealed class DynamicWorkflowPlanningTests
         Assert.Equal(DynamicGoalStatuses.Continue, proposal.GoalStatus);
         Assert.Contains(proposal.Actions, x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && x.Arguments["searchIntents"] is JsonArray);
         Assert.DoesNotContain(proposal.Actions, x => x.NodeType == EvidenceRemediationNodeTypes.PlanRetrieval);
-        Assert.Equal(5, proposal.Actions.Count);
+        Assert.Contains(proposal.Actions, x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence);
+        Assert.Equal(6, proposal.Actions.Count);
     }
 
     [Fact]

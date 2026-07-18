@@ -132,13 +132,17 @@ public static class DeterministicDynamicWorkflowPlanner
         else if (c.Trigger == DynamicPlanningTriggers.CriticCompleted && requiresEvidence)
         {
             var iteration = Math.Min(c.RetrievalIterations + 1, 2); var suffix = $":{iteration}";
-            actions = Chain([
+            var planned = new List<DynamicPlanAction> {
                 A("extractClaims" + suffix, "extract-claims", EvidenceRemediationNodeTypes.ExtractClaims, iteration: iteration),
                 A("retrieveEvidence" + suffix, "retrieve-primary-financial-evidence", EvidenceRemediationNodeTypes.RetrieveEvidence, Args(board), iteration),
+            };
+            if (NeedsCurrentWebEvidence(board)) planned.Add(A("retrieveWebEvidence" + suffix, "retrieve-web-evidence", EvidenceRemediationNodeTypes.RetrieveWebEvidence, Args(board, false), iteration));
+            planned.AddRange([
                 A("assessEvidence" + suffix, "assess-claim-evidence", EvidenceRemediationNodeTypes.AssessSupport, iteration: iteration),
                 A("validateEvidence" + suffix, "validate-evidence", EvidenceRemediationNodeTypes.ValidateMappings, iteration: iteration),
                 A("routeEvidence" + suffix, "route-evidence", EvidenceRemediationNodeTypes.Route, iteration: iteration)
-            ], ResearchQualityReviewNodeKeys.FinalizeCriticReport); skills = ["evidence-remediation", "financial-guidance-verification"]; goal = DynamicGoalStatuses.Continue; reason = "Critic requires additional evidence.";
+            ]);
+            actions = Chain(planned, ResearchQualityReviewNodeKeys.FinalizeCriticReport); skills = ["evidence-remediation", "financial-guidance-verification"]; goal = DynamicGoalStatuses.Continue; reason = NeedsCurrentWebEvidence(board) ? "Critic requires current external evidence." : "Critic requires additional evidence.";
         }
         else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted && board[AgentBlackboardKeys.RouteDecision]?.GetValue<string>() == "InsufficientEvidence" && c.RetrievalIterations < 2)
         {
@@ -171,5 +175,15 @@ public static class DeterministicDynamicWorkflowPlanner
     private static IReadOnlyList<DynamicPlanAction> Chain(IReadOnlyList<DynamicPlanAction> actions, string predecessor)
     { var result = new List<DynamicPlanAction>(); var previous = predecessor; foreach (var action in actions) { result.Add(action with { DependsOn = [previous] }); previous = action.ClientNodeKey; } return result; }
     private static string Last(WorkflowPlanningContext c) => c.Blackboard["dynamicLastNodeKey"]?.GetValue<string>() ?? ResearchQualityReviewNodeKeys.FinalizeCriticReport;
-    private static JsonObject Args(JsonObject board, bool local = true) => new() { ["allowWebFallback"] = local ? false : null, ["searchIntents"] = new JsonArray { new JsonObject { ["targetClaims"] = board[AgentBlackboardKeys.UnresolvedClaims]?.DeepClone() ?? new JsonArray(), ["topic"] = board[AgentBlackboardKeys.Question]?.DeepClone(), ["preferredSourceRoles"] = new JsonArray("Primary"), ["freshness"] = "year", ["topK"] = local ? 6 : 5 } } };
+    private static JsonObject Args(JsonObject board, bool local = true) => new() { ["allowWebFallback"] = local ? false : null, ["searchIntents"] = new JsonArray { new JsonObject { ["targetClaims"] = Targets(board), ["topic"] = board[AgentBlackboardKeys.Question]?.DeepClone(), ["preferredSourceRoles"] = new JsonArray("Primary"), ["freshness"] = "year", ["topK"] = local ? 6 : 5 } } };
+    private static JsonNode Targets(JsonObject board)
+    {
+        if (board[AgentBlackboardKeys.UnresolvedClaims] is JsonArray { Count: > 0 } unresolved) return unresolved.DeepClone();
+        var question = board[AgentBlackboardKeys.Question]?.GetValue<string>(); return string.IsNullOrWhiteSpace(question) ? new JsonArray() : new JsonArray(question);
+    }
+    private static bool NeedsCurrentWebEvidence(JsonObject board)
+    {
+        var question = board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
+        return new[] { "未來", "最新", "展望", "指引", "guidance", "outlook", "forecast", "current", "next year" }.Any(x => question.Contains(x, StringComparison.OrdinalIgnoreCase));
+    }
 }
