@@ -118,7 +118,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         activity?.SetTag("workflow.type", run.WorkflowType);
         activity?.SetTag("node.key", node.NodeKey);
         activity?.SetTag("node.type", node.NodeType);
-        var policy = GetPolicy(run.WorkflowDefinitionJson, node.NodeType);
+        var policy = GetPolicy(run.WorkflowDefinitionJson, node.NodeKey, node.NodeType);
         var decisionPayload = new { decision = "RunNode", nextNodeId = nodeKey, reason = "Previous dependencies are satisfied.", mode = "Deterministic", policy.TimeoutSeconds, policy.MaxRetryCount };
         AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Supervisor selected {nodeKey}.", decisionPayload);
         for (var attempt = 0; attempt <= policy.MaxRetryCount; attempt++)
@@ -228,9 +228,9 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, SerializerOptions);
 
-    private AgentNodeExecutionPolicy GetPolicy(string definition, string nodeType)
+    private AgentNodeExecutionPolicy GetPolicy(string definition, string nodeKey, string nodeType)
     {
-        var node = JsonNode.Parse(definition)?["nodes"]?.AsArray().OfType<JsonObject>().SingleOrDefault(x => x["type"]?.GetValue<string>() == nodeType);
+        var node = JsonNode.Parse(definition)?["nodes"]?.AsArray().OfType<JsonObject>().SingleOrDefault(x => x["id"]?.GetValue<string>() == nodeKey);
         var policy = node?["executionPolicy"] as JsonObject;
         return policy is null ? _catalog?.GetNode(nodeType).DefaultPolicy ?? new AgentNodeExecutionPolicy(120, 0) : new(policy["timeoutSeconds"]!.GetValue<int>(), policy["maxRetryCount"]!.GetValue<int>());
     }
