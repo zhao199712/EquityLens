@@ -90,6 +90,10 @@ public sealed class AgentRunService : IAgentRunService
         Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
     {
         if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.PortfolioDiagnosis, cancellationToken);
+        var isOwner = await _dbContext.Portfolios.AnyAsync(
+            x => x.Id == portfolioId && x.OwnerUserId == userId && x.IsActive,
+            cancellationToken);
+        if (!isOwner) throw new InvalidOperationException("Portfolio was not found.");
         var provider = _portfolioDiagnosisProvider ?? throw new InvalidOperationException("PortfolioDiagnosis workflow provider is not registered.");
         var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var start = from ?? end.AddMonths(-1);

@@ -33,7 +33,7 @@ public sealed class LoadPortfolioDiagnosisContextNodeHandler : IAgentNodeHandler
         var from = DateOnly.Parse(root.GetProperty("from").GetString()!);
         var to = DateOnly.Parse(root.GetProperty("to").GetString()!);
         var portfolio = await context.DbContext.Portfolios.Include(x => x.Holdings).AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == portfolioId && x.OwnerUserId == context.Run.UserId, cancellationToken)
+            .FirstOrDefaultAsync(x => x.Id == portfolioId, cancellationToken)
             ?? throw new InvalidOperationException("Portfolio was not found.");
         var output = new PortfolioDiagnosisContext(portfolio.Id, portfolio.Name, portfolio.BaseCurrency, from, to, portfolio.Holdings.Count);
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
@@ -57,7 +57,7 @@ public sealed class CalculatePerformanceAttributionNodeHandler : IAgentNodeHandl
         var historyResult = await _valuations.GetValuationHistoryAsync(diagnosis.PortfolioId, diagnosis.From, diagnosis.To, cancellationToken);
         if (!historyResult.IsSuccess || historyResult.Value is null) throw new InvalidOperationException(historyResult.ErrorMessage ?? "Portfolio valuation history is unavailable.");
         var portfolio = await context.DbContext.Portfolios.Include(x => x.Holdings).ThenInclude(x => x.Security).AsNoTracking()
-            .SingleAsync(x => x.Id == diagnosis.PortfolioId && x.OwnerUserId == context.Run.UserId, cancellationToken);
+            .SingleAsync(x => x.Id == diagnosis.PortfolioId, cancellationToken);
         var ids = portfolio.Holdings.Select(x => x.SecurityId).ToList();
         var prices = await context.DbContext.MarketPrices.AsNoTracking().Where(x => ids.Contains(x.SecurityId) && x.Interval == "1d" && x.PriceTime.Date >= diagnosis.From.ToDateTime(TimeOnly.MinValue) && x.PriceTime.Date <= diagnosis.To.ToDateTime(TimeOnly.MaxValue))
             .Select(x => new { x.SecurityId, x.PriceTime, x.Close, x.AdjustedClose }).ToListAsync(cancellationToken);
