@@ -59,7 +59,9 @@ public sealed class CalculatePerformanceAttributionNodeHandler : IAgentNodeHandl
         var portfolio = await context.DbContext.Portfolios.Include(x => x.Holdings).ThenInclude(x => x.Security).AsNoTracking()
             .SingleAsync(x => x.Id == diagnosis.PortfolioId, cancellationToken);
         var ids = portfolio.Holdings.Select(x => x.SecurityId).ToList();
-        var prices = await context.DbContext.MarketPrices.AsNoTracking().Where(x => ids.Contains(x.SecurityId) && x.Interval == "1d" && x.PriceTime.Date >= diagnosis.From.ToDateTime(TimeOnly.MinValue) && x.PriceTime.Date <= diagnosis.To.ToDateTime(TimeOnly.MaxValue))
+        var fromUtc = DateTime.SpecifyKind(diagnosis.From.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+        var toUtc = DateTime.SpecifyKind(diagnosis.To.ToDateTime(TimeOnly.MaxValue), DateTimeKind.Utc);
+        var prices = await context.DbContext.MarketPrices.AsNoTracking().Where(x => ids.Contains(x.SecurityId) && x.Interval == "1d" && x.PriceTime >= fromUtc && x.PriceTime <= toUtc)
             .Select(x => new { x.SecurityId, x.PriceTime, x.Close, x.AdjustedClose }).ToListAsync(cancellationToken);
         var raw = new List<(string Name, string? Industry, decimal Value, decimal Return)>();
         foreach (var holding in portfolio.Holdings)
