@@ -74,13 +74,19 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
         {
             try
             {
-                var response = await chat.CompleteAsync(new ChatCompletionRequest(SystemPrompt, JsonSerializer.Serialize(new
+                var completion = chat.CompleteAsync(new ChatCompletionRequest(SystemPrompt, JsonSerializer.Serialize(new
                 {
                     context.RunId, context.OrchestrationVersion, context.Trigger,
                     blackboard = Summarize(context.Blackboard), context.CompletedNodeTypes,
                     skills = context.Skills, capabilities = context.Capabilities.Select(x => new { x.Id, x.NodeType, x.Description, x.MaxOccurrences }),
                     budget = new { maxRetrievalIterations = 2, maxDynamicNodes = ResearchQualityReviewWorkflow.MaxDynamicNodes }, validationError = error
                 }, Json), .1, 3000, ChatResponseFormat.JsonObject), timeout.Token);
+                var finished = await Task.WhenAny(completion, Task.Delay(TimeSpan.FromSeconds(45), cancellationToken));
+                if (finished != completion)
+                {
+                    timeout.Cancel(); error = "Workflow planner timed out after 45 seconds."; break;
+                }
+                var response = await completion;
                 var parsed = Parse(response.Content, context, attempt == 0 ? "Llm" : "LlmRepair", response);
                 return parsed with { Provider = chat.Provider };
             }
