@@ -296,6 +296,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         // mark the existing relationship members as modified when new nodes are added;
         // keeping them unchanged also prevents an unrelated stale node row from rolling
         // back the otherwise atomic planner/tool-call/graph-patch transaction.
+        _dbContext.ChangeTracker.DetectChanges();
         foreach (var entry in _dbContext.ChangeTracker.Entries<AgentRunNode>()
                      .Where(x => existingNodeIds.Contains(x.Entity.Id) && x.State == EntityState.Modified))
         {
