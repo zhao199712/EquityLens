@@ -54,7 +54,7 @@ public sealed class CalculatePerformanceAttributionNodeHandler : IAgentNodeHandl
     {
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
         var diagnosis = PortfolioDiagnosisBlackboard.Context(board);
-        var historyResult = await _valuations.GetValuationHistoryAsync(diagnosis.PortfolioId, diagnosis.From, diagnosis.To, cancellationToken);
+        var historyResult = await _valuations.GetValuationHistoryForUserAsync(diagnosis.PortfolioId, context.Run.UserId, diagnosis.From, diagnosis.To, cancellationToken);
         if (!historyResult.IsSuccess || historyResult.Value is null) throw new InvalidOperationException(historyResult.ErrorMessage ?? "Portfolio valuation history is unavailable.");
         var portfolio = await context.DbContext.Portfolios.Include(x => x.Holdings).ThenInclude(x => x.Security).AsNoTracking()
             .SingleAsync(x => x.Id == diagnosis.PortfolioId, cancellationToken);

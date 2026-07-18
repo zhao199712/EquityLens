@@ -215,6 +215,14 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
         Guid portfolioId,
         DateOnly from,
         DateOnly to,
+        CancellationToken cancellationToken) =>
+        await GetValuationHistoryForUserAsync(portfolioId, _currentUser.UserId, from, to, cancellationToken);
+
+    public async Task<Result<PortfolioValuationHistoryResponse>> GetValuationHistoryForUserAsync(
+        Guid portfolioId,
+        Guid userId,
+        DateOnly from,
+        DateOnly to,
         CancellationToken cancellationToken)
     {
         if (from > to)
@@ -225,7 +233,7 @@ public sealed class PortfolioValuationService : IPortfolioValuationService
 
         var portfolio = await _portfolioRepository.GetDetailAsync(
             portfolioId,
-            _currentUser.UserId,
+            userId,
             cancellationToken);
 
         if (portfolio is null)
