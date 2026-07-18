@@ -49,7 +49,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             .Include(x => x.ToolCalls)
             .FirstAsync(x => x.Id == runId && x.UserId == userId, cancellationToken);
 
-        if (run.Status != AgentRunStatuses.Pending)
+        if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Failed or AgentRunStatuses.Cancelled)
         {
             _logger.LogInformation(
                 "Skipping agent run {AgentRunId} because status is {Status}.",
@@ -65,21 +65,32 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
 
         try
         {
-            _runStateMachine.Transition(run, AgentRunStatuses.Running);
-            run.StartedAtUtc ??= DateTime.UtcNow;
-            AddEvent(run, null, AgentEventTypes.RunStarted, $"{run.WorkflowType} run started.", null);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            var leaseOwner = $"{Environment.MachineName}:{Guid.NewGuid():N}";
+            if (run.LeaseExpiresAtUtc > DateTime.UtcNow && !string.IsNullOrWhiteSpace(run.LeaseOwner)) return;
+            run.LeaseOwner = leaseOwner; run.LeaseExpiresAtUtc = DateTime.UtcNow.AddMinutes(5); run.OrchestrationVersion++;
+            if (run.Status == AgentRunStatuses.Pending)
+            {
+                _runStateMachine.Transition(run, AgentRunStatuses.Running);
+                run.StartedAtUtc ??= DateTime.UtcNow;
+                AddEvent(run, null, AgentEventTypes.RunStarted, $"{run.WorkflowType} run started.", null);
+            }
 
             var executionOrder = _workflowPlanner.GetExecutionOrder(run.WorkflowDefinitionJson);
             _runGraphValidator.Validate(run, executionOrder);
-            foreach (var nodeKey in executionOrder)
+            var nodeKey = GetNextReadyNode(run, executionOrder);
+            if (nodeKey is not null)
             {
                 await RunNodeAsync(run, nodeKey, cancellationToken);
+                run.LeaseOwner = null; run.LeaseExpiresAtUtc = null; run.OrchestrationVersion++;
+                if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped)) CompleteRun(run);
+                else AddWakeOutbox(run, run.Nodes.Single(x => x.NodeKey == nodeKey));
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return;
             }
 
-            _runStateMachine.Transition(run, AgentRunStatuses.Succeeded);
-            run.CompletedAtUtc = DateTime.UtcNow;
-            AddEvent(run, null, AgentEventTypes.RunSucceeded, $"{run.WorkflowType} run succeeded.", null);
+            if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped)) CompleteRun(run);
+            else throw new InvalidOperationException("Workflow has no ready node but is not complete.");
+            run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (Exception exception)
@@ -92,6 +103,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             }
             run.ErrorMessage = exception.Message;
             run.CompletedAtUtc = DateTime.UtcNow;
+            run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
             AddEvent(run, null, AgentEventTypes.RunFailed, $"{run.WorkflowType} run failed.", new { error = exception.Message });
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
@@ -113,6 +125,8 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         {
         _nodeStateMachine.Transition(node, AgentNodeStatuses.Ready);
         AddEvent(run, node, AgentEventTypes.NodeReady, $"Node {nodeKey} is ready.", null);
+        _nodeStateMachine.Transition(node, AgentNodeStatuses.Queued);
+        AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Node {nodeKey} queued.", new { decision = "QueueNode", node.Iteration });
         _nodeStateMachine.Transition(node, AgentNodeStatuses.Running);
         node.StartedAtUtc = DateTime.UtcNow;
         AddEvent(run, node, AgentEventTypes.NodeStarted, $"Node {nodeKey} started.", new { attempt = attempt + 1, policy.TimeoutSeconds });
@@ -154,6 +168,48 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
         }
+    }
+
+    private string? GetNextReadyNode(AgentRun run, IReadOnlyList<string> executionOrder)
+    {
+        using var definition = JsonDocument.Parse(run.WorkflowDefinitionJson);
+        var nodeDefinitions = definition.RootElement.GetProperty("nodes").EnumerateArray().ToDictionary(x => x.GetProperty("id").GetString()!, StringComparer.Ordinal);
+        var predecessors = executionOrder.ToDictionary(x => x, _ => new List<string>(), StringComparer.Ordinal);
+        foreach (var edge in definition.RootElement.GetProperty("edges").EnumerateArray())
+        {
+            var from = edge.GetProperty("from").GetString()!; var to = edge.GetProperty("to").GetString()!;
+            predecessors[to].Add(from);
+        }
+        foreach (var key in executionOrder)
+        {
+            var node = run.Nodes.Single(x => x.NodeKey == key);
+            if (node.Status != AgentNodeStatuses.Pending || !predecessors[key].All(p => run.Nodes.Single(x => x.NodeKey == p).Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped)) continue;
+            if (nodeDefinitions[key].TryGetProperty("condition", out var condition) && condition.ValueKind == JsonValueKind.Object)
+            {
+                var path = condition.GetProperty("path").GetString()!; var expected = condition.GetProperty("equals").GetString();
+                var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); var actual = board[path]?.GetValue<string>();
+                if (!string.Equals(actual, expected, StringComparison.Ordinal))
+                {
+                    node.Status = AgentNodeStatuses.Skipped; node.CompletedAtUtc = DateTime.UtcNow;
+                    AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Node {key} skipped because its condition was false.", new { decision = "SkipNode", path, expected, actual });
+                    continue;
+                }
+            }
+            return key;
+        }
+        return null;
+    }
+
+    private void CompleteRun(AgentRun run)
+    {
+        _runStateMachine.Transition(run, AgentRunStatuses.Succeeded); run.CompletedAtUtc = DateTime.UtcNow;
+        AddEvent(run, null, AgentEventTypes.RunSucceeded, $"{run.WorkflowType} run succeeded.", null);
+    }
+
+    private void AddWakeOutbox(AgentRun run, AgentRunNode cause)
+    {
+        var version = JsonNode.Parse(run.WorkflowDefinitionJson)?["version"]?.GetValue<int>() ?? 1;
+        _dbContext.AgentRunWakeOutbox.Add(new AgentRunWakeOutbox { Id = Guid.NewGuid(), AgentRunId = run.Id, UserId = run.UserId, WorkflowType = run.WorkflowType, AgentRunNodeId = cause.Id, DefinitionVersion = version, OrchestrationVersion = run.OrchestrationVersion, CorrelationId = run.Id, CausationId = cause.Id });
     }
 
     private void AddEvent(AgentRun run, AgentRunNode? node, string eventType, string? message, object? payload)

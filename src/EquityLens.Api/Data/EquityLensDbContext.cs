@@ -68,6 +68,7 @@ public class EquityLensDbContext : DbContext
     public DbSet<AgentFeedback> AgentFeedback => Set<AgentFeedback>();
     public DbSet<AgentWorkflowSetting> AgentWorkflowSettings => Set<AgentWorkflowSetting>();
     public DbSet<AgentNodeSetting> AgentNodeSettings => Set<AgentNodeSetting>();
+    public DbSet<AgentRunWakeOutbox> AgentRunWakeOutbox => Set<AgentRunWakeOutbox>();
 
     // Exchange Rates
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();

@@ -14,6 +14,8 @@ export interface AgentRunListItem {
 export interface AgentRunNodeDto {
   id: string
   nodeKey: string
+  templateNodeKey: string
+  iteration: number
   nodeType: string
   status: string
   inputJson: Record<string, unknown> | null

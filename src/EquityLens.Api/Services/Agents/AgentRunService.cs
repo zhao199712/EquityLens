@@ -173,7 +173,7 @@ public sealed class AgentRunService : IAgentRunService
             .OrderBy(x => x.StartedAtUtc ?? DateTime.MaxValue)
             .ThenBy(x => x.NodeKey)
             .Select(x => new AgentRunNodeResponse(
-                x.Id, x.NodeKey, x.NodeType, x.Status, x.InputJson, x.OutputJson,
+                x.Id, x.NodeKey, x.TemplateNodeKey, x.Iteration, x.NodeType, x.Status, x.InputJson, x.OutputJson,
                 x.ErrorMessage, x.StartedAtUtc, x.CompletedAtUtc, x.DurationMs))
             .ToListAsync(cancellationToken);
 

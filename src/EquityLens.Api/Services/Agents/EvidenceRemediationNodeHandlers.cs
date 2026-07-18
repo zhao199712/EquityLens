@@ -89,17 +89,18 @@ public sealed class LoadEvidenceRemediationContextNodeHandler : IAgentNodeHandle
     }
 }
 
-public sealed class PlanEvidenceRetrievalNodeHandler(IRetrievalPlanner planner) : IAgentNodeHandler
+public sealed class PlanEvidenceRetrievalNodeHandler(IEvidenceRetrievalPlanAgent planner) : IAgentNodeHandler
 {
     public string NodeType => EvidenceRemediationNodeTypes.PlanRetrieval;
-    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = EvidenceRemediationBoard.Parse(context.Run); var question = board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
         var findings = board[AgentBlackboardKeys.CriticFindings]?.AsArray().Select(AgentNodeJson.ParseFinding).Where(x => x is not null).Cast<CriticFinding>().ToList() ?? [];
-        var gapQuery = string.Join("; ", findings.Select(x => $"{x.Category}: {x.Message} {x.Recommendation}"));
-        var plan = planner.BuildPlan($"{question}\nEvidence gaps: {gapQuery}", null, null, 5);
-        context.Node.InputJson = AgentNodeJson.Serialize(new { question, findings = findings.Count }); EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievalPlan, plan); EvidenceRemediationBoard.Commit(context, board, plan);
-        return Task.CompletedTask;
+        var unresolved = board[AgentBlackboardKeys.UnresolvedClaims]?.AsArray().Select(x => x?.GetValue<string>() ?? string.Empty).Where(x => x.Length > 0).ToList() ?? [];
+        var previous = board[AgentBlackboardKeys.RetrievalPlan] is null ? [] : EvidenceRemediationBoard.Required<ResearchRetrievalStrategy>(board, AgentBlackboardKeys.RetrievalPlan).Searches.Select(x => x.Query).ToList();
+        context.Node.InputJson = AgentNodeJson.Serialize(new { question, findings = findings.Count, unresolvedClaims = unresolved.Count, context.Node.Iteration });
+        var result = await EvidenceRemediationToolCall.RunAsync(context, "evidenceRetrievalPlanner", new { context.Node.Iteration, unresolvedClaims = unresolved.Count, previousQueries = previous.Count, promptTemplateId = "evidence-retrieval-planner", promptVersion = 1 }, () => planner.PlanAsync(new(question, unresolved, findings, previous, context.Node.Iteration), cancellationToken), x => $"{x.Mode}: {x.Plan.Searches.Count} searches", cancellationToken);
+        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievalPlan, result.Plan); EvidenceRemediationBoard.Commit(context, board, result);
     }
 }
 
@@ -112,15 +113,20 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
         var board = EvidenceRemediationBoard.Parse(context.Run); var plan = EvidenceRemediationBoard.Required<ResearchRetrievalStrategy>(board, AgentBlackboardKeys.RetrievalPlan); var ticker = board[AgentBlackboardKeys.Ticker]?.GetValue<string>() ?? string.Empty;
         context.Node.InputJson = AgentNodeJson.Serialize(new { ticker, searchCount = plan.Searches.Count, minimumLocalEvidence = MinimumLocalEvidence });
         var local = await EvidenceRemediationToolCall.RunAsync(context, "documentRetrieval", new { ticker, plan }, () => documents.RetrieveAsync(plan, ticker, cancellationToken), x => $"{x.Count} local candidates", cancellationToken);
-        var combined = local.OrderByDescending(x => x.Result.RelevanceScore).Take(8).ToList(); var usedWebFallback = combined.Count < MinimumLocalEvidence;
+        var roundEvidence = local.OrderByDescending(x => x.Result.RelevanceScore).Take(8).ToList(); var usedWebFallback = roundEvidence.Count < MinimumLocalEvidence;
         if (usedWebFallback)
         {
             var query = plan.Searches.FirstOrDefault()?.Query ?? board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
             var webResults = await EvidenceRemediationToolCall.RunAsync(context, "webSearch", new { query, count = 5 }, () => web.RetrieveWebAsync(query, 5, null, cancellationToken), x => $"{x.Count} web candidates", cancellationToken);
-            combined.AddRange(webResults.Take(5));
+            roundEvidence.AddRange(webResults.Take(5));
         }
-        var evidence = combined.Select((x, i) => new RemediationEvidenceItem(i + 1, x.SourceType.ToString(), x.Result.DocumentTitle, x.Result.DocumentType, x.Url ?? x.Result.SourceUrl, x.Result.Content, x.Result.RelevanceScore)).ToList();
-        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievedEvidence, evidence); var output = new { localCount = local.Count, totalCount = evidence.Count, usedWebFallback }; EvidenceRemediationBoard.Commit(context, board, output);
+        var existing = context.Node.Iteration > 1 && board[AgentBlackboardKeys.RetrievedEvidence] is not null ? EvidenceRemediationBoard.Required<List<RemediationEvidenceItem>>(board, AgentBlackboardKeys.RetrievedEvidence) : [];
+        var additions = roundEvidence.Select(x => new RemediationEvidenceItem(0, x.SourceType.ToString(), x.Result.DocumentTitle, x.Result.DocumentType, x.Url ?? x.Result.SourceUrl, x.Result.Content, x.Result.RelevanceScore));
+        var evidence = existing.Concat(additions).GroupBy(x => new { x.SourceType, x.Title, x.Url, x.Content }).Select(x => x.OrderByDescending(y => y.RelevanceScore).First()).Take(16).Select((x, i) => x with { Index = i + 1 }).ToList();
+        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievedEvidence, evidence);
+        var history = board[AgentBlackboardKeys.RetrievalHistory]?.AsArray() ?? new JsonArray(); history.Add(JsonSerializer.SerializeToNode(new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback }, AgentNodeJson.SerializerOptions)); board[AgentBlackboardKeys.RetrievalHistory] = history;
+        var runtime = board[AgentBlackboardKeys.Runtime]?.AsObject() ?? new JsonObject(); if (usedWebFallback) runtime["webFallbackCount"] = (runtime["webFallbackCount"]?.GetValue<int>() ?? 0) + 1; board[AgentBlackboardKeys.Runtime] = runtime;
+        var output = new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback }; EvidenceRemediationBoard.Commit(context, board, output);
     }
 }
 
@@ -161,6 +167,24 @@ public sealed class ValidateEvidenceMappingsNodeHandler : IAgentNodeHandler
         if (assessment is null) errors.Add("Missing support assessment."); if (indexes.Any(i => i < 1 || i > evidence.Count)) errors.Add("Evidence index is out of range.");
         var selectedText = string.Join(" ", indexes.Where(i => i >= 1 && i <= evidence.Count).Select(i => evidence[i - 1].Content)); foreach (var number in claim.NumericValues) if (!selectedText.Contains(number, StringComparison.OrdinalIgnoreCase)) errors.Add($"Numeric value '{number}' is not present in mapped evidence.");
         var semanticSupport = assessment?.Status is "Supported" or "PartiallySupported"; var status = semanticSupport && errors.Count == 0 ? "Supported" : "Unsupported"; return new ValidatedClaimSupport(claim.Id, claim.Text, status, indexes, errors);
+    }
+}
+
+public sealed class RouteEvidenceRemediationNodeHandler : IAgentNodeHandler
+{
+    public string NodeType => EvidenceRemediationNodeTypes.Route;
+    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    {
+        var board = EvidenceRemediationBoard.Parse(context.Run);
+        var validation = EvidenceRemediationBoard.Required<EvidenceValidationResult>(board, AgentBlackboardKeys.EvidenceValidationResults);
+        var decision = validation.EvidenceStatus == "Supported" ? "Supported" : "InsufficientEvidence";
+        board[AgentBlackboardKeys.RouteDecision] = decision;
+        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.UnresolvedClaims, validation.UnresolvedClaimIds);
+        var runtime = board[AgentBlackboardKeys.Runtime]?.AsObject() ?? new JsonObject(); runtime["iteration"] = context.Node.Iteration; board[AgentBlackboardKeys.Runtime] = runtime;
+        context.Node.InputJson = AgentNodeJson.Serialize(new { context.Node.Iteration, validation.EvidenceStatus, unresolvedCount = validation.UnresolvedClaimIds.Count });
+        EvidenceRemediationBoard.Commit(context, board, new { decision, context.Node.Iteration, unresolvedClaimIds = validation.UnresolvedClaimIds });
+        context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision, $"Evidence remediation route: {decision}.", new { decision, context.Node.Iteration });
+        return Task.CompletedTask;
     }
 }
 

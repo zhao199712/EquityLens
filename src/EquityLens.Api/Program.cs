@@ -188,6 +188,7 @@ builder.Services.AddScoped<LlmEvidenceRemediationAgent>();
 builder.Services.AddScoped<IClaimExtractionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
 builder.Services.AddScoped<IClaimSupportAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
 builder.Services.AddScoped<IEvidenceBackedRevisionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
+builder.Services.AddScoped<IEvidenceRetrievalPlanAgent, EvidenceRetrievalPlanAgent>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, CriticReviewWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, DraftRevisionWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchQualityReviewWorkflowDefinitionProvider>();
@@ -221,6 +222,7 @@ builder.Services.AddScoped<IAgentNodeHandler, RetrieveRemediationEvidenceNodeHan
 builder.Services.AddScoped<IAgentNodeHandler, ExtractAnswerClaimsNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, AssessClaimSupportNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, ValidateEvidenceMappingsNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, RouteEvidenceRemediationNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, BuildRemediatedEvidencePacketNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, DraftEvidenceBackedRevisionNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, FinalizeEvidenceRemediationNodeHandler>();
@@ -229,6 +231,7 @@ builder.Services.AddScoped<IAgentRunService, AgentRunService>();
     builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();
     builder.Services.AddHostedService<BackgroundJobWorker>();
     builder.Services.AddHostedService<AgentRunWorker>();
+    builder.Services.AddHostedService<AgentRunWakeOutboxDispatcher>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務

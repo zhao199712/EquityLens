@@ -228,7 +228,7 @@ const nodeMap = computed(() => {
             :type="statusType(node.status)"
             :icon="statusIcon(node.status)"
             :title="node.nodeKey"
-            :content="node.nodeType"
+            :content="`${node.nodeType}${node.iteration > 0 ? ` · 第 ${node.iteration} 輪` : ''}`"
             :time="formatDate(node.completedAtUtc)"
             :class="`tl-${statusType(node.status)}`"
           >

@@ -80,7 +80,7 @@ public sealed class AgentWorkflowPlannerTests
     }
 
     [Fact]
-    public void GetExecutionOrder_EvidenceRemediationWorkflow_ReturnsExpected9NodeOrder()
+    public void GetExecutionOrder_EvidenceRemediationWorkflow_ReturnsExpectedBoundedLoopOrder()
     {
         var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
         var order = new AgentWorkflowPlanner().GetExecutionOrder(run.WorkflowDefinitionJson);
@@ -88,18 +88,16 @@ public sealed class AgentWorkflowPlannerTests
         Assert.Equal(
         [
             EvidenceRemediationNodeKeys.LoadContext,
-            EvidenceRemediationNodeKeys.PlanRetrieval,
-            EvidenceRemediationNodeKeys.RetrieveEvidence,
             EvidenceRemediationNodeKeys.ExtractClaims,
-            EvidenceRemediationNodeKeys.AssessSupport,
-            EvidenceRemediationNodeKeys.ValidateMappings,
+            "planEvidenceRetrieval:1", "retrieveRemediationEvidence:1", "assessClaimSupport:1", "validateEvidenceMappings:1", "routeEvidenceRemediation:1",
+            "planEvidenceRetrieval:2", "retrieveRemediationEvidence:2", "assessClaimSupport:2", "validateEvidenceMappings:2", "routeEvidenceRemediation:2",
             EvidenceRemediationNodeKeys.BuildPacket,
             EvidenceRemediationNodeKeys.DraftRevision,
             EvidenceRemediationNodeKeys.Finalize
         ], order);
         var catalog = new AgentWorkflowCatalog().GetWorkflow(AgentWorkflowTypes.EvidenceRemediation);
-        Assert.Equal(9, catalog.NodeTypes.Count);
-        Assert.Equal(8, catalog.Edges.Count);
+        Assert.Equal(10, catalog.NodeTypes.Count);
+        Assert.Equal(9, catalog.Edges.Count);
     }
 
     [Fact]

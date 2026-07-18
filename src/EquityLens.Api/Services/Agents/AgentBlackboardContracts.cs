@@ -38,6 +38,10 @@ public static class AgentBlackboardKeys
     public const string ClaimSupportAssessments = "claimSupportAssessments";
     public const string EvidenceValidationResults = "evidenceValidationResults";
     public const string RemediatedEvidencePacket = "remediatedEvidencePacket";
+    public const string RetrievalHistory = "retrievalHistory";
+    public const string RouteDecision = "routeDecision";
+    public const string UnresolvedClaims = "unresolvedClaims";
+    public const string Runtime = "runtime";
 }
 
 public static class EvidenceCheckFields
@@ -198,6 +202,10 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.ClaimSupportAssessments] = new JsonArray(),
         [AgentBlackboardKeys.EvidenceValidationResults] = null,
         [AgentBlackboardKeys.RemediatedEvidencePacket] = null,
+        [AgentBlackboardKeys.RetrievalHistory] = new JsonArray(),
+        [AgentBlackboardKeys.RouteDecision] = null,
+        [AgentBlackboardKeys.UnresolvedClaims] = new JsonArray(),
+        [AgentBlackboardKeys.Runtime] = new JsonObject { ["iteration"] = 0, ["maxIterations"] = EvidenceRemediationWorkflow.MaxIterations, ["webFallbackCount"] = 0 },
         [AgentBlackboardKeys.RevisedAnswer] = null,
         [AgentBlackboardKeys.RevisionSummary] = null,
         [AgentBlackboardKeys.FinalOutput] = null

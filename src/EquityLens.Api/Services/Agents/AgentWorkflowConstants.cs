@@ -39,7 +39,8 @@ public static class PortfolioDiagnosisWorkflow
 
 public static class EvidenceRemediationWorkflow
 {
-    public const int Version = 1;
+    public const int Version = 2;
+    public const int MaxIterations = 2;
 }
 
 public static class EvidenceRemediationNodeKeys
@@ -50,6 +51,7 @@ public static class EvidenceRemediationNodeKeys
     public const string ExtractClaims = "extractAnswerClaims";
     public const string AssessSupport = "assessClaimSupport";
     public const string ValidateMappings = "validateEvidenceMappings";
+    public const string Route = "routeEvidenceRemediation";
     public const string BuildPacket = "buildRemediatedEvidencePacket";
     public const string DraftRevision = "draftEvidenceBackedRevision";
     public const string Finalize = "finalizeEvidenceRemediation";
@@ -63,6 +65,7 @@ public static class EvidenceRemediationNodeTypes
     public const string ExtractClaims = "ExtractAnswerClaims";
     public const string AssessSupport = "AssessClaimSupport";
     public const string ValidateMappings = "ValidateEvidenceMappings";
+    public const string Route = "RouteEvidenceRemediation";
     public const string BuildPacket = "BuildRemediatedEvidencePacket";
     public const string DraftRevision = "DraftEvidenceBackedRevision";
     public const string Finalize = "FinalizeEvidenceRemediation";
@@ -136,11 +139,13 @@ public static class AgentNodeStatuses
 {
     public const string Pending = "Pending";
     public const string Ready = "Ready";
+    public const string Queued = "Queued";
     public const string Running = "Running";
     public const string Succeeded = "Succeeded";
     public const string Failed = "Failed";
     public const string Skipped = "Skipped";
     public const string WaitingForFeedback = "WaitingForFeedback";
+    public const string Cancelled = "Cancelled";
 }
 
 public static class AgentToolCallStatuses

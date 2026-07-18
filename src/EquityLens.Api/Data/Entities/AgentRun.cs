@@ -15,6 +15,9 @@ public class AgentRun
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
+    public long OrchestrationVersion { get; set; }
+    public string? LeaseOwner { get; set; }
+    public DateTime? LeaseExpiresAtUtc { get; set; }
 
     public ICollection<AgentRunNode> Nodes { get; set; } = [];
     public ICollection<AgentRunEvent> Events { get; set; } = [];

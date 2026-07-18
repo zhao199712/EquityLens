@@ -22,6 +22,8 @@ public sealed record AgentRunSummaryResponse(
 public sealed record AgentRunNodeResponse(
     Guid Id,
     string NodeKey,
+    string TemplateNodeKey,
+    int Iteration,
     string NodeType,
     string Status,
     string? InputJson,

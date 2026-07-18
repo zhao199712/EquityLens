@@ -242,7 +242,8 @@ public sealed class AgentRunServiceTests
         }.SelectMany(nodeKey => new[]
         {
             $"{nodeKey}:{AgentNodeStatuses.Pending}->{AgentNodeStatuses.Ready}",
-            $"{nodeKey}:{AgentNodeStatuses.Ready}->{AgentNodeStatuses.Running}",
+            $"{nodeKey}:{AgentNodeStatuses.Ready}->{AgentNodeStatuses.Queued}",
+            $"{nodeKey}:{AgentNodeStatuses.Queued}->{AgentNodeStatuses.Running}",
             $"{nodeKey}:{AgentNodeStatuses.Running}->{AgentNodeStatuses.Succeeded}"
         }).ToArray();
         Assert.Equal(expectedNodeTransitions, nodeStateMachine.Transitions.Select(x => $"{x.NodeKey}:{x.From}->{x.To}").ToArray());
@@ -766,7 +767,7 @@ public sealed class AgentRunServiceTests
         var summary = await service.CreateEvidenceRemediationAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Equal(AgentWorkflowTypes.EvidenceRemediation, summary.WorkflowType); Assert.Equal(AgentRunStatuses.Pending, summary.Status); Assert.Single(queue.Messages);
-        var detail = await service.GetByIdAsync(summary.Id, null, CancellationToken.None); Assert.NotNull(detail); Assert.Equal(9, detail.Nodes.Count);
+        var detail = await service.GetByIdAsync(summary.Id, null, CancellationToken.None); Assert.NotNull(detail); Assert.Equal(15, detail.Nodes.Count);
         using var definition = JsonDocument.Parse(detail.WorkflowDefinitionJson); Assert.All(definition.RootElement.GetProperty("nodes").EnumerateArray(), node => Assert.True(node.TryGetProperty("executionPolicy", out _)));
     }
 
@@ -1196,6 +1197,7 @@ public sealed class AgentRunServiceTests
     private sealed class AutoExecutingAgentRunQueue : IAgentRunQueue
     {
         private readonly IAgentRunExecutor _executor;
+        private readonly EquityLensDbContext _db;
 
         public AutoExecutingAgentRunQueue(
             EquityLensDbContext db,
@@ -1203,6 +1205,7 @@ public sealed class AgentRunServiceTests
             IAgentRunStateMachine runStateMachine,
             IAgentNodeStateMachine nodeStateMachine)
         {
+            _db = db;
             _executor = new AgentRunExecutor(
                 db,
                 new AgentWorkflowPlanner(),
@@ -1215,7 +1218,13 @@ public sealed class AgentRunServiceTests
 
         public async Task EnqueueAsync(AgentRunQueueMessage message, CancellationToken cancellationToken = default)
         {
-            await _executor.ExecuteAsync(message.RunId, message.UserId, cancellationToken);
+            for (var wake = 0; wake < 100; wake++)
+            {
+                await _executor.ExecuteAsync(message.RunId, message.UserId, cancellationToken);
+                var status = await _db.AgentRuns.Where(x => x.Id == message.RunId).Select(x => x.Status).SingleAsync(cancellationToken);
+                if (status is AgentRunStatuses.Succeeded or AgentRunStatuses.Failed or AgentRunStatuses.Cancelled) return;
+            }
+            throw new InvalidOperationException("Auto executing queue exceeded 100 orchestration wakes.");
         }
 
         public Task<AgentRunQueueItem?> ReadNextAsync(string consumerName, CancellationToken cancellationToken = default) =>
