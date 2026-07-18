@@ -227,6 +227,7 @@ builder.Services.AddScoped<IAgentNodeHandler, FinalizePortfolioDiagnosisNodeHand
 builder.Services.AddScoped<IAgentNodeHandler, LoadEvidenceRemediationContextNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, PlanEvidenceRetrievalNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, RetrieveRemediationEvidenceNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, RetrieveWebEvidenceNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, ExtractAnswerClaimsNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, AssessClaimSupportNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, ValidateEvidenceMappingsNodeHandler>();

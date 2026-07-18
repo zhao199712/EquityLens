@@ -119,7 +119,9 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
         var board = EvidenceRemediationBoard.Parse(context.Run); var plan = ResolvePlan(context.Node.InputJson, board); var ticker = board[AgentBlackboardKeys.Ticker]?.GetValue<string>() ?? string.Empty;
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievalPlan, plan);
         var local = await EvidenceRemediationToolCall.RunAsync(context, "documentRetrieval", new { ticker, plan }, () => documents.RetrieveAsync(plan, ticker, cancellationToken), x => $"{x.Count} local candidates", cancellationToken);
-        var roundEvidence = local.OrderByDescending(x => x.Result.RelevanceScore).Take(8).ToList(); var usedWebFallback = roundEvidence.Count < MinimumLocalEvidence;
+        var roundEvidence = local.OrderByDescending(x => x.Result.RelevanceScore).Take(8).ToList();
+        var allowWebFallback = JsonNode.Parse(context.Node.InputJson ?? "{}")?["allowWebFallback"]?.GetValue<bool>() ?? true;
+        var usedWebFallback = allowWebFallback && roundEvidence.Count < MinimumLocalEvidence;
         if (usedWebFallback)
         {
             var query = plan.Searches.FirstOrDefault()?.Query ?? board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
@@ -128,7 +130,7 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
             roundEvidence.AddRange(webResults.Take(5));
         }
         var existing = context.Node.Iteration > 1 && board[AgentBlackboardKeys.RetrievedEvidence] is not null ? EvidenceRemediationBoard.Required<List<RemediationEvidenceItem>>(board, AgentBlackboardKeys.RetrievedEvidence) : [];
-        var additions = roundEvidence.Select(x => new RemediationEvidenceItem(0, x.SourceType.ToString(), x.Result.DocumentTitle, x.Result.DocumentType, x.Url ?? x.Result.SourceUrl, x.Result.Content, x.Result.RelevanceScore));
+        var additions = roundEvidence.Select(x => new RemediationEvidenceItem(0, x.SourceType.ToString(), x.Result.DocumentTitle, x.Result.DocumentType, x.Url ?? x.Result.SourceUrl, x.Result.Content, x.Result.RelevanceScore, x.PublishedAt, x.Query, x.SourceType == CitationSourceType.Web ? "Brave" : "Local"));
         var evidence = existing.Concat(additions).GroupBy(x => new { x.SourceType, x.Title, x.Url, x.Content }).Select(x => x.OrderByDescending(y => y.RelevanceScore).First()).Take(16).Select((x, i) => x with { Index = i + 1 }).ToList();
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievedEvidence, evidence);
         var history = board[AgentBlackboardKeys.RetrievalHistory]?.AsArray() ?? new JsonArray(); history.Add(JsonSerializer.SerializeToNode(new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback }, AgentNodeJson.SerializerOptions)); board[AgentBlackboardKeys.RetrievalHistory] = history;
@@ -136,7 +138,7 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
         var output = new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback }; EvidenceRemediationBoard.Commit(context, board, output);
     }
 
-    private static ResearchRetrievalStrategy ResolvePlan(string? inputJson, JsonObject board)
+    internal static ResearchRetrievalStrategy ResolvePlan(string? inputJson, JsonObject board)
     {
         if (!string.IsNullOrWhiteSpace(inputJson))
         {
@@ -158,13 +160,52 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
     }
 }
 
+public sealed record RetrieveWebEvidenceInput(IReadOnlyList<JsonObject> SearchIntents);
+public sealed record RetrieveWebEvidenceOutput(int Iteration, int QueryCount, int ResultCount, string Provider);
+
+public sealed class RetrieveWebEvidenceNodeHandler(IWebRetriever web) : IAgentNodeHandler
+{
+    public string NodeType => EvidenceRemediationNodeTypes.RetrieveWebEvidence;
+
+    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    {
+        var board = EvidenceRemediationBoard.Parse(context.Run);
+        var plan = RetrieveRemediationEvidenceNodeHandler.ResolvePlan(context.Node.InputJson, board);
+        var gathered = new List<RetrievedDocumentChunk>();
+        foreach (var search in plan.Searches.Take(3))
+        {
+            var count = Math.Clamp(search.TopK, 1, 5);
+            var results = await EvidenceRemediationToolCall.RunAsync(context, "braveWebSearch", new { query = search.Query, freshness = search.Freshness, topK = count, provider = "Brave" }, () => web.RetrieveWebAsync(search.Query, count, search.Freshness, cancellationToken), x => $"{x.Count} Brave candidates", cancellationToken);
+            gathered.AddRange(results);
+        }
+
+        var existing = board[AgentBlackboardKeys.RetrievedEvidence] is null ? [] : EvidenceRemediationBoard.Required<List<RemediationEvidenceItem>>(board, AgentBlackboardKeys.RetrievedEvidence);
+        var additions = gathered.Select(x => new RemediationEvidenceItem(0, CitationSourceType.Web.ToString(), x.Result.DocumentTitle, x.Result.DocumentType, x.Url ?? x.Result.SourceUrl, x.Result.Content, x.Result.RelevanceScore, x.PublishedAt, x.Query, "Brave"));
+        var evidence = existing.Concat(additions)
+            .GroupBy(x => !string.IsNullOrWhiteSpace(x.Url) ? $"url:{x.Url}" : $"content:{x.Title}|{x.Content}", StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.OrderByDescending(y => y.RelevanceScore).First()).Take(20)
+            .Select((x, index) => x with { Index = index + 1 }).ToList();
+        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievedEvidence, evidence);
+        var history = board[AgentBlackboardKeys.RetrievalHistory]?.AsArray() ?? new JsonArray();
+        history.Add(JsonSerializer.SerializeToNode(new { iteration = context.Node.Iteration, provider = "Brave", source = "Web", queryCount = plan.Searches.Count, resultCount = gathered.Count }, AgentNodeJson.SerializerOptions));
+        board[AgentBlackboardKeys.RetrievalHistory] = history;
+        var runtime = board[AgentBlackboardKeys.Runtime]?.AsObject() ?? new JsonObject();
+        runtime["webFallbackCount"] = (runtime["webFallbackCount"]?.GetValue<int>() ?? 0) + 1;
+        board[AgentBlackboardKeys.Runtime] = runtime;
+        EvidenceRemediationBoard.Commit(context, board, new RetrieveWebEvidenceOutput(context.Node.Iteration, plan.Searches.Count, gathered.Count, "Brave"));
+    }
+}
+
 public sealed class ExtractAnswerClaimsNodeHandler(IClaimExtractionAgent agent) : IAgentNodeHandler
 {
     public string NodeType => EvidenceRemediationNodeTypes.ExtractClaims;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = EvidenceRemediationBoard.Parse(context.Run); var answer = board[AgentBlackboardKeys.Answer]?.GetValue<string>() ?? string.Empty; context.Node.InputJson = AgentNodeJson.Serialize(new { answerLength = answer.Length });
-        var claims = await EvidenceRemediationToolCall.RunAsync(context, "claimExtractionLLM", new { answerLength = answer.Length, promptTemplateId = "evidence-remediation-claim-extraction", promptVersion = 1 }, () => agent.ExtractAsync(answer, cancellationToken), x => $"{x.Count} claims", cancellationToken);
+        var board = EvidenceRemediationBoard.Parse(context.Run); var answer = board[AgentBlackboardKeys.Answer]?.GetValue<string>() ?? string.Empty; var question = board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
+        var findings = board[AgentBlackboardKeys.CriticFindings]?.AsArray().Select(AgentNodeJson.ParseFinding).Where(x => x is not null).Cast<CriticFinding>().ToList() ?? [];
+        context.Node.InputJson = AgentNodeJson.Serialize(new { questionLength = question.Length, answerLength = answer.Length, findingCount = findings.Count });
+        var claims = await EvidenceRemediationToolCall.RunAsync(context, "claimExtractionLLM", new { questionLength = question.Length, answerLength = answer.Length, findingCount = findings.Count, promptTemplateId = "evidence-remediation-claim-extraction", promptVersion = 2 }, () => agent.ExtractAsync(new(question, answer, findings), cancellationToken), x => $"{x.Count} claims", cancellationToken);
+        if (claims.Count == 0) claims = LlmEvidenceRemediationAgent.CreateInvestigationFallback(new(question, answer, findings));
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.ExtractedClaims, claims); EvidenceRemediationBoard.Commit(context, board, claims);
     }
 }

@@ -3,8 +3,14 @@ using EquityLens.Api.Services.Ai;
 
 namespace EquityLens.Api.Services.Agents;
 
-public sealed record EvidenceClaim(string Id, string Text, IReadOnlyList<string> NumericValues);
-public sealed record RemediationEvidenceItem(int Index, string SourceType, string? Title, string? DocumentType, string? Url, string Content, double RelevanceScore);
+public static class EvidenceClaimKinds
+{
+    public const string AnswerClaim = "AnswerClaim";
+    public const string InvestigationClaim = "InvestigationClaim";
+}
+
+public sealed record EvidenceClaim(string Id, string Text, IReadOnlyList<string> NumericValues, string Kind = EvidenceClaimKinds.AnswerClaim);
+public sealed record RemediationEvidenceItem(int Index, string SourceType, string? Title, string? DocumentType, string? Url, string Content, double RelevanceScore, DateTimeOffset? PublishedAt = null, string? Query = null, string? Provider = null);
 public sealed record ClaimSupportAssessment(
     string ClaimId,
     string Status,
@@ -21,8 +27,10 @@ public sealed record EvidenceRemediationOutput(string SourceAnswer, string Revis
 
 public interface IClaimExtractionAgent
 {
-    Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(string answer, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(ClaimExtractionInput input, CancellationToken cancellationToken = default);
 }
+
+public sealed record ClaimExtractionInput(string Question, string Answer, IReadOnlyList<CriticFinding> CriticFindings);
 
 public interface IEvidenceBackedRevisionAgent
 {
@@ -36,10 +44,15 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
 
     public LlmEvidenceRemediationAgent(IChatCompletionService chat) => _chat = chat;
 
-    public async Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(string answer, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(ClaimExtractionInput input, CancellationToken cancellationToken = default)
     {
-        var content = await CompleteAsync("Extract factual claims from the answer. Output JSON only: {\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"numericValues\":[\"123\"]}]}. Keep exact numbers, dates, percentages and currencies.", answer, cancellationToken);
-        return JsonSerializer.Deserialize<ClaimEnvelope>(content, JsonOptions)?.Claims ?? throw new InvalidOperationException("Claim extraction returned no claims.");
+        if (string.IsNullOrWhiteSpace(input.Answer) && string.IsNullOrWhiteSpace(input.Question) && input.CriticFindings.Count == 0)
+            throw new InvalidOperationException("Claim extraction requires an answer, question, or Critic finding.");
+        var content = await CompleteAsync("Extract factual claims from the answer. If the answer abstains or says evidence is insufficient, create investigation claims from the user question and Critic findings instead. Output JSON only: {\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"numericValues\":[\"123\"],\"kind\":\"AnswerClaim|InvestigationClaim\"}]}. Keep exact numbers, dates, percentages and currencies. Never return an empty claims array when a research question exists.", JsonSerializer.Serialize(input, JsonOptions), cancellationToken);
+        var claims = JsonSerializer.Deserialize<ClaimEnvelope>(content, JsonOptions)?.Claims;
+        var normalized = claims is { Count: > 0 } ? Normalize(claims) : [];
+        if (IsAbstention(input.Answer) && normalized.All(x => x.Kind != EvidenceClaimKinds.InvestigationClaim)) return CreateInvestigationFallback(input);
+        return normalized.Count > 0 ? normalized : CreateInvestigationFallback(input);
     }
 
     public async Task<EvidenceBackedRevisionResult> ReviseAsync(string question, string sourceAnswer, RemediatedEvidencePacket packet, CancellationToken cancellationToken = default)
@@ -57,12 +70,31 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
     }
 
     private sealed record ClaimEnvelope(IReadOnlyList<EvidenceClaim> Claims);
+
+    private static IReadOnlyList<EvidenceClaim> Normalize(IReadOnlyList<EvidenceClaim> claims) => claims
+        .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+        .Select((x, index) => x with { Id = string.IsNullOrWhiteSpace(x.Id) ? $"claim-{index + 1}" : x.Id, Kind = x.Kind is EvidenceClaimKinds.AnswerClaim or EvidenceClaimKinds.InvestigationClaim ? x.Kind : EvidenceClaimKinds.AnswerClaim })
+        .ToList();
+
+    internal static IReadOnlyList<EvidenceClaim> CreateInvestigationFallback(ClaimExtractionInput input)
+    {
+        var text = !string.IsNullOrWhiteSpace(input.Question)
+            ? input.Question.Trim()
+            : input.CriticFindings.Select(x => x.Message).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+        if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("Claim extraction returned no claims and no investigation target is available.");
+        return [new EvidenceClaim("investigation-claim-1", text, DeterministicEvidenceRemediationAgent.ExtractNumbers(text), EvidenceClaimKinds.InvestigationClaim)];
+    }
+
+    internal static bool IsAbstention(string value) => new[] { "資料不足", "證據不足", "無法回答", "無法判斷", "insufficient evidence", "cannot answer" }
+        .Any(marker => value.Contains(marker, StringComparison.OrdinalIgnoreCase));
 }
 
 public sealed class DeterministicEvidenceRemediationAgent : IClaimExtractionAgent, IEvidenceBackedRevisionAgent
 {
-    public Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(string answer, CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<EvidenceClaim>>([new("claim-1", answer, ExtractNumbers(answer))]);
+    public Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(ClaimExtractionInput input, CancellationToken cancellationToken = default) =>
+        Task.FromResult(!string.IsNullOrWhiteSpace(input.Answer) && !LlmEvidenceRemediationAgent.IsAbstention(input.Answer)
+            ? (IReadOnlyList<EvidenceClaim>)[new("claim-1", input.Answer, ExtractNumbers(input.Answer))]
+            : LlmEvidenceRemediationAgent.CreateInvestigationFallback(input));
 
     public Task<EvidenceBackedRevisionResult> ReviseAsync(string question, string sourceAnswer, RemediatedEvidencePacket packet, CancellationToken cancellationToken = default) =>
         Task.FromResult(new EvidenceBackedRevisionResult($"{sourceAnswer}\n\n補充證據：[1] {packet.Evidence[0].Content}", "已依驗證證據補強回答。"));

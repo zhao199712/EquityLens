@@ -3,6 +3,7 @@ using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Agents;
+using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Ai.Retrieval;
 using Microsoft.EntityFrameworkCore;
 
@@ -115,6 +116,39 @@ public sealed class EvidenceRemediationWorkflowTests
     }
 
     [Fact]
+    public async Task ExtractClaims_EmptyAgentResult_CreatesInvestigationClaim()
+    {
+        await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.ExtractClaims);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.Question] = "未來資本支出會壓縮現金流嗎？"; board[AgentBlackboardKeys.Answer] = "目前資料不足。"; board[AgentBlackboardKeys.CriticFindings] = new JsonArray(AgentBlackboardContracts.CreateFinding("High", "InsufficientEvidence", "需要未來指引", "補查法說")); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); db.AgentRuns.Add(run); await db.SaveChangesAsync();
+
+        await new ExtractAnswerClaimsNodeHandler(new EmptyClaimAgent()).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        var claims = EvidenceRemediationBoardForTest.Required<List<EvidenceClaim>>(AgentNodeJson.ParseBlackboard(run.BlackboardJson), AgentBlackboardKeys.ExtractedClaims);
+        Assert.Single(claims); Assert.Equal(EvidenceClaimKinds.InvestigationClaim, claims[0].Kind); Assert.Contains("資本支出", claims[0].Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LlmClaimExtraction_EmptyClaims_UsesInvestigationFallback()
+    {
+        var agent = new LlmEvidenceRemediationAgent(new EmptyClaimsChat());
+        var claims = await agent.ExtractAsync(new("未來資本支出？", "目前資料不足。", []));
+        Assert.Single(claims); Assert.Equal(EvidenceClaimKinds.InvestigationClaim, claims[0].Kind);
+    }
+
+    [Fact]
+    public async Task RetrieveWebEvidence_AppendsDeduplicatedBraveResultsAndTelemetry()
+    {
+        await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "retrieveWebEvidence:1", TemplateNodeKey = "retrieve-web-evidence", NodeType = EvidenceRemediationNodeTypes.RetrieveWebEvidence, Iteration = 1, Status = AgentNodeStatuses.Running, InputJson = new JsonObject { ["searchIntents"] = new JsonArray(new JsonObject { ["topic"] = "TSMC capex", ["targetClaims"] = new JsonArray("claim-1"), ["preferredSourceRoles"] = new JsonArray("Primary"), ["freshness"] = "month", ["topK"] = 5 }) }.ToJsonString() };
+        run.Nodes.Add(node); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.Question] = "TSMC capex?"; board[AgentBlackboardKeys.ExtractedClaims] = JsonSerializerNode(new[] { new EvidenceClaim("claim-1", "TSMC capex guidance", []) }); board[AgentBlackboardKeys.RetrievedEvidence] = JsonSerializerNode(new[] { new RemediationEvidenceItem(1, "Web", "Existing", "WebSearch", "https://example.test", "same", .5) }); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); db.AgentRuns.Add(run); await db.SaveChangesAsync();
+
+        await new RetrieveWebEvidenceNodeHandler(new FakeWebRetriever()).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); var evidence = EvidenceRemediationBoardForTest.Required<List<RemediationEvidenceItem>>(board, AgentBlackboardKeys.RetrievedEvidence);
+        Assert.Single(evidence); Assert.Equal("Brave", evidence[0].Provider); Assert.Contains(run.ToolCalls, x => x.ToolName == "braveWebSearch" && !x.ArgumentsJson.Contains("ApiKey", StringComparison.OrdinalIgnoreCase)); Assert.Contains("Brave", board[AgentBlackboardKeys.RetrievalHistory]!.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task NumericMismatch_ProducesInsufficientEvidence_AndSkipsRevisionAgent()
     {
         await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var validate = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.ValidateMappings && x.Iteration == 1); var draft = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.DraftRevision); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.Question] = "營收？"; board[AgentBlackboardKeys.Answer] = "2026 年營收成長 20%。"; board[AgentBlackboardKeys.ExtractedClaims] = JsonSerializerNode(new[] { new EvidenceClaim("claim-1", "2026 年營收成長 20%。", ["2026", "20%"]) }); board[AgentBlackboardKeys.RetrievedEvidence] = JsonSerializerNode(new[] { new RemediationEvidenceItem(1, "LocalDocument", "年報", "AnnualReport", null, "2025 年營收成長 10%。", .9) }); board[AgentBlackboardKeys.ClaimSupportAssessments] = JsonSerializerNode(new[] { new ClaimSupportAssessment("claim-1", "Supported", [1], "looks related") }); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
@@ -143,6 +177,15 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         public int CallCount { get; private set; }
         public Task<IReadOnlyList<RetrievedDocumentChunk>> RetrieveWebAsync(string query, int count, string? freshness, CancellationToken cancellationToken = default) { CallCount++; return Task.FromResult<IReadOnlyList<RetrievedDocumentChunk>>([Chunk("Web evidence") with { SourceType = CitationSourceType.Web, Url = "https://example.test" }]); }
+    }
+    private sealed class EmptyClaimAgent : IClaimExtractionAgent
+    {
+        public Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(ClaimExtractionInput input, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<EvidenceClaim>>([]);
+    }
+    private sealed class EmptyClaimsChat : IChatCompletionService
+    {
+        public string Provider => "test"; public string Model => "test";
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new ChatCompletionResult("{\"claims\":[]}", Model, 1, 1));
     }
     private sealed class RecordingRevisionAgent : IEvidenceBackedRevisionAgent
     {

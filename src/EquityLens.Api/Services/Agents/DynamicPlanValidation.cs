@@ -22,6 +22,8 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         if (proposal.GoalStatus == DynamicGoalStatuses.Complete && !finalizationCompleted && (review?[CriticReviewFields.RequiresRevision]?.GetValue<bool>() == true || review?[CriticReviewFields.RequiresMoreEvidence]?.GetValue<bool>() == true)) throw new InvalidOperationException("Dynamic plan cannot complete while Critic requirements remain unresolved.");
         if (proposal.GoalStatus == DynamicGoalStatuses.Continue && proposal.Actions.Count == 0) throw new InvalidOperationException("A continuing plan must contain actions.");
         if (run.Nodes.Count + proposal.Actions.Count > ResearchQualityReviewWorkflow.MaxDynamicNodes + 5) throw new InvalidOperationException("Dynamic node budget exceeded.");
+        var webOccurrences = run.Nodes.Count(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence) + proposal.Actions.Count(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence);
+        if (webOccurrences > 1) throw new InvalidOperationException("Web retrieval budget exceeded.");
         var duplicate = proposal.Actions.GroupBy(x => x.ClientNodeKey, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1)?.Key;
         if (duplicate is not null) throw new InvalidOperationException($"Dynamic plan contains duplicate node key '{duplicate}'.");
         var existing = run.Nodes.Select(x => x.NodeKey).ToHashSet(StringComparer.Ordinal);
@@ -36,7 +38,12 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
             if (action.DependsOn.Count == 0 || action.DependsOn.Any(x => !availableDependencies.Contains(x))) throw new InvalidOperationException($"Node '{action.ClientNodeKey}' has an unknown or empty dependency.");
             var occurrences = run.Nodes.Count(x => x.NodeType == action.NodeType) + proposal.Actions.Count(x => x.NodeType == action.NodeType);
             if (occurrences > capability.MaxOccurrences) throw new InvalidOperationException($"Capability '{action.Capability}' occurrence budget exceeded.");
-            if (action.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence) ValidateSearchIntents(action.Arguments);
+            if (action.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence)
+            {
+                ValidateSearchIntents(action.Arguments, 8, requireTargets: false);
+                if (action.Arguments["allowWebFallback"]?.GetValue<bool>() != false) throw new InvalidOperationException("Dynamic local retrieval must disable hidden Web fallback.");
+            }
+            if (action.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence) ValidateSearchIntents(action.Arguments, 5, requireTargets: true);
             var contract = catalog.GetNode(action.NodeType).Contract;
             var missing = contract.RequiredBlackboardKeys.FirstOrDefault(x => !(action.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && x == AgentBlackboardKeys.RetrievalPlan) && !availableKeys.Contains(x));
             if (missing is not null) throw new InvalidOperationException($"Node '{action.NodeType}' requires unavailable blackboard key '{missing}'.");
@@ -46,18 +53,40 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         var nodes = definition["nodes"]!.AsArray(); var edges = definition["edges"]!.AsArray();
         foreach (var action in proposal.Actions) { nodes.Add(new JsonObject { ["id"] = action.ClientNodeKey, ["type"] = action.NodeType }); foreach (var dependency in action.DependsOn) edges.Add(new JsonObject { ["from"] = dependency, ["to"] = action.ClientNodeKey }); }
         topology.GetExecutionOrder(definition.ToJsonString());
+        ValidateWebPlacement(run, proposal.Actions);
         return new(proposal, proposal.Actions);
     }
 
-    private static void ValidateSearchIntents(JsonObject arguments)
+    private static void ValidateSearchIntents(JsonObject arguments, int maximumTopK, bool requireTargets)
     {
         if (arguments["searchIntents"] is not JsonArray intents || intents.Count is < 1 or > 3) throw new InvalidOperationException("RetrieveEvidence requires 1-3 searchIntents.");
         foreach (var item in intents.OfType<JsonObject>())
         {
             if (item["topic"]?.GetValue<string>() is not { Length: > 0 }) throw new InvalidOperationException("searchIntent.topic is required.");
-            var topK = item["topK"]?.GetValue<int>() ?? 0; if (topK is < 1 or > 8) throw new InvalidOperationException("searchIntent.topK must be between 1 and 8.");
+            var topK = item["topK"]?.GetValue<int>() ?? 0; if (topK < 1 || topK > maximumTopK) throw new InvalidOperationException($"searchIntent.topK must be between 1 and {maximumTopK}.");
             var freshness = item["freshness"]?.GetValue<string>(); if (freshness is not (null or "day" or "week" or "month" or "year")) throw new InvalidOperationException("searchIntent.freshness is invalid.");
+            if (requireTargets && (item["targetClaims"] is not JsonArray targets || targets.Count == 0)) throw new InvalidOperationException("Web searchIntent requires targetClaims.");
         }
+    }
+
+    private static void ValidateWebPlacement(AgentRun run, IReadOnlyList<DynamicPlanAction> actions)
+    {
+        var web = actions.SingleOrDefault(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence);
+        if (web is null) return;
+        var byKey = actions.ToDictionary(x => x.ClientNodeKey, StringComparer.Ordinal);
+        bool HasAncestor(string key, Func<string, bool> predicate, HashSet<string>? visited = null)
+        {
+            visited ??= [];
+            if (!visited.Add(key)) return false;
+            if (predicate(key)) return true;
+            return byKey.TryGetValue(key, out var action) && action.DependsOn.Any(x => HasAncestor(x, predicate, visited));
+        }
+        bool IsExtraction(string key) => byKey.TryGetValue(key, out var action)
+            ? action.NodeType == EvidenceRemediationNodeTypes.ExtractClaims
+            : run.Nodes.Any(x => x.NodeKey == key && x.NodeType == EvidenceRemediationNodeTypes.ExtractClaims && x.Status == AgentNodeStatuses.Succeeded);
+        if (!web.DependsOn.Any(x => HasAncestor(x, IsExtraction))) throw new InvalidOperationException("Web retrieval must depend on claim extraction.");
+        foreach (var assessor in actions.Where(x => x.NodeType == EvidenceRemediationNodeTypes.AssessSupport))
+            if (!assessor.DependsOn.Any(x => HasAncestor(x, key => key == web.ClientNodeKey))) throw new InvalidOperationException("Evidence assessment must depend on Web retrieval when Web retrieval is planned.");
     }
 }
 

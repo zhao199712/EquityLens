@@ -16,7 +16,7 @@ public sealed class WorkflowSkillCatalog : IWorkflowSkillCatalog
 {
     public IReadOnlyList<WorkflowSkill> Skills { get; } =
     [
-        new("evidence-remediation", "Close citation and evidence gaps, validate mappings, and revise the answer.", ["extract-claims", "retrieve-primary-financial-evidence", "assess-claim-evidence", "validate-evidence", "build-evidence-packet", "revise-with-evidence", "finalize-quality"]),
+        new("evidence-remediation", "Close citation and evidence gaps with bounded local or Web retrieval, validation, and revision.", ["extract-claims", "retrieve-primary-financial-evidence", "retrieve-web-evidence", "assess-claim-evidence", "validate-evidence", "build-evidence-packet", "revise-with-evidence", "finalize-quality"]),
         new("financial-guidance-verification", "Verify financial guidance with primary or supporting evidence.", ["retrieve-primary-financial-evidence", "assess-claim-evidence", "validate-evidence"]),
         new("evidence-driven-reanalysis", "Reanalyze material conclusions using validated evidence only.", ["build-analysis-context", "reanalyze-investment-answer", "critique-reanalysis", "revise-reanalysis", "finalize-reanalysis"]),
         new("answer-revision", "Revise wording or conclusions from critic findings.", ["revise-answer", "finalize-revision"]),
@@ -31,7 +31,8 @@ public sealed class NodeCapabilityRegistry : INodeCapabilityRegistry
     public IReadOnlyList<NodeCapability> Capabilities { get; } =
     [
         C("extract-claims", EvidenceRemediationNodeTypes.ExtractClaims, "Extract evidence-bearing claims from the answer."),
-        C("retrieve-primary-financial-evidence", EvidenceRemediationNodeTypes.RetrieveEvidence, "Retrieve local primary evidence with bounded web fallback.", loop: true, max: 2),
+        C("retrieve-primary-financial-evidence", EvidenceRemediationNodeTypes.RetrieveEvidence, "Retrieve local primary evidence without hidden Web access in dynamic workflows.", loop: true, max: 2),
+        C("retrieve-web-evidence", EvidenceRemediationNodeTypes.RetrieveWebEvidence, "Retrieve current Web evidence through the configured provider when freshness or local evidence gaps require it."),
         C("assess-claim-evidence", EvidenceRemediationNodeTypes.AssessSupport, "Assess semantic support and material analysis impact.", max: 2),
         C("validate-evidence", EvidenceRemediationNodeTypes.ValidateMappings, "Deterministically validate claim/evidence mappings.", max: 2),
         C("route-evidence", EvidenceRemediationNodeTypes.Route, "Persist the evidence route decision.", max: 2),
@@ -50,7 +51,7 @@ public sealed class NodeCapabilityRegistry : INodeCapabilityRegistry
     private static NodeCapability C(string id, string type, string description, bool loop = false, int max = 1)
     {
         var contract = new AgentWorkflowCatalog().GetNode(type).Contract;
-        return new(id, type, description, type == EvidenceRemediationNodeTypes.RetrieveEvidence ? "RetrieveEvidencePlannerArguments" : contract.InputSchema, contract.RequiredBlackboardKeys, contract.ProducedBlackboardKeys, contract.SideEffectLevel, contract.IsIdempotent, loop || contract.SupportsLoop, max);
+        return new(id, type, description, type is EvidenceRemediationNodeTypes.RetrieveEvidence or EvidenceRemediationNodeTypes.RetrieveWebEvidence ? "RetrieveEvidencePlannerArguments" : contract.InputSchema, contract.RequiredBlackboardKeys, contract.ProducedBlackboardKeys, contract.SideEffectLevel, contract.IsIdempotent, loop || contract.SupportsLoop, max);
     }
 }
 
@@ -114,7 +115,7 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
     }
     private static object Summarize(JsonObject board) => new { question = board[AgentBlackboardKeys.Question], criticReview = board[AgentBlackboardKeys.CriticReview], unresolvedClaims = board[AgentBlackboardKeys.UnresolvedClaims], routeDecision = board[AgentBlackboardKeys.RouteDecision], requiresReanalysis = board[AgentBlackboardKeys.RequiresReanalysis], reanalysisReasons = board[AgentBlackboardKeys.ReanalysisReasons] };
     private const string SystemPrompt = """
-You are the constrained workflow planner for an equity research quality run. Return one JSON object only. Select only supplied skills, capabilities and nodeTypes. Never output tools, code, raw Blackboard writes, unknown nodes, or graph cycles. Decide high-level research intent; retrieval nodes own concrete tool calls. Output {"goalStatus":"Continue|Complete","reason":"...","selectedSkills":["..."],"actions":[{"clientNodeKey":"unique-key","capability":"...","nodeType":"...","dependsOn":["client-key-or-existing-node-key"],"iteration":0,"arguments":{}}]}. If evidence is missing, provide RetrieveRemediationEvidence arguments with searchIntents containing targetClaims, topic, preferredSourceRoles, freshness and topK. Respect all supplied budgets.
+You are the constrained workflow planner for an equity research quality run. Return one JSON object only. Select only supplied skills, capabilities and nodeTypes. Never output providers, tools, code, raw Blackboard writes, unknown nodes, or graph cycles. Decide high-level research intent; retrieval nodes own concrete tool calls. Output {"goalStatus":"Continue|Complete","reason":"...","selectedSkills":["..."],"actions":[{"clientNodeKey":"unique-key","capability":"...","nodeType":"...","dependsOn":["client-key-or-existing-node-key"],"iteration":0,"arguments":{}}]}. Every action requires at least one dependency. If evidence is missing, provide retrieval arguments with 1-3 searchIntents containing targetClaims as an array, topic, preferredSourceRoles as an array, freshness as day|week|month|year and topK. Select RetrieveWebEvidence only for freshness or local evidence gaps. Dynamic local retrieval must set allowWebFallback=false. Respect all supplied budgets, including at most one Web retrieval node.
 """;
 }
 
@@ -142,7 +143,11 @@ public static class DeterministicDynamicWorkflowPlanner
         else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted && board[AgentBlackboardKeys.RouteDecision]?.GetValue<string>() == "InsufficientEvidence" && c.RetrievalIterations < 2)
         {
             var iteration = c.RetrievalIterations + 1; var suffix = $":{iteration}";
-            actions = Chain([A("retrieveEvidence" + suffix, "retrieve-primary-financial-evidence", EvidenceRemediationNodeTypes.RetrieveEvidence, Args(board), iteration), A("assessEvidence" + suffix, "assess-claim-evidence", EvidenceRemediationNodeTypes.AssessSupport, iteration: iteration), A("validateEvidence" + suffix, "validate-evidence", EvidenceRemediationNodeTypes.ValidateMappings, iteration: iteration), A("routeEvidence" + suffix, "route-evidence", EvidenceRemediationNodeTypes.Route, iteration: iteration)], Last(c));
+            var webUsed = c.CompletedNodeTypes.Contains(EvidenceRemediationNodeTypes.RetrieveWebEvidence);
+            var retrieval = webUsed
+                ? A("retrieveEvidence" + suffix, "retrieve-primary-financial-evidence", EvidenceRemediationNodeTypes.RetrieveEvidence, Args(board), iteration)
+                : A("retrieveWebEvidence" + suffix, "retrieve-web-evidence", EvidenceRemediationNodeTypes.RetrieveWebEvidence, Args(board, false), iteration);
+            actions = Chain([retrieval, A("assessEvidence" + suffix, "assess-claim-evidence", EvidenceRemediationNodeTypes.AssessSupport, iteration: iteration), A("validateEvidence" + suffix, "validate-evidence", EvidenceRemediationNodeTypes.ValidateMappings, iteration: iteration), A("routeEvidence" + suffix, "route-evidence", EvidenceRemediationNodeTypes.Route, iteration: iteration)], Last(c));
             skills = ["evidence-remediation"]; goal = DynamicGoalStatuses.Continue; reason = "Evidence remains insufficient and one retrieval iteration remains.";
         }
         else if (c.Trigger != DynamicPlanningTriggers.CriticCompleted && board[AgentBlackboardKeys.RequiresReanalysis]?.GetValue<bool>() == true)
@@ -166,5 +171,5 @@ public static class DeterministicDynamicWorkflowPlanner
     private static IReadOnlyList<DynamicPlanAction> Chain(IReadOnlyList<DynamicPlanAction> actions, string predecessor)
     { var result = new List<DynamicPlanAction>(); var previous = predecessor; foreach (var action in actions) { result.Add(action with { DependsOn = [previous] }); previous = action.ClientNodeKey; } return result; }
     private static string Last(WorkflowPlanningContext c) => c.Blackboard["dynamicLastNodeKey"]?.GetValue<string>() ?? ResearchQualityReviewNodeKeys.FinalizeCriticReport;
-    private static JsonObject Args(JsonObject board) => new() { ["searchIntents"] = new JsonArray { new JsonObject { ["targetClaims"] = board[AgentBlackboardKeys.UnresolvedClaims]?.DeepClone() ?? new JsonArray(), ["topic"] = board[AgentBlackboardKeys.Question]?.DeepClone(), ["preferredSourceRoles"] = new JsonArray("Primary"), ["freshness"] = "year", ["topK"] = 6 } } };
+    private static JsonObject Args(JsonObject board, bool local = true) => new() { ["allowWebFallback"] = local ? false : null, ["searchIntents"] = new JsonArray { new JsonObject { ["targetClaims"] = board[AgentBlackboardKeys.UnresolvedClaims]?.DeepClone() ?? new JsonArray(), ["topic"] = board[AgentBlackboardKeys.Question]?.DeepClone(), ["preferredSourceRoles"] = new JsonArray("Primary"), ["freshness"] = "year", ["topK"] = local ? 6 : 5 } } };
 }

@@ -79,6 +79,7 @@ public static class EvidenceRemediationNodeKeys
     public const string LoadContext = "loadEvidenceRemediationContext";
     public const string PlanRetrieval = "planEvidenceRetrieval";
     public const string RetrieveEvidence = "retrieveRemediationEvidence";
+    public const string RetrieveWebEvidence = "retrieveWebEvidence";
     public const string ExtractClaims = "extractAnswerClaims";
     public const string AssessSupport = "assessClaimSupport";
     public const string ValidateMappings = "validateEvidenceMappings";
@@ -93,6 +94,7 @@ public static class EvidenceRemediationNodeTypes
     public const string LoadContext = "LoadEvidenceRemediationContext";
     public const string PlanRetrieval = "PlanEvidenceRetrieval";
     public const string RetrieveEvidence = "RetrieveRemediationEvidence";
+    public const string RetrieveWebEvidence = "RetrieveWebEvidence";
     public const string ExtractClaims = "ExtractAnswerClaims";
     public const string AssessSupport = "AssessClaimSupport";
     public const string ValidateMappings = "ValidateEvidenceMappings";

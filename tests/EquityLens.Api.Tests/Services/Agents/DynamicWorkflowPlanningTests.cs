@@ -62,6 +62,33 @@ public sealed class DynamicWorkflowPlanningTests
         Assert.Equal(5, run.Nodes.Count);
     }
 
+    [Fact]
+    public void Validator_ValidWebNodeBetweenExtractionAndAssessment_IsAccepted()
+    {
+        var run = RunWithEvidenceContext();
+        var args = new JsonObject { ["searchIntents"] = new JsonArray(new JsonObject { ["topic"] = "TSMC capex", ["targetClaims"] = new JsonArray("claim-1"), ["preferredSourceRoles"] = new JsonArray("Primary"), ["freshness"] = "month", ["topK"] = 5 }) };
+        DynamicPlanAction[] actions = [new("extract:1", "extract-claims", EvidenceRemediationNodeTypes.ExtractClaims, [ResearchQualityReviewNodeKeys.FinalizeCriticReport], new()), new("web:1", "retrieve-web-evidence", EvidenceRemediationNodeTypes.RetrieveWebEvidence, ["extract:1"], args), new("assess:1", "assess-claim-evidence", EvidenceRemediationNodeTypes.AssessSupport, ["web:1"], new())];
+        var proposal = new DynamicPlanProposal(Guid.NewGuid(), run.OrchestrationVersion, DynamicPlanningTriggers.CriticCompleted, DynamicGoalStatuses.Continue, "web", ["evidence-remediation"], actions);
+        var validated = new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService()).Validate(run, proposal);
+        Assert.Contains(validated.Actions, x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence);
+    }
+
+    [Fact]
+    public void Validator_SecondWebNode_IsRejected()
+    {
+        var run = RunWithEvidenceContext(); run.Nodes.Add(new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "web:old", NodeType = EvidenceRemediationNodeTypes.RetrieveWebEvidence, Status = AgentNodeStatuses.Succeeded });
+        var args = new JsonObject { ["searchIntents"] = new JsonArray(new JsonObject { ["topic"] = "TSMC capex", ["targetClaims"] = new JsonArray("claim-1"), ["freshness"] = "month", ["topK"] = 5 }) };
+        var proposal = new DynamicPlanProposal(Guid.NewGuid(), run.OrchestrationVersion, DynamicPlanningTriggers.EvidenceValidated, DynamicGoalStatuses.Continue, "web", ["evidence-remediation"], [new("web:2", "retrieve-web-evidence", EvidenceRemediationNodeTypes.RetrieveWebEvidence, ["web:old"], args)]);
+        var error = Assert.Throws<InvalidOperationException>(() => new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService()).Validate(run, proposal));
+        Assert.Equal("Web retrieval budget exceeded.", error.Message);
+    }
+
+    private static AgentRun RunWithEvidenceContext()
+    {
+        var run = new ResearchQualityReviewWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.Question] = "TSMC capex?"; board[AgentBlackboardKeys.Answer] = "insufficient"; board[AgentBlackboardKeys.CriticFindings] = new JsonArray(); board[AgentBlackboardKeys.CriticReview] = new JsonObject { [CriticReviewFields.RequiresRevision] = true, [CriticReviewFields.RequiresMoreEvidence] = true }; run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); return run;
+    }
+
     private static WorkflowPlanningContext Context(bool requiresRevision, bool requiresEvidence)
     {
         var board = new JsonObject { [AgentBlackboardKeys.Question] = "TSMC guidance?", [AgentBlackboardKeys.UnresolvedClaims] = new JsonArray("claim"), [AgentBlackboardKeys.CriticReview] = new JsonObject { [CriticReviewFields.RequiresRevision] = requiresRevision, [CriticReviewFields.RequiresMoreEvidence] = requiresEvidence } };
