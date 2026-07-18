@@ -123,7 +123,8 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
         if (usedWebFallback)
         {
             var query = plan.Searches.FirstOrDefault()?.Query ?? board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
-            var webResults = await EvidenceRemediationToolCall.RunAsync(context, "webSearch", new { query, count = 5 }, () => web.RetrieveWebAsync(query, 5, null, cancellationToken), x => $"{x.Count} web candidates", cancellationToken);
+            var freshness = plan.Searches.FirstOrDefault()?.Freshness;
+            var webResults = await EvidenceRemediationToolCall.RunAsync(context, "webSearch", new { query, count = 5, freshness }, () => web.RetrieveWebAsync(query, 5, freshness, cancellationToken), x => $"{x.Count} web candidates", cancellationToken);
             roundEvidence.AddRange(webResults.Take(5));
         }
         var existing = context.Node.Iteration > 1 && board[AgentBlackboardKeys.RetrievedEvidence] is not null ? EvidenceRemediationBoard.Required<List<RemediationEvidenceItem>>(board, AgentBlackboardKeys.RetrievedEvidence) : [];
