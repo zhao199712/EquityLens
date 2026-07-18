@@ -247,7 +247,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, AgentNodeJson.ParseBlackboard(run.BlackboardJson), run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), skills.Skills, capabilities.Capabilities, run.Nodes.Where(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), run.Nodes.Count - 5);
         var started = DateTime.UtcNow;
         var plannerCall = new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = run.Id, AgentRunNodeId = last?.Id, ToolName = "workflowPlannerLLM", Status = AgentToolCallStatuses.Running, ArgumentsJson = Serialize(new { trigger, promptTemplateId = LlmAgentWorkflowPlanner.PromptTemplateId, promptVersion = LlmAgentWorkflowPlanner.PromptVersion, timeoutSeconds = 45, context.OrchestrationVersion }), StartedAtUtc = started };
-        _dbContext.AgentToolCalls.Add(plannerCall); AddEvent(run, last, AgentEventTypes.ToolCallStarted, "Tool workflowPlannerLLM started.", new { trigger, timeoutSeconds = 45 }); await _dbContext.SaveChangesAsync(cancellationToken);
+        _dbContext.AgentToolCalls.Add(plannerCall); AddEvent(run, last, AgentEventTypes.ToolCallStarted, "Tool workflowPlannerLLM started.", new { trigger, timeoutSeconds = 45 });
         DynamicPlanProposal proposal;
         try
         {
