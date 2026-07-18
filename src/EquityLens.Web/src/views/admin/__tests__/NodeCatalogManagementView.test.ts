@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { defineComponent, nextTick, type VNode } from 'vue'
+import { defineComponent, nextTick, reactive, type VNode } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { NodeAdmin } from '../../../services/agentWorkflowAdmin'
 
@@ -78,7 +78,7 @@ describe('NodeCatalogManagementView', () => {
     await flushPromises()
 
     const columns = wrapper.findComponent({ name: 'NDataTable' }).props('columns') as TableColumn[]
-    const action = columns.find((column) => column.key === 'action')!.render!(node)
+    const action = columns.find((column) => column.key === 'action')!.render!(reactive(node))
     ;(action.props?.onClick as () => void)()
     await nextTick()
 

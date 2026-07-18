@@ -35,7 +35,7 @@ async function load() {
 }
 
 function edit(row: NodeAdmin) {
-  editing.value = structuredClone(row)
+  editing.value = JSON.parse(JSON.stringify(row)) as NodeAdmin
   metadataText.value = JSON.stringify(row.metadata ?? {}, null, 2)
 }
 
