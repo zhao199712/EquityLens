@@ -251,7 +251,15 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         DynamicPlanProposal proposal;
         try
         {
-            proposal = await planner.PlanAsync(context, cancellationToken); plannerCall.Status = AgentToolCallStatuses.Succeeded; plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180); plannerCall.ResultJson = Serialize(proposal); plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
+            try
+            {
+                proposal = await Task.Run(() => planner.PlanAsync(context, cancellationToken), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(45), cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                proposal = DeterministicDynamicWorkflowPlanner.Create(context, "Workflow planner exceeded the orchestrator 45 second deadline.");
+            }
+            plannerCall.Status = AgentToolCallStatuses.Succeeded; plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180); plannerCall.ResultJson = Serialize(proposal); plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
         }
         catch (Exception exception)
         {
