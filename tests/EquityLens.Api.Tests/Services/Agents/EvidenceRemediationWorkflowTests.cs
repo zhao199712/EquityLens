@@ -21,6 +21,68 @@ public sealed class EvidenceRemediationWorkflowTests
     }
 
     [Fact]
+    public async Task LoadContext_OutputJsonOverridesStaleBlackboardReview()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); var sourceBoard = AgentNodeJson.ParseBlackboard(source.BlackboardJson); sourceBoard[AgentBlackboardKeys.CriticReview]![CriticReviewFields.RequiresMoreEvidence] = false; source.BlackboardJson = sourceBoard.ToJsonString(AgentNodeJson.SerializerOptions); db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
+
+        await new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); Assert.True(board[AgentBlackboardKeys.CriticReview]![CriticReviewFields.RequiresMoreEvidence]!.GetValue<bool>()); Assert.Single(board[AgentBlackboardKeys.CriticFindings]!.AsArray());
+    }
+
+    [Fact]
+    public async Task LoadContext_MissingOutputJsonFallsBackToFinalOutput()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); var sourceBoard = AgentNodeJson.ParseBlackboard(source.BlackboardJson); sourceBoard[AgentBlackboardKeys.FinalOutput] = sourceBoard[AgentBlackboardKeys.CriticReview]!.DeepClone(); sourceBoard[AgentBlackboardKeys.CriticReview]![CriticReviewFields.RequiresMoreEvidence] = false; source.OutputJson = null; source.BlackboardJson = sourceBoard.ToJsonString(AgentNodeJson.SerializerOptions); db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
+
+        await new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        Assert.True(AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.CriticReview]![CriticReviewFields.RequiresMoreEvidence]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task LoadContext_InvalidOutputJson_IsRejectedWithoutFallback()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); source.OutputJson = "not-json"; db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+
+        Assert.Equal("Critic review output is invalid.", exception.Message);
+    }
+
+    [Fact]
+    public async Task LoadContext_OutputThatDoesNotRequireEvidence_IsRejected()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); var output = JsonNode.Parse(source.OutputJson!)!.AsObject(); output[CriticReviewFields.RequiresMoreEvidence] = false; source.OutputJson = output.ToJsonString(); db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+
+        Assert.Equal("Critic review does not require more evidence.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("OtherWorkflow", AgentRunStatuses.Succeeded, "Source run is not a CriticReview workflow.")]
+    [InlineData(AgentWorkflowTypes.CriticReview, AgentRunStatuses.Failed, "Critic review run has not succeeded.")]
+    public async Task LoadContext_InvalidSourceWorkflowOrStatus_IsRejected(string workflowType, string status, string expectedMessage)
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); source.WorkflowType = workflowType; source.Status = status; db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+
+        Assert.Equal(expectedMessage, exception.Message);
+    }
+
+    [Fact]
+    public async Task LoadContext_MissingFinalReview_IsRejected()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); var sourceBoard = AgentNodeJson.ParseBlackboard(source.BlackboardJson); sourceBoard[AgentBlackboardKeys.FinalOutput] = null; sourceBoard[AgentBlackboardKeys.CriticReview] = null; source.OutputJson = null; source.BlackboardJson = sourceBoard.ToJsonString(AgentNodeJson.SerializerOptions); db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+
+        Assert.Equal("Critic review output is missing.", exception.Message);
+    }
+
+    [Fact]
     public async Task LoadContext_DifferentUserCriticRun_IsRejected()
     {
         await using var db = CreateDb(); var source = CriticSource(Guid.NewGuid()); db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
