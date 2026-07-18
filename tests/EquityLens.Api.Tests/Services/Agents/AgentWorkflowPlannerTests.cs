@@ -39,7 +39,7 @@ public sealed class AgentWorkflowPlannerTests
     }
 
     [Fact]
-    public void GetExecutionOrder_ResearchQualityReviewWorkflow_ReturnsExpected7NodeOrder()
+    public void GetExecutionOrder_ResearchQualityReviewWorkflow_ReturnsExpectedDynamicPrefix()
     {
         var provider = new ResearchQualityReviewWorkflowDefinitionProvider();
         var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid());
@@ -53,9 +53,7 @@ public sealed class AgentWorkflowPlannerTests
             ResearchQualityReviewNodeKeys.BuildEvidencePacket,
             ResearchQualityReviewNodeKeys.CheckEvidence,
             ResearchQualityReviewNodeKeys.CritiqueAnswer,
-            ResearchQualityReviewNodeKeys.FinalizeCriticReport,
-            ResearchQualityReviewNodeKeys.DraftRevisedAnswer,
-            ResearchQualityReviewNodeKeys.FinalizeRevision
+            ResearchQualityReviewNodeKeys.FinalizeCriticReport
         ],
         order);
     }

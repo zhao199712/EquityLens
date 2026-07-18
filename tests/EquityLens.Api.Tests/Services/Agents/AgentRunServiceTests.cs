@@ -599,7 +599,7 @@ public sealed class AgentRunServiceTests
 
         var summary = await service.CreateResearchQualityReviewAsync(userId, researchRunId, CancellationToken.None);
 
-        Assert.Equal(AgentRunStatuses.Succeeded, summary.Status);
+        Assert.True(summary.Status == AgentRunStatuses.Succeeded, summary.ErrorMessage);
         Assert.Equal(AgentWorkflowTypes.ResearchQualityReview, summary.WorkflowType);
         var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
         Assert.NotNull(detail);
@@ -728,9 +728,9 @@ public sealed class AgentRunServiceTests
         Assert.Equal(AgentRunStatuses.Succeeded, retried.Status);
         var retriedDetail = await service.GetByIdAsync(failed.Id, userId, CancellationToken.None);
         Assert.NotNull(retriedDetail);
-        Assert.Equal(7, retriedDetail.Nodes.Count);
+        Assert.Equal(5, retriedDetail.Nodes.Count);
         Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Succeeded);
-        Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.FinalizeRevision && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.FinalizeCriticReport && n.Status == AgentNodeStatuses.Succeeded);
         Assert.NotNull(retriedDetail.OutputJson);
         Assert.Equal(2, criticAgent.CallCount);
     }
@@ -1100,7 +1100,9 @@ public sealed class AgentRunServiceTests
         Assert.Equal(ResearchQualityReviewWorkflow.Version, root.GetProperty("version").GetInt32());
 
         var nodes = root.GetProperty("nodes").EnumerateArray().ToArray();
-        Assert.Equal(7, nodes.Length);
+        Assert.Equal("DynamicStateful", root.GetProperty("orchestrationMode").GetString());
+        Assert.Equal(DynamicGoalStatuses.Complete, root.GetProperty("goalStatus").GetString());
+        Assert.Equal(5, nodes.Length);
         Assert.Equal(ResearchQualityReviewNodeKeys.LoadResearchRun, nodes[0].GetProperty("id").GetString());
         Assert.Equal(ResearchQualityReviewNodeTypes.LoadResearchRun, nodes[0].GetProperty("type").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.BuildEvidencePacket, nodes[1].GetProperty("id").GetString());
@@ -1111,13 +1113,8 @@ public sealed class AgentRunServiceTests
         Assert.Equal(ResearchQualityReviewNodeTypes.CritiqueAnswer, nodes[3].GetProperty("type").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeCriticReport, nodes[4].GetProperty("id").GetString());
         Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, nodes[4].GetProperty("type").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.DraftRevisedAnswer, nodes[5].GetProperty("id").GetString());
-        Assert.Equal(ResearchQualityReviewNodeTypes.DraftRevisedAnswer, nodes[5].GetProperty("type").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeRevision, nodes[6].GetProperty("id").GetString());
-        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeRevision, nodes[6].GetProperty("type").GetString());
-
         var edges = root.GetProperty("edges").EnumerateArray().ToArray();
-        Assert.Equal(6, edges.Length);
+        Assert.Equal(4, edges.Length);
         Assert.Equal(ResearchQualityReviewNodeKeys.LoadResearchRun, edges[0].GetProperty("from").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.BuildEvidencePacket, edges[0].GetProperty("to").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.BuildEvidencePacket, edges[1].GetProperty("from").GetString());
@@ -1126,10 +1123,6 @@ public sealed class AgentRunServiceTests
         Assert.Equal(ResearchQualityReviewNodeKeys.CritiqueAnswer, edges[2].GetProperty("to").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.CritiqueAnswer, edges[3].GetProperty("from").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeCriticReport, edges[3].GetProperty("to").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeCriticReport, edges[4].GetProperty("from").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.DraftRevisedAnswer, edges[4].GetProperty("to").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.DraftRevisedAnswer, edges[5].GetProperty("from").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeRevision, edges[5].GetProperty("to").GetString());
     }
 
     private static AgentRunService CreateService(
@@ -1227,7 +1220,8 @@ public sealed class AgentRunServiceTests
                 runStateMachine,
                 nodeStateMachine,
                 handlers,
-                NullLogger<AgentRunExecutor>.Instance);
+                NullLogger<AgentRunExecutor>.Instance,
+                dynamicPlanner: new TestQualityWorkflowPlanner());
         }
 
         public async Task EnqueueAsync(AgentRunQueueMessage message, CancellationToken cancellationToken = default)
@@ -1252,6 +1246,24 @@ public sealed class AgentRunServiceTests
 
         public Task AcknowledgeAsync(string streamId, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
+    }
+
+    private sealed class TestQualityWorkflowPlanner : IAgentWorkflowPlanner
+    {
+        public Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default)
+        {
+            if (context.CompletedNodeTypes.Contains(DraftRevisionNodeTypes.FinalizeRevision))
+                return Task.FromResult(new DynamicPlanProposal(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, DynamicGoalStatuses.Complete, "Test revision completed.", ["quality-finalization"], [], "Test"));
+            var review = context.Blackboard[AgentBlackboardKeys.CriticReview] as JsonObject;
+            if (review?[CriticReviewFields.RequiresRevision]?.GetValue<bool>() != true)
+                return Task.FromResult(new DynamicPlanProposal(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, DynamicGoalStatuses.Complete, "Test critic accepted answer.", ["quality-finalization"], [], "Test"));
+            IReadOnlyList<DynamicPlanAction> actions =
+            [
+                new("draftRevisedAnswer", "revise-answer", DraftRevisionNodeTypes.DraftRevisedAnswer, [ResearchQualityReviewNodeKeys.FinalizeCriticReport], new JsonObject()),
+                new("finalizeRevision", "finalize-revision", DraftRevisionNodeTypes.FinalizeRevision, ["draftRevisedAnswer"], new JsonObject())
+            ];
+            return Task.FromResult(new DynamicPlanProposal(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, DynamicGoalStatuses.Continue, "Test bounded revision.", ["answer-revision"], actions, "Test"));
+        }
     }
 
     private sealed class RecordingAgentRunQueue : IAgentRunQueue

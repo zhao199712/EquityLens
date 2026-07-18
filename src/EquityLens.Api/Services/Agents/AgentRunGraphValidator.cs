@@ -53,7 +53,10 @@ public sealed class AgentRunGraphValidator : IAgentRunGraphValidator
                 continue;
             }
             var contract = _catalog.GetNode(node.NodeType).Contract;
-            var missing = contract.RequiredBlackboardKeys.FirstOrDefault(x => !available.Contains(x));
+            var hasPlannedSearchIntents = node.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence
+                && !string.IsNullOrWhiteSpace(node.InputJson)
+                && node.InputJson.Contains("searchIntents", StringComparison.Ordinal);
+            var missing = contract.RequiredBlackboardKeys.FirstOrDefault(x => !(hasPlannedSearchIntents && x == AgentBlackboardKeys.RetrievalPlan) && !available.Contains(x));
             if (missing is not null)
             {
                 throw new InvalidOperationException($"Node '{node.NodeType}' requires blackboard key '{missing}' but no preceding node produces it.");

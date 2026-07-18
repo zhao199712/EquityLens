@@ -116,8 +116,8 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
     public string NodeType => EvidenceRemediationNodeTypes.RetrieveEvidence;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = EvidenceRemediationBoard.Parse(context.Run); var plan = EvidenceRemediationBoard.Required<ResearchRetrievalStrategy>(board, AgentBlackboardKeys.RetrievalPlan); var ticker = board[AgentBlackboardKeys.Ticker]?.GetValue<string>() ?? string.Empty;
-        context.Node.InputJson = AgentNodeJson.Serialize(new { ticker, searchCount = plan.Searches.Count, minimumLocalEvidence = MinimumLocalEvidence });
+        var board = EvidenceRemediationBoard.Parse(context.Run); var plan = ResolvePlan(context.Node.InputJson, board); var ticker = board[AgentBlackboardKeys.Ticker]?.GetValue<string>() ?? string.Empty;
+        EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievalPlan, plan);
         var local = await EvidenceRemediationToolCall.RunAsync(context, "documentRetrieval", new { ticker, plan }, () => documents.RetrieveAsync(plan, ticker, cancellationToken), x => $"{x.Count} local candidates", cancellationToken);
         var roundEvidence = local.OrderByDescending(x => x.Result.RelevanceScore).Take(8).ToList(); var usedWebFallback = roundEvidence.Count < MinimumLocalEvidence;
         if (usedWebFallback)
@@ -134,6 +134,27 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
         var history = board[AgentBlackboardKeys.RetrievalHistory]?.AsArray() ?? new JsonArray(); history.Add(JsonSerializer.SerializeToNode(new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback }, AgentNodeJson.SerializerOptions)); board[AgentBlackboardKeys.RetrievalHistory] = history;
         var runtime = board[AgentBlackboardKeys.Runtime]?.AsObject() ?? new JsonObject(); if (usedWebFallback) runtime["webFallbackCount"] = (runtime["webFallbackCount"]?.GetValue<int>() ?? 0) + 1; board[AgentBlackboardKeys.Runtime] = runtime;
         var output = new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback }; EvidenceRemediationBoard.Commit(context, board, output);
+    }
+
+    private static ResearchRetrievalStrategy ResolvePlan(string? inputJson, JsonObject board)
+    {
+        if (!string.IsNullOrWhiteSpace(inputJson))
+        {
+            var input = JsonNode.Parse(inputJson) as JsonObject;
+            if (input?["searchIntents"] is JsonArray intents && intents.Count > 0)
+            {
+                var searches = intents.OfType<JsonObject>().Select(intent =>
+                {
+                    var topic = intent["topic"]?.GetValue<string>() ?? board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
+                    var claims = intent["targetClaims"] is JsonArray values ? values.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList() : [];
+                    var query = claims.Count == 0 ? topic : $"{topic} {string.Join(" ", claims)}";
+                    var roles = intent["preferredSourceRoles"] as JsonArray; var role = roles?.FirstOrDefault()?.GetValue<string>() ?? "Primary";
+                    return new ResearchRetrievalSearch(null, role, query, intent["topK"]?.GetValue<int>() ?? 5, "Compiled from workflow planner search intent.", claims.FirstOrDefault(), intent["freshness"]?.GetValue<string>());
+                }).ToList();
+                return new("DynamicIntent", searches);
+            }
+        }
+        return EvidenceRemediationBoard.Required<ResearchRetrievalStrategy>(board, AgentBlackboardKeys.RetrievalPlan);
     }
 }
 

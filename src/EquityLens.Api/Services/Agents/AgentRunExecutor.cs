@@ -13,32 +13,47 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly EquityLensDbContext _dbContext;
-    private readonly IAgentWorkflowPlanner _workflowPlanner;
+    private readonly IWorkflowGraphTopologyService _topology;
     private readonly IAgentRunGraphValidator _runGraphValidator;
     private readonly IAgentRunStateMachine _runStateMachine;
     private readonly IAgentNodeStateMachine _nodeStateMachine;
     private readonly IReadOnlyDictionary<string, IAgentNodeHandler> _nodeHandlers;
     private readonly ILogger<AgentRunExecutor> _logger;
     private readonly IAgentWorkflowCatalog? _catalog;
+    private readonly IAgentWorkflowPlanner? _dynamicPlanner;
+    private readonly IDynamicPlanValidator? _dynamicPlanValidator;
+    private readonly IGraphMaterializer? _graphMaterializer;
+    private readonly IWorkflowSkillCatalog? _skills;
+    private readonly INodeCapabilityRegistry? _capabilities;
 
     public AgentRunExecutor(
         EquityLensDbContext dbContext,
-        IAgentWorkflowPlanner workflowPlanner,
+        IWorkflowGraphTopologyService topology,
         IAgentRunGraphValidator runGraphValidator,
         IAgentRunStateMachine runStateMachine,
         IAgentNodeStateMachine nodeStateMachine,
         IEnumerable<IAgentNodeHandler> nodeHandlers,
         ILogger<AgentRunExecutor> logger,
-        IAgentWorkflowCatalog? catalog = null)
+        IAgentWorkflowCatalog? catalog = null,
+        IAgentWorkflowPlanner? dynamicPlanner = null,
+        IDynamicPlanValidator? dynamicPlanValidator = null,
+        IGraphMaterializer? graphMaterializer = null,
+        IWorkflowSkillCatalog? skills = null,
+        INodeCapabilityRegistry? capabilities = null)
     {
         _dbContext = dbContext;
-        _workflowPlanner = workflowPlanner;
+        _topology = topology;
         _runGraphValidator = runGraphValidator;
         _runStateMachine = runStateMachine;
         _nodeStateMachine = nodeStateMachine;
         _nodeHandlers = nodeHandlers.ToDictionary(x => x.NodeType, StringComparer.Ordinal);
         _logger = logger;
         _catalog = catalog;
+        _dynamicPlanner = dynamicPlanner;
+        _dynamicPlanValidator = dynamicPlanValidator;
+        _graphMaterializer = graphMaterializer;
+        _skills = skills;
+        _capabilities = capabilities;
     }
 
     public async Task ExecuteAsync(Guid runId, Guid userId, CancellationToken cancellationToken = default)
@@ -74,21 +89,34 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 run.StartedAtUtc ??= DateTime.UtcNow;
                 AddEvent(run, null, AgentEventTypes.RunStarted, $"{run.WorkflowType} run started.", null);
             }
+            try { await _dbContext.SaveChangesAsync(cancellationToken); }
+            catch (DbUpdateConcurrencyException)
+            {
+                _dbContext.ChangeTracker.Clear();
+                _logger.LogInformation("Agent run {AgentRunId} lease was claimed by another worker.", run.Id);
+                return;
+            }
 
-            var executionOrder = _workflowPlanner.GetExecutionOrder(run.WorkflowDefinitionJson);
+            var executionOrder = _topology.GetExecutionOrder(run.WorkflowDefinitionJson);
             _runGraphValidator.Validate(run, executionOrder);
             var nodeKey = GetNextReadyNode(run, executionOrder);
             if (nodeKey is not null)
             {
                 await RunNodeAsync(run, nodeKey, cancellationToken);
                 run.LeaseOwner = null; run.LeaseExpiresAtUtc = null; run.OrchestrationVersion++;
-                if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped)) CompleteRun(run);
+                if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped))
+                {
+                    if (!await TryAdvanceDynamicPlanAsync(run, cancellationToken)) CompleteRun(run);
+                }
                 else AddWakeOutbox(run, run.Nodes.Single(x => x.NodeKey == nodeKey));
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 return;
             }
 
-            if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped)) CompleteRun(run);
+            if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped))
+            {
+                if (!await TryAdvanceDynamicPlanAsync(run, cancellationToken)) CompleteRun(run);
+            }
             else throw new InvalidOperationException("Workflow has no ready node but is not complete.");
             run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -204,6 +232,43 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     {
         _runStateMachine.Transition(run, AgentRunStatuses.Succeeded); run.CompletedAtUtc = DateTime.UtcNow;
         AddEvent(run, null, AgentEventTypes.RunSucceeded, $"{run.WorkflowType} run succeeded.", null);
+    }
+
+    private async Task<bool> TryAdvanceDynamicPlanAsync(AgentRun run, CancellationToken cancellationToken)
+    {
+        using var definition = JsonDocument.Parse(run.WorkflowDefinitionJson);
+        if (run.WorkflowType != AgentWorkflowTypes.ResearchQualityReview || definition.RootElement.TryGetProperty("orchestrationMode", out var mode) is false || mode.GetString() != "DynamicStateful") return false;
+        var planner = _dynamicPlanner ?? new DeterministicPlannerAdapter();
+        var capabilities = _capabilities ?? new NodeCapabilityRegistry(); var skills = _skills ?? new WorkflowSkillCatalog();
+        var validator = _dynamicPlanValidator ?? new DynamicPlanValidator(capabilities, _catalog ?? new AgentWorkflowCatalog(), _topology);
+        var materializer = _graphMaterializer ?? new GraphMaterializer(_dbContext, _catalog ?? new AgentWorkflowCatalog());
+        var last = run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).OrderByDescending(x => x.CompletedAtUtc).FirstOrDefault();
+        var trigger = last?.NodeType == EvidenceRemediationNodeTypes.Route ? DynamicPlanningTriggers.EvidenceValidated : last?.NodeType == ResearchQualityReviewNodeTypes.FinalizeCriticReport ? DynamicPlanningTriggers.CriticCompleted : DynamicPlanningTriggers.BranchCompleted;
+        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, AgentNodeJson.ParseBlackboard(run.BlackboardJson), run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), skills.Skills, capabilities.Capabilities, run.Nodes.Where(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), run.Nodes.Count - 5);
+        var started = DateTime.UtcNow;
+        var proposal = await planner.PlanAsync(context, cancellationToken);
+        _dbContext.AgentToolCalls.Add(new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = run.Id, AgentRunNodeId = last?.Id, ToolName = "workflowPlannerLLM", Status = AgentToolCallStatuses.Succeeded, ArgumentsJson = Serialize(new { trigger, promptTemplateId = LlmAgentWorkflowPlanner.PromptTemplateId, promptVersion = LlmAgentWorkflowPlanner.PromptVersion, context.OrchestrationVersion }), ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180), ResultJson = Serialize(proposal), StartedAtUtc = started, CompletedAtUtc = DateTime.UtcNow, DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds });
+        AddEvent(run, last, AgentEventTypes.PlannerProposed, proposal.Reason, new { proposal.ProposalId, proposal.Trigger, proposal.GoalStatus, proposal.SelectedSkills, proposal.Mode, proposal.Provider, proposal.Model, proposal.PromptTokens, proposal.CompletionTokens, proposal.FallbackReason, actions = proposal.Actions.Select(x => new { x.ClientNodeKey, x.Capability, x.NodeType }) });
+        ValidatedDynamicPlan validated;
+        try { validated = validator.Validate(run, proposal); AddEvent(run, last, AgentEventTypes.PlanValidated, "Dynamic plan validated.", new { proposal.ProposalId, actionCount = proposal.Actions.Count }); }
+        catch (Exception exception)
+        {
+            AddEvent(run, last, AgentEventTypes.PlanRejected, exception.Message, new { proposal.ProposalId, error = exception.Message });
+            proposal = DeterministicDynamicWorkflowPlanner.Create(context, exception.Message, proposal.Model);
+            AddEvent(run, last, AgentEventTypes.PlannerProposed, proposal.Reason, new { proposal.ProposalId, proposal.Trigger, proposal.GoalStatus, proposal.SelectedSkills, proposal.Mode, proposal.FallbackReason, actions = proposal.Actions.Select(x => new { x.ClientNodeKey, x.Capability, x.NodeType }) });
+            validated = validator.Validate(run, proposal);
+            AddEvent(run, last, AgentEventTypes.PlanValidated, "Deterministic fallback plan validated.", new { proposal.ProposalId, actionCount = proposal.Actions.Count });
+        }
+        if (proposal.GoalStatus == DynamicGoalStatuses.Complete)
+        {
+            var json = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject(); json["goalStatus"] = DynamicGoalStatuses.Complete; run.WorkflowDefinitionJson = json.ToJsonString(AgentNodeJson.SerializerOptions); return false;
+        }
+        materializer.Materialize(run, validated); return true;
+    }
+
+    private sealed class DeterministicPlannerAdapter : IAgentWorkflowPlanner
+    {
+        public Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default) => Task.FromResult(DeterministicDynamicWorkflowPlanner.Create(context, "Dynamic LLM planner is not registered."));
     }
 
     private void AddWakeOutbox(AgentRun run, AgentRunNode cause)

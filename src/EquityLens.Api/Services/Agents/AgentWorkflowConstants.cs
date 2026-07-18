@@ -31,7 +31,9 @@ public static class DraftRevisionWorkflow
 
 public static class ResearchQualityReviewWorkflow
 {
-    public const int Version = 1;
+    public const int Version = 2;
+    public const int MaxRetrievalIterations = 2;
+    public const int MaxDynamicNodes = 18;
 }
 
 public static class PortfolioDiagnosisWorkflow
@@ -223,4 +225,8 @@ public static class AgentEventTypes
     public const string ToolCallFailed = "ToolCallFailed";
     public const string BlackboardUpdated = "BlackboardUpdated";
     public const string SupervisorDecision = "SupervisorDecision";
+    public const string PlannerProposed = "PlannerProposed";
+    public const string PlanValidated = "PlanValidated";
+    public const string PlanRejected = "PlanRejected";
+    public const string GraphMaterialized = "GraphMaterialized";
 }

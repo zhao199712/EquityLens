@@ -197,7 +197,12 @@ builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceRemediation
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceReanalysisWorkflowDefinitionProvider>();
 builder.Services.AddScoped<PortfolioDiagnosisWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider>(sp => sp.GetRequiredService<PortfolioDiagnosisWorkflowDefinitionProvider>());
-builder.Services.AddScoped<IAgentWorkflowPlanner, AgentWorkflowPlanner>();
+builder.Services.AddSingleton<IWorkflowGraphTopologyService, WorkflowGraphTopologyService>();
+builder.Services.AddSingleton<IWorkflowSkillCatalog, WorkflowSkillCatalog>();
+builder.Services.AddSingleton<INodeCapabilityRegistry, NodeCapabilityRegistry>();
+builder.Services.AddScoped<IAgentWorkflowPlanner, LlmAgentWorkflowPlanner>();
+builder.Services.AddScoped<IDynamicPlanValidator, DynamicPlanValidator>();
+builder.Services.AddScoped<IGraphMaterializer, GraphMaterializer>();
 builder.Services.AddScoped<IAgentRunGraphValidator, AgentRunGraphValidator>();
 builder.Services.AddSingleton<IAgentRunStateMachine, AgentRunStateMachine>();
 builder.Services.AddSingleton<IAgentNodeStateMachine, AgentNodeStateMachine>();
