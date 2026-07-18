@@ -299,6 +299,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         foreach (var entry in _dbContext.ChangeTracker.Entries<AgentRunNode>()
                      .Where(x => existingNodeIds.Contains(x.Entity.Id) && x.State == EntityState.Modified))
         {
+            entry.OriginalValues.SetValues(entry.CurrentValues);
             entry.State = EntityState.Unchanged;
         }
         return true;
