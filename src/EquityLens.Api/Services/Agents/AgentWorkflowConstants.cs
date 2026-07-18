@@ -7,6 +7,7 @@ public static class AgentWorkflowTypes
     public const string ResearchQualityReview = "ResearchQualityReview";
     public const string PortfolioDiagnosis = "PortfolioDiagnosis";
     public const string EvidenceRemediation = "EvidenceRemediation";
+    public const string EvidenceReanalysis = "EvidenceReanalysis";
 }
 
 public static class AgentTypes
@@ -15,6 +16,7 @@ public static class AgentTypes
     public const string Draft = "DraftAgent";
     public const string Portfolio = "PortfolioDiagnosisAgent";
     public const string Research = "ResearchAgent";
+    public const string Analysis = "AnalysisAgent";
 }
 
 public static class CriticReviewWorkflow
@@ -41,6 +43,33 @@ public static class EvidenceRemediationWorkflow
 {
     public const int Version = 3;
     public const int MaxIterations = 2;
+}
+
+public static class EvidenceReanalysisWorkflow
+{
+    public const int Version = 1;
+}
+
+public static class EvidenceReanalysisNodeKeys
+{
+    public const string Load = "loadEvidenceRemediation";
+    public const string Validate = "validateReanalysisRequest";
+    public const string BuildContext = "buildAnalysisContext";
+    public const string Reanalyze = "reanalyzeAnswer";
+    public const string Critique = "critiqueReanalysis";
+    public const string Revise = "reviseReanalysis";
+    public const string Finalize = "finalizeReanalysis";
+}
+
+public static class EvidenceReanalysisNodeTypes
+{
+    public const string Load = "LoadEvidenceRemediation";
+    public const string Validate = "ValidateReanalysisRequest";
+    public const string BuildContext = "BuildAnalysisContext";
+    public const string Reanalyze = "ReanalyzeAnswer";
+    public const string Critique = "CritiqueReanalysis";
+    public const string Revise = "ReviseReanalysis";
+    public const string Finalize = "FinalizeReanalysis";
 }
 
 public static class EvidenceRemediationNodeKeys

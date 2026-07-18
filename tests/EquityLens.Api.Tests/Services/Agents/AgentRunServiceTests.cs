@@ -772,6 +772,20 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
+    public async Task CreateEvidenceReanalysisAsync_CreatesSevenNodeStatefulRunWithPolicySnapshot()
+    {
+        await using var db = CreateDbContext(); var queue = new RecordingAgentRunQueue(); var state = new AgentRunStateMachine(); var nodeState = new AgentNodeStateMachine(); var userId = Guid.NewGuid();
+        var source = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, Guid.NewGuid()); source.Status = AgentRunStatuses.Succeeded; var sourceBoard = AgentNodeJson.ParseBlackboard(source.BlackboardJson); var packet = new RemediatedEvidencePacket("Supported", [new("claim-1", "claim", "Supported", [1], [])], [new(1, "LocalDocument", "年報", "AnnualReport", null, "evidence", .9)], [], true, ["關鍵結論改變"]); sourceBoard[AgentBlackboardKeys.RemediatedEvidencePacket] = JsonSerializer.SerializeToNode(packet, AgentNodeJson.SerializerOptions); source.BlackboardJson = sourceBoard.ToJsonString(AgentNodeJson.SerializerOptions); source.OutputJson = AgentNodeJson.Serialize(new EvidenceRemediationOutput("原回答", "修正版", "summary", "Supported", packet.Evidence, [], true, ["關鍵結論改變"])); db.AgentRuns.Add(source); await db.SaveChangesAsync();
+        var service = new AgentRunService(db, [new EvidenceReanalysisWorkflowDefinitionProvider()], state, nodeState, queue);
+
+        var summary = await service.CreateEvidenceReanalysisAsync(userId, source.Id, CancellationToken.None);
+
+        Assert.Equal(AgentWorkflowTypes.EvidenceReanalysis, summary.WorkflowType); Assert.Equal(AgentTypes.Analysis, summary.AgentType); Assert.Equal(AgentRunStatuses.Pending, summary.Status); Assert.Single(queue.Messages);
+        var detail = await service.GetByIdAsync(summary.Id, null, CancellationToken.None); Assert.NotNull(detail); Assert.Equal(7, detail.Nodes.Count);
+        using var definition = JsonDocument.Parse(detail.WorkflowDefinitionJson); Assert.Equal("Stateful", definition.RootElement.GetProperty("orchestrationMode").GetString()); Assert.All(definition.RootElement.GetProperty("nodes").EnumerateArray(), node => Assert.True(node.TryGetProperty("executionPolicy", out _)));
+    }
+
+    [Fact]
     public async Task GetByIdAsync_DifferentUser_ReturnsNull()
     {
         await using var db = CreateDbContext();

@@ -16,10 +16,10 @@ vi.mock('naive-ui', () => ({
   NTimelineItem: defineComponent({ template: '<div><slot /></div>' }),
   useMessage: () => message,
 }))
-vi.mock('../../../services/agentRuns', () => ({ getAgentRun: vi.fn(), retryAgentRun: vi.fn(), cancelAgentRun: vi.fn(), createEvidenceRemediation: vi.fn() }))
+vi.mock('../../../services/agentRuns', () => ({ getAgentRun: vi.fn(), retryAgentRun: vi.fn(), cancelAgentRun: vi.fn(), createEvidenceRemediation: vi.fn(), createEvidenceReanalysis: vi.fn() }))
 
 import AgentRunAdminDetail from '../components/AgentRunAdminDetail.vue'
-import { createEvidenceRemediation, getAgentRun } from '../../../services/agentRuns'
+import { createEvidenceRemediation, createEvidenceReanalysis, getAgentRun } from '../../../services/agentRuns'
 
 describe('AgentRunAdminDetail evidence remediation', () => {
   beforeEach(() => {
@@ -29,6 +29,7 @@ describe('AgentRunAdminDetail evidence remediation', () => {
       nodes: [], events: [], toolCalls: [], feedback: [], blackboardJson: {}, outputJson: { requiresMoreEvidence: true }, workflowDefinitionJson: {},
     })
     vi.mocked(createEvidenceRemediation).mockResolvedValue({ id: 'remediation-1', workflowType: 'EvidenceRemediation', agentType: 'ResearchAgent', status: 'Pending', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null })
+    vi.mocked(createEvidenceReanalysis).mockResolvedValue({ id: 'reanalysis-1', workflowType: 'EvidenceReanalysis', agentType: 'AnalysisAgent', status: 'Pending', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null })
   })
 
   it('只在 CriticReview 需要更多證據時建立流程並導頁', async () => {
@@ -42,5 +43,15 @@ describe('AgentRunAdminDetail evidence remediation', () => {
 
     expect(createEvidenceRemediation).toHaveBeenCalledWith('critic-1')
     expect(push).toHaveBeenCalledWith({ name: 'admin-agent-run-detail', params: { id: 'remediation-1' } })
+  })
+
+  it('只在 EvidenceRemediation 建議重新分析時建立流程並導頁', async () => {
+    vi.mocked(getAgentRun).mockResolvedValue({
+      run: { id: 'remediation-1', workflowType: 'EvidenceRemediation', agentType: 'ResearchAgent', status: 'Succeeded', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null },
+      nodes: [], events: [], toolCalls: [], feedback: [], blackboardJson: {}, outputJson: { requiresReanalysis: true }, workflowDefinitionJson: {},
+    })
+    const wrapper = mount(AgentRunAdminDetail, { props: { runId: 'remediation-1' } }); await flushPromises()
+    const button = wrapper.findAll('button').find(item => item.text().includes('重新分析')); expect(button).toBeTruthy(); await button!.trigger('click'); await flushPromises()
+    expect(createEvidenceReanalysis).toHaveBeenCalledWith('remediation-1'); expect(push).toHaveBeenCalledWith({ name: 'admin-agent-run-detail', params: { id: 'reanalysis-1' } })
   })
 })

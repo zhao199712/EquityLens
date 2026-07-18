@@ -24,6 +24,11 @@ public interface IAgentRunService
         Guid criticReviewRunId,
         CancellationToken cancellationToken = default);
 
+    Task<AgentRunSummaryResponse> CreateEvidenceReanalysisAsync(
+        Guid userId,
+        Guid evidenceRemediationRunId,
+        CancellationToken cancellationToken = default);
+
     Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(
         Guid userId,
         Guid portfolioId,

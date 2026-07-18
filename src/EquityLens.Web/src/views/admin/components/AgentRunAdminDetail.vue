@@ -18,7 +18,7 @@ import {
   ReloadOutline,
   CloseOutline,
 } from '@vicons/ionicons5'
-import { getAgentRun, retryAgentRun, cancelAgentRun, createEvidenceRemediation, type AgentRunDetail, type AgentRunNodeDto } from '../../../services/agentRuns'
+import { getAgentRun, retryAgentRun, cancelAgentRun, createEvidenceRemediation, createEvidenceReanalysis, type AgentRunDetail, type AgentRunNodeDto } from '../../../services/agentRuns'
 
 const props = defineProps<{ runId: string }>()
 const message = useMessage()
@@ -28,6 +28,7 @@ const run = ref<AgentRunDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
 const creatingRemediation = ref(false)
+const creatingReanalysis = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
 const TERMINAL_STATUSES = new Set(['Succeeded', 'Failed', 'Cancelled'])
 
@@ -39,6 +40,10 @@ const isTerminal = computed(() => {
 const canRemediateEvidence = computed(() => run.value?.run.workflowType === 'CriticReview'
   && run.value.run.status === 'Succeeded'
   && run.value.outputJson?.requiresMoreEvidence === true)
+
+const canReanalyzeEvidence = computed(() => run.value?.run.workflowType === 'EvidenceRemediation'
+  && run.value.run.status === 'Succeeded'
+  && run.value.outputJson?.requiresReanalysis === true)
 
 onMounted(() => {
   loadRun()
@@ -114,6 +119,20 @@ async function handleEvidenceRemediation() {
     message.error('無法建立證據補強流程，請確認 Critic Review 已完成且需要更多證據。')
   } finally {
     creatingRemediation.value = false
+  }
+}
+
+async function handleEvidenceReanalysis() {
+  if (!run.value || creatingReanalysis.value) return
+  creatingReanalysis.value = true
+  try {
+    const created = await createEvidenceReanalysis(run.value.run.id)
+    message.success('證據驅動重新分析流程已建立。')
+    await router.push({ name: 'admin-agent-run-detail', params: { id: created.id } })
+  } catch {
+    message.error('無法建立重新分析流程，請確認補證據流程已完成且建議重新分析。')
+  } finally {
+    creatingReanalysis.value = false
   }
 }
 
@@ -215,6 +234,9 @@ const nodeMap = computed(() => {
         </NSpace>
         <button v-if="canRemediateEvidence" type="button" class="prestige-btn detail-remediation-btn" :disabled="creatingRemediation" @click="handleEvidenceRemediation">
           {{ creatingRemediation ? '建立中…' : '補充證據並修訂' }}
+        </button>
+        <button v-if="canReanalyzeEvidence" type="button" class="prestige-btn detail-remediation-btn" :disabled="creatingReanalysis" @click="handleEvidenceReanalysis">
+          {{ creatingReanalysis ? '建立中…' : '重新分析' }}
         </button>
       </section>
 

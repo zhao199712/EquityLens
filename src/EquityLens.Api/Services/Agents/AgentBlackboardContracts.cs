@@ -43,6 +43,14 @@ public static class AgentBlackboardKeys
     public const string UnresolvedClaims = "unresolvedClaims";
     public const string RequiresReanalysis = "requiresReanalysis";
     public const string ReanalysisReasons = "reanalysisReasons";
+    public const string EvidenceRemediationRunId = "evidenceRemediationRunId";
+    public const string EvidenceRemediationRun = "evidenceRemediationRun";
+    public const string EvidenceRemediationOutput = "evidenceRemediationOutput";
+    public const string AnalysisContext = "analysisContext";
+    public const string ReanalysisDraft = "reanalysisDraft";
+    public const string ReanalysisCriticReview = "reanalysisCriticReview";
+    public const string ReanalysisPolicyDecision = "reanalysisPolicyDecision";
+    public const string ReanalysisFinalRevision = "reanalysisFinalRevision";
     public const string Runtime = "runtime";
 }
 
@@ -212,6 +220,28 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.Runtime] = new JsonObject { ["iteration"] = 0, ["maxIterations"] = EvidenceRemediationWorkflow.MaxIterations, ["webFallbackCount"] = 0 },
         [AgentBlackboardKeys.RevisedAnswer] = null,
         [AgentBlackboardKeys.RevisionSummary] = null,
+        [AgentBlackboardKeys.FinalOutput] = null
+    };
+
+    public static JsonObject CreateInitialEvidenceReanalysisBlackboard(Guid evidenceRemediationRunId) => new()
+    {
+        [AgentBlackboardKeys.EvidenceRemediationRunId] = evidenceRemediationRunId,
+        [AgentBlackboardKeys.EvidenceRemediationRun] = null,
+        [AgentBlackboardKeys.EvidenceRemediationOutput] = null,
+        [AgentBlackboardKeys.ResearchRunId] = null,
+        [AgentBlackboardKeys.Ticker] = null,
+        [AgentBlackboardKeys.Question] = null,
+        [AgentBlackboardKeys.Answer] = null,
+        [AgentBlackboardKeys.CriticFindings] = new JsonArray(),
+        [AgentBlackboardKeys.EvidenceValidationResults] = null,
+        [AgentBlackboardKeys.RemediatedEvidencePacket] = null,
+        [AgentBlackboardKeys.RequiresReanalysis] = false,
+        [AgentBlackboardKeys.ReanalysisReasons] = new JsonArray(),
+        [AgentBlackboardKeys.AnalysisContext] = null,
+        [AgentBlackboardKeys.ReanalysisDraft] = null,
+        [AgentBlackboardKeys.ReanalysisCriticReview] = null,
+        [AgentBlackboardKeys.ReanalysisPolicyDecision] = null,
+        [AgentBlackboardKeys.ReanalysisFinalRevision] = null,
         [AgentBlackboardKeys.FinalOutput] = null
     };
 

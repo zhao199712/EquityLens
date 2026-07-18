@@ -147,3 +147,21 @@ public sealed class ResearchQualityReviewPolicyEvaluator : IWorkflowPolicyEvalua
             Reason: "ResearchQualityReview found answer quality issues; revision will follow in merged workflow.");
     }
 }
+
+public sealed class EvidenceReanalysisPolicyEvaluator : IWorkflowPolicyEvaluator
+{
+    private static readonly string[] EvidenceIssueCategories = ["MissingCitation", "InsufficientEvidence", "WeakCitation"];
+    public string WorkflowType => AgentWorkflowTypes.EvidenceReanalysis;
+
+    public WorkflowPolicyDecision Evaluate(WorkflowPolicyContext context)
+    {
+        if (context.WorkflowType != WorkflowType) throw new InvalidOperationException($"Unsupported workflow type '{context.WorkflowType}'.");
+        var review = context.NodeOutput ?? throw new InvalidOperationException("Evidence reanalysis critic output is missing.");
+        var findings = (review[CriticReviewFields.Findings]?.AsArray() ?? []).Select(AgentNodeJson.ParseFinding).Where(x => x is not null).Cast<CriticFinding>().ToList();
+        if (findings.Count == 0) return new(false, true, false, false, null, "AcceptAnswer", "Reanalysis critic did not report findings.");
+        var requiresEvidence = findings.Any(x => EvidenceIssueCategories.Contains(x.Category, StringComparer.OrdinalIgnoreCase));
+        return requiresEvidence
+            ? new(false, true, true, true, null, "EvidenceRemediation", "Reanalysis critic found a remaining evidence gap; no automatic loop will be created.")
+            : new(false, true, true, false, null, "ReviseAnswer", "Reanalysis critic found answer quality issues.");
+    }
+}

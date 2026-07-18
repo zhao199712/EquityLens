@@ -102,6 +102,7 @@ public sealed class LlmCriticReviewAgent : ICriticReviewAgent
     private static string BuildUserPrompt(CriticReviewInput input)
     {
         var evidenceFindingsJson = JsonSerializer.Serialize(input.EvidenceFindings, SerializerOptions);
+        var evidenceJson = JsonSerializer.Serialize(input.Evidence ?? [], SerializerOptions);
         return $$"""
         Produce valid json for the CriticReviewResult schema.
 
@@ -115,6 +116,9 @@ public sealed class LlmCriticReviewAgent : ICriticReviewAgent
         Candidate count: {{input.CandidateCount}}
         Deterministic evidence findings json:
         {{evidenceFindingsJson}}
+
+        Validated evidence json:
+        {{evidenceJson}}
 
         Required json schema:
         {

@@ -107,6 +107,23 @@ public sealed class AgentRunService : IAgentRunService
         return MapSummary(run);
     }
 
+    public async Task<AgentRunSummaryResponse> CreateEvidenceReanalysisAsync(
+        Guid userId,
+        Guid evidenceRemediationRunId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.EvidenceReanalysis, cancellationToken);
+        await EvidenceReanalysisSourceValidator.ValidateAsync(_dbContext, userId, evidenceRemediationRunId, cancellationToken);
+        var provider = GetWorkflowProvider(AgentWorkflowTypes.EvidenceReanalysis);
+        var run = provider.CreateRun(userId, evidenceRemediationRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
+        _dbContext.AgentRuns.Add(run);
+        AddEvent(run, null, AgentEventTypes.RunCreated, "EvidenceReanalysis run created.", new { evidenceRemediationRunId });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await EnqueueAsync(run, userId, cancellationToken);
+        return MapSummary(run);
+    }
+
     public async Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(
         Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
     {

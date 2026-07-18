@@ -109,6 +109,29 @@ public sealed class AgentRunsController : ControllerBase
         return Ok(response);
     }
 
+    /// <summary>從需要重新分析的 EvidenceRemediation 建立受控重新分析流程。</summary>
+    [HttpPost("evidence-reanalysis")]
+    public async Task<ActionResult<AgentRunSummaryResponse>> CreateEvidenceReanalysis(
+        CreateEvidenceReanalysisRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.EvidenceRemediationRunId == Guid.Empty)
+            return BadRequest(new ApiError("evidence_remediation_run_id_required", "請指定 evidenceRemediationRunId。"));
+        try
+        {
+            var response = await _agentRunService.CreateEvidenceReanalysisAsync(_currentUser.UserId, request.EvidenceRemediationRunId, cancellationToken);
+            return Ok(response);
+        }
+        catch (InvalidOperationException exception) when (exception.Message == "Evidence remediation run not found.")
+        {
+            return NotFound(new ApiError("evidence_remediation_run_not_found", exception.Message));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new ApiError("evidence_reanalysis_invalid_source", exception.Message));
+        }
+    }
+
     /// <summary>
     /// 查詢 Agent runs 清單，可依 workflow type 與狀態篩選。
     /// </summary>
