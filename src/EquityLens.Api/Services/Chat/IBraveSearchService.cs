@@ -10,6 +10,24 @@ public sealed record BraveSearchResponse(
     string Query,
     IReadOnlyList<BraveSearchResult> Results);
 
+public static class WebProviderErrorCodes
+{
+    public const string Configuration = "Configuration";
+    public const string Unauthorized = "Unauthorized";
+    public const string RateLimited = "RateLimited";
+    public const string ProviderError = "ProviderError";
+    public const string NetworkError = "NetworkError";
+    public const string InvalidResponse = "InvalidResponse";
+}
+
+public sealed class WebProviderException(string provider, string errorCode, int? httpStatusCode = null, Exception? innerException = null)
+    : Exception($"{provider} web search failed ({errorCode}{(httpStatusCode is null ? string.Empty : $", HTTP {httpStatusCode}")}).", innerException)
+{
+    public string Provider { get; } = provider;
+    public string ErrorCode { get; } = errorCode;
+    public int? HttpStatusCode { get; } = httpStatusCode;
+}
+
 public interface IBraveSearchService
 {
     Task<BraveSearchResponse> SearchAsync(
