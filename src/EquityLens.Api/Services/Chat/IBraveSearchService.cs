@@ -17,7 +17,15 @@ public static class WebProviderErrorCodes
     public const string RateLimited = "RateLimited";
     public const string ProviderError = "ProviderError";
     public const string NetworkError = "NetworkError";
+    public const string Timeout = "Timeout";
     public const string InvalidResponse = "InvalidResponse";
+
+    public static bool IsTransient(string errorCode, int? httpStatusCode = null) => errorCode switch
+    {
+        NetworkError or Timeout or RateLimited or InvalidResponse => true,
+        ProviderError => httpStatusCode is 408 or >= 500,
+        _ => false
+    };
 }
 
 public sealed class WebProviderException(string provider, string errorCode, int? httpStatusCode = null, Exception? innerException = null)
@@ -26,6 +34,7 @@ public sealed class WebProviderException(string provider, string errorCode, int?
     public string Provider { get; } = provider;
     public string ErrorCode { get; } = errorCode;
     public int? HttpStatusCode { get; } = httpStatusCode;
+    public bool IsTransient => WebProviderErrorCodes.IsTransient(ErrorCode, HttpStatusCode);
 }
 
 public interface IBraveSearchService

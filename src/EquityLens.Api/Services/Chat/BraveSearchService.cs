@@ -80,6 +80,11 @@ public sealed class BraveSearchService : IBraveSearchService
         {
             throw;
         }
+        catch (OperationCanceledException exception)
+        {
+            _logger.LogWarning(exception, "Brave search timed out (query length: {QueryLength})", query.Length);
+            throw new WebProviderException("Brave", WebProviderErrorCodes.Timeout, null, exception);
+        }
         catch (WebProviderException)
         {
             throw;

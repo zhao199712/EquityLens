@@ -28,6 +28,35 @@ public sealed class BraveSearchServiceTests
     }
 
     [Fact]
+    public async Task Search_InternalTimeout_ThrowsTransientTimeout()
+    {
+        var service = Create((_, _) => throw new TaskCanceledException("timeout"));
+        var error = await Assert.ThrowsAsync<WebProviderException>(() => service.SearchAsync("query"));
+        Assert.Equal(WebProviderErrorCodes.Timeout, error.ErrorCode); Assert.True(error.IsTransient);
+    }
+
+    [Fact]
+    public async Task Search_CallerCancellation_IsNotConvertedToProviderFailure()
+    {
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        var service = Create((_, token) => throw new OperationCanceledException(token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.SearchAsync("query", cancellationToken: cancellation.Token));
+    }
+
+    [Theory]
+    [InlineData(WebProviderErrorCodes.NetworkError, null, true)]
+    [InlineData(WebProviderErrorCodes.RateLimited, 429, true)]
+    [InlineData(WebProviderErrorCodes.ProviderError, 500, true)]
+    [InlineData(WebProviderErrorCodes.InvalidResponse, null, true)]
+    [InlineData(WebProviderErrorCodes.Configuration, null, false)]
+    [InlineData(WebProviderErrorCodes.Unauthorized, 401, false)]
+    [InlineData(WebProviderErrorCodes.ProviderError, 400, false)]
+    public void ProviderError_Classification_IsExplicit(string code, int? status, bool expected)
+    {
+        Assert.Equal(expected, new WebProviderException("test", code, status).IsTransient);
+    }
+
+    [Fact]
     public async Task Search_ValidEmptyResponse_IsRealNoResults()
     {
         var service = Create((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"web\":{\"results\":[]}}") }));

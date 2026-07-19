@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Ai.Retrieval;
+using EquityLens.Api.Services.Chat;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Services.Agents;
@@ -191,10 +192,11 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
 }
 
 public sealed record RetrieveWebEvidenceInput(IReadOnlyList<JsonObject> SearchIntents);
-public sealed record RetrieveWebEvidenceOutput(int Iteration, int QueryCount, int ResultCount, string Provider);
+public sealed record RetrieveWebEvidenceOutput(int Iteration, int QueryCount, int ResultCount, string Provider, string Status = "Completed", int SuccessfulQueryCount = 0, int FailedQueryCount = 0, IReadOnlyList<string>? ErrorCodes = null, int AttemptCount = 0);
 
-public sealed class RetrieveWebEvidenceNodeHandler(IWebRetriever web) : IAgentNodeHandler
+public sealed class RetrieveWebEvidenceNodeHandler(IWebRetriever web, Func<TimeSpan, CancellationToken, Task>? retryDelay = null) : IAgentNodeHandler
 {
+    private static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3)];
     public string NodeType => EvidenceRemediationNodeTypes.RetrieveWebEvidence;
 
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
@@ -202,11 +204,28 @@ public sealed class RetrieveWebEvidenceNodeHandler(IWebRetriever web) : IAgentNo
         var board = EvidenceRemediationBoard.Parse(context.Run);
         var plan = RetrieveRemediationEvidenceNodeHandler.ResolvePlan(context.Node.InputJson, board);
         var gathered = new List<RetrievedDocumentChunk>();
+        var successfulQueries = 0; var failedQueries = 0; var attemptCount = 0; var errorCodes = new List<string>();
         foreach (var search in plan.Searches.Take(3))
         {
             var count = Math.Clamp(search.TopK, 1, 5);
-            var results = await EvidenceRemediationToolCall.RunAsync(context, "braveWebSearch", new { query = search.Query, freshness = search.Freshness, topK = count, provider = "Brave" }, () => web.RetrieveWebAsync(search.Query, count, search.Freshness, cancellationToken), x => $"{x.Count} Brave candidates", cancellationToken);
-            gathered.AddRange(results);
+            var completed = false;
+            for (var attempt = 1; attempt <= 3; attempt++)
+            {
+                attemptCount++;
+                try
+                {
+                    var results = await EvidenceRemediationToolCall.RunAsync(context, "braveWebSearch", new { query = search.Query, freshness = search.Freshness, topK = count, provider = "Brave", attempt, maxAttempts = 3 }, () => web.RetrieveWebAsync(search.Query, count, search.Freshness, cancellationToken), x => $"{x.Count} Brave candidates", cancellationToken);
+                    gathered.AddRange(results); successfulQueries++; completed = true; break;
+                }
+                catch (WebProviderException exception) when (exception.IsTransient)
+                {
+                    errorCodes.Add(exception.ErrorCode);
+                    if (attempt == 3) break;
+                    context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision, "Retrying transient Web retrieval failure.", new { provider = exception.Provider, exception.ErrorCode, exception.HttpStatusCode, queryAttempt = attempt + 1, maxAttempts = 3 });
+                    await (retryDelay ?? Task.Delay)(RetryDelays[attempt - 1], cancellationToken);
+                }
+            }
+            if (!completed) failedQueries++;
         }
 
         var existing = board[AgentBlackboardKeys.RetrievedEvidence] is null ? [] : EvidenceRemediationBoard.Required<List<RemediationEvidenceItem>>(board, AgentBlackboardKeys.RetrievedEvidence);
@@ -217,12 +236,17 @@ public sealed class RetrieveWebEvidenceNodeHandler(IWebRetriever web) : IAgentNo
             .Select((x, index) => x with { Index = index + 1 }).ToList();
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievedEvidence, evidence);
         var history = board[AgentBlackboardKeys.RetrievalHistory]?.AsArray() ?? new JsonArray();
-        history.Add(JsonSerializer.SerializeToNode(new { iteration = context.Node.Iteration, provider = "Brave", source = "Web", queryCount = plan.Searches.Count, resultCount = gathered.Count }, AgentNodeJson.SerializerOptions));
+        var status = failedQueries == 0 ? "Completed" : successfulQueries > 0 ? "Partial" : "Unavailable";
+        history.Add(JsonSerializer.SerializeToNode(new { iteration = context.Node.Iteration, provider = "Brave", source = "Web", status, queryCount = plan.Searches.Count, successfulQueryCount = successfulQueries, failedQueryCount = failedQueries, resultCount = gathered.Count, errorCodes = errorCodes.Distinct().ToList(), attemptCount }, AgentNodeJson.SerializerOptions));
         board[AgentBlackboardKeys.RetrievalHistory] = history;
         var runtime = board[AgentBlackboardKeys.Runtime]?.AsObject() ?? new JsonObject();
         runtime["webFallbackCount"] = (runtime["webFallbackCount"]?.GetValue<int>() ?? 0) + 1;
+        runtime["webRetryCount"] = (runtime["webRetryCount"]?.GetValue<int>() ?? 0) + Math.Max(0, attemptCount - plan.Searches.Count);
+        if (failedQueries > 0) runtime["webUnavailableCount"] = (runtime["webUnavailableCount"]?.GetValue<int>() ?? 0) + failedQueries;
         board[AgentBlackboardKeys.Runtime] = runtime;
-        EvidenceRemediationBoard.Commit(context, board, new RetrieveWebEvidenceOutput(context.Node.Iteration, plan.Searches.Count, gathered.Count, "Brave"));
+        var output = new RetrieveWebEvidenceOutput(context.Node.Iteration, plan.Searches.Count, gathered.Count, "Brave", status, successfulQueries, failedQueries, errorCodes.Distinct().ToList(), attemptCount);
+        EvidenceRemediationBoard.Commit(context, board, output);
+        if (failedQueries > 0) context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision, $"Web retrieval completed with status {status}.", new { status, successfulQueries, failedQueries, attemptCount, errorCodes = errorCodes.Distinct() });
     }
 }
 

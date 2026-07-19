@@ -5,6 +5,7 @@ using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Ai.Retrieval;
+using EquityLens.Api.Services.Chat;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Tests.Services.Agents;
@@ -223,6 +224,41 @@ public sealed class EvidenceRemediationWorkflowTests
     }
 
     [Fact]
+    public async Task RetrieveWebEvidence_TransientFailureThenSuccess_RetriesQuery()
+    {
+        var (db, run, node) = await WebNodeContext(); var web = new ScriptedWebRetriever(call => call == 1 ? throw new WebProviderException("Brave", WebProviderErrorCodes.NetworkError) : [Chunk("recovered") with { SourceType = CitationSourceType.Web, Url = "https://recovered.test" }]);
+        await new RetrieveWebEvidenceNodeHandler(web, (_, _) => Task.CompletedTask).ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
+        var output = System.Text.Json.JsonSerializer.Deserialize<RetrieveWebEvidenceOutput>(node.OutputJson!, AgentNodeJson.SerializerOptions)!;
+        Assert.Equal("Completed", output.Status); Assert.Equal(2, output.AttemptCount); Assert.Equal(2, web.CallCount); Assert.Equal(2, run.ToolCalls.Count(x => x.ToolName == "braveWebSearch"));
+    }
+
+    [Fact]
+    public async Task RetrieveWebEvidence_TransientFailures_DegradeToUnavailable()
+    {
+        var (db, run, node) = await WebNodeContext(); var web = new ScriptedWebRetriever(_ => throw new WebProviderException("Brave", WebProviderErrorCodes.NetworkError));
+        await new RetrieveWebEvidenceNodeHandler(web, (_, _) => Task.CompletedTask).ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
+        var output = System.Text.Json.JsonSerializer.Deserialize<RetrieveWebEvidenceOutput>(node.OutputJson!, AgentNodeJson.SerializerOptions)!; var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        Assert.Equal("Unavailable", output.Status); Assert.Equal(3, output.AttemptCount); Assert.Equal(1, output.FailedQueryCount); Assert.Equal(2, board[AgentBlackboardKeys.Runtime]!["webRetryCount"]!.GetValue<int>()); Assert.Equal(1, board[AgentBlackboardKeys.Runtime]!["webUnavailableCount"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task RetrieveWebEvidence_OneQueryFails_ProducesPartialResult()
+    {
+        var (db, run, node) = await WebNodeContext(2); var web = new ScriptedWebRetriever(call => call == 1 ? [Chunk("success") with { SourceType = CitationSourceType.Web, Url = "https://success.test" }] : throw new WebProviderException("Brave", WebProviderErrorCodes.RateLimited, 429));
+        await new RetrieveWebEvidenceNodeHandler(web, (_, _) => Task.CompletedTask).ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
+        var output = System.Text.Json.JsonSerializer.Deserialize<RetrieveWebEvidenceOutput>(node.OutputJson!, AgentNodeJson.SerializerOptions)!;
+        Assert.Equal("Partial", output.Status); Assert.Equal(1, output.SuccessfulQueryCount); Assert.Equal(1, output.FailedQueryCount); Assert.Equal(4, output.AttemptCount); Assert.Equal(1, output.ResultCount);
+    }
+
+    [Fact]
+    public async Task RetrieveWebEvidence_PermanentFailure_FailsImmediately()
+    {
+        var (db, run, node) = await WebNodeContext(); var web = new ScriptedWebRetriever(_ => throw new WebProviderException("Brave", WebProviderErrorCodes.Unauthorized, 401));
+        var error = await Assert.ThrowsAsync<WebProviderException>(() => new RetrieveWebEvidenceNodeHandler(web, (_, _) => Task.CompletedTask).ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { })));
+        Assert.False(error.IsTransient); Assert.Equal(1, web.CallCount);
+    }
+
+    [Fact]
     public async Task NumericMismatch_ProducesInsufficientEvidence_AndSkipsRevisionAgent()
     {
         await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var validate = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.ValidateMappings && x.Iteration == 1); var draft = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.DraftRevision); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.Question] = "營收？"; board[AgentBlackboardKeys.Answer] = "2026 年營收成長 20%。"; board[AgentBlackboardKeys.ExtractedClaims] = JsonSerializerNode(new[] { new EvidenceClaim("claim-1", "2026 年營收成長 20%。", ["2026", "20%"]) }); board[AgentBlackboardKeys.RetrievedEvidence] = JsonSerializerNode(new[] { new RemediationEvidenceItem(1, "LocalDocument", "年報", "AnnualReport", null, "2025 年營收成長 10%。", .9) }); board[AgentBlackboardKeys.ClaimSupportAssessments] = JsonSerializerNode(new[] { new ClaimSupportAssessment("claim-1", "Supported", [1], "looks related") }); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
@@ -241,6 +277,13 @@ public sealed class EvidenceRemediationWorkflowTests
     }
     private static RetrievedDocumentChunk Chunk(string content) => new(new DocumentSearchResult(Guid.NewGuid(), Guid.NewGuid(), "文件", "AnnualReport", null, 1, 1, null, content, .1, .9, null, "2330", "TWSE", "台積電"), "Primary", "search-1", "query");
     private static TestDb CreateDb() { var options = new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options; return new TestDb(options); }
+    private static async Task<(TestDb Db, AgentRun Run, AgentRunNode Node)> WebNodeContext(int intentCount = 1)
+    {
+        var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var intents = new JsonArray(Enumerable.Range(1, intentCount).Select(i => (JsonNode)new JsonObject { ["topic"] = $"TSMC capex {i}", ["targetClaims"] = new JsonArray("claim-1"), ["preferredSourceRoles"] = new JsonArray("Primary"), ["freshness"] = "month", ["topK"] = 5 }).ToArray());
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "retrieveWebEvidence:test", TemplateNodeKey = "retrieve-web-evidence", NodeType = EvidenceRemediationNodeTypes.RetrieveWebEvidence, Iteration = 1, Status = AgentNodeStatuses.Running, InputJson = new JsonObject { ["searchIntents"] = intents }.ToJsonString() };
+        run.Nodes.Add(node); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.Question] = "TSMC capex?"; board[AgentBlackboardKeys.ExtractedClaims] = JsonSerializerNode(new[] { new EvidenceClaim("claim-1", "TSMC capex", []) }); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); db.AgentRuns.Add(run); await db.SaveChangesAsync(); return (db, run, node);
+    }
 
     private sealed class FakeDocumentRetriever(IReadOnlyList<RetrievedDocumentChunk> results) : IDocumentRetriever
     {
@@ -251,6 +294,11 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         public int CallCount { get; private set; }
         public Task<IReadOnlyList<RetrievedDocumentChunk>> RetrieveWebAsync(string query, int count, string? freshness, CancellationToken cancellationToken = default) { CallCount++; return Task.FromResult<IReadOnlyList<RetrievedDocumentChunk>>([Chunk("Web evidence") with { SourceType = CitationSourceType.Web, Url = "https://example.test" }]); }
+    }
+    private sealed class ScriptedWebRetriever(Func<int, IReadOnlyList<RetrievedDocumentChunk>> action) : IWebRetriever
+    {
+        public int CallCount { get; private set; }
+        public Task<IReadOnlyList<RetrievedDocumentChunk>> RetrieveWebAsync(string query, int count, string? freshness, CancellationToken cancellationToken = default) { CallCount++; return Task.FromResult(action(CallCount)); }
     }
     private sealed class EmptyClaimAgent : IClaimExtractionAgent
     {
