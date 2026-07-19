@@ -259,14 +259,14 @@ public sealed class ExtractAnswerClaimsNodeHandler(IClaimExtractionAgent agent, 
         var findings = board[AgentBlackboardKeys.CriticFindings]?.AsArray().Select(AgentNodeJson.ParseFinding).Where(x => x is not null).Cast<CriticFinding>().ToList() ?? [];
         var mode = LlmEvidenceRemediationAgent.IsAbstention(answer) ? InvestigationModes.RecoverAnswer : InvestigationModes.CorrectExistingAnswer;
         context.Node.InputJson = AgentNodeJson.Serialize(new { questionLength = question.Length, answerLength = answer.Length, findingCount = findings.Count, investigationMode = mode });
-        var claims = await EvidenceRemediationToolCall.RunAsync(context, "claimExtractionLLM", new { questionLength = question.Length, answerLength = answer.Length, findingCount = findings.Count, promptTemplateId = "evidence-remediation-claim-extraction", promptVersion = 3, investigationMode = mode }, () => agent.ExtractAsync(new(question, answer, findings), cancellationToken), x => $"{x.Count} claims", cancellationToken);
+        var claims = await EvidenceRemediationToolCall.RunAsync(context, "claimExtractionLLM", new { questionLength = question.Length, answerLength = answer.Length, findingCount = findings.Count, promptTemplateId = "evidence-remediation-claim-extraction", promptVersion = 4, investigationMode = mode }, () => agent.ExtractAsync(new(question, answer, findings), cancellationToken), x => $"{x.Count} claims", cancellationToken);
         var claimValidator = validator ?? new ClaimSetValidator();
         var validation = claimValidator.Validate(new(question, answer, findings, mode, claims));
         var history = board[AgentBlackboardKeys.ClaimRepairHistory]?.AsArray() ?? new JsonArray();
         history.Add(JsonSerializer.SerializeToNode(new { attempt = 0, validation.IsValid, validation.Coverage, validation.Errors }, AgentNodeJson.SerializerOptions));
         if (!validation.IsValid)
         {
-            var repaired = await EvidenceRemediationToolCall.RunAsync(context, "claimExtractionRepairLLM", new { validation.Errors, promptTemplateId = "evidence-remediation-claim-extraction", promptVersion = 3, investigationMode = mode }, () => agent.ExtractAsync(new(question, answer, findings, validation.Errors, true), cancellationToken), x => $"{x.Count} repaired claims", cancellationToken);
+            var repaired = await EvidenceRemediationToolCall.RunAsync(context, "claimExtractionRepairLLM", new { validation.Errors, promptTemplateId = "evidence-remediation-claim-extraction", promptVersion = 4, investigationMode = mode }, () => agent.ExtractAsync(new(question, answer, findings, validation.Errors, true), cancellationToken), x => $"{x.Count} repaired claims", cancellationToken);
             var repairedValidation = claimValidator.Validate(new(question, answer, findings, mode, repaired));
             history.Add(JsonSerializer.SerializeToNode(new { attempt = 1, repairedValidation.IsValid, repairedValidation.Coverage, repairedValidation.Errors }, AgentNodeJson.SerializerOptions));
             if (repairedValidation.IsValid) { claims = repaired; validation = repairedValidation with { Resolution = "LlmRepair" }; }

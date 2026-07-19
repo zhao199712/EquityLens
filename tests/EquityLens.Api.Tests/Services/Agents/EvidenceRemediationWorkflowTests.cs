@@ -137,6 +137,23 @@ public sealed class EvidenceRemediationWorkflowTests
     }
 
     [Fact]
+    public async Task LlmClaimExtraction_NormalizesNumericJsonValuesToStrings()
+    {
+        var json = """{"claims":[{"id":"claim-1","text":"2026 年資本支出為 6000 億元，成長 20.5%。","numericValues":[2026,6000,20.5,"20.5%"],"kind":"InvestigationClaim","claimType":"Factual","researchDimension":"CapEx guidance"}]}""";
+        var claims = await new LlmEvidenceRemediationAgent(new SequenceClaimsChat(json)).ExtractAsync(new("資本支出？", "資料不足。", []));
+        Assert.Equal(["2026", "6000", "20.5", "20.5%"], Assert.Single(claims).NumericValues);
+    }
+
+    [Fact]
+    public async Task LlmClaimExtraction_InvalidNumericStructure_RepairsOnce()
+    {
+        var invalid = """{"claims":[{"id":"claim-1","text":"claim","numericValues":[{"value":2026}]}]}""";
+        var repaired = """{"claims":[{"id":"claim-1","text":"2026 guidance","numericValues":["2026"],"kind":"InvestigationClaim","claimType":"Factual","researchDimension":"CapEx guidance"}]}""";
+        var chat = new SequenceClaimsChat(invalid, repaired); var claims = await new LlmEvidenceRemediationAgent(chat).ExtractAsync(new("資本支出？", "資料不足。", []));
+        Assert.Equal("2026", Assert.Single(claims).NumericValues[0]); Assert.Equal(2, chat.CallCount); Assert.Contains("numericValues", chat.Requests[1].UserPrompt);
+    }
+
+    [Fact]
     public void ClaimSetValidator_RejectsCoarseWeakRecoverAnswerClaims()
     {
         var claims = new[]
@@ -319,6 +336,11 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         public string Provider => "test"; public string Model => "test";
         public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new ChatCompletionResult("{\"claims\":[]}", Model, 1, 1));
+    }
+    private sealed class SequenceClaimsChat(params string[] responses) : IChatCompletionService
+    {
+        private int index; public int CallCount => index; public List<ChatCompletionRequest> Requests { get; } = []; public string Provider => "test"; public string Model => "test";
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) { Requests.Add(request); var content = responses[Math.Min(index++, responses.Length - 1)]; return Task.FromResult(new ChatCompletionResult(content, Model, 1, 1)); }
     }
     private sealed class RecordingRevisionAgent : IEvidenceBackedRevisionAgent
     {

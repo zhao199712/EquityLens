@@ -65,10 +65,22 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
     {
         if (string.IsNullOrWhiteSpace(input.Answer) && string.IsNullOrWhiteSpace(input.Question) && input.CriticFindings.Count == 0)
             throw new InvalidOperationException("Claim extraction requires an answer, question, or Critic finding.");
-        var content = await CompleteAsync("Extract domain claims that help answer the user's research question. If the answer abstains, ignore its meta claim and decompose the question and Critic findings into answerable factual, mechanism, and judgment investigation claims. Cover every required research dimension identified by the question; claims must directly support retrieval or analysis, not merely say historical data may be useful. When validationErrors are supplied, repair every listed defect. Answerability statements such as 'data is insufficient' may be labelled Answerability but must not dominate. Output JSON only: {\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"numericValues\":[\"123\"],\"kind\":\"AnswerClaim|InvestigationClaim\",\"claimType\":\"Factual|Mechanism|Judgment|Answerability\",\"researchDimension\":\"...\"}]}. Keep exact numbers, dates, percentages and currencies. Never return an empty claims array when a research question exists.", JsonSerializer.Serialize(input, JsonOptions), cancellationToken);
-        var claims = JsonSerializer.Deserialize<ClaimEnvelope>(content, JsonOptions)?.Claims;
-        var normalized = claims is { Count: > 0 } ? Normalize(claims) : [];
-        return normalized;
+        const string prompt = "Extract domain claims that help answer the user's research question. If the answer abstains, ignore its meta claim and decompose the question and Critic findings into answerable factual, mechanism, and judgment investigation claims. Cover every required research dimension identified by the question; claims must directly support retrieval or analysis, not merely say historical data may be useful. When validationErrors are supplied, repair every listed defect. Answerability statements such as 'data is insufficient' may be labelled Answerability but must not dominate. Output JSON only: {\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"numericValues\":[\"123\"],\"kind\":\"AnswerClaim|InvestigationClaim\",\"claimType\":\"Factual|Mechanism|Judgment|Answerability\",\"researchDimension\":\"...\"}]}. numericValues may contain JSON strings or numbers; never objects, arrays or booleans. Keep exact numbers, dates, percentages and currencies. Never return an empty claims array when a research question exists.";
+        string? parseError = null;
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var request = attempt == 0 ? input : input with { ValidationErrors = [parseError!], IsRepair = true };
+            var content = await CompleteAsync(prompt, JsonSerializer.Serialize(request, JsonOptions), cancellationToken);
+            try
+            {
+                var claims = ParseClaims(content); return claims.Count > 0 ? Normalize(claims) : [];
+            }
+            catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+            {
+                parseError = exception.Message;
+            }
+        }
+        return CreateInvestigationFallback(input);
     }
 
     public async Task<EvidenceBackedRevisionResult> ReviseAsync(string question, string sourceAnswer, RemediatedEvidencePacket packet, CancellationToken cancellationToken = default)
@@ -86,7 +98,42 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
         return response.Content;
     }
 
-    private sealed record ClaimEnvelope(IReadOnlyList<EvidenceClaim> Claims);
+    private static IReadOnlyList<EvidenceClaim> ParseClaims(string content)
+    {
+        using var document = JsonDocument.Parse(content);
+        if (!document.RootElement.TryGetProperty("claims", out var claimsElement) || claimsElement.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("Claim extraction response is missing claims array.");
+        var claims = new List<EvidenceClaim>();
+        foreach (var item in claimsElement.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("Claim extraction returned a non-object claim.");
+            var text = RequiredString(item, "text");
+            var numbers = new List<string>();
+            if (item.TryGetProperty("numericValues", out var values))
+            {
+                if (values.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("Claim numericValues must be an array.");
+                foreach (var value in values.EnumerateArray())
+                {
+                    var normalized = value.ValueKind switch
+                    {
+                        JsonValueKind.String => value.GetString(),
+                        JsonValueKind.Number => value.GetRawText(),
+                        _ => throw new InvalidOperationException("Claim numericValues may contain only strings or numbers.")
+                    };
+                    if (!string.IsNullOrWhiteSpace(normalized)) numbers.Add(normalized.Trim());
+                }
+            }
+            claims.Add(new EvidenceClaim(OptionalString(item, "id") ?? string.Empty, text, numbers.Distinct(StringComparer.Ordinal).ToList(), OptionalString(item, "kind") ?? EvidenceClaimKinds.AnswerClaim, OptionalString(item, "claimType") ?? EvidenceClaimTypes.Factual, OptionalString(item, "researchDimension")));
+        }
+        return claims;
+    }
+
+    private static string RequiredString(JsonElement item, string name) => OptionalString(item, name) ?? throw new InvalidOperationException($"Claim extraction field '{name}' must be a non-empty string.");
+    private static string? OptionalString(JsonElement item, string name)
+    {
+        if (!item.TryGetProperty(name, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return null;
+        if (value.ValueKind != JsonValueKind.String) throw new InvalidOperationException($"Claim extraction field '{name}' must be a string.");
+        var text = value.GetString()?.Trim(); return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
 
     private static IReadOnlyList<EvidenceClaim> Normalize(IReadOnlyList<EvidenceClaim> claims) => claims
         .Where(x => !string.IsNullOrWhiteSpace(x.Text))
