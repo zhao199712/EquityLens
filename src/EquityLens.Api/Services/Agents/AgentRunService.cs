@@ -240,10 +240,11 @@ public sealed class AgentRunService : IAgentRunService
         run.BlackboardJson = provider.CreateInitialBlackboardJson(GetSourceRunId(run.InputJson));
         run.StartedAtUtc = null;
         run.CompletedAtUtc = null;
+        var plannedArguments = GetPlannedArguments(run.WorkflowDefinitionJson);
         foreach (var node in run.Nodes)
         {
             _nodeStateMachine.ResetForRetry(node);
-            node.InputJson = null;
+            node.InputJson = plannedArguments.TryGetValue(node.NodeKey, out var arguments) ? arguments : null;
             node.OutputJson = null;
             node.ErrorMessage = null;
             node.StartedAtUtc = null;
@@ -255,6 +256,23 @@ public sealed class AgentRunService : IAgentRunService
 
         await EnqueueAsync(run, userId, cancellationToken);
         return MapSummary(run);
+    }
+
+    internal static IReadOnlyDictionary<string, string> GetPlannedArguments(string definitionJson)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            var nodes = JsonNode.Parse(definitionJson)?["nodes"]?.AsArray();
+            if (nodes is null) return result;
+            foreach (var node in nodes.OfType<JsonObject>())
+            {
+                var key = node["id"]?.GetValue<string>(); var arguments = node["plannedArguments"];
+                if (!string.IsNullOrWhiteSpace(key) && arguments is not null) result[key] = arguments.ToJsonString(AgentNodeJson.SerializerOptions);
+            }
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException) { }
+        return result;
     }
 
     public async Task<AgentRunSummaryResponse?> CancelAsync(

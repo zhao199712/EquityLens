@@ -66,6 +66,15 @@ public sealed class AgentRunGraphValidatorTests
     }
 
     [Fact]
+    public void RetryPlannedArguments_AreRestoredFromDefinitionSnapshot()
+    {
+        var definition = """{"nodes":[{"id":"load","type":"LoadResearchRun"},{"id":"retrieve:1","type":"RetrieveRemediationEvidence","plannedArguments":{"searchIntents":[{"topic":"台積電","topK":5}]}}]}""";
+        var arguments = AgentRunService.GetPlannedArguments(definition);
+        var restored = JsonNode.Parse(arguments["retrieve:1"])!;
+        Assert.False(arguments.ContainsKey("load")); Assert.Equal("台積電", restored["searchIntents"]![0]!["topic"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void NodeMetadata_AllCriticReviewNodeTypes_HaveMetadata()
     {
         var allMetadata = AgentNodeMetadata.GetAll();
