@@ -16,7 +16,7 @@ public sealed class EvidenceAssessorTests
     [InlineData("Unverifiable", "None")]
     public async Task AssessAsync_ValidStructuredResponse_ReturnsDedicatedAgentTelemetry(string status, string impact)
     {
-        var json = $$"""{"assessments":[{"claimId":"claim-1","status":"{{status}}","evidenceIndexes":[1],"reason":"reason","confidence":0.9,"analysisImpact":"{{impact}}","impactReason":"impact"}]}""";
+        var json = $$"""{"assessments":[{"claimId":"claim-1","status":"{{status}}","evidenceIndexes":[1],"reason":"reason","confidence":0.9,"analysisImpact":"{{impact}}","impactReason":"impact","questionRelevance":"Core","answerabilityEffect":"NoChange"}]}""";
         var result = await new LlmEvidenceAssessor(new FakeChat(json)).AssessAsync(Input());
 
         var assessment = Assert.Single(result.Assessments);
@@ -29,9 +29,19 @@ public sealed class EvidenceAssessorTests
     [InlineData("")]
     [InlineData("not-json")]
     [InlineData("{\"assessments\":[]}")]
-    public async Task AssessAsync_InvalidOrEmptyOutput_Throws(string content)
+    public async Task AssessAsync_InvalidOrEmptyOutput_UsesConservativeFallback(string content)
     {
-        await Assert.ThrowsAnyAsync<Exception>(() => new LlmEvidenceAssessor(new FakeChat(content)).AssessAsync(Input()));
+        var result = await new LlmEvidenceAssessor(new FakeChat(content)).AssessAsync(Input());
+        var assessment = Assert.Single(result.Assessments);
+        Assert.Equal("ConservativeFallback", result.Mode); Assert.Equal("Unverifiable", assessment.Status); Assert.Empty(assessment.EvidenceIndexes); Assert.Equal("None", assessment.AnalysisImpact); Assert.Equal(2, result.Attempts!.Count);
+    }
+
+    [Fact]
+    public async Task AssessAsync_InvalidInitialOutput_RepairsOnce()
+    {
+        var valid = """{"assessments":[{"claimId":"claim-1","status":"Supported","evidenceIndexes":[1],"reason":"fixed","confidence":0.9,"analysisImpact":"None","impactReason":"","questionRelevance":"Core","answerabilityEffect":"EnablesDirectAnswer"}]}""";
+        var result = await new LlmEvidenceAssessor(new SequenceChat("{\"assessments\":[", valid)).AssessAsync(Input());
+        Assert.Equal("LlmRepair", result.Mode); Assert.Equal("Supported", Assert.Single(result.Assessments).Status); Assert.Equal(2, result.Attempts!.Count);
     }
 
     [Fact]
@@ -124,6 +134,12 @@ public sealed class EvidenceAssessorTests
     {
         public string Provider => "test-provider"; public string Model => "configured-model";
         public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new ChatCompletionResult(content, "actual-model", 12, 7));
+    }
+
+    private sealed class SequenceChat(params string[] contents) : IChatCompletionService
+    {
+        private int index; public string Provider => "test-provider"; public string Model => "configured-model";
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new ChatCompletionResult(contents[Math.Min(index++, contents.Length - 1)], "actual-model", 12, 7));
     }
 
     private sealed class FakeAssessor : IEvidenceAssessor

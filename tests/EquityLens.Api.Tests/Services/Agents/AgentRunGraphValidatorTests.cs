@@ -49,6 +49,23 @@ public sealed class AgentRunGraphValidatorTests
     }
 
     [Fact]
+    public void Validate_DynamicRetrieveArguments_SatisfyRetrievalPlanDependency()
+    {
+        var run = DynamicRetrieveRun("""{"searchIntents":[{"topic":"台積電資本支出","targetClaims":["FCF impact"],"preferredSourceRoles":["Primary"],"topK":5,"freshness":"year"}]}""");
+        new AgentRunGraphValidator().Validate(run, ["retrieve:1"]);
+    }
+
+    [Theory]
+    [InlineData("{\"searchIntents\":[]}")]
+    [InlineData("{\"searchIntents\":[{\"topic\":\"x\",\"topK\":99}]}")]
+    [InlineData("not-json")]
+    public void Validate_InvalidDynamicRetrieveArguments_DoNotBypassDependency(string input)
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => new AgentRunGraphValidator().Validate(DynamicRetrieveRun(input), ["retrieve:1"]));
+        Assert.Contains("retrievalPlan", exception.Message);
+    }
+
+    [Fact]
     public void NodeMetadata_AllCriticReviewNodeTypes_HaveMetadata()
     {
         var allMetadata = AgentNodeMetadata.GetAll();
@@ -187,5 +204,11 @@ public sealed class AgentRunGraphValidatorTests
             NodeType = nodeKey,
             Status = AgentNodeStatuses.Pending
         }).ToList()
+    };
+
+    private static AgentRun DynamicRetrieveRun(string input) => new()
+    {
+        Id = Guid.NewGuid(), BlackboardJson = new JsonObject { [AgentBlackboardKeys.Ticker] = "2330", [AgentBlackboardKeys.Question] = "問題" }.ToJsonString(),
+        Nodes = [new AgentRunNode { Id = Guid.NewGuid(), NodeKey = "retrieve:1", NodeType = EvidenceRemediationNodeTypes.RetrieveEvidence, Status = AgentNodeStatuses.Pending, InputJson = input }]
     };
 }

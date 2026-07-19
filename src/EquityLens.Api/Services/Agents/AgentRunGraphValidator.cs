@@ -54,8 +54,7 @@ public sealed class AgentRunGraphValidator : IAgentRunGraphValidator
             }
             var contract = _catalog.GetNode(node.NodeType).Contract;
             var hasPlannedSearchIntents = node.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence
-                && !string.IsNullOrWhiteSpace(node.InputJson)
-                && node.InputJson.Contains("searchIntents", StringComparison.Ordinal);
+                && RetrieveRemediationEvidenceNodeHandler.TryCompileDynamicPlan(node.InputJson, blackboard[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty, out _);
             var missing = contract.RequiredBlackboardKeys.FirstOrDefault(x => !(hasPlannedSearchIntents && x == AgentBlackboardKeys.RetrievalPlan) && !available.Contains(x));
             if (missing is not null)
             {

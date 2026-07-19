@@ -9,7 +9,7 @@ namespace EquityLens.Api.Services.Agents;
 public sealed record ReanalysisClaim(string ClaimId, string ClaimText, string Status, IReadOnlyList<int> EvidenceIndexes);
 public sealed record InvestmentReanalysisContext(string? Ticker, string Question, string SourceAnswer, string RemediationAnswer, IReadOnlyList<ReanalysisClaim> AffectedClaims, IReadOnlyList<RemediationEvidenceItem> Evidence, IReadOnlyList<string> ReanalysisReasons);
 public sealed record InvestmentReanalysisDraft(string ReanalyzedAnswer, string AnalysisChangeSummary, IReadOnlyList<string> ChangedClaimIds, IReadOnlyList<string> KeyConclusionChanges);
-public sealed record InvestmentReanalysisAgentResult(InvestmentReanalysisDraft Draft, string AgentIdentity, string Provider, string Model, int PromptTokens, int CompletionTokens, decimal? EstimatedCostUsd);
+public sealed record InvestmentReanalysisAgentResult(InvestmentReanalysisDraft Draft, string AgentIdentity, string Provider, string Model, int PromptTokens, int CompletionTokens, decimal? EstimatedCostUsd, string Mode = "Llm", IReadOnlyList<StructuredLlmAttempt>? Attempts = null);
 public sealed record EvidenceReanalysisOutput(string SourceAnswer, string RemediationAnswer, string ReanalyzedAnswer, string FinalAnswer, string AnalysisChangeSummary, IReadOnlyList<string> ChangedClaimIds, IReadOnlyList<string> KeyConclusionChanges, IReadOnlyList<RemediationEvidenceItem> Citations, CriticReviewResult CriticReview, bool RequiresMoreEvidence, string RecommendedNextAction, IReadOnlyList<string> ReanalysisReasons, string AnswerQualityStatus = "NotEvaluated", double AnswerCoverage = 0, IReadOnlyList<string>? AnsweredDimensions = null, IReadOnlyList<string>? UnresolvedDimensions = null);
 
 public interface IInvestmentReanalysisAgent
@@ -21,18 +21,35 @@ public sealed class LlmInvestmentReanalysisAgent(IChatCompletionService chat) : 
 {
     public const string AgentIdentity = "InvestmentReanalysisAgent";
     public const string PromptTemplateId = "evidence-reanalysis-analysis";
-    public const int PromptVersion = 1;
+    public const int PromptVersion = 2;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<InvestmentReanalysisAgentResult> ReanalyzeAsync(InvestmentReanalysisContext context, CancellationToken cancellationToken = default)
     {
-        var response = await chat.CompleteAsync(new ChatCompletionRequest(SystemPrompt, JsonSerializer.Serialize(context, JsonOptions), .1, 4096, ChatResponseFormat.JsonObject), cancellationToken);
-        if (string.IsNullOrWhiteSpace(response.Content)) throw new InvalidOperationException("Investment reanalysis agent returned empty content.");
+        var execution = await StructuredLlmOutput.ExecuteAsync(chat, SystemPrompt, (attempt, previous, error) => JsonSerializer.Serialize(new
+        {
+            task = attempt == 1 ? "Reanalyze the affected claims." : "Repair the prior response and return one complete replacement JSON object.",
+            context,
+            allowedClaimIds = context.AffectedClaims.Select(x => x.ClaimId),
+            allowedEvidenceIndexes = context.Evidence.Select(x => x.Index),
+            previousOutput = attempt == 1 ? null : previous,
+            validationError = attempt == 1 ? null : error
+        }, JsonOptions), content => ParseAndValidate(content, context), 4096, cancellationToken);
+        if (execution.Value is null) throw new InvalidOperationException($"Investment reanalysis structured output remained invalid after repair: {execution.LastError}");
+        return new(execution.Value, AgentIdentity, chat.Provider, execution.Attempts[^1].Model, execution.Attempts.Sum(x => x.PromptTokens), execution.Attempts.Sum(x => x.CompletionTokens), null, execution.Attempts.Count == 1 ? "Llm" : "LlmRepair", execution.Attempts);
+    }
+
+    private static InvestmentReanalysisDraft ParseAndValidate(string content, InvestmentReanalysisContext context)
+    {
         InvestmentReanalysisDraft draft;
-        try { draft = JsonSerializer.Deserialize<InvestmentReanalysisDraft>(response.Content, JsonOptions) ?? throw new InvalidOperationException("Investment reanalysis agent returned empty JSON object."); }
+        try
+        {
+            using var document = JsonDocument.Parse(content); var required = new[] { "reanalyzedAnswer", "analysisChangeSummary", "changedClaimIds", "keyConclusionChanges" };
+            if (document.RootElement.ValueKind != JsonValueKind.Object || required.Any(field => !document.RootElement.TryGetProperty(field, out _))) throw new InvalidOperationException("Investment reanalysis result is missing required fields.");
+            draft = JsonSerializer.Deserialize<InvestmentReanalysisDraft>(content, JsonOptions) ?? throw new InvalidOperationException("Investment reanalysis agent returned empty JSON object.");
+        }
         catch (JsonException exception) { throw new InvalidOperationException("Investment reanalysis agent returned invalid JSON content.", exception); }
-        Validate(draft, context);
-        return new(draft, AgentIdentity, chat.Provider, response.Model, response.PromptTokens, response.CompletionTokens, null);
+        Validate(draft, context); return draft;
     }
 
     private static void Validate(InvestmentReanalysisDraft draft, InvestmentReanalysisContext context)
@@ -46,7 +63,7 @@ public sealed class LlmInvestmentReanalysisAgent(IChatCompletionService chat) : 
     }
 
     private const string SystemPrompt = """
-You are an investment reanalysis agent for Taiwan public equities. Reanalyze only the affected claims using only the supplied validated evidence. Do not search, invent facts or citations, change workflow routing, or introduce an evidence index that was not supplied. Preserve uncertainty. Write Traditional Chinese.
+You are an investment reanalysis agent for Taiwan public equities. Reanalyze only the affected claims using only the supplied validated evidence. Treat allowedClaimIds and allowedEvidenceIndexes as closed sets. Do not search, invent facts or citations, change workflow routing, or introduce an ID or evidence index that was not supplied. Include every required JSON field. Preserve uncertainty. Write Traditional Chinese.
 Return JSON only: {"reanalyzedAnswer":"...","analysisChangeSummary":"...","changedClaimIds":["claim-1"],"keyConclusionChanges":["..."]}. Cite supplied evidence as [n].
 """;
 }
@@ -149,7 +166,7 @@ public sealed class ReanalyzeAnswerNodeHandler(IInvestmentReanalysisAgent agent)
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = EvidenceReanalysisBoard.Parse(context.Run); var input = EvidenceReanalysisBoard.Required<InvestmentReanalysisContext>(board, AgentBlackboardKeys.AnalysisContext); context.Node.InputJson = AgentNodeJson.Serialize(new { claims = input.AffectedClaims.Count, evidence = input.Evidence.Count });
-        var result = await EvidenceRemediationToolCall.RunAsync(context, "investmentReanalysisLLM", new { agentIdentity = LlmInvestmentReanalysisAgent.AgentIdentity, promptTemplateId = LlmInvestmentReanalysisAgent.PromptTemplateId, promptVersion = LlmInvestmentReanalysisAgent.PromptVersion, claims = input.AffectedClaims.Count, evidence = input.Evidence.Count }, () => agent.ReanalyzeAsync(input, cancellationToken), x => $"{x.Provider}/{x.Model}; {x.PromptTokens + x.CompletionTokens} tokens", cancellationToken); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.ReanalysisDraft, result.Draft); EvidenceReanalysisBoard.Commit(context, board, result);
+        var result = await EvidenceRemediationToolCall.RunAsync(context, "investmentReanalysisLLM", new { agentIdentity = LlmInvestmentReanalysisAgent.AgentIdentity, promptTemplateId = LlmInvestmentReanalysisAgent.PromptTemplateId, promptVersion = LlmInvestmentReanalysisAgent.PromptVersion, claims = input.AffectedClaims.Count, evidence = input.Evidence.Count }, () => agent.ReanalyzeAsync(input, cancellationToken), x => $"{x.Provider}/{x.Model}; {x.PromptTokens + x.CompletionTokens} tokens", cancellationToken); EvidenceRemediationToolCall.RecordStructuredAttempts(context, "investmentReanalysisLLM", LlmInvestmentReanalysisAgent.AgentIdentity, LlmInvestmentReanalysisAgent.PromptTemplateId, LlmInvestmentReanalysisAgent.PromptVersion, result.Attempts); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.ReanalysisDraft, result.Draft); EvidenceReanalysisBoard.Commit(context, board, result);
     }
 }
 

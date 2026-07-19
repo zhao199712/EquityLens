@@ -38,6 +38,25 @@ internal static class EvidenceRemediationToolCall
             await context.DbContext.SaveChangesAsync(cancellationToken); throw;
         }
     }
+
+    public static void RecordStructuredAttempts(AgentNodeExecutionContext context, string toolName, string agentIdentity, string promptTemplateId, int promptVersion, IReadOnlyList<StructuredLlmAttempt>? attempts)
+    {
+        if (attempts is null) return;
+        foreach (var attempt in attempts)
+        {
+            var succeeded = attempt.ValidationError is null;
+            context.DbContext.AgentToolCalls.Add(new AgentToolCall
+            {
+                Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+                ToolName = $"{toolName}:{attempt.Mode}", Status = succeeded ? AgentToolCallStatuses.Succeeded : AgentToolCallStatuses.Failed,
+                ArgumentsJson = AgentNodeJson.Serialize(new { agentIdentity, promptTemplateId, promptVersion, attempt = attempt.Attempt, mode = attempt.Mode, validationError = attempt.ValidationError }),
+                ResultJson = AgentNodeJson.Serialize(new { attempt.Model, attempt.PromptTokens, attempt.CompletionTokens, attempt.OutputPreview }),
+                ResultPreview = succeeded ? $"{attempt.Mode} structured output accepted." : AgentNodeJson.Trim(attempt.ValidationError ?? "Structured output rejected.", 180),
+                ErrorMessage = attempt.ValidationError, StartedAtUtc = DateTime.UtcNow, CompletedAtUtc = DateTime.UtcNow, DurationMs = 0
+            });
+            context.AddEvent(context.Run, context.Node, succeeded ? AgentEventTypes.ToolCallCompleted : AgentEventTypes.ToolCallFailed, $"Structured output attempt {attempt.Attempt} {attempt.Mode} {(succeeded ? "accepted" : "rejected")}.", new { agentIdentity, promptTemplateId, promptVersion, attempt.Attempt, attempt.Mode, attempt.ValidationError });
+        }
+    }
 }
 
 public sealed class LoadEvidenceRemediationContextNodeHandler : IAgentNodeHandler
@@ -140,23 +159,34 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
 
     internal static ResearchRetrievalStrategy ResolvePlan(string? inputJson, JsonObject board)
     {
-        if (!string.IsNullOrWhiteSpace(inputJson))
+        if (TryCompileDynamicPlan(inputJson, board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty, out var dynamicPlan)) return dynamicPlan;
+        return EvidenceRemediationBoard.Required<ResearchRetrievalStrategy>(board, AgentBlackboardKeys.RetrievalPlan);
+    }
+
+    internal static bool TryCompileDynamicPlan(string? inputJson, string fallbackQuestion, out ResearchRetrievalStrategy plan)
+    {
+        plan = default!;
+        if (string.IsNullOrWhiteSpace(inputJson)) return false;
+        try
         {
             var input = JsonNode.Parse(inputJson) as JsonObject;
             if (input?["searchIntents"] is JsonArray intents && intents.Count > 0)
             {
+                if (intents.Count > 3 || intents.Any(x => x is not JsonObject)) return false;
                 var searches = intents.OfType<JsonObject>().Select(intent =>
                 {
-                    var topic = intent["topic"]?.GetValue<string>() ?? board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
+                    var topic = intent["topic"]?.GetValue<string>() ?? fallbackQuestion;
                     var claims = intent["targetClaims"] is JsonArray values ? values.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList() : [];
                     var query = claims.Count == 0 ? topic : $"{topic} {string.Join(" ", claims)}";
                     var roles = intent["preferredSourceRoles"] as JsonArray; var role = roles?.FirstOrDefault()?.GetValue<string>() ?? "Primary";
                     return new ResearchRetrievalSearch(null, role, query, intent["topK"]?.GetValue<int>() ?? 5, "Compiled from workflow planner search intent.", claims.FirstOrDefault(), intent["freshness"]?.GetValue<string>());
                 }).ToList();
-                return new("DynamicIntent", searches);
+                if (searches.Any(x => string.IsNullOrWhiteSpace(x.Query) || x.TopK is < 1 or > 8 || x.SourceRole is not ("Primary" or "Supporting") || x.Freshness is not (null or "day" or "week" or "month" or "year"))) return false;
+                plan = new("DynamicIntent", searches); return true;
             }
         }
-        return EvidenceRemediationBoard.Required<ResearchRetrievalStrategy>(board, AgentBlackboardKeys.RetrievalPlan);
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException) { return false; }
+        return false;
     }
 }
 
@@ -238,6 +268,7 @@ public sealed class AssessClaimSupportNodeHandler(IEvidenceAssessor assessor) : 
         var findings = board[AgentBlackboardKeys.CriticFindings]?.AsArray().Select(AgentNodeJson.ParseFinding).Where(x => x is not null).Cast<CriticFinding>().ToList() ?? [];
         context.Node.InputJson = AgentNodeJson.Serialize(new { question, answerLength = sourceAnswer.Length, claimCount = claims.Count, evidenceCount = evidence.Count, findingCount = findings.Count });
         var result = await EvidenceRemediationToolCall.RunAsync(context, "evidenceAssessorLLM", new { agentIdentity = LlmEvidenceAssessor.AgentIdentity, claimCount = claims.Count, evidenceCount = evidence.Count, promptTemplateId = LlmEvidenceAssessor.PromptTemplateId, promptVersion = LlmEvidenceAssessor.PromptVersion }, () => assessor.AssessAsync(new(question, sourceAnswer, claims, evidence, findings), cancellationToken), x => $"{x.Assessments.Count} assessments; {x.Provider}/{x.Model}; {x.PromptTokens + x.CompletionTokens} tokens; cost={x.EstimatedCostUsd?.ToString() ?? "unavailable"}", cancellationToken);
+        EvidenceRemediationToolCall.RecordStructuredAttempts(context, "evidenceAssessorLLM", LlmEvidenceAssessor.AgentIdentity, LlmEvidenceAssessor.PromptTemplateId, LlmEvidenceAssessor.PromptVersion, result.Attempts);
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.ClaimSupportAssessments, result.Assessments); EvidenceRemediationBoard.Commit(context, board, result);
     }
 }

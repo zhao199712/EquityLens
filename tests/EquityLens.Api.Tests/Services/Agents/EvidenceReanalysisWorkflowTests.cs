@@ -69,6 +69,15 @@ public sealed class EvidenceReanalysisWorkflowTests
     }
 
     [Fact]
+    public async Task InvestmentAgent_UnknownClaimId_RepairsOnce()
+    {
+        var invalid = """{"reanalyzedAnswer":"新分析 [1]","analysisChangeSummary":"x","changedClaimIds":["unknown"],"keyConclusionChanges":[]}""";
+        var repaired = """{"reanalyzedAnswer":"修復分析 [1]","analysisChangeSummary":"x","changedClaimIds":["claim-1"],"keyConclusionChanges":["更新"]}""";
+        var result = await new LlmInvestmentReanalysisAgent(new SequenceChat(invalid, repaired)).ReanalyzeAsync(Context());
+        Assert.Equal("LlmRepair", result.Mode); Assert.Equal("修復分析 [1]", result.Draft.ReanalyzedAnswer); Assert.Equal(2, result.Attempts!.Count);
+    }
+
+    [Fact]
     public async Task SevenHandlers_ProduceFinalOutputWithoutLoop()
     {
         await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = Source(userId); var run = new EvidenceReanalysisWorkflowDefinitionProvider().CreateRun(userId, source.Id); db.AgentRuns.AddRange(source, run); await db.SaveChangesAsync(); var events = new List<(string Type, object? Payload)>(); AgentRunEventWriter writer = (_, _, type, _, payload) => events.Add((type, payload));
@@ -85,6 +94,7 @@ public sealed class EvidenceReanalysisWorkflowTests
     private static InvestmentReanalysisContext Context() => new("2330", "展望？", "原回答", "補證據修正版", [new("claim-1", "營收成長 20%", "Supported", [1])], [new(1, "LocalDocument", "年報", "AnnualReport", null, "營收成長 20%", .9)], ["關鍵數字改變"]);
     private static TestDb CreateDb() => new(new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     private sealed class FakeChat(string content) : IChatCompletionService { public string Provider => "test"; public string Model => "configured"; public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new ChatCompletionResult(content, "actual-model", 10, 7)); }
+    private sealed class SequenceChat(params string[] contents) : IChatCompletionService { private int index; public string Provider => "test"; public string Model => "configured"; public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new ChatCompletionResult(contents[Math.Min(index++, contents.Length - 1)], "actual-model", 10, 7)); }
     private sealed class FakeAnalysisAgent : IInvestmentReanalysisAgent { public Task<InvestmentReanalysisAgentResult> ReanalyzeAsync(InvestmentReanalysisContext context, CancellationToken cancellationToken = default) => Task.FromResult(new InvestmentReanalysisAgentResult(new("重新分析 [1]", "已重算", ["claim-1"], ["結論更新"]), "InvestmentReanalysisAgent", "test", "test-model", 10, 5, null)); }
     private sealed class CorrectingRevisionAgent : IDraftRevisionAgent
     {
