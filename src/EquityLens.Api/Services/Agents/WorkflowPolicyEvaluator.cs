@@ -165,3 +165,28 @@ public sealed class EvidenceReanalysisPolicyEvaluator : IWorkflowPolicyEvaluator
             : new(false, true, true, false, null, "ReviseAnswer", "Reanalysis critic found answer quality issues.");
     }
 }
+
+public sealed class ResearchInvestigationPolicyEvaluator : IWorkflowPolicyEvaluator
+{
+    private readonly ResearchQualityReviewPolicyEvaluator inner = new();
+    public string WorkflowType => AgentWorkflowTypes.ResearchInvestigation;
+    public WorkflowPolicyDecision Evaluate(WorkflowPolicyContext context)
+    {
+        if (context.WorkflowType != WorkflowType) throw new InvalidOperationException($"Unsupported workflow type '{context.WorkflowType}'.");
+        var review = context.NodeOutput ?? AgentNodeJson.GetRequiredBlackboardObject(context.Blackboard, AgentBlackboardKeys.CriticReview);
+        var severity = review[CriticReviewFields.OverallSeverity]?.GetValue<string>() ?? "None";
+        var packet = context.Blackboard[AgentBlackboardKeys.EvidencePacket] as JsonObject;
+        var summary = packet?["evidenceSummary"] as JsonObject;
+        var checks = context.Blackboard[AgentBlackboardKeys.EvidenceChecks] as JsonObject;
+        var deterministicEvidencePass = summary?["hasAnswer"]?.GetValue<bool>() == true
+            && summary?["hasCitations"]?.GetValue<bool>() == true
+            && summary?["emptyQuoteCount"]?.GetValue<int>() == 0
+            && (checks?[EvidenceCheckFields.FindingCount]?.GetValue<int>() ?? 0) == 0;
+        var highSeverity = severity is "High" or "Critical";
+        if (deterministicEvidencePass && !highSeverity)
+        {
+            return new(false, true, false, false, null, "AcceptAnswer", "Deterministic evidence checks passed; non-high Critic findings do not trigger remediation.");
+        }
+        return inner.Evaluate(context with { WorkflowType = AgentWorkflowTypes.ResearchQualityReview });
+    }
+}

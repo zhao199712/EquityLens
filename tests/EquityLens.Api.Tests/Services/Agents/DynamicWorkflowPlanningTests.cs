@@ -9,6 +9,54 @@ namespace EquityLens.Api.Tests.Services.Agents;
 
 public sealed class DynamicWorkflowPlanningTests
 {
+    [Theory]
+    [InlineData("為甚麼台積電7/17跌這麼多")]
+    [InlineData("台積電今天為什麼跌")]
+    public void DeterministicPlanner_FreshMarketQuestion_MaterializesWebResearchBranch(string question)
+    {
+        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid(), new("2330", question));
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.ResearchIntent] = new JsonObject { ["selected"] = 3 };
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, DynamicPlanningTriggers.ResearchContextReady, board, [ResearchInvestigationNodeTypes.Validate, ResearchInvestigationNodeTypes.DetectIntent], new WorkflowSkillCatalog().Skills, new NodeCapabilityRegistry().Capabilities, 0, 0);
+
+        var proposal = DeterministicDynamicWorkflowPlanner.Create(context);
+        var validated = new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService()).Validate(run, proposal);
+
+        Assert.Contains("current-market-event-investigation", proposal.SelectedSkills);
+        Assert.Contains(validated.Actions, x => x.NodeType == ResearchInvestigationNodeTypes.RetrieveWeb);
+        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, validated.Actions[^1].NodeType);
+    }
+
+    [Fact]
+    public void Validator_LocalOnly_RejectsInitialWebResearchCapability()
+    {
+        var request = new EquityLens.Api.Contracts.Research.ResearchAskRequest("2330", "7/17為什麼跌", SourcePolicy: EquityLens.Api.Contracts.Research.SourcePolicy.LocalOnly);
+        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid(), request);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.ResearchIntent] = new JsonObject(); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var actions = new DynamicPlanAction[] { new("web:initial", "retrieve-web-research-evidence", ResearchInvestigationNodeTypes.RetrieveWeb, [ResearchInvestigationNodeKeys.DetectIntent], new()) };
+        var proposal = new DynamicPlanProposal(Guid.NewGuid(), run.OrchestrationVersion, DynamicPlanningTriggers.ResearchContextReady, DynamicGoalStatuses.Continue, "web", ["research-investigation"], actions);
+
+        var error = Assert.Throws<InvalidOperationException>(() => new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService()).Validate(run, proposal));
+
+        Assert.Equal("Source policy LocalOnly forbids Web retrieval.", error.Message);
+    }
+
+    [Fact]
+    public void DeterministicPlanner_WebOnly_OmitsLocalRetrievalCapability()
+    {
+        var request = new EquityLens.Api.Contracts.Research.ResearchAskRequest("2330", "最新消息", SourcePolicy: EquityLens.Api.Contracts.Research.SourcePolicy.WebOnly);
+        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid(), request);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.ResearchIntent] = new JsonObject(); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, DynamicPlanningTriggers.ResearchContextReady, board, [ResearchInvestigationNodeTypes.Validate, ResearchInvestigationNodeTypes.DetectIntent], new WorkflowSkillCatalog().Skills, new NodeCapabilityRegistry().Capabilities, 0, 0);
+
+        var proposal = DeterministicDynamicWorkflowPlanner.Create(context);
+        var validated = new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService()).Validate(run, proposal);
+
+        Assert.DoesNotContain(validated.Actions, x => x.NodeType == ResearchInvestigationNodeTypes.RetrieveLocal);
+        Assert.Contains(validated.Actions, x => x.NodeType == ResearchInvestigationNodeTypes.RetrieveWeb);
+    }
+
     [Fact]
     public void DeterministicPlanner_EvidenceGap_ProducesBoundedIntentGraphWithoutRetrievalPlannerNode()
     {
@@ -20,6 +68,18 @@ public sealed class DynamicWorkflowPlanningTests
         Assert.DoesNotContain(proposal.Actions, x => x.NodeType == EvidenceRemediationNodeTypes.PlanRetrieval);
         Assert.Contains(proposal.Actions, x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence);
         Assert.Equal(6, proposal.Actions.Count);
+    }
+
+    [Fact]
+    public void DeterministicPlanner_CriticAfterDynamicInitialBranch_DependsOnMaterializedBranchEndpoint()
+    {
+        var context = Context(requiresRevision: true, requiresEvidence: true);
+        context.Blackboard["dynamicLastNodeKey"] = "finalizeCriticReport:1";
+
+        var proposal = DeterministicDynamicWorkflowPlanner.Create(context);
+
+        Assert.Equal(["finalizeCriticReport:1"], proposal.Actions[0].DependsOn);
+        Assert.Equal(EvidenceRemediationNodeTypes.ExtractClaims, proposal.Actions[0].NodeType);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Services.Ai;
+using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Services.Documents;
 using EquityLens.Api.Services.Research;
@@ -22,6 +23,7 @@ public sealed class ResearchController : ControllerBase
     private readonly IResearchPreflightService _researchPreflightService;
     private readonly IResearchAnswerService _researchAnswerService;
     private readonly IResearchRunTraceService _traceService;
+    private readonly IAgentRunService _agentRunService;
     private readonly ICurrentUserContext _currentUser;
     private readonly ILogger<ResearchController> _logger;
 
@@ -30,6 +32,7 @@ public sealed class ResearchController : ControllerBase
         IResearchPreflightService researchPreflightService,
         IResearchAnswerService researchAnswerService,
         IResearchRunTraceService traceService,
+        IAgentRunService agentRunService,
         ICurrentUserContext currentUser,
         ILogger<ResearchController> logger)
     {
@@ -37,6 +40,7 @@ public sealed class ResearchController : ControllerBase
         _researchPreflightService = researchPreflightService;
         _researchAnswerService = researchAnswerService;
         _traceService = traceService;
+        _agentRunService = agentRunService;
         _currentUser = currentUser;
         _logger = logger;
     }
@@ -109,6 +113,17 @@ public sealed class ResearchController : ControllerBase
 
         var response = await _researchAnswerService.AskAsync(request, cancellationToken);
         return Ok(response);
+    }
+
+    /// <summary>建立端到端研究調查流程並立即回傳背景執行識別碼。</summary>
+    [HttpPost("investigations")]
+    public async Task<ActionResult<ResearchInvestigationCreatedResponse>> CreateInvestigation(ResearchAskRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Question)) return BadRequest(new ApiError("question_required", "請輸入問題。"));
+        if (string.IsNullOrWhiteSpace(request.Ticker)) return BadRequest(new ApiError("ticker_required", "請指定股票代號。"));
+        if (!IsValidDocumentType(request.DocumentType, allowAuto: true)) return BadRequest(new ApiError("invalid_document_type", "documentType 僅支援 AnnualReport 或 EarningsPresentation。"));
+        var created = await _agentRunService.CreateResearchInvestigationAsync(_currentUser.UserId, request, cancellationToken);
+        return Accepted(new ResearchInvestigationCreatedResponse(created.AgentRun.Id, created.ResearchRunId, created.AgentRun.WorkflowType, created.AgentRun.Status));
     }
 
     [HttpGet("runs")]

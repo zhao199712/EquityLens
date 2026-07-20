@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Agents;
+using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -48,6 +49,7 @@ public sealed class AgentRunService : IAgentRunService
         if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.CriticReview, cancellationToken);
         var provider = GetWorkflowProvider(AgentWorkflowTypes.CriticReview);
         var run = provider.CreateRun(userId, researchRunId);
+        run.ResearchRunId = researchRunId;
         await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "CriticReview run created.", new { researchRunId });
@@ -55,6 +57,26 @@ public sealed class AgentRunService : IAgentRunService
 
         await EnqueueAsync(run, userId, cancellationToken);
         return MapSummary(run);
+    }
+
+    public async Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, CancellationToken cancellationToken = default)
+    {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.ResearchInvestigation, cancellationToken);
+        var researchRun = new ResearchRun
+        {
+            Id = Guid.NewGuid(), UserId = userId, TraceId = Guid.NewGuid().ToString("N"),
+            Ticker = request.Ticker.Trim().ToUpperInvariant(), Question = request.Question.Trim(), Answer = string.Empty,
+            Status = "Pending", RetrievalMode = request.RetrievalMode?.ToString() ?? "Auto", SourcePolicy = request.SourcePolicy.ToString(),
+            DocumentType = request.DocumentType, TopK = request.TopK, Temperature = request.Temperature, CreatedAtUtc = DateTime.UtcNow
+        };
+        var provider = GetWorkflowProvider(AgentWorkflowTypes.ResearchInvestigation) as ResearchInvestigationWorkflowDefinitionProvider
+            ?? throw new InvalidOperationException("ResearchInvestigation provider is not registered.");
+        var run = provider.CreateRun(userId, researchRun.Id, request);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
+        _dbContext.ResearchRuns.Add(researchRun); _dbContext.AgentRuns.Add(run);
+        AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchInvestigation run created.", new { researchRunId = researchRun.Id });
+        await _dbContext.SaveChangesAsync(cancellationToken); await EnqueueAsync(run, userId, cancellationToken);
+        return (MapSummary(run), researchRun.Id);
     }
 
     public async Task<AgentRunSummaryResponse> CreateDraftRevisionAsync(
@@ -82,6 +104,7 @@ public sealed class AgentRunService : IAgentRunService
         if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.ResearchQualityReview, cancellationToken);
         var provider = GetWorkflowProvider(AgentWorkflowTypes.ResearchQualityReview);
         var run = provider.CreateRun(userId, researchRunId);
+        run.ResearchRunId = researchRunId;
         await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchQualityReview run created.", new { researchRunId });
@@ -166,11 +189,7 @@ public sealed class AgentRunService : IAgentRunService
             .Take(Math.Clamp(limit, 100, 1000))
             .ToListAsync(cancellationToken);
 
-        if (researchRunId.HasValue)
-        {
-            var rid = researchRunId.Value.ToString("D");
-            runs = runs.Where(x => x.InputJson.Contains($"\"researchRunId\":\"{rid}\"")).ToList();
-        }
+        if (researchRunId.HasValue) runs = runs.Where(x => x.ResearchRunId == researchRunId.Value).ToList();
 
         return runs
             .Take(Math.Clamp(limit, 1, 100))
@@ -246,7 +265,23 @@ public sealed class AgentRunService : IAgentRunService
         run.ErrorMessage = null;
         run.OutputJson = null;
         var provider = GetWorkflowProvider(run.WorkflowType);
-        run.BlackboardJson = provider.CreateInitialBlackboardJson(GetSourceRunId(run.InputJson));
+        if (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation)
+        {
+            var investigationProvider = provider as ResearchInvestigationWorkflowDefinitionProvider
+                ?? throw new InvalidOperationException("ResearchInvestigation provider is not registered.");
+            var request = JsonSerializer.Deserialize<ResearchAskRequest>(run.InputJson, SerializerOptions)
+                ?? throw new InvalidOperationException("ResearchInvestigation input is invalid.");
+            var researchRunId = run.ResearchRunId
+                ?? throw new InvalidOperationException("ResearchInvestigation run is missing its ResearchRun link.");
+            run.BlackboardJson = investigationProvider.CreateInitialBlackboardJson(researchRunId, request);
+            var researchRun = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == researchRunId, cancellationToken);
+            researchRun.Status = "Pending";
+            researchRun.ErrorMessage = null;
+        }
+        else
+        {
+            run.BlackboardJson = provider.CreateInitialBlackboardJson(GetSourceRunId(run.InputJson));
+        }
         run.StartedAtUtc = null;
         run.CompletedAtUtc = null;
         var plannedArguments = GetPlannedArguments(run.WorkflowDefinitionJson);
@@ -296,6 +331,11 @@ public sealed class AgentRunService : IAgentRunService
 
         _runStateMachine.Transition(run, AgentRunStatuses.Cancelled);
         run.CompletedAtUtc = DateTime.UtcNow;
+        if (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation && run.ResearchRunId is Guid researchRunId)
+        {
+            var artifact = await _dbContext.ResearchRuns.SingleOrDefaultAsync(x => x.Id == researchRunId, cancellationToken);
+            if (artifact is not null) artifact.Status = "Cancelled";
+        }
         AddEvent(run, null, AgentEventTypes.RunCancelled, "Run cancelled by user.", null);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return MapSummary(run);

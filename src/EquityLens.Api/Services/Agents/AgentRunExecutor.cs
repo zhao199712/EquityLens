@@ -87,6 +87,11 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             {
                 _runStateMachine.Transition(run, AgentRunStatuses.Running);
                 run.StartedAtUtc ??= DateTime.UtcNow;
+                if (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation && run.ResearchRunId is Guid researchRunId)
+                {
+                    var artifact = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == researchRunId, cancellationToken);
+                    artifact.Status = "Running";
+                }
                 AddEvent(run, null, AgentEventTypes.RunStarted, $"{run.WorkflowType} run started.", null);
             }
             try { await _dbContext.SaveChangesAsync(cancellationToken); }
@@ -97,21 +102,37 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 return;
             }
 
-            var executionOrder = _topology.GetExecutionOrder(run.WorkflowDefinitionJson);
-            _runGraphValidator.Validate(run, executionOrder);
-            var nodeKey = GetNextReadyNode(run, executionOrder);
-            if (nodeKey is not null)
+            const int maxBatchNodes = 6;
+            var batchTimer = Stopwatch.StartNew();
+            AgentRunNode? lastExecutedNode = null;
+            for (var batchCount = 0; batchCount < maxBatchNodes && batchTimer.Elapsed < TimeSpan.FromSeconds(30); batchCount++)
             {
+                var executionOrder = _topology.GetExecutionOrder(run.WorkflowDefinitionJson);
+                _runGraphValidator.Validate(run, executionOrder);
+                var nodeKey = GetNextReadyNode(run, executionOrder);
+                if (nodeKey is null) break;
                 await RunNodeAsync(run, nodeKey, cancellationToken);
-                run.LeaseOwner = null; run.LeaseExpiresAtUtc = null; run.OrchestrationVersion++;
-                var graphAppended = false;
+                lastExecutedNode = run.Nodes.Single(x => x.NodeKey == nodeKey);
+                run.OrchestrationVersion++;
                 if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped))
                 {
-                    graphAppended = await TryAdvanceDynamicPlanAsync(run, cancellationToken);
+                    var graphAppended = await TryAdvanceDynamicPlanAsync(run, cancellationToken);
                     if (!graphAppended) CompleteRun(run);
+                    run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
+                    await SaveOrchestrationChangesAsync(graphAppended, cancellationToken);
+                    return;
                 }
-                else AddWakeOutbox(run, run.Nodes.Single(x => x.NodeKey == nodeKey));
-                await SaveOrchestrationChangesAsync(graphAppended, cancellationToken);
+            }
+
+            var executionOrderAfterBatch = _topology.GetExecutionOrder(run.WorkflowDefinitionJson);
+            _runGraphValidator.Validate(run, executionOrderAfterBatch);
+            var nextNode = GetNextReadyNode(run, executionOrderAfterBatch);
+            if (nextNode is not null && lastExecutedNode is not null)
+            {
+                AddWakeOutbox(run, lastExecutedNode);
+                run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
+                AddEvent(run, lastExecutedNode, AgentEventTypes.SchedulerDecision, "Node batch yielded back to the queue.", new { executedNodes = run.Nodes.Count(x => x.Status == AgentNodeStatuses.Succeeded), maxBatchNodes, elapsedMs = batchTimer.ElapsedMilliseconds });
+                await SaveOrchestrationChangesAsync(false, cancellationToken);
                 return;
             }
 
@@ -135,6 +156,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             }
             run.ErrorMessage = exception.Message;
             run.CompletedAtUtc = DateTime.UtcNow;
+            await UpdateResearchArtifactTerminalAsync(run, "Failed", cancellationToken);
             run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
             AddEvent(run, null, AgentEventTypes.RunFailed, $"{run.WorkflowType} run failed.", new { error = exception.Message });
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -152,13 +174,13 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         activity?.SetTag("node.type", node.NodeType);
         var policy = GetPolicy(run.WorkflowDefinitionJson, node.NodeKey, node.NodeType);
         var decisionPayload = new { decision = "RunNode", nextNodeId = nodeKey, reason = "Previous dependencies are satisfied.", mode = "Deterministic", policy.TimeoutSeconds, policy.MaxRetryCount };
-        AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Supervisor selected {nodeKey}.", decisionPayload);
+        AddEvent(run, node, AgentEventTypes.SchedulerDecision, $"Scheduler selected {nodeKey}.", decisionPayload);
         for (var attempt = 0; attempt <= policy.MaxRetryCount; attempt++)
         {
         _nodeStateMachine.Transition(node, AgentNodeStatuses.Ready);
         AddEvent(run, node, AgentEventTypes.NodeReady, $"Node {nodeKey} is ready.", null);
         _nodeStateMachine.Transition(node, AgentNodeStatuses.Queued);
-        AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Node {nodeKey} queued.", new { decision = "QueueNode", node.Iteration });
+        AddEvent(run, node, AgentEventTypes.SchedulerDecision, $"Node {nodeKey} queued.", new { decision = "QueueNode", node.Iteration });
         _nodeStateMachine.Transition(node, AgentNodeStatuses.Running);
         node.StartedAtUtc = DateTime.UtcNow;
         AddEvent(run, node, AgentEventTypes.NodeStarted, $"Node {nodeKey} started.", new { attempt = attempt + 1, policy.TimeoutSeconds });
@@ -276,7 +298,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 if (!string.Equals(actual, expected, StringComparison.Ordinal))
                 {
                     node.Status = AgentNodeStatuses.Skipped; node.CompletedAtUtc = DateTime.UtcNow;
-                    AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Node {key} skipped because its condition was false.", new { decision = "SkipNode", path, expected, actual });
+                    AddEvent(run, node, AgentEventTypes.SchedulerDecision, $"Node {key} skipped because its condition was false.", new { decision = "SkipNode", path, expected, actual });
                     continue;
                 }
             }
@@ -288,23 +310,53 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     private void CompleteRun(AgentRun run)
     {
         _runStateMachine.Transition(run, AgentRunStatuses.Succeeded); run.CompletedAtUtc = DateTime.UtcNow;
+        if (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation && run.ResearchRunId is Guid researchRunId)
+        {
+            var artifact = _dbContext.ResearchRuns.Local.SingleOrDefault(x => x.Id == researchRunId)
+                ?? _dbContext.ResearchRuns.Single(x => x.Id == researchRunId);
+            var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+            artifact.Answer = board[AgentBlackboardKeys.RevisedAnswer]?.GetValue<string>()
+                ?? board[AgentBlackboardKeys.Answer]?.GetValue<string>() ?? artifact.Answer;
+            artifact.Status = artifact.Answer.Contains("資料不足", StringComparison.OrdinalIgnoreCase) ? "InsufficientEvidence" : "Answered";
+            artifact.LatencyMs = run.StartedAtUtc.HasValue ? (long)(DateTime.UtcNow - run.StartedAtUtc.Value).TotalMilliseconds : 0;
+        }
         AddEvent(run, null, AgentEventTypes.RunSucceeded, $"{run.WorkflowType} run succeeded.", null);
     }
 
     private async Task<bool> TryAdvanceDynamicPlanAsync(AgentRun run, CancellationToken cancellationToken)
     {
         using var definition = JsonDocument.Parse(run.WorkflowDefinitionJson);
-        if (run.WorkflowType != AgentWorkflowTypes.ResearchQualityReview || definition.RootElement.TryGetProperty("orchestrationMode", out var mode) is false || mode.GetString() != "DynamicStateful") return false;
+        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.ResearchInvestigation) || definition.RootElement.TryGetProperty("orchestrationMode", out var mode) is false || mode.GetString() != "DynamicStateful") return false;
         var planner = _dynamicPlanner ?? new DeterministicPlannerAdapter();
         var capabilities = _capabilities ?? new NodeCapabilityRegistry(); var skills = _skills ?? new WorkflowSkillCatalog();
         var validator = _dynamicPlanValidator ?? new DynamicPlanValidator(capabilities, _catalog ?? new AgentWorkflowCatalog(), _topology);
         var materializer = _graphMaterializer ?? new GraphMaterializer(_dbContext, _catalog ?? new AgentWorkflowCatalog());
         var last = run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).OrderByDescending(x => x.CompletedAtUtc).FirstOrDefault();
-        var trigger = last?.NodeType == EvidenceRemediationNodeTypes.Route ? DynamicPlanningTriggers.EvidenceValidated : last?.NodeType == ResearchQualityReviewNodeTypes.FinalizeCriticReport ? DynamicPlanningTriggers.CriticCompleted : DynamicPlanningTriggers.BranchCompleted;
-        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, AgentNodeJson.ParseBlackboard(run.BlackboardJson), run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), skills.Skills, capabilities.Capabilities, run.Nodes.Where(x => (x.NodeType is EvidenceRemediationNodeTypes.RetrieveEvidence or EvidenceRemediationNodeTypes.RetrieveWebEvidence) && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), run.Nodes.Count - 5);
+        var trigger = last?.NodeType == ResearchInvestigationNodeTypes.DetectIntent && run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation
+            ? DynamicPlanningTriggers.ResearchContextReady
+            : last?.NodeType == EvidenceRemediationNodeTypes.Route
+                ? DynamicPlanningTriggers.EvidenceValidated
+                : last?.NodeType == ResearchQualityReviewNodeTypes.FinalizeCriticReport
+                    ? DynamicPlanningTriggers.CriticCompleted
+                    : DynamicPlanningTriggers.BranchCompleted;
+        if (trigger == DynamicPlanningTriggers.CriticCompleted
+            && run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation
+            && AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.CriticReview]?[CriticReviewFields.RecommendedNextAction]?.GetValue<string>() == "AcceptAnswer")
+        {
+            var completedDefinition = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
+            completedDefinition["goalStatus"] = DynamicGoalStatuses.Complete;
+            run.WorkflowDefinitionJson = completedDefinition.ToJsonString(AgentNodeJson.SerializerOptions);
+            AddEvent(run, last, AgentEventTypes.SupervisorRouteDecision, "Supervisor accepted the evidence-checked report without remediation.", new { trigger, decision = "Complete", fastPath = true });
+            return false;
+        }
+        var dynamicNodeCount = run.Nodes.Count(x => !string.IsNullOrWhiteSpace(x.TemplateNodeKey)
+            && (run.WorkflowType != AgentWorkflowTypes.ResearchInvestigation || x.Iteration > 0));
+        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, AgentNodeJson.ParseBlackboard(run.BlackboardJson), run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), skills.Skills, capabilities.Capabilities, run.Nodes.Where(x => (x.NodeType is EvidenceRemediationNodeTypes.RetrieveEvidence or EvidenceRemediationNodeTypes.RetrieveWebEvidence) && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), dynamicNodeCount, last?.NodeKey);
         var started = DateTime.UtcNow;
-        var plannerCall = new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = run.Id, AgentRunNodeId = last?.Id, ToolName = "workflowPlannerLLM", Status = AgentToolCallStatuses.Running, ArgumentsJson = Serialize(new { trigger, promptTemplateId = LlmAgentWorkflowPlanner.PromptTemplateId, promptVersion = LlmAgentWorkflowPlanner.PromptVersion, timeoutSeconds = 45, context.OrchestrationVersion }), StartedAtUtc = started };
-        _dbContext.AgentToolCalls.Add(plannerCall); AddEvent(run, last, AgentEventTypes.ToolCallStarted, "Tool workflowPlannerLLM started.", new { trigger, timeoutSeconds = 45 });
+        AddEvent(run, last, AgentEventTypes.SupervisorPlanningStarted, $"Supervisor planning started for {trigger}.", new { trigger, context.OrchestrationVersion });
+        var planningTimeoutSeconds = LlmAgentWorkflowPlanner.TimeoutSeconds;
+        var plannerCall = new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = run.Id, AgentRunNodeId = last?.Id, ToolName = "workflowPlannerLLM", Status = AgentToolCallStatuses.Running, ArgumentsJson = Serialize(new { trigger, promptTemplateId = LlmAgentWorkflowPlanner.PromptTemplateId, promptVersion = LlmAgentWorkflowPlanner.PromptVersion, timeoutSeconds = planningTimeoutSeconds, context.OrchestrationVersion }), StartedAtUtc = started };
+        _dbContext.AgentToolCalls.Add(plannerCall); AddEvent(run, last, AgentEventTypes.ToolCallStarted, "Tool workflowPlannerLLM started.", new { trigger, timeoutSeconds = planningTimeoutSeconds });
         DynamicPlanProposal proposal;
         try
         {
@@ -318,12 +370,12 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             }) { IsBackground = true, Name = $"workflow-planner-{run.Id:N}" };
             plannerThread.Start();
             var deadline = Stopwatch.StartNew();
-            while (!completed.IsSet && deadline.Elapsed < TimeSpan.FromSeconds(45))
+            while (!completed.IsSet && deadline.Elapsed < TimeSpan.FromSeconds(planningTimeoutSeconds))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 Thread.Sleep(100);
             }
-            if (!completed.IsSet) proposal = DeterministicDynamicWorkflowPlanner.Create(context, "Workflow planner exceeded the orchestrator 45 second deadline.");
+            if (!completed.IsSet) proposal = DeterministicDynamicWorkflowPlanner.Create(context, $"Workflow planner exceeded the orchestrator {planningTimeoutSeconds} second deadline.");
             else if (planningError is not null) throw planningError;
             else proposal = planned ?? throw new InvalidOperationException("Workflow planner returned no proposal.");
             plannerCall.Status = AgentToolCallStatuses.Succeeded; plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180); plannerCall.ResultJson = Serialize(proposal); plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
@@ -333,21 +385,24 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             plannerCall.Status = AgentToolCallStatuses.Failed; plannerCall.ErrorMessage = exception.Message; plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallFailed, "Tool workflowPlannerLLM failed.", new { error = exception.Message }); throw;
         }
         AddEvent(run, last, AgentEventTypes.PlannerProposed, proposal.Reason, new { proposal.ProposalId, proposal.Trigger, proposal.GoalStatus, proposal.SelectedSkills, proposal.Mode, proposal.Provider, proposal.Model, proposal.PromptTokens, proposal.CompletionTokens, proposal.FallbackReason, actions = proposal.Actions.Select(x => new { x.ClientNodeKey, x.Capability, x.NodeType }) });
-        ValidatedDynamicPlan validated;
+        ValidatedDynamicPlan? validated = null;
         try { validated = validator.Validate(run, proposal); AddEvent(run, last, AgentEventTypes.PlanValidated, "Dynamic plan validated.", new { proposal.ProposalId, actionCount = proposal.Actions.Count }); }
         catch (Exception exception)
         {
             AddEvent(run, last, AgentEventTypes.PlanRejected, exception.Message, new { proposal.ProposalId, error = exception.Message });
-            proposal = DeterministicDynamicWorkflowPlanner.Create(context, exception.Message, proposal.Model);
-            AddEvent(run, last, AgentEventTypes.PlannerProposed, proposal.Reason, new { proposal.ProposalId, proposal.Trigger, proposal.GoalStatus, proposal.SelectedSkills, proposal.Mode, proposal.FallbackReason, actions = proposal.Actions.Select(x => new { x.ClientNodeKey, x.Capability, x.NodeType }) });
-            validated = validator.Validate(run, proposal);
-            AddEvent(run, last, AgentEventTypes.PlanValidated, "Deterministic fallback plan validated.", new { proposal.ProposalId, actionCount = proposal.Actions.Count });
+            if (validated is null)
+            {
+                proposal = DeterministicDynamicWorkflowPlanner.Create(context, exception.Message, proposal.Model);
+                AddEvent(run, last, AgentEventTypes.PlannerProposed, proposal.Reason, new { proposal.ProposalId, proposal.Trigger, proposal.GoalStatus, proposal.SelectedSkills, proposal.Mode, proposal.FallbackReason, actions = proposal.Actions.Select(x => new { x.ClientNodeKey, x.Capability, x.NodeType }) });
+                validated = validator.Validate(run, proposal);
+                AddEvent(run, last, AgentEventTypes.PlanValidated, "Deterministic fallback plan validated.", new { proposal.ProposalId, actionCount = proposal.Actions.Count });
+            }
         }
         if (proposal.GoalStatus == DynamicGoalStatuses.Complete)
         {
             var json = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject(); json["goalStatus"] = DynamicGoalStatuses.Complete; run.WorkflowDefinitionJson = json.ToJsonString(AgentNodeJson.SerializerOptions); return false;
         }
-        materializer.Materialize(run, validated);
+        materializer.Materialize(run, validated!);
         return true;
     }
 
@@ -390,6 +445,15 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     {
         var version = JsonNode.Parse(run.WorkflowDefinitionJson)?["version"]?.GetValue<int>() ?? 1;
         _dbContext.AgentRunWakeOutbox.Add(new AgentRunWakeOutbox { Id = Guid.NewGuid(), AgentRunId = run.Id, UserId = run.UserId, WorkflowType = run.WorkflowType, AgentRunNodeId = cause.Id, DefinitionVersion = version, OrchestrationVersion = run.OrchestrationVersion, CorrelationId = run.Id, CausationId = cause.Id });
+    }
+
+    private async Task UpdateResearchArtifactTerminalAsync(AgentRun run, string status, CancellationToken cancellationToken)
+    {
+        if (run.WorkflowType != AgentWorkflowTypes.ResearchInvestigation || run.ResearchRunId is not Guid researchRunId) return;
+        var artifact = await _dbContext.ResearchRuns.SingleOrDefaultAsync(x => x.Id == researchRunId, cancellationToken);
+        if (artifact is null) return;
+        artifact.Status = status; artifact.ErrorMessage = run.ErrorMessage;
+        artifact.LatencyMs = run.StartedAtUtc.HasValue ? (long)(DateTime.UtcNow - run.StartedAtUtc.Value).TotalMilliseconds : 0;
     }
 
     private void AddEvent(AgentRun run, AgentRunNode? node, string eventType, string? message, object? payload)

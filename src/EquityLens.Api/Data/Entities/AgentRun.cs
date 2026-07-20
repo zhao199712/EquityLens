@@ -4,6 +4,7 @@ public class AgentRun
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
+    public Guid? ResearchRunId { get; set; }
     public string WorkflowType { get; set; } = string.Empty;
     public string AgentType { get; set; } = string.Empty;
     public string Status { get; set; } = "Pending";
@@ -27,4 +28,5 @@ public class AgentRun
     public ICollection<AgentRunEvent> Events { get; set; } = [];
     public ICollection<AgentToolCall> ToolCalls { get; set; } = [];
     public ICollection<AgentFeedback> Feedback { get; set; } = [];
+    public ResearchRun? ResearchRun { get; set; }
 }

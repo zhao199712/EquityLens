@@ -16,8 +16,25 @@ public interface IAgentWorkflowAdminService
     Task<IReadOnlyDictionary<string, AgentNodeExecutionPolicy>> GetPoliciesAsync(IEnumerable<string> nodeTypes, CancellationToken ct = default);
 }
 
-public sealed class AgentWorkflowAdminService(EquityLensDbContext db, IAgentWorkflowCatalog catalog) : IAgentWorkflowAdminService
+public sealed class AgentWorkflowAdminService : IAgentWorkflowAdminService
 {
+    private readonly EquityLensDbContext db;
+    private readonly IAgentWorkflowCatalog catalog;
+    private readonly IReadOnlyDictionary<string, IAgentWorkflowDefinitionProvider> providers;
+    private readonly INodeCapabilityRegistry? capabilities;
+
+    public AgentWorkflowAdminService(
+        EquityLensDbContext db,
+        IAgentWorkflowCatalog catalog,
+        IEnumerable<IAgentWorkflowDefinitionProvider>? providers = null,
+        INodeCapabilityRegistry? capabilities = null)
+    {
+        this.db = db;
+        this.catalog = catalog;
+        this.providers = (providers ?? []).ToDictionary(x => x.WorkflowType, StringComparer.Ordinal);
+        this.capabilities = capabilities;
+    }
+
     public async Task<IReadOnlyList<AgentWorkflowAdminResponse>> ListWorkflowsAsync(CancellationToken ct = default)
     {
         var settings = await db.AgentWorkflowSettings.AsNoTracking().ToDictionaryAsync(x => x.WorkflowType, ct);
@@ -57,7 +74,39 @@ public sealed class AgentWorkflowAdminService(EquityLensDbContext db, IAgentWork
         var types = nodeTypes.Distinct().ToArray(); var settings = await db.AgentNodeSettings.Where(x => types.Contains(x.NodeType)).ToDictionaryAsync(x => x.NodeType, ct);
         return types.ToDictionary(x => x, x => { var d = catalog.GetNode(x).DefaultPolicy; var s = settings.GetValueOrDefault(x); return new AgentNodeExecutionPolicy(s?.TimeoutSeconds ?? d.TimeoutSeconds, s?.MaxRetryCount ?? d.MaxRetryCount); });
     }
-    private static AgentWorkflowAdminResponse Map(AgentWorkflowCatalogEntry x, AgentWorkflowSetting? s) => new(x.WorkflowType, s?.DisplayName ?? x.DisplayName, s?.Description ?? x.Description, x.AgentType, s?.IsEnabled ?? true, x.NodeTypes, x.Edges.Select(e => new AgentWorkflowEdgeResponse(e.From, e.To)).ToList());
+    private AgentWorkflowAdminResponse Map(AgentWorkflowCatalogEntry x, AgentWorkflowSetting? s)
+    {
+        if (!providers.TryGetValue(x.WorkflowType, out var provider))
+        {
+            return new(x.WorkflowType, s?.DisplayName ?? x.DisplayName, s?.Description ?? x.Description, x.AgentType, s?.IsEnabled ?? true,
+                x.NodeTypes, x.Edges.Select(e => new AgentWorkflowEdgeResponse(e.From, e.To)).ToList(), "Static",
+                x.NodeTypes.Select(type => new AgentWorkflowNodeResponse(type, type)).ToList(),
+                x.Edges.Select(e => new AgentWorkflowEdgeResponse(e.From, e.To)).ToList(), []);
+        }
+
+        var run = provider.CreateRun(Guid.Empty, Guid.Empty);
+        using var definition = JsonDocument.Parse(run.WorkflowDefinitionJson);
+        var root = definition.RootElement;
+        var mode = root.TryGetProperty("orchestrationMode", out var modeElement)
+            ? modeElement.GetString() ?? "Static"
+            : "Static";
+        var initialNodes = root.GetProperty("nodes").EnumerateArray()
+            .Select(node => new AgentWorkflowNodeResponse(
+                node.GetProperty("id").GetString() ?? throw new InvalidOperationException("Workflow node id is missing."),
+                node.GetProperty("type").GetString() ?? throw new InvalidOperationException("Workflow node type is missing.")))
+            .ToList();
+        var initialEdges = root.GetProperty("edges").EnumerateArray()
+            .Select(edge => new AgentWorkflowEdgeResponse(
+                edge.GetProperty("from").GetString() ?? throw new InvalidOperationException("Workflow edge from is missing."),
+                edge.GetProperty("to").GetString() ?? throw new InvalidOperationException("Workflow edge to is missing.")))
+            .ToList();
+        var dynamicNodeTypes = mode == "DynamicStateful" && capabilities is not null
+            ? capabilities.Capabilities.Select(capability => capability.NodeType).Distinct(StringComparer.Ordinal).ToList()
+            : [];
+
+        return new(x.WorkflowType, s?.DisplayName ?? x.DisplayName, s?.Description ?? x.Description, x.AgentType, s?.IsEnabled ?? true,
+            x.NodeTypes, x.Edges.Select(e => new AgentWorkflowEdgeResponse(e.From, e.To)).ToList(), mode, initialNodes, initialEdges, dynamicNodeTypes);
+    }
     private static AgentNodeAdminResponse Map(AgentNodeCatalogEntry x, AgentNodeSetting? s) => new(x.NodeType, s?.DisplayName ?? x.DisplayName, s?.Description ?? x.Description, x.Stage, x.SideEffectLevel, s?.IsEnabled ?? true, s?.TimeoutSeconds ?? x.DefaultPolicy.TimeoutSeconds, s?.MaxRetryCount ?? x.DefaultPolicy.MaxRetryCount, ParseMetadata(s?.MetadataJson), x.Contract, x.RequiredBlackboardKeys, x.ProducedBlackboardKeys, x.AllowedNextNodeTypes);
     private static JsonElement? ParseMetadata(string? value) => string.IsNullOrWhiteSpace(value) ? null : JsonDocument.Parse(value).RootElement.Clone();
 }

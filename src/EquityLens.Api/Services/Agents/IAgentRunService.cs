@@ -1,9 +1,11 @@
 using EquityLens.Api.Contracts.Agents;
+using EquityLens.Api.Contracts.Research;
 
 namespace EquityLens.Api.Services.Agents;
 
 public interface IAgentRunService
 {
+    Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, CancellationToken cancellationToken = default);
     Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
         Guid userId,
         Guid researchRunId,

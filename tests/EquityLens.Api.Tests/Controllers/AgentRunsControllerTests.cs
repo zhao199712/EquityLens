@@ -1,5 +1,6 @@
 using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Agents;
+using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Controllers;
 using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.CurrentUser;
@@ -130,6 +131,11 @@ public sealed class AgentRunsControllerTests
 
     private sealed class FakeAgentRunService : IAgentRunService
     {
+        public Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, CancellationToken cancellationToken = default)
+        {
+            var researchRunId = Guid.NewGuid();
+            return Task.FromResult((new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.ResearchInvestigation, AgentTypes.Research, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0), researchRunId));
+        }
         public bool CreateWasCalled { get; private set; }
         public bool CreateDraftRevisionWasCalled { get; private set; }
         public bool CreateResearchQualityReviewWasCalled { get; private set; }

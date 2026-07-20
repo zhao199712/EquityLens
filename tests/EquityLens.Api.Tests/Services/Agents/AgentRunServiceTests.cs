@@ -111,6 +111,46 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
+    public void ResearchInvestigationPolicyEvaluator_DeterministicEvidencePass_OverridesMediumMissingCitation()
+    {
+        var board = new JsonObject
+        {
+            [AgentBlackboardKeys.EvidencePacket] = new JsonObject { ["evidenceSummary"] = new JsonObject { ["hasAnswer"] = true, ["hasCitations"] = true, ["emptyQuoteCount"] = 0 } },
+            [AgentBlackboardKeys.EvidenceChecks] = new JsonObject { [EvidenceCheckFields.FindingCount] = 0 }
+        };
+        var review = new JsonObject
+        {
+            [CriticReviewFields.OverallSeverity] = "Medium",
+            [CriticReviewFields.Findings] = new JsonArray { AgentBlackboardContracts.CreateFinding("Medium", "MissingCitation", "LLM claimed citation text was missing.", "Provide quotes.") }
+        };
+
+        var decision = new ResearchInvestigationPolicyEvaluator().Evaluate(new(AgentWorkflowTypes.ResearchInvestigation, "finalizeCriticReport:1", board, review));
+
+        Assert.Equal("AcceptAnswer", decision.RecommendedNextAction);
+        Assert.False(decision.RequiresRevision);
+        Assert.False(decision.RequiresMoreEvidence);
+    }
+
+    [Fact]
+    public void ResearchInvestigationPolicyEvaluator_HighFinding_DoesNotUseFastPath()
+    {
+        var board = new JsonObject
+        {
+            [AgentBlackboardKeys.EvidencePacket] = new JsonObject { ["evidenceSummary"] = new JsonObject { ["hasAnswer"] = true, ["hasCitations"] = true, ["emptyQuoteCount"] = 0 } },
+            [AgentBlackboardKeys.EvidenceChecks] = new JsonObject { [EvidenceCheckFields.FindingCount] = 0 }
+        };
+        var review = new JsonObject
+        {
+            [CriticReviewFields.OverallSeverity] = "High",
+            [CriticReviewFields.Findings] = new JsonArray { AgentBlackboardContracts.CreateFinding("High", "InsufficientEvidence", "Material gap.", "Retrieve evidence.") }
+        };
+
+        var decision = new ResearchInvestigationPolicyEvaluator().Evaluate(new(AgentWorkflowTypes.ResearchInvestigation, "finalizeCriticReport:1", board, review));
+
+        Assert.True(decision.RequiresMoreEvidence);
+    }
+
+    [Fact]
     public void ResearchQualityReviewPolicyEvaluator_NonEvidenceFinding_SetsRouteBackToNull()
     {
         var evaluator = new ResearchQualityReviewPolicyEvaluator();
@@ -641,6 +681,29 @@ public sealed class AgentRunServiceTests
         var summary = await service.CreateResearchQualityReviewAsync(Guid.NewGuid(), researchRunId, CancellationToken.None);
 
         Assert.Equal(AgentRunStatuses.Succeeded, summary.Status);
+    }
+
+    [Fact]
+    public async Task WorkflowAdmin_ResearchQualityReview_ReportsInitialDynamicGraph()
+    {
+        await using var db = CreateDbContext();
+        var service = new AgentWorkflowAdminService(
+            db,
+            new AgentWorkflowCatalog(),
+            [new ResearchQualityReviewWorkflowDefinitionProvider()],
+            new NodeCapabilityRegistry());
+
+        var workflows = await service.ListWorkflowsAsync();
+
+        var workflow = workflows.Single(x => x.WorkflowType == AgentWorkflowTypes.ResearchQualityReview);
+        Assert.Equal("DynamicStateful", workflow.OrchestrationMode);
+        Assert.Equal(5, workflow.InitialNodes.Count);
+        Assert.Equal(4, workflow.InitialEdges.Count);
+        Assert.Equal(ResearchQualityReviewNodeTypes.LoadResearchRun, workflow.InitialNodes[0].NodeType);
+        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, workflow.InitialNodes[^1].NodeType);
+        Assert.Contains(DraftRevisionNodeTypes.DraftRevisedAnswer, workflow.DynamicNodeTypes);
+        Assert.Contains(EvidenceRemediationNodeTypes.RetrieveEvidence, workflow.DynamicNodeTypes);
+        Assert.Contains(EvidenceReanalysisNodeTypes.Reanalyze, workflow.DynamicNodeTypes);
     }
 
     [Fact]

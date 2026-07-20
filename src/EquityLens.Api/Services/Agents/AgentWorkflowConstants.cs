@@ -8,6 +8,7 @@ public static class AgentWorkflowTypes
     public const string PortfolioDiagnosis = "PortfolioDiagnosis";
     public const string EvidenceRemediation = "EvidenceRemediation";
     public const string EvidenceReanalysis = "EvidenceReanalysis";
+    public const string ResearchInvestigation = "ResearchInvestigation";
 }
 
 public static class AgentTypes
@@ -34,6 +35,36 @@ public static class ResearchQualityReviewWorkflow
     public const int Version = 4;
     public const int MaxRetrievalIterations = 2;
     public const int MaxDynamicNodes = 18;
+}
+
+public static class ResearchInvestigationWorkflow
+{
+    public const int Version = 1;
+    public const int MaxInitialPlanNodes = 10;
+}
+
+public static class ResearchInvestigationNodeKeys
+{
+    public const string Validate = "validateResearchRequest";
+    public const string DetectIntent = "detectResearchIntent";
+    public const string PlanRetrieval = "planResearchRetrieval";
+    public const string RetrieveLocal = "retrieveLocalResearchEvidence";
+    public const string EvaluateEvidence = "evaluateInitialEvidencePolicy";
+    public const string RetrieveWeb = "retrieveWebResearchEvidence";
+    public const string RankEvidence = "rankAndSelectResearchEvidence";
+    public const string DraftAnswer = "draftResearchAnswer";
+}
+
+public static class ResearchInvestigationNodeTypes
+{
+    public const string Validate = "ValidateResearchRequest";
+    public const string DetectIntent = "DetectResearchIntent";
+    public const string PlanRetrieval = "PlanResearchRetrieval";
+    public const string RetrieveLocal = "RetrieveLocalResearchEvidence";
+    public const string EvaluateEvidence = "EvaluateInitialEvidencePolicy";
+    public const string RetrieveWeb = "RetrieveWebResearchEvidence";
+    public const string RankEvidence = "RankAndSelectResearchEvidence";
+    public const string DraftAnswer = "DraftResearchAnswer";
 }
 
 public static class PortfolioDiagnosisWorkflow
@@ -227,6 +258,9 @@ public static class AgentEventTypes
     public const string ToolCallFailed = "ToolCallFailed";
     public const string BlackboardUpdated = "BlackboardUpdated";
     public const string SupervisorDecision = "SupervisorDecision";
+    public const string SupervisorPlanningStarted = "SupervisorPlanningStarted";
+    public const string SchedulerDecision = "SchedulerDecision";
+    public const string SupervisorRouteDecision = "SupervisorRouteDecision";
     public const string PlannerProposed = "PlannerProposed";
     public const string PlanValidated = "PlanValidated";
     public const string PlanRejected = "PlanRejected";

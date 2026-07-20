@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import { getResearchRun, type ResearchRunDetail } from '../../services/research'
-import { createResearchQualityReview } from '../../services/agentRuns'
 import { listAgentRuns, type AgentRunListItem } from '../../services/agentRuns'
 
 const route = useRoute()
@@ -11,9 +10,9 @@ const router = useRouter()
 const runDetail = ref<ResearchRunDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
-const actionLoading = ref(false)
 const activeTab = ref<'answer' | 'citations' | 'steps' | 'candidates' | 'agentRuns'>('answer')
 const agentRuns = ref<AgentRunListItem[]>([])
+const investigationRun = computed(() => agentRuns.value.find(run => run.workflowType === 'ResearchInvestigation') ?? agentRuns.value.find(run => run.workflowType === 'ResearchQualityReview') ?? null)
 
 onMounted(loadRun)
 
@@ -37,20 +36,6 @@ async function loadAgentRuns(researchRunId: string) {
     agentRuns.value = all
   } catch {
     // non-critical
-  }
-}
-
-async function handleCreateQualityReview() {
-  if (!runDetail.value) return
-  actionLoading.value = true
-  error.value = ''
-  try {
-    const created = await createResearchQualityReview(runDetail.value.run.id)
-    router.push({ name: 'agent-run-detail', params: { id: created.id } })
-  } catch {
-    error.value = '建立 CriticReview 失敗。'
-  } finally {
-    actionLoading.value = false
   }
 }
 
@@ -96,9 +81,7 @@ function statusColor(status: string) {
           </div>
           <h2 class="question-title">{{ runDetail.run.question }}</h2>
           <div class="head-actions">
-            <button class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleCreateQualityReview">
-              {{ actionLoading ? '建立中...' : '執行 Quality Review' }}
-            </button>
+            <button v-if="investigationRun" class="prestige-btn prestige-btn-solid" @click="router.push({ name: 'agent-run-detail', params: { id: investigationRun.id } })">查看 Investigation</button>
             <button class="prestige-btn" @click="loadRun">重新整理</button>
           </div>
           <div class="meta-row">

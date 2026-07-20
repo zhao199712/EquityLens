@@ -205,7 +205,7 @@ public sealed class BuildEvidencePacketNodeHandler : IAgentNodeHandler
         var value = citation?.AsObject();
         return new EvidencePacketCitation(
             GetInt(value, "citationIndex") ?? 0,
-            GetString(value, "sourceType"),
+            GetCitationSourceType(value),
             GetGuid(value, "documentId"),
             GetGuid(value, "documentChunkId"),
             GetString(value, "title"),
@@ -215,6 +215,22 @@ public sealed class BuildEvidencePacketNodeHandler : IAgentNodeHandler
     }
 
     private static string? GetString(JsonObject? value, string key) => value?[key] is null ? null : value[key]!.GetValue<string>();
+
+    private static string? GetCitationSourceType(JsonObject? value)
+    {
+        if (value?["sourceType"] is not JsonValue sourceType) return null;
+        if (sourceType.TryGetValue<string>(out var text)) return text;
+        if (sourceType.TryGetValue<int>(out var number)
+            && Enum.IsDefined(typeof(EquityLens.Api.Contracts.Research.CitationSourceType), number))
+        {
+            return ((EquityLens.Api.Contracts.Research.CitationSourceType)number).ToString();
+        }
+
+        throw new AgentNodeException(
+            "citation_source_type_invalid",
+            AgentNodeErrorCategories.ValidationFailure,
+            "Citation sourceType must be LocalDocument, Web, 0, or 1.");
+    }
 
     private static Guid? GetGuid(JsonObject? value, string key) => value?[key] is null ? null : value[key]!.GetValue<Guid>();
 
@@ -381,6 +397,8 @@ public sealed class FinalizeCriticReportNodeHandler : IAgentNodeHandler
         run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
         run.OutputJson = node.OutputJson;
         context.AddEvent(run, node, AgentEventTypes.BlackboardUpdated, "Final critic report written to blackboard.", new { overallSeverity = finalOutput.OverallSeverity, policyDecision.RecommendedNextAction, policyDecision.Reason });
+        if (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation)
+            context.AddEvent(run, node, AgentEventTypes.SupervisorRouteDecision, $"Research investigation route: {policyDecision.RecommendedNextAction}.", new { policyDecision.RecommendedNextAction, policyDecision.RequiresRevision, policyDecision.RequiresMoreEvidence, policyDecision.Reason });
         return Task.CompletedTask;
     }
 }

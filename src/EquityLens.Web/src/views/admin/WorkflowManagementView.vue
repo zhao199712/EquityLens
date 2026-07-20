@@ -9,9 +9,21 @@ const editing = ref<WorkflowAdmin | null>(null)
 const message = useMessage()
 
 function flowSummary(workflow: WorkflowAdmin) {
-  const first = workflow.nodeTypes[0] ?? '—'
-  const last = workflow.nodeTypes.at(-1) ?? '—'
-  return `${workflow.nodeTypes.length} nodes · ${workflow.edges.length} edges\n${first} → ${last}`
+  return `${workflow.initialNodes.length} nodes · ${workflow.initialEdges.length} edges\n${initialEndpoints(workflow)}`
+}
+
+function initialEndpoints(workflow: WorkflowAdmin) {
+  const incoming = new Set(workflow.initialEdges.map(edge => edge.to))
+  const outgoing = new Set(workflow.initialEdges.map(edge => edge.from))
+  const entries = workflow.initialNodes.filter(node => !incoming.has(node.nodeKey)).map(node => node.nodeType)
+  const terminals = workflow.initialNodes.filter(node => !outgoing.has(node.nodeKey)).map(node => node.nodeType)
+  return `${entries.join(', ') || '—'} → ${terminals.join(', ') || '—'}`
+}
+
+function modeLabel(mode: string) {
+  if (mode === 'DynamicStateful') return '動態 Stateful'
+  if (mode === 'Stateful') return 'Stateful'
+  return '固定 DAG'
 }
 
 function saveError(error: unknown) {
@@ -56,7 +68,7 @@ async function save() {
 const columns: DataTableColumns<WorkflowAdmin> = [
   { title: 'Workflow', key: 'displayName', render: row => h('div', { class: 'wf-name' }, [h('strong', row.displayName), h('code', row.workflowType)]) },
   { title: 'Agent', key: 'agentType' },
-  { title: 'Flow', key: 'flow', render: row => h('span', { class: 'wf-flow-summary', title: flowSummary(row) }, [h('strong', `${row.nodeTypes.length} nodes · ${row.edges.length} edges`), h('span', `${row.nodeTypes[0] ?? '—'} → ${row.nodeTypes.at(-1) ?? '—'}`)]) },
+  { title: 'Flow', key: 'flow', render: row => h('span', { class: 'wf-flow-summary', title: flowSummary(row) }, [h('span', { class: 'wf-flow-heading' }, [h('strong', `初始 ${row.initialNodes.length} nodes · ${row.initialEdges.length} edges`), row.orchestrationMode === 'DynamicStateful' ? h(NTag, { size: 'small', type: 'info' }, () => '動態') : null]), h('span', initialEndpoints(row))]) },
   { title: '狀態', key: 'isEnabled', render: row => h(NTag, { type: row.isEnabled ? 'success' : 'error' }, () => row.isEnabled ? '啟用' : '停用') },
   { title: '管理', key: 'action', render: row => h(NButton, { size: 'small', onClick: () => edit(row) }, () => '設定') },
 ]
@@ -86,17 +98,23 @@ onMounted(load)
 
         <details class="wf-details" open>
           <summary>流程定義（唯讀）</summary>
-          <dl class="wf-definition"><dt>Workflow type</dt><dd><code>{{ editing.workflowType }}</code></dd><dt>Agent</dt><dd>{{ editing.agentType }}</dd><dt>流程規模</dt><dd>{{ editing.nodeTypes.length }} nodes · {{ editing.edges.length }} edges</dd><dt>入口 Node</dt><dd><code>{{ editing.nodeTypes[0] ?? '—' }}</code></dd><dt>終點 Node</dt><dd><code>{{ editing.nodeTypes.at(-1) ?? '—' }}</code></dd></dl>
+          <dl class="wf-definition"><dt>Workflow type</dt><dd><code>{{ editing.workflowType }}</code></dd><dt>Agent</dt><dd>{{ editing.agentType }}</dd><dt>編排模式</dt><dd>{{ modeLabel(editing.orchestrationMode) }}</dd><dt>初始流程規模</dt><dd>{{ editing.initialNodes.length }} nodes · {{ editing.initialEdges.length }} edges</dd><dt>初始入口／終點</dt><dd><code>{{ initialEndpoints(editing) }}</code></dd></dl>
         </details>
 
         <details class="wf-details" open>
-          <summary>執行步驟（唯讀）</summary>
-          <ol class="wf-steps"><li v-for="nodeType in editing.nodeTypes" :key="nodeType"><code>{{ nodeType }}</code></li></ol>
+          <summary>初始執行步驟（唯讀）</summary>
+          <ol class="wf-steps"><li v-for="node in editing.initialNodes" :key="node.nodeKey"><code>{{ node.nodeType }}</code><small v-if="node.nodeKey !== node.nodeType">{{ node.nodeKey }}</small></li></ol>
         </details>
 
         <details class="wf-details">
-          <summary>DAG Edges（唯讀）</summary>
-          <ul class="wf-edges"><li v-for="edge in editing.edges" :key="`${edge.from}-${edge.to}`"><code>{{ edge.from }}</code> <span>→</span> <code>{{ edge.to }}</code></li></ul>
+          <summary>初始 DAG Edges（唯讀）</summary>
+          <ul class="wf-edges"><li v-for="edge in editing.initialEdges" :key="`${edge.from}-${edge.to}`"><code>{{ edge.from }}</code> <span>→</span> <code>{{ edge.to }}</code></li></ul>
+        </details>
+
+        <details v-if="editing.orchestrationMode === 'DynamicStateful'" class="wf-details" open>
+          <summary>可動態加入的 Node Types</summary>
+          <ul class="wf-dynamic-nodes"><li v-for="nodeType in editing.dynamicNodeTypes" :key="nodeType"><code>{{ nodeType }}</code></li></ul>
+          <p class="wf-detail-note">實際執行圖由 Planner 依執行狀態建立，請以個別 Agent Run 的持久化 Workflow Definition 為準。</p>
         </details>
 
         <aside class="wf-notice">停用 Workflow 會拒絕建立新的 Agent Run。Node 的 timeout、retry、side effect 與 contract 請至 Node 管理查看與設定。</aside>
@@ -117,6 +135,7 @@ onMounted(load)
 .table-panel :deep(.n-button) { color: var(--gold); background: transparent; border: 1px solid var(--gold-border); border-radius: 4px; }
 .table-panel :deep(.n-tag) { background: transparent; }
 .wf-name, .wf-flow-summary { display: grid; gap: 3px; }
+.wf-flow-heading { display: flex; align-items: center; gap: 8px; }
 .wf-name code, .wf-flow-summary span { color: var(--muted); font-size: 11px; }
 .wf-section { display: grid; gap: 12px; }
 .wf-section-title, .wf-field-label { margin: 0; color: var(--gold); font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
@@ -125,8 +144,11 @@ onMounted(load)
 .wf-details summary { cursor: pointer; padding: 12px 14px; color: var(--gold); font-size: 12px; font-weight: 600; letter-spacing: .08em; }
 .wf-definition { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 7px 12px; padding: 0 14px 14px; margin: 0; font-size: 12px; line-height: 1.5; }
 dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
-.wf-steps, .wf-edges { display: grid; gap: 8px; margin: 0; padding: 0 14px 14px 36px; font-size: 12px; line-height: 1.5; }
+.wf-steps, .wf-edges, .wf-dynamic-nodes { display: grid; gap: 8px; margin: 0; padding: 0 14px 14px 36px; font-size: 12px; line-height: 1.5; }
+.wf-steps small { display: block; color: var(--muted); }
 .wf-steps li:not(:last-child)::after { content: '↓'; display: block; color: var(--gold); margin-top: 5px; }
 .wf-edges { list-style: none; padding-left: 14px; }.wf-edges li { display: flex; gap: 8px; align-items: baseline; overflow-wrap: anywhere; }.wf-edges span { color: var(--gold); }
+.wf-dynamic-nodes { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); list-style: none; padding-left: 14px; }
+.wf-detail-note { margin: 0; padding: 0 14px 14px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .wf-notice { padding: 12px 14px; border-left: 2px solid var(--gold); background: rgba(201, 168, 106, .07); color: var(--muted); font-size: 12px; line-height: 1.6; }
 </style>
