@@ -5,11 +5,10 @@ import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import {
   cancelAgentRun,
   createDraftRevision,
-  getAgentRun,
   retryAgentRun,
-  type AgentRunDetail,
   type AgentRunNodeDto,
 } from '../../services/agentRuns'
+import { useAgentRunPolling } from '../../composables/useAgentRunPolling'
 
 interface CriticFinding {
   Severity: string
@@ -40,27 +39,12 @@ interface DraftRevisionOutput {
 
 const route = useRoute()
 const router = useRouter()
-const run = ref<AgentRunDetail | null>(null)
-const loading = ref(true)
+const { agentRun: run, isLoading: loading, error, startPolling, refresh: loadRun } = useAgentRunPolling(route.params.id as string)
 const actionLoading = ref(false)
-const error = ref('')
 const activeTab = ref<'timeline' | 'nodes' | 'toolCalls' | 'feedback' | 'blackboard' | 'workflow'>('timeline')
 const debugExpanded = ref(false)
 
-onMounted(loadRun)
-
-async function loadRun() {
-  const id = route.params.id as string
-  loading.value = true
-  error.value = ''
-  try {
-    run.value = await getAgentRun(id)
-  } catch {
-    error.value = '無法載入 Agent Run 詳情。'
-  } finally {
-    loading.value = false
-  }
-}
+onMounted(startPolling)
 
 async function handleRetry() {
   if (!run.value) return
@@ -204,7 +188,6 @@ const nextActionLabel = computed(() => {
                 <button v-if="run.run.status === 'Failed'" class="kimi-btn kimi-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
                 <button v-if="run.run.status === 'Running' || run.run.status === 'Pending'" class="kimi-btn" style="border-color: #f87171; color: #f87171" :disabled="actionLoading" @click="handleCancel">取消</button>
                 <button v-if="canCreateDraftRevision" class="kimi-btn kimi-btn-solid" :disabled="actionLoading" @click="handleCreateDraftRevision">產生修訂稿</button>
-                <button class="kimi-btn" :disabled="actionLoading" @click="loadRun">重新整理</button>
               </div>
 
               <div style="display: flex; gap: 20px; margin-top: 12px; font-size: 12px; color: var(--kimi-muted); flex-wrap: wrap">

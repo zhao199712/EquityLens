@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import { getResearchRun, type ResearchRunDetail } from '../../services/research'
-import { createCriticReview } from '../../services/agentRuns'
+import { createResearchQualityReview } from '../../services/agentRuns'
 import { listAgentRuns, type AgentRunListItem } from '../../services/agentRuns'
 
 const route = useRoute()
@@ -40,15 +40,15 @@ async function loadAgentRuns(researchRunId: string) {
   }
 }
 
-async function handleCreateCriticReview() {
+async function handleCreateQualityReview() {
   if (!runDetail.value) return
   actionLoading.value = true
   error.value = ''
   try {
-    const created = await createCriticReview(runDetail.value.run.id)
+    const created = await createResearchQualityReview(runDetail.value.run.id)
     router.push({ name: 'agent-run-detail', params: { id: created.id } })
   } catch {
-    error.value = '建立 CriticReview 失敗。'
+    error.value = '建立 Quality Review 失敗。'
   } finally {
     actionLoading.value = false
   }
@@ -93,8 +93,8 @@ function statusColor(status: string) {
               </div>
               <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 600">{{ runDetail.run.question }}</h2>
               <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
-                <button class="kimi-btn kimi-btn-solid" :disabled="actionLoading" @click="handleCreateCriticReview">
-                  {{ actionLoading ? '建立中...' : '執行 Critic Review' }}
+                <button class="kimi-btn kimi-btn-solid" :disabled="actionLoading" @click="handleCreateQualityReview">
+                  {{ actionLoading ? '建立中...' : '執行 Quality Review' }}
                 </button>
                 <button class="kimi-btn" @click="loadRun">重新整理</button>
               </div>

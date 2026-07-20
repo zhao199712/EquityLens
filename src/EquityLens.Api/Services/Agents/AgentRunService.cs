@@ -90,17 +90,22 @@ public sealed class AgentRunService : IAgentRunService
             query = query.Where(x => x.WorkflowType == workflowType.Trim());
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(x => x.Status == status.Trim());
+
+        var runs = await query
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(Math.Clamp(limit, 100, 1000))
+            .ToListAsync(cancellationToken);
+
         if (researchRunId.HasValue)
         {
             var rid = researchRunId.Value.ToString("D");
-            query = query.Where(x => x.InputJson.Contains($"\"researchRunId\":\"{rid}\""));
+            runs = runs.Where(x => x.InputJson.Contains($"\"researchRunId\":\"{rid}\"")).ToList();
         }
 
-        return await query
-            .OrderByDescending(x => x.CreatedAtUtc)
+        return runs
             .Take(Math.Clamp(limit, 1, 100))
             .Select(x => MapSummary(x))
-            .ToListAsync(cancellationToken);
+            .ToList();
     }
 
     public async Task<AgentRunDetailResponse?> GetByIdAsync(
