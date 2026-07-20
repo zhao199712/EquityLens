@@ -32,4 +32,12 @@ public interface IPortfolioValuationService
         DateOnly from,
         DateOnly to,
         CancellationToken cancellationToken);
+
+    /// <summary>Background workflows use the persisted Run owner rather than HTTP claims.</summary>
+    Task<Result<PortfolioValuationHistoryResponse>> GetValuationHistoryForUserAsync(
+        Guid portfolioId,
+        Guid userId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken);
 }

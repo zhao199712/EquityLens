@@ -14,6 +14,8 @@ export interface AgentRunListItem {
 export interface AgentRunNodeDto {
   id: string
   nodeKey: string
+  templateNodeKey: string
+  iteration: number
   nodeType: string
   status: string
   inputJson: Record<string, unknown> | null
@@ -109,6 +111,16 @@ export async function createDraftRevision(criticReviewRunId: string): Promise<Ag
 
 export async function createResearchQualityReview(researchRunId: string): Promise<AgentRunCreatedResponse> {
   const response = await http.post<AgentRunCreatedResponse>('/agent-runs/research-quality-review', { researchRunId })
+  return response.data
+}
+
+export async function createEvidenceRemediation(criticReviewRunId: string): Promise<AgentRunCreatedResponse> {
+  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/evidence-remediation', { criticReviewRunId })
+  return response.data
+}
+
+export async function createEvidenceReanalysis(evidenceRemediationRunId: string): Promise<AgentRunCreatedResponse> {
+  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/evidence-reanalysis', { evidenceRemediationRunId })
   return response.data
 }
 

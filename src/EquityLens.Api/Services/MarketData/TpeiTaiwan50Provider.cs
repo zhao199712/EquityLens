@@ -6,7 +6,8 @@ using CsvHelper.Configuration;
 namespace EquityLens.Api.Services.MarketData;
 
 /// <summary>
-/// TPEX 0050 成分股提供者，從證櫃 API 取得 CSV 格式成分股清單。
+/// 富櫃50成分股提供者，從證櫃 API 取得 CSV 格式成分股清單。
+/// 請勿將此來源用於元大台灣50 ETF（0050）。
 /// </summary>
 public sealed class TpeiTaiwan50Provider : ITaiwan50ConstituentProvider
 {
@@ -16,7 +17,7 @@ public sealed class TpeiTaiwan50Provider : ITaiwan50ConstituentProvider
     private readonly HttpClient _httpClient;
 
     /// <summary>
-    /// 初始化 TPEX 0050 成分股提供者。
+    /// 初始化富櫃50成分股提供者。
     /// </summary>
     /// <param name="httpClient">HTTP 客戶端。</param>
     public TpeiTaiwan50Provider(HttpClient httpClient)

@@ -5,6 +5,10 @@ public sealed record CreateCriticReviewRequest(Guid ResearchRunId);
 public sealed record CreateDraftRevisionRequest(Guid CriticReviewRunId);
 
 public sealed record CreateResearchQualityReviewRequest(Guid ResearchRunId);
+public sealed record CreateEvidenceRemediationRequest(Guid CriticReviewRunId);
+public sealed record CreateEvidenceReanalysisRequest(Guid EvidenceRemediationRunId);
+
+public sealed record CreatePortfolioDiagnosisRequest(DateOnly? From = null, DateOnly? To = null);
 
 public sealed record AgentRunSummaryResponse(
     Guid Id,
@@ -19,6 +23,8 @@ public sealed record AgentRunSummaryResponse(
 public sealed record AgentRunNodeResponse(
     Guid Id,
     string NodeKey,
+    string TemplateNodeKey,
+    int Iteration,
     string NodeType,
     string Status,
     string? InputJson,

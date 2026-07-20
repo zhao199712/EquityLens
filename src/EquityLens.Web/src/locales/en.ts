@@ -1,5 +1,6 @@
 export default {
   nav: {
+    home: 'Home',
     dashboard: 'Dashboard',
     portfolios: 'Portfolios',
     riskRuns: 'Risk Runs',

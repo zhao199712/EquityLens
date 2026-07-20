@@ -24,7 +24,7 @@ async function handleLogin() {
 
   try {
     await authStore.login(email.value, password.value)
-    router.push({ name: 'dashboard' })
+    router.push({ name: authStore.user?.role === 'Admin' ? 'admin-agent-runs' : 'dashboard' })
   } catch (e: any) {
     error.value = e?.response?.data?.message || t('auth.login.errorLoginFailed')
   } finally {
@@ -34,36 +34,36 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="kimi-login-page">
-    <div class="kimi-login-container">
+  <div class="prestige-page auth-page">
+    <div class="auth-container prestige-fade">
       <!-- Left Side - Brand -->
-      <div class="kimi-login-brand">
-        <div class="kimi-login-brand-content">
-          <div class="kimi-login-logo">
-            <span class="kimi-brand-mark">EL</span>
+      <div class="auth-brand">
+        <div class="auth-brand-content">
+          <div class="auth-logo">
+            <span class="auth-logo-mark">EL</span>
           </div>
-          <h1 class="kimi-login-title">EQUITYLENS</h1>
-          <p class="kimi-login-subtitle">AI-ASSISTED INVESTMENT ANALYTICS</p>
-          <div class="kimi-login-features">
-            <div class="kimi-feature-item">
-              <div class="kimi-feature-icon">📊</div>
+          <h1 class="auth-title">EQUITYLENS</h1>
+          <p class="auth-subtitle">AI-ASSISTED INVESTMENT ANALYTICS</p>
+          <div class="auth-features">
+            <div class="auth-feature-item">
+              <div class="auth-feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V12"/><path d="M10 20V5"/><path d="M16 20v-8"/><path d="M2.5 20h19"/></svg></div>
               <div>
-                <div class="kimi-feature-title">{{ t('auth.login.featurePortfolio') }}</div>
-                <div class="kimi-feature-desc">{{ t('auth.login.featurePortfolioDesc') }}</div>
+                <div class="auth-feature-title">{{ t('auth.login.featurePortfolio') }}</div>
+                <div class="auth-feature-desc">{{ t('auth.login.featurePortfolioDesc') }}</div>
               </div>
             </div>
-            <div class="kimi-feature-item">
-              <div class="kimi-feature-icon">🤖</div>
+            <div class="auth-feature-item">
+              <div class="auth-feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.6 5.6 1.9-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9L12 3z"/><path d="M18.5 15.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6z"/></svg></div>
               <div>
-                <div class="kimi-feature-title">{{ t('auth.login.featureAI') }}</div>
-                <div class="kimi-feature-desc">{{ t('auth.login.featureAIDesc') }}</div>
+                <div class="auth-feature-title">{{ t('auth.login.featureAI') }}</div>
+                <div class="auth-feature-desc">{{ t('auth.login.featureAIDesc') }}</div>
               </div>
             </div>
-            <div class="kimi-feature-item">
-              <div class="kimi-feature-icon">📈</div>
+            <div class="auth-feature-item">
+              <div class="auth-feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.6-3 8.2-7 10-4-1.8-7-5.4-7-10V6l7-3z"/><path d="M9 11.5l2 2 4-4"/></svg></div>
               <div>
-                <div class="kimi-feature-title">{{ t('auth.login.featureRisk') }}</div>
-                <div class="kimi-feature-desc">{{ t('auth.login.featureRiskDesc') }}</div>
+                <div class="auth-feature-title">{{ t('auth.login.featureRisk') }}</div>
+                <div class="auth-feature-desc">{{ t('auth.login.featureRiskDesc') }}</div>
               </div>
             </div>
           </div>
@@ -71,51 +71,52 @@ async function handleLogin() {
       </div>
 
       <!-- Right Side - Login Form -->
-      <div class="kimi-login-form-wrapper">
-        <div class="kimi-login-form">
-          <div class="kimi-login-header">
+      <div class="auth-form-wrapper">
+        <div class="auth-form">
+          <div class="auth-form-header">
+            <span class="prestige-label">Member Access</span>
             <h2>{{ t('auth.login.welcomeBack') }}</h2>
             <p>{{ t('auth.login.pleaseLogin') }}</p>
           </div>
 
-          <form class="kimi-form" @submit.prevent="handleLogin">
-            <div class="kimi-form-group">
-              <label class="kimi-label">{{ t('auth.login.email') }}</label>
+          <form class="auth-fields" @submit.prevent="handleLogin">
+            <div class="auth-field">
+              <label class="auth-field-label">{{ t('auth.login.email') }}</label>
               <input
                 v-model="email"
                 type="email"
-                class="kimi-input"
+                class="prestige-input"
                 placeholder="your@email.com"
                 autocomplete="email"
               />
             </div>
 
-            <div class="kimi-form-group">
-              <label class="kimi-label">{{ t('auth.login.password') }}</label>
+            <div class="auth-field">
+              <label class="auth-field-label">{{ t('auth.login.password') }}</label>
               <input
                 v-model="password"
                 type="password"
-                class="kimi-input"
+                class="prestige-input"
                 placeholder="••••••••"
                 autocomplete="current-password"
               />
             </div>
 
-            <div v-if="error" class="kimi-error">
+            <div v-if="error" class="prestige-error">
               {{ error }}
             </div>
 
             <button
               type="submit"
-              class="kimi-btn kimi-btn-primary kimi-btn-full"
+              class="prestige-btn prestige-btn-solid auth-submit"
               :disabled="loading"
             >
-              <span v-if="loading" class="kimi-spinner"></span>
+              <span v-if="loading" class="auth-spinner"></span>
               <span v-else>{{ t('auth.login.loginBtn') }}</span>
             </button>
           </form>
 
-          <div class="kimi-login-footer">
+          <div class="auth-form-footer">
             <p>{{ t('auth.login.noAccount') }} <RouterLink to="/register">{{ t('auth.login.register') }}</RouterLink></p>
           </div>
         </div>
@@ -125,105 +126,117 @@ async function handleLogin() {
 </template>
 
 <style scoped>
-.kimi-login-page {
+.auth-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--kimi-bg-light);
   padding: 20px;
 }
 
-.kimi-login-container {
+.auth-container {
   display: flex;
   width: 100%;
   max-width: 900px;
   min-height: 520px;
-  background: var(--kimi-card-light);
-  border: 1px solid var(--kimi-border-light);
+  background: var(--panel-bg);
+  border: 1px solid var(--gold-border);
+  border-radius: 6px;
   overflow: hidden;
 }
 
-.kimi-login-brand {
+.auth-brand {
   flex: 1;
   padding: 48px 40px;
-  background: var(--kimi-bg-light);
   display: flex;
   align-items: center;
-  border-right: 1px solid var(--kimi-border-light);
+  border-right: 1px solid var(--gold-border-soft);
+  background:
+    repeating-radial-gradient(circle at 50% 0%, rgba(201, 168, 106, 0.03) 0 2px, transparent 2px 90px);
 }
 
-.kimi-login-brand-content {
+.auth-brand-content {
   width: 100%;
 }
 
-.kimi-login-logo {
+.auth-logo {
   margin-bottom: 24px;
 }
 
-.kimi-login-logo .kimi-brand-mark {
+.auth-logo-mark {
   display: inline-grid;
   width: 48px;
   height: 48px;
   place-items: center;
-  background: var(--kimi-text-light);
-  color: var(--kimi-bg-light);
-  font-size: 16px;
+  border: 1px solid var(--gold-border);
+  border-radius: 4px;
+  color: var(--gold);
+  font-family: var(--serif);
+  font-size: 17px;
   font-weight: 700;
+  letter-spacing: 0.05em;
 }
 
-.kimi-login-title {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  margin: 0 0 4px;
-  color: var(--kimi-text-light);
+.auth-title {
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin: 0 0 6px;
 }
 
-.kimi-login-subtitle {
+.auth-subtitle {
   font-size: 11px;
-  letter-spacing: 0.2em;
-  color: var(--kimi-muted);
-  margin: 0 0 32px;
+  letter-spacing: 0.24em;
+  color: var(--gold);
+  margin: 0 0 36px;
   text-transform: uppercase;
 }
 
-.kimi-login-features {
+.auth-features {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 0;
 }
 
-.kimi-feature-item {
+.auth-feature-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--gold-border-soft);
 }
 
-.kimi-feature-icon {
+.auth-feature-item:first-child {
+  border-top: 1px solid var(--gold-border-soft);
+}
+
+.auth-feature-icon {
   width: 36px;
   height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--kimi-bg-light);
-  border: 1px solid var(--kimi-border-light);
-  font-size: 16px;
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+  color: var(--gold);
+  flex-shrink: 0;
 }
 
-.kimi-feature-title {
+.auth-feature-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--kimi-text-light);
+  color: var(--ivory);
 }
 
-.kimi-feature-desc {
+.auth-feature-desc {
   font-size: 12px;
-  color: var(--kimi-muted);
+  color: var(--muted);
   margin-top: 2px;
+  line-height: 1.6;
 }
 
-.kimi-login-form-wrapper {
+.auth-form-wrapper {
   flex: 1;
   display: flex;
   align-items: center;
@@ -231,161 +244,107 @@ async function handleLogin() {
   padding: 48px 40px;
 }
 
-.kimi-login-form {
+.auth-form {
   width: 100%;
   max-width: 320px;
 }
 
-.kimi-login-header {
+.auth-form-header {
   margin-bottom: 32px;
 }
 
-.kimi-login-header h2 {
-  font-size: 22px;
+.auth-form-header h2 {
+  font-family: var(--serif);
+  font-size: 24px;
   font-weight: 600;
-  color: var(--kimi-text-light);
-  margin: 0 0 4px;
+  margin: 10px 0 4px;
 }
 
-.kimi-login-header p {
+.auth-form-header p {
   font-size: 13px;
-  color: var(--kimi-muted);
+  color: var(--muted);
   margin: 0;
 }
 
-.kimi-form {
+.auth-fields {
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-.kimi-form-group {
+.auth-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.kimi-label {
-  font-size: 12px;
+.auth-field-label {
+  font-size: 11px;
   font-weight: 600;
-  color: var(--kimi-text-light);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
 }
 
-.kimi-input {
+.auth-submit {
   width: 100%;
-  height: 44px;
-  padding: 0 14px;
-  background: transparent;
-  border: 1px solid var(--kimi-border-light);
-  color: var(--kimi-text-light);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.kimi-input::placeholder {
-  color: var(--kimi-muted);
-}
-
-.kimi-input:focus {
-  border-color: var(--kimi-text-light);
-}
-
-.kimi-error {
-  padding: 10px 14px;
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.3);
-  color: #f87171;
-  font-size: 13px;
-}
-
-.kimi-btn {
-  height: 44px;
-  padding: 0 24px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid transparent;
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
+  height: 46px;
 }
 
-.kimi-btn-primary {
-  background: var(--kimi-text-light);
-  color: var(--kimi-bg-light);
-  border-color: var(--kimi-text-light);
-}
-
-.kimi-btn-primary:hover:not(:disabled) {
-  background: #333;
-  border-color: #333;
-}
-
-.kimi-btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.kimi-btn-full {
-  width: 100%;
-}
-
-.kimi-spinner {
+.auth-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border: 2px solid rgba(11, 18, 32, 0.3);
+  border-top-color: #0b1220;
   border-radius: 50%;
-  animation: spin 0.6s linear infinite;
+  animation: auth-spin 0.6s linear infinite;
 }
 
-@keyframes spin {
+@keyframes auth-spin {
   to { transform: rotate(360deg); }
 }
 
-.kimi-login-footer {
+.auth-form-footer {
   margin-top: 24px;
   text-align: center;
 }
 
-.kimi-login-footer p {
+.auth-form-footer p {
   font-size: 13px;
-  color: var(--kimi-muted);
+  color: var(--muted);
   margin: 0;
 }
 
-.kimi-login-footer a {
-  color: var(--kimi-text-light);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.auth-form-footer a {
+  color: var(--gold);
+  text-decoration: none;
+  border-bottom: 1px solid var(--gold-border);
+  transition: color 0.2s ease, border-color 0.2s ease;
 }
 
-.kimi-login-footer a:hover {
-  color: var(--kimi-text-light);
+.auth-form-footer a:hover {
+  color: var(--gold-strong);
+  border-color: var(--gold-strong);
 }
 
 @media (max-width: 768px) {
-  .kimi-login-container {
+  .auth-container {
     flex-direction: column;
     max-width: 400px;
   }
 
-  .kimi-login-brand {
+  .auth-brand {
     border-right: none;
-    border-bottom: 1px solid var(--kimi-border-light);
+    border-bottom: 1px solid var(--gold-border-soft);
     padding: 32px 24px;
   }
 
-  .kimi-login-features {
+  .auth-features {
     display: none;
   }
 
-  .kimi-login-form-wrapper {
+  .auth-form-wrapper {
     padding: 32px 24px;
   }
 }

@@ -63,89 +63,179 @@ function formatDate(iso: string) {
 
 function statusColor(status: string) {
   switch (status) {
-    case 'Answered': return '#34d399'
-    case 'Failed': return '#f87171'
-    case 'Running': return '#60a5fa'
-    default: return '#666666'
+    case 'Answered': return '#7fa387'
+    case 'Failed': return '#b05c5c'
+    case 'Running': return '#d4a24e'
+    default: return '#9a917c'
   }
 }
 </script>
 
 <template>
-  <div class="kimi-page-light">
-    <div class="kimi-content">
-      <ScrollReveal>
-        <div class="kimi-section" style="margin-top: 60px">
-          <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light); display: flex; align-items: center; justify-content: space-between">
-            <div>
-              <h2 style="margin: 0; font-size: 20px; font-weight: 600">Research</h2>
-              <span class="kimi-caption" style="margin-top: 4px; display: block">RESEARCH RUNS</span>
-            </div>
-            <div style="display: flex; gap: 8px">
-              <button class="kimi-btn" @click="showAskForm = !showAskForm">{{ showAskForm ? '關閉' : '+ 提出研究問題' }}</button>
-              <button class="kimi-btn" @click="loadRuns">重新整理</button>
-            </div>
+  <div class="prestige-page">
+    <div class="prestige-section">
+      <!-- Header -->
+      <div class="prestige-section-head">
+        <div>
+          <span class="prestige-label">Research Runs</span>
+          <h2 class="prestige-section-title">Research</h2>
+        </div>
+        <div class="head-actions">
+          <button class="prestige-btn" @click="showAskForm = !showAskForm">{{ showAskForm ? '關閉' : '+ 提出研究問題' }}</button>
+          <button class="prestige-btn" @click="loadRuns">重新整理</button>
+        </div>
+      </div>
+
+      <!-- Ask Form -->
+      <ScrollReveal v-if="showAskForm">
+        <div class="prestige-panel prestige-panel-pad ask-panel">
+          <h3 class="ask-title">提出研究問題</h3>
+          <div class="ask-grid">
+            <input v-model="ticker" placeholder="股票代號（如 2330）" class="prestige-input ask-ticker" />
+            <input v-model="question" placeholder="研究問題" class="prestige-input ask-question" @keyup.enter="handleAsk" />
           </div>
-
-          <!-- Ask Form -->
-          <div v-if="showAskForm" style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
-            <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600">提出研究問題</h3>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px">
-              <input v-model="ticker" placeholder="股票代號（如 2330）" style="padding: 8px 12px; border: 1px solid var(--kimi-border-light); background: transparent; font-size: 13px; width: 200px; font-family: var(--kimi-font-body)" />
-              <input v-model="question" placeholder="研究問題" style="flex: 1; min-width: 300px; padding: 8px 12px; border: 1px solid var(--kimi-border-light); background: transparent; font-size: 13px; font-family: var(--kimi-font-body)" @keyup.enter="handleAsk" />
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center">
-              <button class="kimi-btn kimi-btn-solid" :disabled="askLoading || !ticker.trim() || !question.trim()" @click="handleAsk">
-                {{ askLoading ? '查詢中...' : '送出研究問題' }}
-              </button>
-              <span v-if="askError" style="color: #f87171; font-size: 13px">{{ askError }}</span>
-            </div>
+          <div class="ask-actions">
+            <button class="prestige-btn prestige-btn-solid" :disabled="askLoading || !ticker.trim() || !question.trim()" @click="handleAsk">
+              {{ askLoading ? '查詢中...' : '送出研究問題' }}
+            </button>
+            <span v-if="askError" class="ask-error">{{ askError }}</span>
           </div>
-
-          <!-- Search -->
-          <div style="padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light)">
-            <input v-model="search" placeholder="搜尋 ticker / 問題 / ID..." style="width: 100%; max-width: 400px; padding: 8px 12px; border: 1px solid var(--kimi-border-light); background: transparent; font-size: 13px; font-family: var(--kimi-font-body)" />
-          </div>
-
-          <!-- Loading / Error -->
-          <div v-if="loading" style="padding: 40px 20px; color: var(--kimi-muted); font-size: 14px; text-align: center">載入中...</div>
-          <div v-else-if="error" style="padding: 20px; color: #f87171; font-size: 14px">{{ error }}</div>
-
-          <!-- Runs List -->
-          <template v-else>
-            <div v-for="(run, i) in filteredRuns" :key="run.id">
-              <ScrollReveal :delay="i * 0.03">
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light); cursor: pointer; transition: background 0.2s" @click="router.push({ name: 'research-run-detail', params: { id: run.id } })">
-                  <div style="flex: 1; min-width: 0">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
-                      <span class="kimi-tag" style="font-family: var(--kimi-font-mono); font-size: 11px">{{ run.ticker }}</span>
-                      <span class="kimi-tag">{{ run.retrievalMode }}</span>
-                      <span class="kimi-tag" :style="{ borderColor: statusColor(run.status), color: statusColor(run.status) }">{{ run.status }}</span>
-                    </div>
-                    <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px">{{ run.question }}</div>
-                    <div style="display: flex; gap: 20px; font-size: 12px; color: var(--kimi-muted)">
-                      <span>Citations: {{ run.citationCount }}</span>
-                      <span>Latency: {{ run.latencyMs }}ms</span>
-                      <span>{{ formatDate(run.createdAtUtc) }}</span>
-                    </div>
-                  </div>
-                  <span style="color: var(--kimi-muted); font-size: 18px; margin-left: 12px">&rsaquo;</span>
-                </div>
-              </ScrollReveal>
-            </div>
-
-            <div v-if="filteredRuns.length === 0" style="padding: 40px 20px; color: var(--kimi-muted); text-align: center; font-size: 14px">沒有研究結果。</div>
-          </template>
         </div>
       </ScrollReveal>
 
-      <div style="height: 80px" />
-    </div>
+      <!-- Search -->
+      <div class="search-row">
+        <input v-model="search" placeholder="搜尋 ticker / 問題 / ID..." class="prestige-input search-input" />
+      </div>
 
-    <footer class="kimi-footer">
-      <span>RISE VISION 2026</span>
-      <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px">RESEARCH</span>
-      <span>數據僅供參考</span>
-    </footer>
+      <!-- Loading skeleton -->
+      <div v-if="loading" class="skeleton-stack">
+        <div v-for="i in 3" :key="i" class="prestige-skeleton" />
+      </div>
+
+      <!-- Error -->
+      <div v-else-if="error" class="prestige-error">{{ error }}</div>
+
+      <!-- Runs Table -->
+      <ScrollReveal v-else-if="filteredRuns.length > 0">
+        <div class="prestige-panel table-panel">
+          <table class="prestige-table">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>問題</th>
+                <th>檢索模式</th>
+                <th>狀態</th>
+                <th>引用</th>
+                <th>延遲</th>
+                <th>建立時間</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="run in filteredRuns"
+                :key="run.id"
+                class="run-row"
+                @click="router.push({ name: 'research-run-detail', params: { id: run.id } })"
+              >
+                <td><span class="prestige-tag prestige-mono">{{ run.ticker }}</span></td>
+                <td class="question-cell">{{ run.question }}</td>
+                <td><span class="prestige-tag">{{ run.retrievalMode }}</span></td>
+                <td>
+                  <span class="prestige-tag" :style="{ borderColor: statusColor(run.status), color: statusColor(run.status) }">{{ run.status }}</span>
+                </td>
+                <td class="prestige-mono">{{ run.citationCount }}</td>
+                <td class="prestige-mono">{{ run.latencyMs }}ms</td>
+                <td class="prestige-mono date-cell">{{ formatDate(run.createdAtUtc) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ScrollReveal>
+
+      <div v-else class="prestige-empty">沒有研究結果。</div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.prestige-page {
+  min-height: calc(100vh - 60px);
+}
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ask-panel {
+  margin-bottom: 24px;
+}
+
+.ask-title {
+  margin: 0 0 14px;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.ask-grid {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.ask-ticker {
+  width: 200px;
+  flex: none;
+}
+
+.ask-question {
+  flex: 1;
+  min-width: 280px;
+}
+
+.ask-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.ask-error {
+  color: var(--down);
+  font-size: 13px;
+}
+
+.search-row {
+  margin-bottom: 20px;
+}
+
+.search-input {
+  max-width: 400px;
+}
+
+.skeleton-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.table-panel {
+  overflow-x: auto;
+}
+
+.run-row {
+  cursor: pointer;
+}
+
+.question-cell {
+  font-weight: 500;
+}
+
+.date-cell {
+  color: var(--muted);
+  white-space: nowrap;
+}
+</style>

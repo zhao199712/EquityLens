@@ -8,10 +8,10 @@
   --bg-glass-hover: rgba(255, 255, 255, 0.10);
   
   /* 文字色彩 */
-  --text-primary: #f0f4f8;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --text-muted: #475569;
+  --text-primary: #ffffff;
+  --text-secondary: #e2e8f0;
+  --text-tertiary: #cbd5e1;
+  --text-muted: #94a3b8;
   
   /* 強調色 - 冷調藍紫 */
   --accent-primary: #60a5fa;
@@ -199,11 +199,20 @@ a {
   margin-bottom: 28px;
 }
 
+/* 管理後台內容區採淺色畫布，標題不可沿用深色主題的白字。 */
+.n-layout-content .page-heading h1 {
+  color: #111827;
+}
+
+.n-layout-content .page-heading .eyebrow {
+  color: #1d4ed8;
+}
+
 .eyebrow {
   margin: 0 0 8px;
-  color: var(--accent-primary);
+  color: #bfdbfe;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }

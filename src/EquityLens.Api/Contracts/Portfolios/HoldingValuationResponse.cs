@@ -16,4 +16,6 @@ public sealed record HoldingValuationResponse(
     decimal? UnrealizedPnl,
     decimal? UnrealizedPnlPercent,
     decimal? Weight,
-    string ValuationStatus);
+    string ValuationStatus,
+    string? Sector,
+    string? Industry);

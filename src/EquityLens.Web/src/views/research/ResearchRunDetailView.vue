@@ -48,7 +48,7 @@ async function handleCreateQualityReview() {
     const created = await createResearchQualityReview(runDetail.value.run.id)
     router.push({ name: 'agent-run-detail', params: { id: created.id } })
   } catch {
-    error.value = '建立 Quality Review 失敗。'
+    error.value = '建立 CriticReview 失敗。'
   } finally {
     actionLoading.value = false
   }
@@ -61,146 +61,347 @@ function formatDate(iso: string | null) {
 
 function statusColor(status: string) {
   switch (status) {
-    case 'Succeeded': return '#34d399'
-    case 'Failed': return '#f87171'
-    case 'Running': return '#60a5fa'
-    case 'Cancelled': return '#999999'
-    case 'Pending': return '#fbbf24'
-    default: return '#666666'
+    case 'Succeeded': return '#7fa387'
+    case 'Failed': return '#b05c5c'
+    case 'Running': return '#d4a24e'
+    case 'Cancelled': return '#9a917c'
+    case 'Pending': return '#d4a24e'
+    default: return '#9a917c'
   }
 }
 </script>
 
 <template>
-  <div class="kimi-page-light">
-    <div class="kimi-content">
-      <div style="margin-top: 60px; margin-bottom: 12px">
-        <button class="kimi-btn" @click="router.push({ name: 'research' })">← 返回列表</button>
+  <div class="prestige-page">
+    <div class="prestige-section detail-section">
+      <div class="back-row">
+        <button class="prestige-btn" @click="router.push({ name: 'research' })">← 返回列表</button>
       </div>
 
-      <div v-if="loading" style="padding: 40px 0; color: var(--kimi-muted); font-size: 14px; text-align: center">載入中...</div>
-      <div v-else-if="error" style="padding: 20px; color: #f87171; font-size: 14px">{{ error }}</div>
+      <!-- Loading skeleton -->
+      <div v-if="loading" class="skeleton-stack">
+        <div v-for="i in 2" :key="i" class="prestige-skeleton" />
+      </div>
 
-      <template v-else-if="runDetail">
+      <!-- Error -->
+      <div v-else-if="error" class="prestige-error">{{ error }}</div>
+
+      <ScrollReveal v-else-if="runDetail">
         <!-- Header -->
-        <ScrollReveal>
-          <div class="kimi-section">
-            <div style="padding: 20px; border-bottom: 1px solid var(--kimi-border-light)">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap">
-                <span class="kimi-tag" style="font-family: var(--kimi-font-mono)">{{ runDetail.run.ticker }}</span>
-                <span class="kimi-tag" :style="{ borderColor: statusColor(runDetail.run.status), color: statusColor(runDetail.run.status) }">{{ runDetail.run.status }}</span>
-                <span class="kimi-tag">{{ runDetail.run.retrievalMode }}</span>
-              </div>
-              <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 600">{{ runDetail.run.question }}</h2>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
-                <button class="kimi-btn kimi-btn-solid" :disabled="actionLoading" @click="handleCreateQualityReview">
-                  {{ actionLoading ? '建立中...' : '執行 Quality Review' }}
-                </button>
-                <button class="kimi-btn" @click="loadRun">重新整理</button>
-              </div>
-              <div style="display: flex; gap: 20px; font-size: 12px; color: var(--kimi-muted); flex-wrap: wrap">
-                <span>Citations：{{ runDetail.run.citationCount }}</span>
-                <span>延遲：{{ runDetail.run.latencyMs }}ms</span>
-                <span>建立：{{ formatDate(runDetail.run.createdAtUtc) }}</span>
-              </div>
-            </div>
-
-            <!-- Tabs -->
-            <div style="display: flex; border-bottom: 1px solid var(--kimi-border-light); overflow-x: auto">
-              <button
-                v-for="tab in (['answer', 'citations', 'steps', 'candidates', 'agentRuns'] as const)"
-                :key="tab"
-                :style="{ padding: '12px 20px', background: activeTab === tab ? 'var(--kimi-text-light)' : 'transparent', border: 'none', borderBottom: 'none', color: activeTab === tab ? 'var(--kimi-bg-light)' : 'var(--kimi-muted)', cursor: 'pointer', fontSize: '13px', fontWeight: activeTab === tab ? '600' : '400', fontFamily: 'var(--kimi-font-body)', letterSpacing: '0.05em' }"
-                @click="activeTab = tab"
-              >
-                {{ tab === 'answer' ? '研究答案' : tab === 'citations' ? '引用來源' : tab === 'steps' ? '執行步驟' : tab === 'candidates' ? '候選文件' : 'Agent Runs' }}
-              </button>
-            </div>
-
-            <!-- Tab: Answer -->
-            <div v-if="activeTab === 'answer'" style="padding: 24px 20px">
-              <div style="white-space: pre-wrap; line-height: 1.8; font-size: 14px">{{ runDetail.answer }}</div>
-            </div>
-
-            <!-- Tab: Citations -->
-            <div v-if="activeTab === 'citations'">
-              <div v-for="cite in runDetail.citations" :key="cite.id" style="display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light)">
-                <div style="flex: 1; min-width: 0">
-                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
-                    <span class="kimi-tag" style="font-family: var(--kimi-font-mono); font-size: 11px">#{{ cite.citationIndex }}</span>
-                    <span class="kimi-tag" style="font-size: 11px">{{ cite.sourceType }}</span>
-                    <span v-if="cite.sourceRole" class="kimi-tag" style="font-size: 11px">{{ cite.sourceRole }}</span>
-                  </div>
-                  <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px">{{ cite.title }}</div>
-                  <div style="font-size: 13px; color: var(--kimi-muted); font-style: italic">"{{ cite.quoteText }}"</div>
-                  <div style="display: flex; gap: 16px; margin-top: 6px; font-size: 12px; color: var(--kimi-muted)">
-                    <span>Page {{ cite.pageNumber ?? '-' }}</span>
-                    <span>Score: {{ cite.relevanceScore.toFixed(3) }}</span>
-                  </div>
-                </div>
-              </div>
-              <div v-if="runDetail.citations.length === 0" style="padding: 40px 20px; color: var(--kimi-muted); text-align: center">暫無引用來源。</div>
-            </div>
-
-            <!-- Tab: Steps -->
-            <div v-if="activeTab === 'steps'">
-              <div v-for="step in runDetail.steps" :key="step.id" style="padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light)">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px">
-                  <span style="font-family: var(--kimi-font-mono); font-size: 14px; font-weight: 600">{{ step.stepType }}</span>
-                  <span v-if="step.durationMs !== null" style="font-size: 12px; color: var(--kimi-muted)">{{ step.durationMs }}ms</span>
-                </div>
-                <div v-if="step.errorMessage" style="color: #f87171; font-size: 13px; margin-bottom: 6px">{{ step.errorMessage }}</div>
-                <div style="display: flex; gap: 16px; font-size: 12px; color: var(--kimi-muted); margin-bottom: 8px">
-                  <span>開始：{{ formatDate(step.startedAtUtc) }}</span>
-                  <span>完成：{{ formatDate(step.completedAtUtc) }}</span>
-                </div>
-                <pre v-if="step.outputJson" style="padding: 12px; background: var(--kimi-bg-alt); border: 1px solid var(--kimi-border-light); font-size: 12px; color: var(--kimi-muted); overflow-x: auto; white-space: pre-wrap">{{ step.outputJson }}</pre>
-              </div>
-              <div v-if="runDetail.steps.length === 0" style="padding: 40px 20px; color: var(--kimi-muted); text-align: center">暫無執行步驟。</div>
-            </div>
-
-            <!-- Tab: Candidates -->
-            <div v-if="activeTab === 'candidates'">
-              <div v-for="c in runDetail.candidates" :key="c.id" style="padding: 16px 20px; border-bottom: 1px solid var(--kimi-border-light)">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 8px; flex-wrap: wrap">
-                  <div style="display: flex; align-items: center; gap: 8px">
-                    <span style="font-size: 14px; font-weight: 500">{{ c.title ?? 'Untitled' }}</span>
-                    <span class="kimi-tag" style="font-size: 11px">{{ c.decision }}</span>
-                  </div>
-                  <span style="font-size: 12px; color: var(--kimi-muted)">Score: {{ c.relevanceScore.toFixed(3) }}</span>
-                </div>
-                <div v-if="c.discardReason" style="color: #fbbf24; font-size: 12px; margin-bottom: 4px">{{ c.discardReason }}</div>
-                <div v-if="c.contentPreview" style="font-size: 13px; color: var(--kimi-muted); line-height: 1.5">{{ c.contentPreview }}</div>
-              </div>
-              <div v-if="runDetail.candidates.length === 0" style="padding: 40px 20px; color: var(--kimi-muted); text-align: center">暫無候選文件。</div>
-            </div>
-
-            <!-- Tab: Agent Runs -->
-            <div v-if="activeTab === 'agentRuns'">
-              <div v-for="ar in agentRuns" :key="ar.id" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--kimi-border-light); cursor: pointer; transition: background 0.2s" @click="router.push({ name: 'agent-run-detail', params: { id: ar.id } })">
-                <div>
-                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px">
-                    <span class="kimi-tag" style="font-family: var(--kimi-font-mono); font-size: 11px">{{ ar.workflowType }}</span>
-                    <span class="kimi-tag" style="font-size: 11px">{{ ar.agentType }}</span>
-                    <span class="kimi-tag" :style="{ borderColor: statusColor(ar.status), color: statusColor(ar.status) }">{{ ar.status }}</span>
-                  </div>
-                  <div style="font-family: var(--kimi-font-mono); font-size: 12px; color: var(--kimi-muted)">{{ ar.id }}</div>
-                </div>
-                <span style="color: var(--kimi-muted); font-size: 12px">{{ formatDate(ar.createdAtUtc) }}</span>
-              </div>
-              <div v-if="agentRuns.length === 0" style="padding: 40px 20px; color: var(--kimi-muted); text-align: center">暫無關聯的 Agent Runs。</div>
-            </div>
+        <div class="prestige-panel prestige-panel-pad">
+          <div class="tag-row">
+            <span class="prestige-tag prestige-mono">{{ runDetail.run.ticker }}</span>
+            <span class="prestige-tag" :style="{ borderColor: statusColor(runDetail.run.status), color: statusColor(runDetail.run.status) }">{{ runDetail.run.status }}</span>
+            <span class="prestige-tag">{{ runDetail.run.retrievalMode }}</span>
           </div>
-        </ScrollReveal>
+          <h2 class="question-title">{{ runDetail.run.question }}</h2>
+          <div class="head-actions">
+            <button class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleCreateQualityReview">
+              {{ actionLoading ? '建立中...' : '執行 Quality Review' }}
+            </button>
+            <button class="prestige-btn" @click="loadRun">重新整理</button>
+          </div>
+          <div class="meta-row">
+            <span>Citations：<span class="prestige-mono">{{ runDetail.run.citationCount }}</span></span>
+            <span>延遲：<span class="prestige-mono">{{ runDetail.run.latencyMs }}ms</span></span>
+            <span>建立：<span class="prestige-mono">{{ formatDate(runDetail.run.createdAtUtc) }}</span></span>
+          </div>
+        </div>
 
-        <div style="height: 80px" />
-      </template>
+        <!-- Tabs -->
+        <div class="tabs">
+          <button
+            v-for="tab in (['answer', 'citations', 'steps', 'candidates', 'agentRuns'] as const)"
+            :key="tab"
+            :class="['tab-btn', { active: activeTab === tab }]"
+            @click="activeTab = tab"
+          >
+            {{ tab === 'answer' ? '研究答案' : tab === 'citations' ? '引用來源' : tab === 'steps' ? '執行步驟' : tab === 'candidates' ? '候選文件' : 'Agent Runs' }}
+          </button>
+        </div>
+
+        <!-- Tab content -->
+        <div class="prestige-panel tab-panel">
+          <!-- Tab: Answer -->
+          <div v-if="activeTab === 'answer'" class="answer-body">{{ runDetail.answer }}</div>
+
+          <!-- Tab: Citations -->
+          <template v-if="activeTab === 'citations'">
+            <div v-for="cite in runDetail.citations" :key="cite.id" class="list-item">
+              <div class="tag-row">
+                <span class="prestige-tag prestige-mono">#{{ cite.citationIndex }}</span>
+                <span class="prestige-tag">{{ cite.sourceType }}</span>
+                <span v-if="cite.sourceRole" class="prestige-tag">{{ cite.sourceRole }}</span>
+              </div>
+              <div class="item-title">{{ cite.title }}</div>
+              <div class="item-quote">"{{ cite.quoteText }}"</div>
+              <div class="item-meta">
+                <span>Page <span class="prestige-mono">{{ cite.pageNumber ?? '-' }}</span></span>
+                <span>Score: <span class="prestige-mono">{{ cite.relevanceScore.toFixed(3) }}</span></span>
+              </div>
+            </div>
+            <div v-if="runDetail.citations.length === 0" class="prestige-empty panel-empty">暫無引用來源。</div>
+          </template>
+
+          <!-- Tab: Steps -->
+          <template v-if="activeTab === 'steps'">
+            <div v-for="step in runDetail.steps" :key="step.id" class="list-item">
+              <div class="item-head">
+                <span class="prestige-mono step-type">{{ step.stepType }}</span>
+                <span v-if="step.durationMs !== null" class="prestige-mono item-meta-text">{{ step.durationMs }}ms</span>
+              </div>
+              <div v-if="step.errorMessage" class="item-error">{{ step.errorMessage }}</div>
+              <div class="item-meta">
+                <span>開始：<span class="prestige-mono">{{ formatDate(step.startedAtUtc) }}</span></span>
+                <span>完成：<span class="prestige-mono">{{ formatDate(step.completedAtUtc) }}</span></span>
+              </div>
+              <pre v-if="step.outputJson" class="output-json prestige-mono">{{ step.outputJson }}</pre>
+            </div>
+            <div v-if="runDetail.steps.length === 0" class="prestige-empty panel-empty">暫無執行步驟。</div>
+          </template>
+
+          <!-- Tab: Candidates -->
+          <template v-if="activeTab === 'candidates'">
+            <div v-for="c in runDetail.candidates" :key="c.id" class="list-item">
+              <div class="item-head">
+                <div class="item-head-left">
+                  <span class="item-title candidate-title">{{ c.title ?? 'Untitled' }}</span>
+                  <span class="prestige-tag">{{ c.decision }}</span>
+                </div>
+                <span class="prestige-mono item-meta-text">Score: {{ c.relevanceScore.toFixed(3) }}</span>
+              </div>
+              <div v-if="c.discardReason" class="item-warn">{{ c.discardReason }}</div>
+              <div v-if="c.contentPreview" class="item-preview">{{ c.contentPreview }}</div>
+            </div>
+            <div v-if="runDetail.candidates.length === 0" class="prestige-empty panel-empty">暫無候選文件。</div>
+          </template>
+
+          <!-- Tab: Agent Runs -->
+          <template v-if="activeTab === 'agentRuns'">
+            <div
+              v-for="ar in agentRuns"
+              :key="ar.id"
+              class="list-item agent-run-row"
+              @click="router.push({ name: 'agent-run-detail', params: { id: ar.id } })"
+            >
+              <div>
+                <div class="tag-row">
+                  <span class="prestige-tag prestige-mono">{{ ar.workflowType }}</span>
+                  <span class="prestige-tag">{{ ar.agentType }}</span>
+                  <span class="prestige-tag" :style="{ borderColor: statusColor(ar.status), color: statusColor(ar.status) }">{{ ar.status }}</span>
+                </div>
+                <div class="prestige-mono agent-run-id">{{ ar.id }}</div>
+              </div>
+              <span class="prestige-mono item-meta-text">{{ formatDate(ar.createdAtUtc) }}</span>
+            </div>
+            <div v-if="agentRuns.length === 0" class="prestige-empty panel-empty">暫無關聯的 Agent Runs。</div>
+          </template>
+        </div>
+      </ScrollReveal>
     </div>
-
-    <footer class="kimi-footer">
-      <span>RISE VISION 2026</span>
-      <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px">RESEARCH DETAIL</span>
-      <span>數據僅供參考</span>
-    </footer>
   </div>
 </template>
+
+<style scoped>
+.prestige-page {
+  min-height: calc(100vh - 60px);
+}
+
+.detail-section {
+  padding-top: 32px;
+}
+
+.back-row {
+  margin-bottom: 20px;
+}
+
+.skeleton-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.question-title {
+  margin: 0 0 14px;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+}
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.meta-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: 28px 0 16px;
+  border-bottom: 1px solid var(--gold-border-soft);
+  overflow-x: auto;
+}
+
+.tab-btn {
+  padding: 12px 18px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: var(--ivory);
+}
+
+.tab-btn.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  font-weight: 600;
+}
+
+.answer-body {
+  padding: 24px;
+  white-space: pre-wrap;
+  line-height: 1.9;
+  font-size: 14px;
+}
+
+.list-item {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--gold-border-soft);
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.item-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.candidate-title {
+  margin-bottom: 0;
+}
+
+.item-quote {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.6;
+}
+
+.item-meta {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.item-meta-text {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.item-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-type {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.item-error {
+  color: var(--down);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.item-warn {
+  color: #d4a24e;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.item-preview {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.output-json {
+  margin: 10px 0 0;
+  padding: 12px;
+  background: rgba(11, 18, 32, 0.6);
+  border: 1px solid var(--gold-border-soft);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.agent-run-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.agent-run-row:hover {
+  background: rgba(201, 168, 106, 0.05);
+}
+
+.agent-run-id {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.panel-empty {
+  margin: 16px;
+}
+</style>

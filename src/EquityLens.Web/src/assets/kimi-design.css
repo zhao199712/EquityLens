@@ -18,7 +18,7 @@
 
   /* Shared */
   --kimi-radius: 0px;
-  --kimi-muted: #666666;
+  --kimi-muted: #4b5563;
   --kimi-bg-alt: #F9F9F9;
   --kimi-bg-dark-alt: #111111;
 
@@ -46,12 +46,72 @@
   min-height: 100vh;
 }
 
+/* The global heading rules use light text for the dark application shell.
+   Restore the correct contrast when a Kimi page uses its light canvas. */
+.kimi-page-light h1,
+.kimi-page-light h2,
+.kimi-page-light h3 {
+  color: var(--kimi-text-light);
+}
+
 /* ---- Dark Theme Page ---- */
 .kimi-page-dark {
   background-color: var(--kimi-bg-dark);
   color: var(--kimi-text-dark);
   font-family: var(--kimi-font-body);
   min-height: 100vh;
+}
+
+/* VS Code-inspired dark canvas for research and agent execution workflows. */
+.kimi-page-vscode {
+  background-color: #001d2f;
+  color: #d4d4d4;
+  font-family: var(--kimi-font-body);
+  min-height: 100vh;
+}
+
+.kimi-page-vscode h1,
+.kimi-page-vscode h2,
+.kimi-page-vscode h3 {
+  color: #f8fafc;
+}
+
+.kimi-page-vscode .kimi-section,
+.kimi-page-vscode .kimi-footer {
+  background: #001d2f;
+  border-color: #163a55;
+}
+
+.kimi-page-vscode .kimi-caption,
+.kimi-page-vscode .kimi-label,
+.kimi-page-vscode .kimi-footer,
+.kimi-page-vscode .kimi-btn {
+  color: #a9c2d9;
+}
+
+.kimi-page-vscode .kimi-tag,
+.kimi-page-vscode input,
+.kimi-page-vscode select {
+  color: #d4d4d4;
+  border-color: #24516f !important;
+  background-color: #001526 !important;
+}
+
+.kimi-page-vscode select option {
+  background-color: #001526;
+  color: #d4d4d4;
+}
+
+.kimi-page-dark h1,
+.kimi-page-dark h2,
+.kimi-page-dark h3 {
+  color: var(--kimi-text-dark);
+}
+
+.kimi-page-dark .kimi-caption,
+.kimi-page-dark .kimi-label,
+.kimi-page-dark .kimi-footer {
+  color: #cbd5e1;
 }
 
 /* ---- Section ---- */

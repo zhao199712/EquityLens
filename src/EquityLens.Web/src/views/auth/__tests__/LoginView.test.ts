@@ -25,6 +25,7 @@ function createTestRouter() {
       { path: '/login', name: 'login', component: { template: '<div />' } },
       { path: '/register', name: 'register', component: { template: '<div />' } },
       { path: '/', name: 'dashboard', component: { template: '<div />' } },
+      { path: '/admin/agent-runs', name: 'admin-agent-runs', component: { template: '<div />' } },
     ],
   })
 }
@@ -68,7 +69,7 @@ describe('LoginView', () => {
 
   it('renders brand area', () => {
     const wrapper = mountLogin()
-    expect(wrapper.find('.kimi-login-title').text()).toBe('EQUITYLENS')
+    expect(wrapper.find('.auth-title').text()).toBe('EQUITYLENS')
   })
 
   it('renders register link', () => {
@@ -82,7 +83,7 @@ describe('LoginView', () => {
 
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('Please fill in all fields')
+    expect(wrapper.find('.prestige-error').text()).toBe('Please fill in all fields')
     expect(mockedHttp.post).not.toHaveBeenCalled()
   })
 
@@ -92,15 +93,15 @@ describe('LoginView', () => {
     await wrapper.find('input[type="email"]').setValue('test@test.com')
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('Please fill in all fields')
+    expect(wrapper.find('.prestige-error').text()).toBe('Please fill in all fields')
   })
 
-  it('redirects to dashboard on successful login', async () => {
+  it('redirects users to dashboard on successful login', async () => {
     mockedHttp.post.mockResolvedValueOnce({
       data: {
         accessToken: 'token',
         refreshToken: 'refresh',
-        user: { id: 'u1', email: 'test@test.com', displayName: 'Test' },
+        user: { id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' },
       },
     })
 
@@ -122,6 +123,33 @@ describe('LoginView', () => {
     })
   })
 
+  it('redirects admins to admin area on successful login', async () => {
+    mockedHttp.post.mockResolvedValueOnce({
+      data: {
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        user: { id: 'u1', email: 'admin@test.com', displayName: 'Admin', role: 'Admin' },
+      },
+    })
+
+    const router = createTestRouter()
+    const pushSpy = vi.spyOn(router, 'push')
+    const pinia = createPinia()
+    setActivePinia(pinia)
+
+    const wrapper = mount(LoginView, {
+      global: { plugins: [pinia, router, createTestI18n()], stubs: { RouterLink: true } },
+    })
+
+    await wrapper.find('input[type="email"]').setValue('admin@test.com')
+    await wrapper.find('input[type="password"]').setValue('password123')
+    await wrapper.find('form').trigger('submit')
+
+    await vi.waitFor(() => {
+      expect(pushSpy).toHaveBeenCalledWith({ name: 'admin-agent-runs' })
+    })
+  })
+
   it('shows error message on login failure', async () => {
     mockedHttp.post.mockRejectedValueOnce({
       response: { status: 401, data: { message: 'Invalid email or password.' } },
@@ -134,7 +162,7 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('Invalid email or password.')
+      expect(wrapper.find('.prestige-error').text()).toBe('Invalid email or password.')
     })
   })
 
@@ -148,7 +176,7 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('Login failed, please check your credentials')
+      expect(wrapper.find('.prestige-error').text()).toBe('Login failed, please check your credentials')
     })
   })
 
@@ -165,18 +193,18 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit')
 
     await nextTick()
-    expect(wrapper.find('.kimi-spinner').exists()).toBe(true)
+    expect(wrapper.find('.auth-spinner').exists()).toBe(true)
     expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
 
     resolveLogin!({
       data: {
         accessToken: 't',
         refreshToken: 'r',
-        user: { id: 'u1', email: 'test@test.com', displayName: 'Test' },
+        user: { id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' },
       },
     })
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-spinner').exists()).toBe(false)
+      expect(wrapper.find('.auth-spinner').exists()).toBe(false)
     })
   })
 })

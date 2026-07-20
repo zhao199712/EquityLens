@@ -58,7 +58,9 @@ public sealed class SecurityService : ISecurityService
         }
 
         var normalizedQuery = query.Trim();
-        var cacheKey = $"equitylens:cache:security-search:{normalizedQuery}";
+        // Bump the cache namespace when changing ranking semantics so cached legacy
+        // ticker ordering cannot leak into the new search experience.
+        var cacheKey = $"equitylens:cache:security-search:v2:{normalizedQuery}";
 
         var cached = await _redisCache.GetAsync<IReadOnlyList<SecuritySearchResult>>(cacheKey, cancellationToken);
         if (cached is not null)
@@ -66,66 +68,52 @@ public sealed class SecurityService : ISecurityService
             return cached;
         }
 
-        var localResults = (await _securityRepository.SearchAsync(normalizedQuery, cancellationToken))
-            .Select(x => new SecuritySearchResult(
-                x.Id,
-                x.Ticker,
-                x.Exchange,
-                x.Name,
-                x.AssetType,
-                x.Currency,
-                x.Isin,
-                x.Sector,
-                x.Industry,
-                "Local"))
+        var localCandidates = (await _securityRepository.SearchAsync(normalizedQuery, cancellationToken))
+            .Select(SecuritySearchCandidate.FromLocal)
             .ToList();
 
-        var results = new List<SecuritySearchResult>(localResults);
-
-        foreach (var provider in _marketDataProviders)
+        var candidates = new List<SecuritySearchCandidate>(localCandidates);
+        if (SecuritySearchRanker.CountEligible(localCandidates) < 10)
         {
-            IReadOnlyList<ExternalSecuritySearchResult> externalResults;
-            try
-            {
-                externalResults = await provider.SearchSecuritiesAsync(normalizedQuery, cancellationToken);
-            }
-            catch (InvalidOperationException)
-            {
-                continue;
-            }
-            catch (HttpRequestException)
-            {
-                continue;
-            }
-            catch (JsonException)
-            {
-                continue;
-            }
+            var providerResults = await Task.WhenAll(_marketDataProviders.Select(
+                provider => SearchProviderSafelyAsync(provider, normalizedQuery, cancellationToken)));
 
-            results.AddRange(externalResults.Select(x => new SecuritySearchResult(
-                null,
-                x.Ticker,
-                x.Exchange,
-                x.Name,
-                x.AssetType,
-                x.Currency,
-                x.Isin,
-                x.Sector,
-                x.Industry,
-                x.Source)));
+            candidates.AddRange(providerResults
+                .SelectMany(results => results)
+                .Select(SecuritySearchCandidate.FromExternal));
         }
 
-        var finalResults = results
-            .GroupBy(x => new { x.Ticker, x.Exchange })
-            .Select(x => x.OrderByDescending(result => result.SecurityId.HasValue).First())
-            .OrderBy(x => x.Ticker)
-            .ThenBy(x => x.Exchange)
+        var finalResults = SecuritySearchRanker.Rank(candidates, normalizedQuery)
             .Take(25)
+            .Select(x => x.ToResponse())
             .ToList();
 
         await _redisCache.SetAsync(cacheKey, finalResults, cancellationToken: cancellationToken);
 
         return finalResults;
+    }
+
+    private static async Task<IReadOnlyList<ExternalSecuritySearchResult>> SearchProviderSafelyAsync(
+        IMarketDataProvider provider,
+        string query,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await provider.SearchSecuritiesAsync(query, cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            return [];
+        }
+        catch (HttpRequestException)
+        {
+            return [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 
     /// <inheritdoc />

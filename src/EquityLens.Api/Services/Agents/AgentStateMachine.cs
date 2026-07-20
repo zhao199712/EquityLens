@@ -100,7 +100,7 @@ public sealed class AgentNodeStateMachine : IAgentNodeStateMachine
             return;
         }
 
-        if (currentStatus is not (AgentNodeStatuses.Ready or AgentNodeStatuses.Running or AgentNodeStatuses.Succeeded or AgentNodeStatuses.Failed))
+        if (currentStatus is not (AgentNodeStatuses.Ready or AgentNodeStatuses.Queued or AgentNodeStatuses.Running or AgentNodeStatuses.Succeeded or AgentNodeStatuses.Failed))
         {
             throw new InvalidOperationException($"Invalid agent node retry reset from status: {currentStatus}.");
         }
@@ -135,7 +135,9 @@ public sealed class AgentNodeStateMachine : IAgentNodeStateMachine
     private static bool CanTransition(string current, string next) => (current, next) switch
     {
         (AgentNodeStatuses.Pending, AgentNodeStatuses.Ready) => true,
+        (AgentNodeStatuses.Ready, AgentNodeStatuses.Queued) => true,
         (AgentNodeStatuses.Ready, AgentNodeStatuses.Running) => true,
+        (AgentNodeStatuses.Queued, AgentNodeStatuses.Running) => true,
         (AgentNodeStatuses.Running, AgentNodeStatuses.Succeeded) => true,
         (AgentNodeStatuses.Running, AgentNodeStatuses.Failed) => true,
         _ => false

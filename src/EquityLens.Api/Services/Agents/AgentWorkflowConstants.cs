@@ -5,12 +5,18 @@ public static class AgentWorkflowTypes
     public const string CriticReview = "CriticReview";
     public const string DraftRevision = "DraftRevision";
     public const string ResearchQualityReview = "ResearchQualityReview";
+    public const string PortfolioDiagnosis = "PortfolioDiagnosis";
+    public const string EvidenceRemediation = "EvidenceRemediation";
+    public const string EvidenceReanalysis = "EvidenceReanalysis";
 }
 
 public static class AgentTypes
 {
     public const string Critic = "CriticAgent";
     public const string Draft = "DraftAgent";
+    public const string Portfolio = "PortfolioDiagnosisAgent";
+    public const string Research = "ResearchAgent";
+    public const string Analysis = "AnalysisAgent";
 }
 
 public static class CriticReviewWorkflow
@@ -25,7 +31,99 @@ public static class DraftRevisionWorkflow
 
 public static class ResearchQualityReviewWorkflow
 {
+    public const int Version = 4;
+    public const int MaxRetrievalIterations = 2;
+    public const int MaxDynamicNodes = 18;
+}
+
+public static class PortfolioDiagnosisWorkflow
+{
     public const int Version = 1;
+}
+
+public static class EvidenceRemediationWorkflow
+{
+    public const int Version = 3;
+    public const int MaxIterations = 2;
+}
+
+public static class EvidenceReanalysisWorkflow
+{
+    public const int Version = 1;
+}
+
+public static class EvidenceReanalysisNodeKeys
+{
+    public const string Load = "loadEvidenceRemediation";
+    public const string Validate = "validateReanalysisRequest";
+    public const string BuildContext = "buildAnalysisContext";
+    public const string Reanalyze = "reanalyzeAnswer";
+    public const string Critique = "critiqueReanalysis";
+    public const string Revise = "reviseReanalysis";
+    public const string Finalize = "finalizeReanalysis";
+}
+
+public static class EvidenceReanalysisNodeTypes
+{
+    public const string Load = "LoadEvidenceRemediation";
+    public const string Validate = "ValidateReanalysisRequest";
+    public const string BuildContext = "BuildAnalysisContext";
+    public const string Reanalyze = "ReanalyzeAnswer";
+    public const string Critique = "CritiqueReanalysis";
+    public const string Revise = "ReviseReanalysis";
+    public const string Finalize = "FinalizeReanalysis";
+}
+
+public static class EvidenceRemediationNodeKeys
+{
+    public const string LoadContext = "loadEvidenceRemediationContext";
+    public const string PlanRetrieval = "planEvidenceRetrieval";
+    public const string RetrieveEvidence = "retrieveRemediationEvidence";
+    public const string RetrieveWebEvidence = "retrieveWebEvidence";
+    public const string ExtractClaims = "extractAnswerClaims";
+    public const string AssessSupport = "assessClaimSupport";
+    public const string ValidateMappings = "validateEvidenceMappings";
+    public const string Route = "routeEvidenceRemediation";
+    public const string BuildPacket = "buildRemediatedEvidencePacket";
+    public const string DraftRevision = "draftEvidenceBackedRevision";
+    public const string Finalize = "finalizeEvidenceRemediation";
+}
+
+public static class EvidenceRemediationNodeTypes
+{
+    public const string LoadContext = "LoadEvidenceRemediationContext";
+    public const string PlanRetrieval = "PlanEvidenceRetrieval";
+    public const string RetrieveEvidence = "RetrieveRemediationEvidence";
+    public const string RetrieveWebEvidence = "RetrieveWebEvidence";
+    public const string ExtractClaims = "ExtractAnswerClaims";
+    public const string AssessSupport = "AssessClaimSupport";
+    public const string ValidateMappings = "ValidateEvidenceMappings";
+    public const string Route = "RouteEvidenceRemediation";
+    public const string BuildPacket = "BuildRemediatedEvidencePacket";
+    public const string DraftRevision = "DraftEvidenceBackedRevision";
+    public const string Finalize = "FinalizeEvidenceRemediation";
+}
+
+public static class PortfolioDiagnosisNodeKeys
+{
+    public const string LoadContext = "loadPortfolioDiagnosisContext";
+    public const string CalculateAttribution = "calculatePerformanceAttribution";
+    public const string LoadRiskProfile = "loadRiskProfile";
+    public const string PrioritizeRiskAnalyses = "prioritizeRiskAnalyses";
+    public const string BuildEvidencePacket = "buildPortfolioEvidencePacket";
+    public const string DraftDiagnosis = "draftPortfolioDiagnosis";
+    public const string FinalizeDiagnosis = "finalizePortfolioDiagnosis";
+}
+
+public static class PortfolioDiagnosisNodeTypes
+{
+    public const string LoadContext = "LoadPortfolioDiagnosisContext";
+    public const string CalculateAttribution = "CalculatePerformanceAttribution";
+    public const string LoadRiskProfile = "LoadRiskProfile";
+    public const string PrioritizeRiskAnalyses = "PrioritizeRiskAnalyses";
+    public const string BuildEvidencePacket = "BuildPortfolioEvidencePacket";
+    public const string DraftDiagnosis = "DraftPortfolioDiagnosis";
+    public const string FinalizeDiagnosis = "FinalizePortfolioDiagnosis";
 }
 
 public static class CriticReviewNodeKeys
@@ -74,11 +172,13 @@ public static class AgentNodeStatuses
 {
     public const string Pending = "Pending";
     public const string Ready = "Ready";
+    public const string Queued = "Queued";
     public const string Running = "Running";
     public const string Succeeded = "Succeeded";
     public const string Failed = "Failed";
     public const string Skipped = "Skipped";
     public const string WaitingForFeedback = "WaitingForFeedback";
+    public const string Cancelled = "Cancelled";
 }
 
 public static class AgentToolCallStatuses
@@ -127,4 +227,8 @@ public static class AgentEventTypes
     public const string ToolCallFailed = "ToolCallFailed";
     public const string BlackboardUpdated = "BlackboardUpdated";
     public const string SupervisorDecision = "SupervisorDecision";
+    public const string PlannerProposed = "PlannerProposed";
+    public const string PlanValidated = "PlanValidated";
+    public const string PlanRejected = "PlanRejected";
+    public const string GraphMaterialized = "GraphMaterialized";
 }

@@ -76,7 +76,7 @@ describe('RegisterView', () => {
     const wrapper = mountRegister()
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('Please fill in all fields')
+    expect(wrapper.find('.prestige-error').text()).toBe('Please fill in all fields')
     expect(mockedHttp.post).not.toHaveBeenCalled()
   })
 
@@ -87,7 +87,7 @@ describe('RegisterView', () => {
     await wrapper.find('input[type="password"]').setValue('12345')
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('Password must be at least 6 characters')
+    expect(wrapper.find('.prestige-error').text()).toBe('Password must be at least 6 characters')
   })
 
   it('shows error when passwords do not match', async () => {
@@ -98,7 +98,7 @@ describe('RegisterView', () => {
     await wrapper.findAll('input[type="password"]')[1].setValue('password456')
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.find('.kimi-error').text()).toBe('Passwords do not match')
+    expect(wrapper.find('.prestige-error').text()).toBe('Passwords do not match')
   })
 
   it('redirects to dashboard on successful registration', async () => {
@@ -106,7 +106,7 @@ describe('RegisterView', () => {
       data: {
         accessToken: 'token',
         refreshToken: 'refresh',
-        user: { id: 'u1', email: 'test@test.com', displayName: 'Test' },
+        user: { id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' },
       },
     })
 
@@ -140,7 +140,7 @@ describe('RegisterView', () => {
       data: {
         accessToken: 'token',
         refreshToken: 'refresh',
-        user: { id: 'u1', email: 'test@test.com', displayName: 'test' },
+        user: { id: 'u1', email: 'test@test.com', displayName: 'test', role: 'User' },
       },
     })
 
@@ -173,7 +173,7 @@ describe('RegisterView', () => {
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('This email is already registered')
+      expect(wrapper.find('.prestige-error').text()).toBe('This email is already registered')
     })
   })
 
@@ -190,7 +190,7 @@ describe('RegisterView', () => {
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('Server error')
+      expect(wrapper.find('.prestige-error').text()).toBe('Server error')
     })
   })
 
@@ -205,7 +205,7 @@ describe('RegisterView', () => {
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.kimi-error').text()).toBe('Registration failed, please try again later')
+      expect(wrapper.find('.prestige-error').text()).toBe('Registration failed, please try again later')
     })
   })
 })

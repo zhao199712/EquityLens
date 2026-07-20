@@ -1,10 +1,17 @@
 using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Risk;
+using EquityLens.Api.Data;
+using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Domain.Calculations;
 using EquityLens.Api.Repositories.MarketPrices;
 using EquityLens.Api.Repositories.Portfolios;
 using EquityLens.Api.Repositories.Securities;
 using EquityLens.Api.Services.ExchangeRates;
+using EquityLens.Api.Observability;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+using System.Text.Json;
 
 namespace EquityLens.Api.Services.RiskAnalysis;
 
@@ -14,12 +21,16 @@ namespace EquityLens.Api.Services.RiskAnalysis;
 public sealed class RiskAnalysisService : IRiskAnalysisService
 {
     private const string DailyInterval = "1d";
-    private const int MinPriceCount = 30;
+    // 最低共同交易日門檻(約一個月),讓 1M 以上區間可估算風險;所有持倉必須在相同日期具有有效價格。
+    private const int MinPriceCount = 20;
     private const decimal MaxConfidenceLevel = 0.999m;
     private const decimal MinConfidenceLevel = 0.90m;
     private const int MaxSimulations = 100000;
     private const int MinSimulations = 1000;
     private const decimal EwmaLambda = 0.94m;
+    private const string MvewmaFhsModel = "mvewma_fhs";
+    private const string ConservativeMvewmaFhsModel = "mvewma_fhs_conservative";
+    private const decimal ConservativeResidualCapQuantile = 0.99m;
     private const string VolatilityMethod = "EWMA";
     private const string DriftAssumption = "ZeroDrift";
     private static readonly int[] SupportedHorizons = [1, 7, 30];
@@ -28,6 +39,8 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
     private readonly IMarketPriceRepository _marketPriceRepository;
     private readonly IPortfolioRepository _portfolioRepository;
     private readonly IExchangeRateService _exchangeRateService;
+    private readonly EquityLensDbContext? _dbContext;
+    private readonly ILogger<RiskAnalysisService>? _logger;
 
     /// <summary>
     /// 初始化風險分析服務。
@@ -40,12 +53,47 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         ISecurityRepository securityRepository,
         IMarketPriceRepository marketPriceRepository,
         IPortfolioRepository portfolioRepository,
-        IExchangeRateService exchangeRateService)
+        IExchangeRateService exchangeRateService,
+        EquityLensDbContext? dbContext = null,
+        ILogger<RiskAnalysisService>? logger = null)
     {
         _securityRepository = securityRepository;
         _marketPriceRepository = marketPriceRepository;
         _portfolioRepository = portfolioRepository;
         _exchangeRateService = exchangeRateService;
+        _dbContext = dbContext;
+        _logger = logger;
+    }
+
+    private async Task<Result<T>> ExecuteRiskOperationAsync<T>(
+        string operation,
+        string? model,
+        decimal? confidenceLevel,
+        int? simulations,
+        Func<Task<Result<T>>> execute)
+    {
+        using var activity = EquityLensTelemetry.StartRiskOperation(operation, model, confidenceLevel, simulations);
+        var stopwatch = Stopwatch.StartNew();
+        _logger?.LogInformation("Risk operation {RiskOperation} started. Model={RiskModel} Confidence={RiskConfidence} Simulations={RiskSimulations}",
+            operation, model, confidenceLevel, simulations);
+
+        try
+        {
+            var result = await execute();
+            stopwatch.Stop();
+            EquityLensTelemetry.CompleteRiskOperation(activity, operation, stopwatch, result.IsSuccess, result.ErrorCode, model, confidenceLevel);
+            _logger?.LogInformation("Risk operation {RiskOperation} completed. Outcome={RiskOutcome} DurationMs={RiskDurationMs} ErrorCode={RiskErrorCode}",
+                operation, result.IsSuccess ? "success" : "failure", stopwatch.ElapsedMilliseconds, result.ErrorCode);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            stopwatch.Stop();
+            EquityLensTelemetry.MarkError(activity, exception);
+            EquityLensTelemetry.CompleteRiskOperation(activity, operation, stopwatch, false, exception.GetType().Name, model, confidenceLevel);
+            _logger?.LogError(exception, "Risk operation {RiskOperation} failed after {RiskDurationMs}ms", operation, stopwatch.ElapsedMilliseconds);
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -80,7 +128,6 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             return Result<SecurityRiskResponse>.Failure(
                 "risk.invalid_simulations", "Simulations must be between 1000 and 100000.");
         }
-
         var prices = await _marketPriceRepository.GetBySecurityAsync(
             securityId, from, to, cancellationToken);
 
@@ -145,7 +192,24 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         int simulations,
         Guid providerUserId,
         CancellationToken cancellationToken,
-        string modelName = "gbm_ewma_normal")
+        string modelName = "gbm_ewma_normal",
+        IReadOnlyDictionary<Guid, decimal>? targetWeights = null) =>
+        await ExecuteRiskOperationAsync(
+            "risk.portfolio.calculate", modelName, confidenceLevel, simulations,
+            () => GetPortfolioRiskCoreAsync(portfolioId, from, to, horizonDays, confidenceLevel, simulations,
+                providerUserId, cancellationToken, modelName, targetWeights));
+
+    private async Task<Result<PortfolioRiskResponse>> GetPortfolioRiskCoreAsync(
+        Guid portfolioId,
+        DateOnly from,
+        DateOnly to,
+        int horizonDays,
+        decimal confidenceLevel,
+        int simulations,
+        Guid providerUserId,
+        CancellationToken cancellationToken,
+        string modelName = "gbm_ewma_normal",
+        IReadOnlyDictionary<Guid, decimal>? targetWeights = null)
     {
         if (from >= to)
         {
@@ -164,6 +228,9 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             return Result<PortfolioRiskResponse>.Failure(
                 "risk.invalid_simulations", "Simulations must be between 1000 and 100000.");
         }
+
+        if (modelName is not ("gbm_ewma_normal" or MvewmaFhsModel or ConservativeMvewmaFhsModel))
+            return Result<PortfolioRiskResponse>.Failure("risk.invalid_model", "Unsupported risk model.");
 
         var portfolio = await _portfolioRepository.GetDetailAsync(
             portfolioId, providerUserId, cancellationToken);
@@ -184,8 +251,12 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             .Distinct()
             .ToList();
 
-        var latestPrices = await _marketPriceRepository.GetLatestPricesAsync(
-            securityIds, DailyInterval, cancellationToken);
+        IReadOnlyDictionary<Guid, LatestMarketPrice> latestPrices;
+        using (EquityLensTelemetry.StartRiskStage(Activity.Current, "prices.load"))
+        {
+            latestPrices = await _marketPriceRepository.GetLatestPricesAsync(
+                securityIds, DailyInterval, cancellationToken);
+        }
 
         if (latestPrices.Count == 0)
         {
@@ -229,13 +300,18 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
 
         // 取得各證券歷史價格
         var pricesBySecurity = new Dictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>>();
-        foreach (var securityId in pricedSecurityIds)
+        var priceCountsBySecurity = new Dictionary<Guid, int>();
+        using (EquityLensTelemetry.StartRiskStage(Activity.Current, "prices.load"))
         {
-            var prices = await _marketPriceRepository.GetBySecurityAsync(
-                securityId, from, to, cancellationToken);
-            if (prices.Count >= MinPriceCount)
+            foreach (var securityId in pricedSecurityIds)
             {
-                pricesBySecurity[securityId] = prices;
+                var prices = await _marketPriceRepository.GetBySecurityAsync(
+                    securityId, from, to, cancellationToken);
+                priceCountsBySecurity[securityId] = prices.Count;
+                if (prices.Count >= MinPriceCount)
+                {
+                    pricesBySecurity[securityId] = prices;
+                }
             }
         }
 
@@ -243,22 +319,36 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         {
             return Result<PortfolioRiskResponse>.Failure(
                 "risk.insufficient_prices",
-                $"At least {MinPriceCount} price records are required for risk estimation.");
+                $"No holding has the required {MinPriceCount} price records; " +
+                $"available records range from {priceCountsBySecurity.Values.Min()} to {priceCountsBySecurity.Values.Max()}.");
         }
 
         // 日期對齊：只保留所有資產共同的交易日
-        var dateSets = pricesBySecurity.Values
-            .Select(p => p.Select(x => DateOnly.FromDateTime(x.PriceTime)).ToHashSet())
-            .ToList();
+        List<DateOnly> commonDates;
+        Dictionary<Guid, IReadOnlyList<decimal>> dateToPrice;
+        using (EquityLensTelemetry.StartRiskStage(Activity.Current, "returns.align"))
+        {
+            var dateSets = pricesBySecurity.Values
+                .Select(p => p.Select(x => DateOnly.FromDateTime(x.PriceTime)).ToHashSet())
+                .ToList();
 
-        var commonDates = dateSets.Skip(1)
-            .Aggregate(dateSets[0], (intersection, set) =>
-            {
-                intersection.IntersectWith(set);
-                return intersection;
-            })
-            .OrderBy(d => d)
-            .ToList();
+            commonDates = dateSets.Skip(1)
+                .Aggregate(dateSets[0], (intersection, set) =>
+                {
+                    intersection.IntersectWith(set);
+                    return intersection;
+                })
+                .OrderBy(d => d)
+                .ToList();
+
+            dateToPrice = pricesBySecurity.ToDictionary(
+                kvp => kvp.Key,
+                kvp => (IReadOnlyList<decimal>)kvp.Value
+                    .Where(p => commonDates.Contains(DateOnly.FromDateTime(p.PriceTime)))
+                    .OrderBy(p => p.PriceTime)
+                    .Select(p => p.AdjustedClose ?? p.Close)
+                    .ToList());
+        }
 
         if (commonDates.Count < MinPriceCount)
         {
@@ -267,14 +357,6 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
                 $"After date alignment, only {commonDates.Count} common trading days remain " +
                 $"(need at least {MinPriceCount}).");
         }
-
-        var dateToPrice = pricesBySecurity.ToDictionary(
-            kvp => kvp.Key,
-            kvp => (IReadOnlyList<decimal>)kvp.Value
-                .Where(p => commonDates.Contains(DateOnly.FromDateTime(p.PriceTime)))
-                .OrderBy(p => p.PriceTime)
-                .Select(p => p.AdjustedClose ?? p.Close)
-                .ToList());
 
         if (dateToPrice.Values.Any(prices => prices.Any(price => price <= 0)))
         {
@@ -287,6 +369,8 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         var weightsBySecurityId = marketValues.ToDictionary(
             x => x.Holding.SecurityId,
             x => x.MarketValueInBase / totalMarketValue);
+        if (targetWeights is not null)
+            weightsBySecurityId = weightsBySecurityId.Keys.ToDictionary(id => id, id => targetWeights.GetValueOrDefault(id, 0m));
 
         // 計算每日 portfolio return
         var portfolioReturns = new List<decimal>(commonDates.Count);
@@ -325,12 +409,23 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         portfolioValues.Add(totalMarketValue);
         for (var d = 0; d < portfolioReturns.Count; d++)
         {
-            var nextValue = portfolioValues[^1] * (1 + portfolioReturns[d]);
+            var nextValue = portfolioValues[^1] * (decimal)Math.Exp((double)portfolioReturns[d]);
             portfolioValues.Add(nextValue);
         }
         var maxDrawdown = RiskMath.CalculateMaxDrawdown(portfolioValues);
+        var classificationsBySecurityId = marketValues.ToDictionary(
+            value => value.Holding.SecurityId,
+            value => ResolveIndustry(value.Holding));
+        IReadOnlyDictionary<Guid, VolatilityRiskContribution> riskSourcesBySecurityId;
+        IReadOnlyList<PortfolioIndustryRiskResponse> industryRiskSources;
+        decimal riskSourceAnnualizedVolatility;
+        using (EquityLensTelemetry.StartRiskStage(Activity.Current, "risk-sources"))
+        {
+            (riskSourcesBySecurityId, industryRiskSources, riskSourceAnnualizedVolatility) = BuildRiskSources(
+                dateToPrice, weightsBySecurityId, classificationsBySecurityId, modelName);
+        }
 
-        // 各持倉風險摘要
+        // 各持倉風險來源
         var holdingRisks = new List<PortfolioHoldingRiskResponse>();
         foreach (var m in marketValues)
         {
@@ -340,6 +435,8 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
                 : 0m;
             var secAnnVol = RiskMath.CalculateAnnualizedVolatility(secVol);
             var weight = weightsBySecurityId.GetValueOrDefault(m.Holding.SecurityId, 0);
+            var source = riskSourcesBySecurityId.GetValueOrDefault(
+                m.Holding.SecurityId, VolatilityRiskContribution.Zero);
 
             holdingRisks.Add(new PortfolioHoldingRiskResponse(
                 m.Holding.SecurityId,
@@ -348,8 +445,17 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
                 m.Holding.SecurityName,
                 weight,
                 secAnnVol,
-                secPrices?.Count ?? 0));
+                secPrices?.Count ?? 0,
+                classificationsBySecurityId[m.Holding.SecurityId],
+                source.ComponentVolatility,
+                source.ComponentRiskShare,
+                source.MarginalVolatility,
+                source.IncrementalVolatility));
         }
+
+        var (concentrationHhi, largestHoldingWeight) = RiskMath.CalculateConcentration(
+            weightsBySecurityId.Values.ToList());
+        var dataAsOfDate = commonDates[^1];
 
         // Correlated zero-drift GBM Monte Carlo for the fixed product horizons.
         IReadOnlyList<RiskHorizonResult> horizons;
@@ -357,24 +463,31 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         string? residualSampling = null;
         int? commonTradingDays = null;
         decimal? shrinkageAlpha = null;
+        using (EquityLensTelemetry.StartRiskStage(Activity.Current, "horizons"))
+        {
+            if (modelName is MvewmaFhsModel or ConservativeMvewmaFhsModel)
+            {
+                horizons = BuildPortfolioHorizonsMvewmaFhs(
+                    portfolioReturns, dateToPrice, weightsBySecurityId, totalMarketValue,
+                    simulations, confidenceLevel,
+                    modelName == ConservativeMvewmaFhsModel ? ConservativeResidualCapQuantile : 0m,
+                    out var alpha, out var ctd);
+                shrinkageAlpha = alpha;
+                commonTradingDays = ctd;
+                covarianceMethod = "MultivariateEWMA";
+                residualSampling = "HistoricalVectorBootstrap";
+            }
+            else
+            {
+                horizons = BuildPortfolioHorizons(
+                    portfolioReturns, dateToPrice, weightsBySecurityId, totalMarketValue,
+                    simulations, confidenceLevel);
+            }
+        }
 
-        if (modelName == "mvewma_fhs")
-        {
-            horizons = BuildPortfolioHorizonsMvewmaFhs(
-                portfolioReturns, dateToPrice, weightsBySecurityId, totalMarketValue,
-                simulations, confidenceLevel,
-                out var alpha, out var ctd);
-            shrinkageAlpha = alpha;
-            commonTradingDays = ctd;
-            covarianceMethod = "MultivariateEWMA";
-            residualSampling = "HistoricalVectorBootstrap";
-        }
-        else
-        {
-            horizons = BuildPortfolioHorizons(
-                portfolioReturns, dateToPrice, weightsBySecurityId, totalMarketValue,
-                simulations, confidenceLevel);
-        }
+        Activity.Current?.SetTag("risk.holdings_count", portfolio.Holdings.Count);
+        Activity.Current?.SetTag("risk.priced_holdings_count", pricedHoldings.Count);
+        Activity.Current?.SetTag("risk.common_trading_days", commonDates.Count);
 
         var response = new PortfolioRiskResponse(
             portfolioId,
@@ -399,9 +512,203 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             CovarianceMethod: covarianceMethod,
             ResidualSampling: residualSampling,
             CommonTradingDays: commonTradingDays,
-            ShrinkageAlpha: shrinkageAlpha);
-
+            ShrinkageAlpha: shrinkageAlpha,
+            DataAsOfDate: dataAsOfDate,
+            ConcentrationHhi: concentrationHhi,
+            LargestHoldingWeight: largestHoldingWeight,
+            Industries: industryRiskSources,
+            RiskSourceAnnualizedVolatility: riskSourceAnnualizedVolatility,
+            DailyLogReturns: portfolioReturns);
         return Result<PortfolioRiskResponse>.Success(response);
+    }
+
+    public async Task<Result<PortfolioRiskBacktestResponse>> GetPortfolioRiskBacktestAsync(
+        Guid portfolioId, DateOnly from, DateOnly to, Guid providerUserId, CancellationToken cancellationToken) =>
+        await ExecuteRiskOperationAsync(
+            "risk.portfolio.backtest", "mvewma_fhs", null, 5000,
+            () => GetPortfolioRiskBacktestCoreAsync(portfolioId, from, to, providerUserId, cancellationToken));
+
+    private async Task<Result<PortfolioRiskBacktestResponse>> GetPortfolioRiskBacktestCoreAsync(
+        Guid portfolioId, DateOnly from, DateOnly to, Guid providerUserId, CancellationToken cancellationToken)
+    {
+        const int lookbackDays = 252;
+        const int minimumObservations = 100;
+        const int simulations = 5000;
+        if (from >= to) return Result<PortfolioRiskBacktestResponse>.Failure("risk.invalid_date_range", "'from' must be earlier than 'to'.");
+
+        var portfolio = await _portfolioRepository.GetDetailAsync(portfolioId, providerUserId, cancellationToken);
+        if (portfolio is null) return Result<PortfolioRiskBacktestResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
+        if (portfolio.Holdings.Count == 0) return Result<PortfolioRiskBacktestResponse>.Failure("portfolio.no_holdings", "Portfolio has no holdings.");
+
+        var ids = portfolio.Holdings.Select(h => h.SecurityId).Distinct().ToList();
+        var latest = await _marketPriceRepository.GetLatestPricesAsync(ids, DailyInterval, cancellationToken);
+        var holdings = portfolio.Holdings.Where(h => latest.ContainsKey(h.SecurityId)).ToList();
+        if (holdings.Count == 0) return Result<PortfolioRiskBacktestResponse>.Failure("risk.insufficient_prices", "No latest prices available for portfolio holdings.");
+
+        var values = await Task.WhenAll(holdings.Select(async h =>
+        {
+            var localValue = PortfolioMath.CalculateMarketValue(h.Quantity, latest[h.SecurityId].Price);
+            return (h.SecurityId, Value: await _exchangeRateService.ConvertAsync(localValue, h.CostCurrency, portfolio.BaseCurrency, cancellationToken));
+        }));
+        var total = values.Sum(v => v.Value);
+        if (total <= 0) return Result<PortfolioRiskBacktestResponse>.Failure("risk.invalid_market_value", "Total market value is zero or negative.");
+        var weights = values.ToDictionary(v => v.SecurityId, v => v.Value / total);
+
+        var pricesById = new Dictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>>();
+        foreach (var id in weights.Keys)
+            pricesById[id] = await _marketPriceRepository.GetBySecurityAsync(id, from, to, cancellationToken);
+        var dateSets = pricesById.Values.Select(ps => ps.Select(p => DateOnly.FromDateTime(p.PriceTime)).ToHashSet()).ToList();
+        var commonDates = dateSets.Skip(1).Aggregate(dateSets[0], (set, next) => { set.IntersectWith(next); return set; }).OrderBy(d => d).ToList();
+        if (commonDates.Count < lookbackDays + minimumObservations)
+            return Result<PortfolioRiskBacktestResponse>.Failure("risk.insufficient_prices", $"At least {lookbackDays + minimumObservations} common trading days are required for backtesting (got {commonDates.Count}).");
+
+        var aligned = pricesById.ToDictionary(pair => pair.Key, pair => pair.Value
+            .Where(p => commonDates.Contains(DateOnly.FromDateTime(p.PriceTime))).OrderBy(p => p.PriceTime)
+            .Select(p => p.AdjustedClose ?? p.Close).ToList());
+        if (aligned.Values.Any(ps => ps.Any(p => p <= 0))) return Result<PortfolioRiskBacktestResponse>.Failure("risk.non_positive_price", "Historical prices contain non-positive values.");
+
+        var returns = new List<decimal>(commonDates.Count - 1);
+        for (var index = 1; index < commonDates.Count; index++)
+            returns.Add(aligned.Sum(pair => weights[pair.Key] * (decimal)Math.Log((double)(pair.Value[index] / pair.Value[index - 1]))));
+
+        var assetIds = aligned.Keys.OrderBy(id => id).ToArray();
+        var weightList = assetIds.Select(id => weights[id]).ToArray();
+        var shrinkageAlpha = RiskMath.DetermineAutoShrinkageAlpha(assetIds.Length, lookbackDays);
+        var portfolioReturns = returns.ToArray();
+        var confidenceLevels = new[] { 0.95m, 0.99m };
+        var assetReturns = assetIds.Select(id =>
+        {
+            var prices = aligned[id];
+            var result = new decimal[prices.Count - 1];
+            for (var index = 0; index < result.Length; index++)
+                result[index] = (decimal)Math.Log((double)(prices[index + 1] / prices[index]));
+            return result;
+        }).ToArray();
+
+        // Every rolling window is independent.  Limit the CPU use to four cores so a
+        // background backtest does not starve the API, Redis worker, or database host.
+        var windowCount = returns.Count - lookbackDays;
+        var windowResults = new BacktestWindowResult[windowCount];
+        var parallelOptions = new ParallelOptions
+        {
+            CancellationToken = cancellationToken,
+            MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount - 2, 1, 4),
+        };
+
+        Parallel.For(0, windowCount, parallelOptions, windowOffset =>
+        {
+            var index = lookbackDays + windowOffset;
+            var returnMatrix = new IReadOnlyList<decimal>[assetReturns.Length];
+            for (var assetIndex = 0; assetIndex < assetReturns.Length; assetIndex++)
+                returnMatrix[assetIndex] = new ArraySegment<decimal>(assetReturns[assetIndex], index - lookbackDays, lookbackDays);
+
+            var window = new ArraySegment<decimal>(portfolioReturns, index - lookbackDays, lookbackDays);
+            var historicalVaR = new decimal[confidenceLevels.Length];
+            var historicalEs = new decimal[confidenceLevels.Length];
+            for (var confidenceIndex = 0; confidenceIndex < confidenceLevels.Length; confidenceIndex++)
+            {
+                historicalVaR[confidenceIndex] = RiskMath.CalculateHistoricalVaR(window, confidenceLevels[confidenceIndex]);
+                historicalEs[confidenceIndex] = RiskMath.CalculateExpectedShortfall(window, confidenceLevels[confidenceIndex]);
+            }
+
+            var fhsResults = RiskMath.RunMultivariateFhsSimulationForConfidenceLevels(
+                returnMatrix, weightList, 100m, 1, simulations, confidenceLevels,
+                EwmaLambda, shrinkageAlpha);
+            var conservativeResults = RiskMath.RunMultivariateFhsSimulationForConfidenceLevels(
+                returnMatrix, weightList, 100m, 1, simulations, confidenceLevels,
+                EwmaLambda, shrinkageAlpha, residualCapQuantile: ConservativeResidualCapQuantile);
+            windowResults[windowOffset] = new BacktestWindowResult(
+                commonDates[index + 1], returns[index], historicalVaR, historicalEs,
+                fhsResults.Select(result => result.SimulatedVaR).ToArray(),
+                fhsResults.Select(result => result.SimulatedES).ToArray(),
+                conservativeResults.Select(result => result.SimulatedVaR).ToArray(),
+                conservativeResults.Select(result => result.SimulatedES).ToArray());
+        });
+
+        var models = new List<PortfolioRiskBacktestModelResponse>();
+        for (var confidenceIndex = 0; confidenceIndex < confidenceLevels.Length; confidenceIndex++)
+        {
+            var confidence = confidenceLevels[confidenceIndex];
+            var historical = new List<PortfolioRiskBacktestPoint>();
+            var monteCarlo = new List<PortfolioRiskBacktestPoint>();
+            var conservativeMonteCarlo = new List<PortfolioRiskBacktestPoint>();
+            foreach (var window in windowResults)
+            {
+                historical.Add(new(window.Date, window.ActualReturn, window.HistoricalVaR[confidenceIndex], window.HistoricalEs[confidenceIndex], window.ActualReturn < window.HistoricalVaR[confidenceIndex]));
+                monteCarlo.Add(new(window.Date, window.ActualReturn, window.MonteCarloVaR[confidenceIndex], window.MonteCarloEs[confidenceIndex], window.ActualReturn < window.MonteCarloVaR[confidenceIndex]));
+                conservativeMonteCarlo.Add(new(window.Date, window.ActualReturn, window.ConservativeVaR[confidenceIndex], window.ConservativeEs[confidenceIndex], window.ActualReturn < window.ConservativeVaR[confidenceIndex]));
+            }
+            models.Add(BuildBacktestModel("Historical", confidence, historical));
+            models.Add(BuildBacktestModel("MVEWMA-FHS", confidence, monteCarlo));
+            models.Add(BuildBacktestModel("MVEWMA-FHS（保守 p99）", confidence, conservativeMonteCarlo));
+        }
+        return Result<PortfolioRiskBacktestResponse>.Success(new(portfolioId, from, to, lookbackDays, returns.Count - lookbackDays, models));
+    }
+
+    private sealed record BacktestWindowResult(
+        DateOnly Date,
+        decimal ActualReturn,
+        decimal[] HistoricalVaR,
+        decimal[] HistoricalEs,
+        decimal[] MonteCarloVaR,
+        decimal[] MonteCarloEs,
+        decimal[] ConservativeVaR,
+        decimal[] ConservativeEs);
+
+    private static PortfolioRiskBacktestModelResponse BuildBacktestModel(string model, decimal confidence, IReadOnlyList<PortfolioRiskBacktestPoint> points)
+    {
+        var breaches = points.Count(point => point.Breached);
+        var rate = points.Count == 0 ? 0 : (decimal)breaches / points.Count;
+        var expected = 1 - confidence;
+        decimal? kupiec = points.Count < 100 ? null : KupiecPValue(points.Count, breaches, expected);
+        var christoffersen = points.Count < 100 ? null : ChristoffersenPValue(points);
+        var tailPoints = points.Where(point => point.Breached).ToList();
+        decimal? actualTailLossAverage = tailPoints.Count == 0 ? null : tailPoints.Average(point => point.ActualReturn);
+        decimal? predictedEsAverage = tailPoints.Count == 0 ? null : tailPoints.Average(point => point.PredictedES);
+        decimal? tailLossRatio = actualTailLossAverage is null || predictedEsAverage is null || predictedEsAverage == 0
+            ? null : actualTailLossAverage / predictedEsAverage;
+        var esStatus = tailLossRatio is null ? "insufficient_tail_observations"
+            : tailLossRatio > 1.10m ? "underestimated" : tailLossRatio < 0.90m ? "conservative" : "aligned";
+        return new(model, confidence, points.Count, breaches, rate, expected, kupiec, christoffersen,
+            tailPoints.Count, actualTailLossAverage, predictedEsAverage, tailLossRatio, esStatus,
+            points.Count < 100 ? "insufficient_observations" : "ready", points);
+    }
+
+    private static decimal KupiecPValue(int count, int breaches, decimal expected)
+    {
+        var observed = (decimal)breaches / count;
+        Func<decimal, int, double> logLikelihood = (p, x) => x == 0 ? count * Math.Log((double)(1 - p)) : x * Math.Log((double)p) + (count - x) * Math.Log((double)(1 - p));
+        var lr = -2d * (logLikelihood(expected, breaches) - logLikelihood(Math.Clamp(observed, 0.000001m, 0.999999m), breaches));
+        return ChiSquareOneDegreeSurvival(lr);
+    }
+
+    private static decimal? ChristoffersenPValue(IReadOnlyList<PortfolioRiskBacktestPoint> points)
+    {
+        if (points.Count < 2) return null;
+        var transitions = new int[2, 2];
+        for (var i = 1; i < points.Count; i++) transitions[points[i - 1].Breached ? 1 : 0, points[i].Breached ? 1 : 0]++;
+        var n0 = transitions[0, 0] + transitions[0, 1]; var n1 = transitions[1, 0] + transitions[1, 1];
+        if (n0 == 0 || n1 == 0) return null;
+        var pi = (decimal)(transitions[0, 1] + transitions[1, 1]) / (n0 + n1);
+        var pi0 = (decimal)transitions[0, 1] / n0; var pi1 = (decimal)transitions[1, 1] / n1;
+        Func<decimal, int, int, double> ll = (p, a, b) => a * Math.Log((double)(1 - Math.Clamp(p, 0.000001m, 0.999999m))) + b * Math.Log((double)Math.Clamp(p, 0.000001m, 0.999999m));
+        var lr = -2d * ((ll(pi, transitions[0, 0] + transitions[1, 0], transitions[0, 1] + transitions[1, 1])) - ll(pi0, transitions[0, 0], transitions[0, 1]) - ll(pi1, transitions[1, 0], transitions[1, 1]));
+        return ChiSquareOneDegreeSurvival(lr);
+    }
+
+    // Both the unconditional-coverage and independence likelihood-ratio tests
+    // have one degree of freedom.  For χ²(1), the survival function is
+    // erfc(sqrt(x / 2)); use a stable normal-tail approximation because .NET's
+    // Math API does not expose erfc on every supported runtime.
+    private static decimal ChiSquareOneDegreeSurvival(double statistic)
+    {
+        if (statistic <= 0) return 1m;
+
+        var z = Math.Sqrt(statistic);
+        var t = 1d / (1d + 0.2316419d * z);
+        var density = 0.3989422804014327d * Math.Exp(-0.5d * z * z);
+        var upperTail = density * (0.319381530d * t - 0.356563782d * t * t + 1.781477937d * t * t * t - 1.821255978d * t * t * t * t + 1.330274429d * t * t * t * t * t);
+        return (decimal)Math.Clamp(2d * upperTail, 0d, 1d);
     }
 
     private MonteCarloResult RunCorrelatedMonteCarlo(
@@ -588,6 +895,78 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         return RiskMath.CalculateEwmaVolatility(logReturns, EwmaLambda);
     }
 
+    private static string ResolveIndustry(EquityLens.Api.Contracts.PortfolioHoldings.PortfolioHoldingResponse holding) =>
+        string.IsNullOrWhiteSpace(holding.Industry)
+            ? string.IsNullOrWhiteSpace(holding.Sector) ? "未分類" : holding.Sector
+            : holding.Industry;
+
+    private static (
+        IReadOnlyDictionary<Guid, VolatilityRiskContribution> BySecurityId,
+        IReadOnlyList<PortfolioIndustryRiskResponse> Industries,
+        decimal AnnualizedVolatility)
+        BuildRiskSources(
+            IReadOnlyDictionary<Guid, IReadOnlyList<decimal>> alignedPrices,
+            IReadOnlyDictionary<Guid, decimal> weightsBySecurityId,
+            IReadOnlyDictionary<Guid, string> classificationsBySecurityId,
+            string modelName)
+    {
+        var assetIds = alignedPrices.Keys
+            .Where(id => weightsBySecurityId.GetValueOrDefault(id, 0) > 0)
+            .ToList();
+        if (assetIds.Count == 0)
+            return (new Dictionary<Guid, VolatilityRiskContribution>(), Array.Empty<PortfolioIndustryRiskResponse>(), 0);
+
+        var returnMatrix = assetIds.Select(id =>
+        {
+            var prices = alignedPrices[id];
+            return (IReadOnlyList<decimal>)Enumerable.Range(1, prices.Count - 1)
+                .Select(index => (decimal)Math.Log((double)(prices[index] / prices[index - 1])))
+                .ToList();
+        }).ToList();
+        var weights = assetIds.Select(id => weightsBySecurityId[id]).ToList();
+        var covarianceSeries = RiskMath.CalculateMultivariateEwmaCovariances(returnMatrix, EwmaLambda);
+        if (covarianceSeries.Count == 0)
+            return (new Dictionary<Guid, VolatilityRiskContribution>(), Array.Empty<PortfolioIndustryRiskResponse>(), 0);
+
+        if (modelName is MvewmaFhsModel or ConservativeMvewmaFhsModel)
+        {
+            var alpha = RiskMath.DetermineAutoShrinkageAlpha(assetIds.Count, returnMatrix[0].Count);
+            covarianceSeries = RiskMath.AddJitter(RiskMath.ApplyDiagonalShrinkage(covarianceSeries, alpha));
+        }
+
+        var covariance = covarianceSeries[^1];
+        var totalRiskSource = RiskMath.CalculateVolatilityRiskContribution(
+            weights, covariance, Enumerable.Range(0, assetIds.Count).ToList());
+        var bySecurityId = assetIds
+            .Select((id, index) => new
+            {
+                Id = id,
+                Source = RiskMath.CalculateVolatilityRiskContribution(weights, covariance, [index]),
+            })
+            .ToDictionary(value => value.Id, value => value.Source);
+
+        var industries = assetIds
+            .Select((id, index) => new { Id = id, Index = index, Industry = classificationsBySecurityId.GetValueOrDefault(id, "未分類") })
+            .GroupBy(value => value.Industry)
+            .Select(group =>
+            {
+                var indices = group.Select(value => value.Index).ToList();
+                var source = RiskMath.CalculateVolatilityRiskContribution(weights, covariance, indices);
+                return new PortfolioIndustryRiskResponse(
+                    group.Key,
+                    indices.Sum(index => weights[index]),
+                    source.ComponentVolatility,
+                    source.ComponentRiskShare,
+                    source.MarginalVolatility,
+                    source.IncrementalVolatility,
+                    indices.Count);
+            })
+            .OrderByDescending(source => source.ComponentRiskShare)
+            .ToList();
+
+        return (bySecurityId, industries, totalRiskSource.ComponentVolatility);
+    }
+
     private IReadOnlyList<RiskHorizonResult> BuildPortfolioHorizonsMvewmaFhs(
         IReadOnlyList<decimal> portfolioReturns,
         IReadOnlyDictionary<Guid, IReadOnlyList<decimal>> alignedPrices,
@@ -595,6 +974,7 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         decimal totalMarketValue,
         int simulations,
         decimal confidenceLevel,
+        decimal residualCapQuantile,
         out decimal shrinkageAlpha,
         out int commonTradingDays)
     {
@@ -610,7 +990,7 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             var rollingReturns = RiskMath.CalculateRollingLogReturns(portfolioReturns, horizonDays);
             var fhsResult = RiskMath.RunMultivariateFhsSimulation(
                 returnMatrix, weightList, totalMarketValue, horizonDays,
-                simulations, confidenceLevel, EwmaLambda, alpha);
+                simulations, confidenceLevel, EwmaLambda, alpha, residualCapQuantile: residualCapQuantile);
 
             results.Add(new RiskHorizonResult(
                 horizonDays,
@@ -658,5 +1038,372 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         }
 
         return (returnMatrix, weightList);
+    }
+
+    public async Task<Result<PortfolioMonteCarloResponse>> GetPortfolioMonteCarloAsync(
+        Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken, string modelName = MvewmaFhsModel) =>
+        await ExecuteRiskOperationAsync(
+            "risk.portfolio.monte-carlo", modelName, null, 10000,
+            () => GetPortfolioMonteCarloCoreAsync(portfolioId, providerUserId, cancellationToken, modelName));
+
+    private async Task<Result<PortfolioMonteCarloResponse>> GetPortfolioMonteCarloCoreAsync(
+        Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken, string modelName = MvewmaFhsModel)
+    {
+        const int horizonDays = 252;
+        const int simulations = 10000;
+        const int samplePathCount = 8;
+        if (modelName is not (MvewmaFhsModel or ConservativeMvewmaFhsModel))
+            return Result<PortfolioMonteCarloResponse>.Failure("risk.invalid_model", "Unsupported Monte Carlo model.");
+        var residualCapQuantile = modelName == ConservativeMvewmaFhsModel ? ConservativeResidualCapQuantile : 0m;
+        var displayModel = residualCapQuantile > 0 ? "MVEWMA-FHS（保守 p99）" : "MVEWMA-FHS";
+        var portfolio = await _portfolioRepository.GetDetailAsync(portfolioId, providerUserId, cancellationToken);
+        if (portfolio is null)
+            return Result<PortfolioMonteCarloResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
+        if (portfolio.Holdings.Count == 0)
+            return Result<PortfolioMonteCarloResponse>.Failure("portfolio.no_holdings", "Portfolio has no holdings.");
+
+        PortfolioMonteCarloResponse Insufficient(string message, DateOnly? asOf = null, int commonDays = 0) =>
+            new(portfolioId, "insufficient_prices", message, asOf, commonDays, horizonDays, simulations,
+                displayModel, EwmaLambda, 0, residualCapQuantile, 0, Array.Empty<PortfolioMonteCarloBandPoint>(),
+                Array.Empty<PortfolioMonteCarloPath>(), 0, 0, 0, 0,
+                new PortfolioMonteCarloDiagnostics(0, 0, 0, 0, 0, 0, 0, residualCapQuantile, 0, false, null));
+
+        var securityIds = portfolio.Holdings.Select(holding => holding.SecurityId).Distinct().ToList();
+        var latestPrices = await _marketPriceRepository.GetLatestPricesAsync(securityIds, DailyInterval, cancellationToken);
+        if (latestPrices.Count != securityIds.Count)
+            return Result<PortfolioMonteCarloResponse>.Success(Insufficient("所有持倉都需要最新有效價格，才能模擬共同投組路徑。"));
+
+        var valuations = await Task.WhenAll(portfolio.Holdings.Select(async holding =>
+        {
+            var marketValue = PortfolioMath.CalculateMarketValue(holding.Quantity, latestPrices[holding.SecurityId].Price);
+            var baseValue = await _exchangeRateService.ConvertAsync(
+                marketValue, holding.CostCurrency, portfolio.BaseCurrency, cancellationToken);
+            return (holding.SecurityId, baseValue);
+        }));
+        var totalValue = valuations.Sum(value => value.baseValue);
+        if (totalValue <= 0)
+            return Result<PortfolioMonteCarloResponse>.Failure("risk.invalid_market_value", "Total market value is zero or negative.");
+        var weights = valuations.ToDictionary(value => value.SecurityId, value => value.baseValue / totalValue);
+
+        var pricesBySecurity = new Dictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>>();
+        foreach (var securityId in securityIds)
+            pricesBySecurity[securityId] = await _marketPriceRepository.GetBySecurityAsync(securityId, null, null, cancellationToken);
+        if (pricesBySecurity.Values.Any(series => series.Count < MinPriceCount))
+            return Result<PortfolioMonteCarloResponse>.Success(Insufficient($"所有持倉至少需要 {MinPriceCount} 筆價格資料，才能建立共同日報酬。"));
+
+        var commonDates = pricesBySecurity.Values
+            .Select(series => series.Select(price => DateOnly.FromDateTime(price.PriceTime)).ToHashSet())
+            .Aggregate((left, right) => { left.IntersectWith(right); return left; })
+            .OrderBy(date => date)
+            .ToList();
+        var dataAsOf = commonDates.LastOrDefault();
+        if (commonDates.Count < MinPriceCount)
+            return Result<PortfolioMonteCarloResponse>.Success(Insufficient(
+                $"可用的共同日價格只有 {commonDates.Count} 筆，至少需要 {MinPriceCount} 筆。", dataAsOf, commonDates.Count));
+
+        var alignedPrices = pricesBySecurity.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<decimal>)pair.Value
+                .Where(price => commonDates.Contains(DateOnly.FromDateTime(price.PriceTime)))
+                .OrderBy(price => price.PriceTime)
+                .Select(price => price.AdjustedClose ?? price.Close)
+                .ToList());
+        if (alignedPrices.Values.Any(series => series.Any(price => price <= 0)))
+            return Result<PortfolioMonteCarloResponse>.Failure("risk.non_positive_price", "Historical prices contain non-positive values.");
+
+        var (returnMatrix, weightList) = BuildReturnMatrix(alignedPrices, weights);
+        if (returnMatrix.Count != securityIds.Count || returnMatrix.Count == 0)
+            return Result<PortfolioMonteCarloResponse>.Success(Insufficient("無法建立所有持倉的有效共同日報酬。", dataAsOf, commonDates.Count));
+        var shrinkage = RiskMath.DetermineAutoShrinkageAlpha(returnMatrix.Count, returnMatrix[0].Count);
+        var seed = BuildMonteCarloSeed(portfolioId, dataAsOf, horizonDays, simulations);
+        var simulation = RiskMath.RunMultivariateFhsPathSimulation(
+            returnMatrix, weightList, horizonDays, simulations, samplePathCount, seed, EwmaLambda, shrinkage, residualCapQuantile);
+        if (simulation.DidFallback)
+            return Result<PortfolioMonteCarloResponse>.Success(Insufficient("共同日報酬不足，無法完成 MVEWMA-FHS 模擬。", dataAsOf, commonDates.Count));
+
+        var bands = simulation.Bands.Select(band => new PortfolioMonteCarloBandPoint(
+            band.Day, band.P1, band.P5, band.P50, band.P95, band.P99)).ToList();
+        var paths = simulation.SamplePaths.Select((path, index) => new PortfolioMonteCarloPath(index + 1, path)).ToList();
+        var rightSkewWarning = RiskMath.HasMaterialRightSkew(simulation.ExpectedMedianGap);
+        var diagnostics = new PortfolioMonteCarloDiagnostics(
+            simulation.AnnualizedPortfolioVolatility,
+            simulation.ResidualNormP99,
+            simulation.MaxResidualNorm,
+            simulation.P50FinalReturn,
+            simulation.P95FinalReturn,
+            simulation.P99FinalReturn,
+            simulation.ExpectedMedianGap,
+            simulation.ResidualCapQuantile,
+            simulation.CappedDrawRate,
+            rightSkewWarning,
+            rightSkewWarning
+                ? "期望期末報酬明顯高於中位數，表示平均值受到少數高報酬路徑拉高；請優先參考中位數與下行情境。"
+                : null);
+        return Result<PortfolioMonteCarloResponse>.Success(new(
+            portfolioId, "ready", null, dataAsOf, simulation.CommonTradingDays, horizonDays, simulations,
+            displayModel, EwmaLambda, simulation.ShrinkageAlpha, simulation.ResidualCapQuantile,
+            simulation.CappedDrawRate, bands, paths,
+            simulation.PositiveReturnProbability, simulation.ExpectedReturn,
+            simulation.P5FinalReturn, simulation.P1FinalReturn, diagnostics));
+    }
+
+    private static int BuildMonteCarloSeed(Guid portfolioId, DateOnly dataAsOf, int horizonDays, int simulations)
+    {
+        var bytes = portfolioId.ToByteArray();
+        var seed = 17;
+        foreach (var value in bytes) seed = unchecked(seed * 31 + value);
+        seed = unchecked(seed * 31 + dataAsOf.DayNumber);
+        seed = unchecked(seed * 31 + horizonDays);
+        return unchecked(seed * 31 + simulations);
+    }
+
+    public async Task<Result<PortfolioRiskGovernanceResponse>> GetPortfolioRiskGovernanceAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken) =>
+        await ExecuteRiskOperationAsync(
+            "risk.portfolio.governance", MvewmaFhsModel, .95m, 5000,
+            () => GetPortfolioRiskGovernanceCoreAsync(portfolioId, providerUserId, cancellationToken));
+
+    private async Task<Result<PortfolioRiskGovernanceResponse>> GetPortfolioRiskGovernanceCoreAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken)
+    {
+        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var risk = await GetPortfolioRiskAsync(portfolioId, to.AddYears(-1), to, 1, .95m, 5000, providerUserId, cancellationToken, MvewmaFhsModel);
+        if (!risk.IsSuccess) return Result<PortfolioRiskGovernanceResponse>.Failure("risk.insufficient_prices", "Risk governance cannot be evaluated because formal risk data is unavailable.");
+        return Result<PortfolioRiskGovernanceResponse>.Success(BuildGovernance(portfolioId, risk.Value!, 0m, to));
+    }
+
+    private static PortfolioRiskGovernanceResponse BuildGovernance(Guid portfolioId, PortfolioRiskResponse value, decimal cashWeight, DateOnly today)
+    {
+        var alerts = new List<PortfolioRiskAlertResponse>();
+        void Add(string code, decimal current, decimal warning, decimal critical, bool lowerIsWorse, string text)
+        {
+            var status = lowerIsWorse ? current <= critical ? "critical" : current <= warning ? "warning" : "normal" : current > critical ? "critical" : current > warning ? "warning" : "normal";
+            alerts.Add(new(code, status, current, warning, critical, text));
+        }
+        Add("concentration.largest_holding", value.LargestHoldingWeight, .40m, .50m, false, "降低單一持倉或增加分散配置。");
+        Add("concentration.hhi", value.ConcentrationHhi, .25m, .35m, false, "降低集中產業或單一標的曝險。");
+        var stale = value.DataAsOfDate is null ? 999m : today.DayNumber - value.DataAsOfDate.Value.DayNumber;
+        Add("data.price_age_days", stale, 5m, 10m, false, "請同步最新價格資料後重新計算。");
+        var leverage = Math.Max(0, -cashWeight);
+        Add("leverage.financing", leverage, .20m, .40m, false, "融資槓桿未納入利率、保證金、追繳與被迫平倉風險。");
+        return new(portfolioId, stale > 10 ? "critical" : value.CommonTradingDays < 120 ? "critical" : stale > 5 ? "warning" : "ready", value.DataAsOfDate, value.CommonTradingDays ?? 0, alerts.OrderByDescending(a => a.Status).ToList());
+    }
+
+    public async Task<Result<PortfolioRiskReportSnapshotDetailResponse>> CreatePortfolioRiskReportSnapshotAsync(
+        Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken)
+    {
+        if (_dbContext is null)
+            return Result<PortfolioRiskReportSnapshotDetailResponse>.Failure("risk.snapshot_unavailable", "Risk report storage is unavailable.");
+        var portfolio = await _portfolioRepository.GetDetailAsync(portfolioId, providerUserId, cancellationToken);
+        if (portfolio is null)
+            return Result<PortfolioRiskReportSnapshotDetailResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var risk = await GetPortfolioRiskAsync(portfolioId, today.AddYears(-1), today, 1, .95m, 10000, providerUserId, cancellationToken, MvewmaFhsModel);
+        var governance = await GetPortfolioRiskGovernanceAsync(portfolioId, providerUserId, cancellationToken);
+        var stress = await GetPortfolioStressTestAsync(portfolioId, providerUserId, cancellationToken);
+        var monteCarlo = await GetPortfolioMonteCarloAsync(portfolioId, providerUserId, cancellationToken, MvewmaFhsModel);
+        var backtest = await GetPortfolioRiskBacktestAsync(portfolioId, today.AddYears(-3), today, providerUserId, cancellationToken);
+        if (!risk.IsSuccess || !governance.IsSuccess || !stress.IsSuccess || !monteCarlo.IsSuccess || !backtest.IsSuccess ||
+            monteCarlo.Value!.Status != "ready" || backtest.Value!.Models.Any(model => model.Status != "ready") ||
+            stress.Value!.Scenarios.Any(scenario => scenario.Status != "ready"))
+        {
+            return Result<PortfolioRiskReportSnapshotDetailResponse>.Failure(
+                "risk.snapshot_unavailable", "必要正式風險資料尚不可計算，無法建立不完整的報告快照。");
+        }
+
+        var riskValue = risk.Value!;
+        var governanceValue = governance.Value!;
+        var stressValue = stress.Value!;
+        var monteCarloValue = monteCarlo.Value!;
+        var backtestValue = backtest.Value!;
+        var snapshot = new
+        {
+            dataQuality = new
+            {
+                status = governanceValue.DataStatus,
+                dataAsOfDate = governanceValue.DataAsOfDate,
+                commonTradingDays = governanceValue.CommonTradingDays
+            },
+            governance = governanceValue.Alerts,
+            concentration = new { hhi = riskValue.ConcentrationHhi, largestHoldingWeight = riskValue.LargestHoldingWeight },
+            risk = new
+            {
+                annualizedVolatility = riskValue.HistoricalAnnualizedVolatility,
+                maxDrawdown = riskValue.MaxDrawdown,
+                sharpeRatio = riskValue.SharpeRatio,
+                confidenceLevel = riskValue.ConfidenceLevel,
+                horizons = riskValue.Horizons.Select(h => new { h.HorizonDays, h.HistoricalVaR, h.HistoricalES, h.MonteCarloVaR, h.MonteCarloES })
+            },
+            holdings = riskValue.Holdings.Select(h => new { h.Ticker, h.Exchange, h.SecurityName, h.Industry, h.Weight, h.AnnualizedVolatility, h.ComponentVolatility, h.ComponentRiskShare, h.MarginalVolatility, h.IncrementalVolatility, h.DataPointCount }),
+            industries = riskValue.Industries?.Select(i => new { i.Industry, i.HoldingCount, i.Weight, i.ComponentVolatility, i.ComponentRiskShare, i.MarginalVolatility, i.IncrementalVolatility }),
+            backtest = backtestValue.Models.Select(m => new { m.Model, m.ConfidenceLevel, m.ObservationCount, m.BreachCount, m.BreachRate, m.ExpectedBreachRate, m.KupiecPValue, m.ChristoffersenPValue, m.TailObservationCount, m.EsTailLossRatio, m.EsStatus, m.Status }),
+            stress = stressValue.Scenarios.Select(s => new
+            {
+                s.Id, s.Name, s.Type, s.Status, s.Methodology, s.From, s.To, s.TotalImpact,
+                holdings = s.Holdings.Select(h => new { h.Ticker, h.SecurityName, h.Industry, h.Weight, h.Shock, h.Contribution }),
+                industries = s.Industries
+            }),
+            monteCarlo = new
+            {
+                monteCarloValue.Status, monteCarloValue.DataAsOfDate, monteCarloValue.CommonTradingDays,
+                monteCarloValue.HorizonDays, monteCarloValue.Simulations, monteCarloValue.Model,
+                monteCarloValue.EwmaLambda, monteCarloValue.ShrinkageAlpha,
+                monteCarloValue.PositiveReturnProbability, monteCarloValue.ExpectedReturn,
+                monteCarloValue.P5FinalReturn, monteCarloValue.P1FinalReturn, monteCarloValue.Diagnostics
+            }
+        };
+        var entity = new RiskReportSnapshot
+        {
+            Id = Guid.NewGuid(),
+            PortfolioId = portfolioId,
+            CreatedByUserId = providerUserId,
+            CreatedAtUtc = DateTime.UtcNow,
+            DataAsOfDate = riskValue.DataAsOfDate,
+            Model = "MVEWMA-FHS",
+            ThresholdVersion = "balanced-v1",
+            SnapshotJson = JsonSerializer.Serialize(snapshot)
+        };
+        _dbContext.RiskReportSnapshots.Add(entity);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Result<PortfolioRiskReportSnapshotDetailResponse>.Success(ToSnapshotDetail(entity, governanceValue.DataStatus));
+    }
+
+    public async Task<Result<IReadOnlyList<PortfolioRiskReportSnapshotListItemResponse>>> GetPortfolioRiskReportSnapshotsAsync(
+        Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken)
+    {
+        if (_dbContext is null)
+            return Result<IReadOnlyList<PortfolioRiskReportSnapshotListItemResponse>>.Failure("risk.snapshot_unavailable", "Risk report storage is unavailable.");
+        if (await _portfolioRepository.GetDetailAsync(portfolioId, providerUserId, cancellationToken) is null)
+            return Result<IReadOnlyList<PortfolioRiskReportSnapshotListItemResponse>>.Failure("portfolio.not_found", "Portfolio was not found.");
+        var reports = await _dbContext.RiskReportSnapshots.AsNoTracking()
+            .Where(report => report.PortfolioId == portfolioId)
+            .OrderByDescending(report => report.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+        return Result<IReadOnlyList<PortfolioRiskReportSnapshotListItemResponse>>.Success(reports
+            .Select(report => new PortfolioRiskReportSnapshotListItemResponse(report.Id, report.CreatedAtUtc, report.DataAsOfDate, report.Model, report.ThresholdVersion, ReadSnapshotStatus(report.SnapshotJson)))
+            .ToList());
+    }
+
+    public async Task<Result<PortfolioRiskReportSnapshotDetailResponse>> GetPortfolioRiskReportSnapshotAsync(
+        Guid portfolioId, Guid reportId, Guid providerUserId, CancellationToken cancellationToken)
+    {
+        if (_dbContext is null)
+            return Result<PortfolioRiskReportSnapshotDetailResponse>.Failure("risk.snapshot_unavailable", "Risk report storage is unavailable.");
+        if (await _portfolioRepository.GetDetailAsync(portfolioId, providerUserId, cancellationToken) is null)
+            return Result<PortfolioRiskReportSnapshotDetailResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
+        var report = await _dbContext.RiskReportSnapshots.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == reportId && item.PortfolioId == portfolioId, cancellationToken);
+        return report is null
+            ? Result<PortfolioRiskReportSnapshotDetailResponse>.Failure("risk.report_not_found", "Risk report snapshot was not found.")
+            : Result<PortfolioRiskReportSnapshotDetailResponse>.Success(ToSnapshotDetail(report, ReadSnapshotStatus(report.SnapshotJson)));
+    }
+
+    private static PortfolioRiskReportSnapshotDetailResponse ToSnapshotDetail(RiskReportSnapshot report, string status)
+    {
+        using var document = JsonDocument.Parse(report.SnapshotJson);
+        return new PortfolioRiskReportSnapshotDetailResponse(report.Id, report.PortfolioId, report.CreatedAtUtc, report.DataAsOfDate, report.Model, report.ThresholdVersion, status, document.RootElement.Clone());
+    }
+
+    private static string ReadSnapshotStatus(string snapshotJson)
+    {
+        using var document = JsonDocument.Parse(snapshotJson);
+        return document.RootElement.TryGetProperty("dataQuality", out var quality) && quality.TryGetProperty("status", out var status)
+            ? status.GetString() ?? "unknown"
+            : "unknown";
+    }
+
+    public async Task<Result<PortfolioStressTestResponse>> GetPortfolioStressTestAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken) =>
+        await ExecuteRiskOperationAsync(
+            "risk.portfolio.stress", null, null, null,
+            () => GetPortfolioStressTestCoreAsync(portfolioId, providerUserId, cancellationToken));
+
+    private async Task<Result<PortfolioStressTestResponse>> GetPortfolioStressTestCoreAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken)
+    {
+        var portfolio = await _portfolioRepository.GetDetailAsync(portfolioId, providerUserId, cancellationToken);
+        if (portfolio is null) return Result<PortfolioStressTestResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
+        if (portfolio.Holdings.Count == 0) return Result<PortfolioStressTestResponse>.Failure("portfolio.no_holdings", "Portfolio has no holdings.");
+        var ids = portfolio.Holdings.Select(x => x.SecurityId).Distinct().ToList();
+        var latest = await _marketPriceRepository.GetLatestPricesAsync(ids, DailyInterval, cancellationToken);
+        var values = await Task.WhenAll(portfolio.Holdings.Where(h => latest.ContainsKey(h.SecurityId)).Select(async h => (h, Value: await _exchangeRateService.ConvertAsync(PortfolioMath.CalculateMarketValue(h.Quantity, latest[h.SecurityId].Price), h.CostCurrency, portfolio.BaseCurrency, cancellationToken))));
+        var total = values.Sum(x => x.Value);
+        if (total <= 0) return Result<PortfolioStressTestResponse>.Failure("risk.invalid_market_value", "Total market value is zero or negative.");
+        var weights = values.ToDictionary(x => x.h.SecurityId, x => x.Value / total);
+        var prices = new Dictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>>();
+        foreach (var id in ids) prices[id] = await _marketPriceRepository.GetBySecurityAsync(id, null, null, cancellationToken);
+        var scenarios = new List<PortfolioStressScenarioResponse>();
+        foreach (var s in new[] { ("covid", "COVID-19 市場急跌", new DateOnly(2020,2,19), new DateOnly(2020,3,23)), ("rates_2022", "2022 升息熊市", new DateOnly(2022,1,3), new DateOnly(2022,10,14)), ("tech_2024", "2024 科技股修正", new DateOnly(2024,7,11), new DateOnly(2024,8,5)) }) scenarios.Add(BuildHistoricalStress(s.Item1,s.Item2,s.Item3,s.Item4,portfolio.Holdings,weights,prices));
+        scenarios.Add(BuildWorstTwentyDayStress(portfolio.Holdings, weights, prices));
+        var latestById = latest.ToDictionary(x => x.Key, x => x.Value.Price);
+        scenarios.Add(BuildHypotheticalStress("taiwan_strait", "台海供應鏈中斷", portfolio.Holdings, weights, latestById, -0.45m, -0.30m, -0.35m));
+        scenarios.Add(BuildHypotheticalStress("ai_correction", "AI 泡沫修正", portfolio.Holdings, weights, latestById, -0.30m, -0.15m, -0.20m));
+        return Result<PortfolioStressTestResponse>.Success(new(portfolioId, latest.Values.MaxBy(x => x.PriceTime)?.PriceTime is { } date ? DateOnly.FromDateTime(date) : null, scenarios));
+    }
+
+    public async Task<Result<PortfolioRiskScenarioResponse>> CalculatePortfolioRiskScenarioAsync(Guid portfolioId, PortfolioRiskScenarioRequest request, Guid providerUserId, CancellationToken cancellationToken)
+    {
+        var portfolio = await _portfolioRepository.GetDetailAsync(portfolioId, providerUserId, cancellationToken);
+        if (portfolio is null) return Result<PortfolioRiskScenarioResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
+        if (portfolio.Holdings.Count == 0) return Result<PortfolioRiskScenarioResponse>.Failure("portfolio.no_holdings", "Portfolio has no holdings.");
+        var ids = portfolio.Holdings.Select(h => h.SecurityId).Distinct().ToHashSet();
+        if (request.TargetWeights.Any(item => !ids.Contains(item.SecurityId))) return Result<PortfolioRiskScenarioResponse>.Failure("risk.invalid_target_weight", "Target weights may only reference existing portfolio holdings.");
+        if (request.TargetWeights.Any(item => item.TargetWeight < 0)) return Result<PortfolioRiskScenarioResponse>.Failure("risk.invalid_target_weight", "Target weights cannot be negative.");
+        var targetWeights = request.TargetWeights.GroupBy(item => item.SecurityId).ToDictionary(group => group.Key, group => group.Sum(item => item.TargetWeight));
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var current = await GetPortfolioRiskAsync(portfolioId, today.AddYears(-1), today, 1, .95m, 5000, providerUserId, cancellationToken, MvewmaFhsModel);
+        var scenario = await GetPortfolioRiskAsync(portfolioId, today.AddYears(-1), today, 1, .95m, 5000, providerUserId, cancellationToken, MvewmaFhsModel, targetWeights);
+        if (!current.IsSuccess || !scenario.IsSuccess) return Result<PortfolioRiskScenarioResponse>.Failure("risk.insufficient_prices", "正式風險資料不可計算，無法完成目標權重試算。");
+        var currentStress = await GetPortfolioStressTestAsync(portfolioId, providerUserId, cancellationToken);
+        var scenarioStress = await GetPortfolioStressTestWithWeightsAsync(portfolioId, providerUserId, targetWeights, cancellationToken);
+        if (!currentStress.IsSuccess || !scenarioStress.IsSuccess) return Result<PortfolioRiskScenarioResponse>.Failure("risk.insufficient_prices", "壓力測試資料不可計算，無法完成目標權重試算。");
+        var cashWeight = 1m - targetWeights.Values.Sum();
+        return Result<PortfolioRiskScenarioResponse>.Success(new(portfolioId, cashWeight, current.Value!, scenario.Value!, currentStress.Value!.Scenarios, scenarioStress.Value!.Scenarios, BuildGovernance(portfolioId, current.Value!, 0m, today), BuildGovernance(portfolioId, scenario.Value!, cashWeight, today)));
+    }
+
+    private async Task<Result<PortfolioStressTestResponse>> GetPortfolioStressTestWithWeightsAsync(Guid portfolioId, Guid providerUserId, IReadOnlyDictionary<Guid, decimal> targetWeights, CancellationToken cancellationToken)
+    {
+        var portfolio = await _portfolioRepository.GetDetailAsync(portfolioId, providerUserId, cancellationToken);
+        if (portfolio is null) return Result<PortfolioStressTestResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
+        var ids = portfolio.Holdings.Select(x => x.SecurityId).Distinct().ToList(); var latest = await _marketPriceRepository.GetLatestPricesAsync(ids, DailyInterval, cancellationToken);
+        if (latest.Count != ids.Count) return Result<PortfolioStressTestResponse>.Failure("risk.insufficient_prices", "All holdings require latest prices.");
+        var prices = new Dictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>>(); foreach (var id in ids) prices[id] = await _marketPriceRepository.GetBySecurityAsync(id, null, null, cancellationToken);
+        var scenarios = new List<PortfolioStressScenarioResponse>(); foreach (var s in new[] { ("covid", "COVID-19 市場急跌", new DateOnly(2020,2,19), new DateOnly(2020,3,23)), ("rates_2022", "2022 升息熊市", new DateOnly(2022,1,3), new DateOnly(2022,10,14)), ("tech_2024", "2024 科技股修正", new DateOnly(2024,7,11), new DateOnly(2024,8,5)) }) scenarios.Add(BuildHistoricalStress(s.Item1,s.Item2,s.Item3,s.Item4,portfolio.Holdings,targetWeights,prices));
+        scenarios.Add(BuildWorstTwentyDayStress(portfolio.Holdings,targetWeights,prices)); var latestById = latest.ToDictionary(x=>x.Key,x=>x.Value.Price);
+        scenarios.Add(BuildHypotheticalStress("taiwan_strait","台海供應鏈中斷",portfolio.Holdings,targetWeights,latestById,-.45m,-.30m,-.35m)); scenarios.Add(BuildHypotheticalStress("ai_correction","AI 泡沫修正",portfolio.Holdings,targetWeights,latestById,-.30m,-.15m,-.20m));
+        return Result<PortfolioStressTestResponse>.Success(new(portfolioId, DateOnly.FromDateTime(latest.Values.MaxBy(x=>x.PriceTime)!.PriceTime),scenarios));
+    }
+
+    private static PortfolioStressScenarioResponse BuildHistoricalStress(string id, string name, DateOnly from, DateOnly to, IReadOnlyList<EquityLens.Api.Contracts.PortfolioHoldings.PortfolioHoldingResponse> holdings, IReadOnlyDictionary<Guid, decimal> weights, IReadOnlyDictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>> prices)
+    {
+        var details = new List<PortfolioStressHoldingResponse>();
+        foreach (var h in holdings)
+        {
+            var series = prices.GetValueOrDefault(h.SecurityId) ?? Array.Empty<Contracts.MarketPrices.MarketPriceResponse>();
+            var start = series.Where(p => DateOnly.FromDateTime(p.PriceTime) >= from).OrderBy(p => p.PriceTime).FirstOrDefault();
+            var end = series.Where(p => DateOnly.FromDateTime(p.PriceTime) <= to).OrderByDescending(p => p.PriceTime).FirstOrDefault();
+            if (start is null || end is null || start.Close <= 0) return new(id,name,"historical","insufficient_prices","共同價格不足，無法回放此歷史情境",from,to,0,Array.Empty<PortfolioStressHoldingResponse>(),Array.Empty<PortfolioStressIndustryResponse>());
+            var shock = end.Close / start.Close - 1;
+            details.Add(new(h.Ticker,h.SecurityName,ResolveIndustry(h),weights.GetValueOrDefault(h.SecurityId),start.Close,end.Close,shock,weights.GetValueOrDefault(h.SecurityId)*shock));
+        }
+        return BuildStressResponse(id,name,"historical","ready",$"以目前持倉權重回放 {from:yyyy-MM-dd} 至 {to:yyyy-MM-dd} 的價格報酬",from,to,details);
+    }
+
+    private static PortfolioStressScenarioResponse BuildWorstTwentyDayStress(IReadOnlyList<EquityLens.Api.Contracts.PortfolioHoldings.PortfolioHoldingResponse> holdings, IReadOnlyDictionary<Guid, decimal> weights, IReadOnlyDictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>> prices)
+    {
+        var common = prices.Values.Select(series => series.Select(p => DateOnly.FromDateTime(p.PriceTime)).ToHashSet()).Aggregate((left,right) => { left.IntersectWith(right); return left; }).Order().ToList();
+        if (common.Count < 21) return new("worst_20d","資料期間最差 20 日","historical","insufficient_prices","共同價格不足 21 日",null,null,0,Array.Empty<PortfolioStressHoldingResponse>(),Array.Empty<PortfolioStressIndustryResponse>());
+        decimal best = 1m; DateOnly from = common[0], to = common[20];
+        for (var i=20;i<common.Count;i++) { decimal impact=0; foreach(var h in holdings) { var s=prices[h.SecurityId]; var a=s.First(p=>DateOnly.FromDateTime(p.PriceTime)==common[i-20]).Close; var b=s.First(p=>DateOnly.FromDateTime(p.PriceTime)==common[i]).Close; impact += weights.GetValueOrDefault(h.SecurityId)*(b/a-1); } if(impact<best){best=impact;from=common[i-20];to=common[i];} }
+        return BuildHistoricalStress("worst_20d","資料期間最差 20 日",from,to,holdings,weights,prices);
+    }
+
+    private static PortfolioStressScenarioResponse BuildHypotheticalStress(string id, string name, IReadOnlyList<EquityLens.Api.Contracts.PortfolioHoldings.PortfolioHoldingResponse> holdings, IReadOnlyDictionary<Guid, decimal> weights, IReadOnlyDictionary<Guid, decimal> latest, decimal semiconductor, decimal finance, decimal other)
+    {
+        var details = holdings.Select(h => { var industry=ResolveIndustry(h); var shock=industry.Contains("半導體") ? semiconductor : industry.Contains("金融") ? finance : other; var weight=weights.GetValueOrDefault(h.SecurityId); var price=latest.GetValueOrDefault(h.SecurityId); return new PortfolioStressHoldingResponse(h.Ticker,h.SecurityName,industry,weight,price,price*(1+shock),shock,weight*shock); }).ToList();
+        return BuildStressResponse(id,name,"hypothetical","ready",$"半導體 {semiconductor:P0}；金融保險 {finance:P0}；其他／未分類 {other:P0}。假設情境，非發生機率預測。",null,null,details);
+    }
+
+    private static PortfolioStressScenarioResponse BuildStressResponse(string id,string name,string type,string status,string methodology,DateOnly? from,DateOnly? to,IReadOnlyList<PortfolioStressHoldingResponse> holdings)
+    {
+        var industries=holdings.GroupBy(x=>x.Industry).Select(g => { var weight=g.Sum(x=>x.Weight); var contribution=g.Sum(x=>x.Contribution); return new PortfolioStressIndustryResponse(g.Key,weight,weight == 0 ? 0 : contribution / weight,contribution); }).OrderBy(x=>x.Contribution).ToList();
+        return new(id,name,type,status,methodology,from,to,holdings.Sum(x=>x.Contribution),holdings,industries);
     }
 }

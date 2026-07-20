@@ -39,7 +39,7 @@ public sealed class AgentWorkflowPlannerTests
     }
 
     [Fact]
-    public void GetExecutionOrder_ResearchQualityReviewWorkflow_ReturnsExpected7NodeOrder()
+    public void GetExecutionOrder_ResearchQualityReviewWorkflow_ReturnsExpectedDynamicPrefix()
     {
         var provider = new ResearchQualityReviewWorkflowDefinitionProvider();
         var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid());
@@ -53,11 +53,89 @@ public sealed class AgentWorkflowPlannerTests
             ResearchQualityReviewNodeKeys.BuildEvidencePacket,
             ResearchQualityReviewNodeKeys.CheckEvidence,
             ResearchQualityReviewNodeKeys.CritiqueAnswer,
-            ResearchQualityReviewNodeKeys.FinalizeCriticReport,
-            ResearchQualityReviewNodeKeys.DraftRevisedAnswer,
-            ResearchQualityReviewNodeKeys.FinalizeRevision
+            ResearchQualityReviewNodeKeys.FinalizeCriticReport
         ],
         order);
+    }
+
+    [Fact]
+    public void GetExecutionOrder_PortfolioDiagnosisWorkflow_ReturnsExpectedOrder()
+    {
+        var provider = new PortfolioDiagnosisWorkflowDefinitionProvider();
+        var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 6, 1), new DateOnly(2026, 7, 1));
+        var planner = new AgentWorkflowPlanner();
+
+        Assert.Equal(
+        [
+            PortfolioDiagnosisNodeKeys.LoadContext,
+            PortfolioDiagnosisNodeKeys.CalculateAttribution,
+            PortfolioDiagnosisNodeKeys.LoadRiskProfile,
+            PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses,
+            PortfolioDiagnosisNodeKeys.BuildEvidencePacket,
+            PortfolioDiagnosisNodeKeys.DraftDiagnosis,
+            PortfolioDiagnosisNodeKeys.FinalizeDiagnosis
+        ], planner.GetExecutionOrder(run.WorkflowDefinitionJson));
+    }
+
+    [Fact]
+    public void GetExecutionOrder_EvidenceRemediationWorkflow_ReturnsExpectedBoundedLoopOrder()
+    {
+        var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var order = new AgentWorkflowPlanner().GetExecutionOrder(run.WorkflowDefinitionJson);
+
+        Assert.Equal(
+        [
+            EvidenceRemediationNodeKeys.LoadContext,
+            EvidenceRemediationNodeKeys.ExtractClaims,
+            "planEvidenceRetrieval:1", "retrieveRemediationEvidence:1", "assessClaimSupport:1", "validateEvidenceMappings:1", "routeEvidenceRemediation:1",
+            "planEvidenceRetrieval:2", "retrieveRemediationEvidence:2", "assessClaimSupport:2", "validateEvidenceMappings:2", "routeEvidenceRemediation:2",
+            EvidenceRemediationNodeKeys.BuildPacket,
+            EvidenceRemediationNodeKeys.DraftRevision,
+            EvidenceRemediationNodeKeys.Finalize
+        ], order);
+        var catalog = new AgentWorkflowCatalog().GetWorkflow(AgentWorkflowTypes.EvidenceRemediation);
+        Assert.Equal(10, catalog.NodeTypes.Count);
+        Assert.Equal(9, catalog.Edges.Count);
+    }
+
+    [Fact]
+    public void Catalog_AllNodeContracts_AreCompleteAndUnique()
+    {
+        var catalog = new AgentWorkflowCatalog();
+
+        Assert.Equal(catalog.Nodes.Count, catalog.Nodes.Select(x => x.NodeType).Distinct().Count());
+        Assert.All(catalog.Nodes, node =>
+        {
+            var contract = node.Contract;
+            Assert.True(contract.Version > 0);
+            Assert.False(string.IsNullOrWhiteSpace(contract.InputSchema));
+            Assert.False(string.IsNullOrWhiteSpace(contract.OutputSchema));
+            Assert.False(string.IsNullOrWhiteSpace(contract.Stage));
+            Assert.NotNull(contract.RequiredBlackboardKeys);
+            Assert.NotNull(contract.ProducedBlackboardKeys);
+        });
+    }
+
+    [Fact]
+    public void Catalog_ResearchQualityReview_UsesExpectedSharedNodeContracts()
+    {
+        var workflow = new AgentWorkflowCatalog().GetWorkflow(AgentWorkflowTypes.ResearchQualityReview);
+
+        Assert.Equal("研究品質審查", workflow.DisplayName);
+        Assert.Equal(AgentTypes.Critic, workflow.AgentType);
+        Assert.Equal(
+        [
+            ResearchQualityReviewNodeTypes.LoadResearchRun,
+            ResearchQualityReviewNodeTypes.BuildEvidencePacket,
+            ResearchQualityReviewNodeTypes.CheckEvidence,
+            ResearchQualityReviewNodeTypes.CritiqueAnswer,
+            ResearchQualityReviewNodeTypes.FinalizeCriticReport,
+            ResearchQualityReviewNodeTypes.DraftRevisedAnswer,
+            ResearchQualityReviewNodeTypes.FinalizeRevision
+        ], workflow.NodeTypes);
+        Assert.Equal(6, workflow.Edges.Count);
+        Assert.Equal((ResearchQualityReviewNodeTypes.FinalizeCriticReport, ResearchQualityReviewNodeTypes.DraftRevisedAnswer), workflow.Edges[4]);
+        Assert.Equal((ResearchQualityReviewNodeTypes.DraftRevisedAnswer, ResearchQualityReviewNodeTypes.FinalizeRevision), workflow.Edges[5]);
     }
 
     [Fact]

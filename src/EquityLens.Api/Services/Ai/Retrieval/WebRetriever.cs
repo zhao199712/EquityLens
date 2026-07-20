@@ -31,7 +31,19 @@ public sealed class WebRetriever : IWebRetriever
         webActivity?.SetTag("web.query_length", query.Length);
         webActivity?.SetTag("web.count", count);
 
-        var response = await _braveSearch.SearchAsync(query, count, freshness, cancellationToken);
+        BraveSearchResponse response;
+        try
+        {
+            response = await _braveSearch.SearchAsync(query, count, freshness, cancellationToken);
+        }
+        catch (WebProviderException exception)
+        {
+            webActivity?.SetTag("web.provider", exception.Provider);
+            webActivity?.SetTag("web.error_code", exception.ErrorCode);
+            webActivity?.SetTag("http.status_code", exception.HttpStatusCode);
+            webActivity?.SetStatus(ActivityStatusCode.Error, exception.ErrorCode);
+            throw;
+        }
 
         if (response.Results.Count == 0)
         {

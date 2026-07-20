@@ -19,7 +19,9 @@ public sealed record ResearchRetrievalSearch(
     string SourceRole,
     string Query,
     int TopK,
-    string Reason);
+    string Reason,
+    string? TargetClaim = null,
+    string? Freshness = null);
 
 public sealed record ResearchCitation(
     int Index,

@@ -1,40 +1,49 @@
 <template>
-  <svg ref="svgRef" :width="width" :height="height" :viewBox="`0 0 ${width} ${height}`">
+  <svg :viewBox="`0 0 ${viewBoxSize} ${viewBoxSize}`" class="kimi-donut" preserveAspectRatio="xMidYMid meet">
     <g
       v-for="(path, i) in paths"
       :key="i"
+      class="cursor-pointer"
       @mouseenter="handleHover(i)"
       @mouseleave="handleHover(null)"
-      class="cursor-pointer"
-      :style="{
+    >
+      <g :style="{
         transform: `translate(${currentHover === i ? 5 * Math.cos(path.midAngle) : 0}px, ${currentHover === i ? 5 * Math.sin(path.midAngle) : 0}px)`,
         transition: 'transform 0.3s ease',
-      }"
-    >
-      <path
-        :d="path.d"
-        :fill="path.seg.color"
-        :stroke="path.seg.borderColor || 'none'"
-        :stroke-width="path.seg.borderColor ? 1 : 0"
-      />
-      <line
-        :x1="cx + outerR * Math.cos(path.midAngle)"
-        :y1="cy + outerR * Math.sin(path.midAngle)"
-        :x2="cx + (outerR + 30) * Math.cos(path.midAngle)"
-        :y2="cy + (outerR + 30) * Math.sin(path.midAngle)"
-        :stroke="dark ? '#333333' : '#E0E0E0'"
-        stroke-width="1"
-      />
-      <text
-        :x="cx + (outerR + 40) * Math.cos(path.midAngle)"
-        :y="cy + (outerR + 40) * Math.sin(path.midAngle) + 4"
-        :text-anchor="Math.cos(path.midAngle) > 0 ? 'start' : 'end'"
-        fill="#666666"
-        font-size="11"
-        font-family="Inter, sans-serif"
+      }">
+        <path
+          :d="path.d"
+          :fill="path.seg.color"
+          :stroke="path.seg.borderColor || 'none'"
+          :stroke-width="path.seg.borderColor ? 1 : 0"
+        />
+      </g>
+
+      <g v-if="path.seg.value / total >= labelThreshold"
+        :style="{
+          transform: `translate(${currentHover === i ? 5 * Math.cos(path.midAngle) : 0}px, ${currentHover === i ? 5 * Math.sin(path.midAngle) : 0}px)`,
+          transition: 'transform 0.3s ease',
+        }"
       >
-        {{ path.seg.label }} {{ Math.round((path.seg.value / total) * 100) }}%
-      </text>
+        <line
+          :x1="cx + outerR * Math.cos(path.midAngle)"
+          :y1="cy + outerR * Math.sin(path.midAngle)"
+          :x2="cx + (outerR + labelLineLength) * Math.cos(path.midAngle)"
+          :y2="cy + (outerR + labelLineLength) * Math.sin(path.midAngle)"
+          :stroke="dark ? '#333333' : '#E0E0E0'"
+          stroke-width="1"
+        />
+        <text
+          :x="cx + labelRadius * Math.cos(path.midAngle)"
+          :y="cy + labelRadius * Math.sin(path.midAngle) + 4"
+          :text-anchor="Math.cos(path.midAngle) >= 0 ? 'start' : 'end'"
+          :fill="dark ? '#888888' : '#666666'"
+          font-size="11"
+          font-family="Inter, sans-serif"
+        >
+          {{ path.seg.label }} {{ Math.round((path.seg.value / total) * 100) }}%
+        </text>
+      </g>
     </g>
 
     <!-- Center label -->
@@ -79,14 +88,13 @@ const props = withDefaults(defineProps<{
   segments: Segment[]
   centerLabel?: string
   centerSubLabel?: string
-  width?: number
-  height?: number
-  activeIndex?: number | null
   dark?: boolean
+  activeIndex?: number | null
+  labelThreshold?: number
 }>(), {
-  width: 360,
-  height: 360,
   dark: false,
+  activeIndex: null,
+  labelThreshold: 0.03,
 })
 
 const emit = defineEmits<{
@@ -95,16 +103,19 @@ const emit = defineEmits<{
 
 const hovered = ref<number | null>(null)
 
-const cx = computed(() => props.width / 2)
-const cy = computed(() => props.height / 2)
-const outerR = 140
-const innerR = 90
+const viewBoxSize = 420
+const cx = computed(() => viewBoxSize / 2)
+const cy = computed(() => viewBoxSize / 2)
+const outerR = 130
+const innerR = 80
+const labelLineLength = 32
+const labelRadius = outerR + labelLineLength + 8
 const total = computed(() => props.segments.reduce((s, seg) => s + seg.value, 0))
 
 const paths = computed(() => {
   let startAngle = -Math.PI / 2
   return props.segments.map((seg) => {
-    const angle = (seg.value / total.value) * Math.PI * 2
+    const angle = total.value > 0 ? (seg.value / total.value) * Math.PI * 2 : 0
     const endAngle = startAngle + angle
 
     const x1 = cx.value + outerR * Math.cos(startAngle)
@@ -132,3 +143,16 @@ const handleHover = (index: number | null) => {
   emit('segmentHover', index)
 }
 </script>
+
+<style scoped>
+.kimi-donut {
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  overflow: visible;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+</style>

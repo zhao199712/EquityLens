@@ -13,6 +13,8 @@ public class AgentRunNode
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
     public long? DurationMs { get; set; }
+    public string TemplateNodeKey { get; set; } = string.Empty;
+    public int Iteration { get; set; }
 
     public AgentRun Run { get; set; } = null!;
     public ICollection<AgentRunEvent> Events { get; set; } = [];

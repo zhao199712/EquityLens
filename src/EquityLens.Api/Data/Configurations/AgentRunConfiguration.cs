@@ -23,6 +23,9 @@ public class AgentRunConfiguration : IEntityTypeConfiguration<AgentRun>
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("now()");
         builder.Property(x => x.StartedAtUtc).HasColumnName("started_at_utc");
         builder.Property(x => x.CompletedAtUtc).HasColumnName("completed_at_utc");
+        builder.Property(x => x.OrchestrationVersion).HasColumnName("orchestration_version").IsConcurrencyToken();
+        builder.Property(x => x.LeaseOwner).HasColumnName("lease_owner").HasMaxLength(128);
+        builder.Property(x => x.LeaseExpiresAtUtc).HasColumnName("lease_expires_at_utc");
 
         builder.HasMany(x => x.Nodes).WithOne(n => n.Run).HasForeignKey(n => n.AgentRunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(x => x.Events).WithOne(e => e.Run).HasForeignKey(e => e.AgentRunId).OnDelete(DeleteBehavior.Cascade);

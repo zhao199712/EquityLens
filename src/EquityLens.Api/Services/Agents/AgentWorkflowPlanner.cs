@@ -2,12 +2,12 @@ using System.Text.Json;
 
 namespace EquityLens.Api.Services.Agents;
 
-public interface IAgentWorkflowPlanner
+public interface IWorkflowGraphTopologyService
 {
     IReadOnlyList<string> GetExecutionOrder(string workflowDefinitionJson);
 }
 
-public sealed class AgentWorkflowPlanner : IAgentWorkflowPlanner
+public class WorkflowGraphTopologyService : IWorkflowGraphTopologyService
 {
     public IReadOnlyList<string> GetExecutionOrder(string workflowDefinitionJson)
     {
@@ -73,3 +73,6 @@ public sealed class AgentWorkflowPlanner : IAgentWorkflowPlanner
         return order;
     }
 }
+
+/// <summary>Compatibility facade for callers that used the old, misleading planner name.</summary>
+public sealed class AgentWorkflowPlanner : WorkflowGraphTopologyService;

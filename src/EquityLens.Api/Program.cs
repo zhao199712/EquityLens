@@ -26,6 +26,7 @@ using EquityLens.Api.Services.ExchangeRates;
 using EquityLens.Api.Services.MarketData;
 using EquityLens.Api.Services.MarketPrices;
 using EquityLens.Api.Services.ObjectStorage;
+using EquityLens.Api.Services.PortfolioDividends;
 using EquityLens.Api.Services.PortfolioHoldings;
 using EquityLens.Api.Services.Portfolios;
 using EquityLens.Api.Services.PortfolioValuations;
@@ -36,12 +37,15 @@ using EquityLens.Api.Services.FinancialFilings;
 using EquityLens.Api.Services.DocumentParsing;
 using EquityLens.Api.Services.DocumentProcessing;
 using EquityLens.Api.Services.PortfolioTransactions;
+using EquityLens.Api.Services.PortfolioFunding;
 using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Services.InvestorConferences;
 using EquityLens.Api.Services.FinancialData;
+using EquityLens.Api.Services.AdminJobs;
+using EquityLens.Api.Services.BackgroundWorkers;
 using EquityLens.Api.Services.Ai;
-using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Ai.Retrieval;
+using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Chat;
 using EquityLens.Api.Services.Research;
 using EquityLens.Api.Observability;
@@ -155,12 +159,19 @@ builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<ISecurityService, SecurityService>();
 builder.Services.AddScoped<IPortfolioHoldingService, PortfolioHoldingService>();
 builder.Services.AddScoped<IPortfolioValuationService, PortfolioValuationService>();
+builder.Services.AddHttpClient<IPortfolioBenchmarkService, FinMindPortfolioBenchmarkService>((sp, client) =>
+{
+    client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<FinMindOptions>>().Value.BaseUrl);
+});
+builder.Services.AddScoped<IPortfolioDividendService, PortfolioDividendService>();
 builder.Services.AddScoped<IMarketPriceService, MarketPriceService>();
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 builder.Services.AddScoped<IUploadedFileService, UploadedFileService>();
 builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddScoped<IPortfolioFundingService, PortfolioFundingService>();
 builder.Services.AddScoped<IRiskAnalysisService, RiskAnalysisService>();
+builder.Services.AddScoped<IRiskBacktestRunService, RiskBacktestRunService>();
 builder.Services.AddScoped<IConferenceImportService, ConferenceImportService>();
 builder.Services.AddScoped<IPdfTextExtractionService, PdfPigTextExtractionService>();
 builder.Services.AddScoped<IConferenceChunkingService, ConferenceChunkingService>();
@@ -170,16 +181,36 @@ builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 builder.Services.AddScoped<IResearchPreflightService, ResearchPreflightService>();
 builder.Services.AddScoped<IResearchRunTraceService, ResearchRunTraceService>();
 builder.Services.AddScoped<ICriticReviewAgent, LlmCriticReviewAgent>();
+builder.Services.AddSingleton<IAgentWorkflowCatalog, AgentWorkflowCatalog>();
+builder.Services.AddScoped<IAgentWorkflowAdminService, AgentWorkflowAdminService>();
 builder.Services.AddScoped<IDraftRevisionAgent, LlmDraftRevisionAgent>();
+builder.Services.AddScoped<LlmEvidenceRemediationAgent>();
+builder.Services.AddScoped<IClaimExtractionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
+builder.Services.AddSingleton<IClaimSetValidator, ClaimSetValidator>();
+builder.Services.AddSingleton<IAnswerQualityValidator, AnswerQualityValidator>();
+builder.Services.AddScoped<IEvidenceBackedRevisionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
+builder.Services.AddScoped<IEvidenceAssessor, LlmEvidenceAssessor>();
+builder.Services.AddScoped<IInvestmentReanalysisAgent, LlmInvestmentReanalysisAgent>();
+builder.Services.AddScoped<IEvidenceRetrievalPlanAgent, EvidenceRetrievalPlanAgent>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, CriticReviewWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, DraftRevisionWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchQualityReviewWorkflowDefinitionProvider>();
-builder.Services.AddScoped<IAgentWorkflowPlanner, AgentWorkflowPlanner>();
+builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceRemediationWorkflowDefinitionProvider>();
+builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceReanalysisWorkflowDefinitionProvider>();
+builder.Services.AddScoped<PortfolioDiagnosisWorkflowDefinitionProvider>();
+builder.Services.AddScoped<IAgentWorkflowDefinitionProvider>(sp => sp.GetRequiredService<PortfolioDiagnosisWorkflowDefinitionProvider>());
+builder.Services.AddSingleton<IWorkflowGraphTopologyService, WorkflowGraphTopologyService>();
+builder.Services.AddSingleton<IWorkflowSkillCatalog, WorkflowSkillCatalog>();
+builder.Services.AddSingleton<INodeCapabilityRegistry, NodeCapabilityRegistry>();
+builder.Services.AddScoped<IAgentWorkflowPlanner, LlmAgentWorkflowPlanner>();
+builder.Services.AddScoped<IDynamicPlanValidator, DynamicPlanValidator>();
+builder.Services.AddScoped<IGraphMaterializer, GraphMaterializer>();
 builder.Services.AddScoped<IAgentRunGraphValidator, AgentRunGraphValidator>();
 builder.Services.AddSingleton<IAgentRunStateMachine, AgentRunStateMachine>();
 builder.Services.AddSingleton<IAgentNodeStateMachine, AgentNodeStateMachine>();
 builder.Services.AddScoped<IWorkflowPolicyEvaluator, CriticReviewPolicyEvaluator>();
 builder.Services.AddScoped<IWorkflowPolicyEvaluator, ResearchQualityReviewPolicyEvaluator>();
+builder.Services.AddScoped<IWorkflowPolicyEvaluator, EvidenceReanalysisPolicyEvaluator>();
 builder.Services.AddScoped<IAgentNodeHandler, LoadResearchRunNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, BuildEvidencePacketNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, CheckEvidenceNodeHandler>();
@@ -188,9 +219,37 @@ builder.Services.AddScoped<IAgentNodeHandler, FinalizeCriticReportNodeHandler>()
 builder.Services.AddScoped<IAgentNodeHandler, LoadCriticReviewRunNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, DraftRevisedAnswerNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, FinalizeRevisionNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, LoadPortfolioDiagnosisContextNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, CalculatePerformanceAttributionNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, LoadRiskProfileNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, PrioritizeRiskAnalysesNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, BuildPortfolioEvidencePacketNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, DraftPortfolioDiagnosisNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, FinalizePortfolioDiagnosisNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, LoadEvidenceRemediationContextNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, PlanEvidenceRetrievalNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, RetrieveRemediationEvidenceNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, RetrieveWebEvidenceNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, ExtractAnswerClaimsNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, AssessClaimSupportNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, ValidateEvidenceMappingsNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, RouteEvidenceRemediationNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, BuildRemediatedEvidencePacketNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, DraftEvidenceBackedRevisionNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, FinalizeEvidenceRemediationNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, LoadEvidenceRemediationNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, ValidateReanalysisRequestNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, BuildAnalysisContextNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, ReanalyzeAnswerNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, CritiqueReanalysisNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, ReviseReanalysisNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, FinalizeReanalysisNodeHandler>();
 builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
 builder.Services.AddScoped<IAgentRunService, AgentRunService>();
-builder.Services.AddHostedService<AgentRunWorker>();
+    builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();
+    builder.Services.AddHostedService<BackgroundJobWorker>();
+    builder.Services.AddHostedService<AgentRunWorker>();
+    builder.Services.AddHostedService<AgentRunWakeOutboxDispatcher>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務
@@ -252,6 +311,11 @@ builder.Services.AddHttpClient<FinMindFinancialImportService>((sp, client) =>
     var options = sp.GetRequiredService<IOptions<FinMindOptions>>().Value;
     client.BaseAddress = new Uri(options.BaseUrl);
 });
+builder.Services.AddHttpClient<IFinMindDividendImportService, FinMindDividendImportService>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<FinMindOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+});
 
 builder.Services.AddScoped<IMopsFinancialImportService, MopsFinancialImportService>();
 builder.Services.AddHttpClient<MopsFinancialImportService>(client =>
@@ -271,9 +335,10 @@ builder.Services.AddHttpClient<TwseReportDownloadService>(client =>
     client.Timeout = TimeSpan.FromSeconds(60);
 });
 
-// TWSE 財報爬蟲服務
+// 富櫃50資料來源（不可作為元大0050成分股來源）
 builder.Services.AddHttpClient<TpeiTaiwan50Provider>();
 builder.Services.AddScoped<ITaiwan50ConstituentProvider, TpeiTaiwan50Provider>();
+builder.Services.AddScoped<ITw0050PriceSyncService, Tw0050PriceSyncService>();
 builder.Services.AddHttpClient<TwseFilingCrawler>();
 builder.Services.AddScoped<ITwseFilingCrawler, TwseFilingCrawler>();
 builder.Services.AddScoped<IPdfParser, PigPdfParser>();

@@ -242,7 +242,8 @@ public sealed class AgentRunServiceTests
         }.SelectMany(nodeKey => new[]
         {
             $"{nodeKey}:{AgentNodeStatuses.Pending}->{AgentNodeStatuses.Ready}",
-            $"{nodeKey}:{AgentNodeStatuses.Ready}->{AgentNodeStatuses.Running}",
+            $"{nodeKey}:{AgentNodeStatuses.Ready}->{AgentNodeStatuses.Queued}",
+            $"{nodeKey}:{AgentNodeStatuses.Queued}->{AgentNodeStatuses.Running}",
             $"{nodeKey}:{AgentNodeStatuses.Running}->{AgentNodeStatuses.Succeeded}"
         }).ToArray();
         Assert.Equal(expectedNodeTransitions, nodeStateMachine.Transitions.Select(x => $"{x.NodeKey}:{x.From}->{x.To}").ToArray());
@@ -598,7 +599,7 @@ public sealed class AgentRunServiceTests
 
         var summary = await service.CreateResearchQualityReviewAsync(userId, researchRunId, CancellationToken.None);
 
-        Assert.Equal(AgentRunStatuses.Succeeded, summary.Status);
+        Assert.True(summary.Status == AgentRunStatuses.Succeeded, summary.ErrorMessage);
         Assert.Equal(AgentWorkflowTypes.ResearchQualityReview, summary.WorkflowType);
         var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
         Assert.NotNull(detail);
@@ -613,6 +614,33 @@ public sealed class AgentRunServiceTests
         Assert.NotNull(detail.OutputJson);
         Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunStarted);
         Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunSucceeded);
+    }
+
+    [Fact]
+    public async Task CreateResearchQualityReviewAsync_DisabledWorkflow_IsRejectedUntilReenabled()
+    {
+        await using var db = CreateDbContext();
+        var researchRunId = Guid.NewGuid();
+        var adminService = new AgentWorkflowAdminService(db, new AgentWorkflowCatalog());
+        await adminService.UpdateWorkflowAsync(
+            AgentWorkflowTypes.ResearchQualityReview,
+            new UpdateAgentWorkflowSettingRequest(false, null, null));
+        var service = CreateService(
+            db,
+            new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId)),
+            new DeterministicCriticReviewAgent(),
+            workflowAdminService: adminService);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateResearchQualityReviewAsync(Guid.NewGuid(), researchRunId, CancellationToken.None));
+        Assert.Equal("Workflow 'ResearchQualityReview' is disabled.", exception.Message);
+
+        await adminService.UpdateWorkflowAsync(
+            AgentWorkflowTypes.ResearchQualityReview,
+            new UpdateAgentWorkflowSettingRequest(true, null, null));
+        var summary = await service.CreateResearchQualityReviewAsync(Guid.NewGuid(), researchRunId, CancellationToken.None);
+
+        Assert.Equal(AgentRunStatuses.Succeeded, summary.Status);
     }
 
     [Fact]
@@ -700,9 +728,9 @@ public sealed class AgentRunServiceTests
         Assert.Equal(AgentRunStatuses.Succeeded, retried.Status);
         var retriedDetail = await service.GetByIdAsync(failed.Id, userId, CancellationToken.None);
         Assert.NotNull(retriedDetail);
-        Assert.Equal(7, retriedDetail.Nodes.Count);
+        Assert.Equal(5, retriedDetail.Nodes.Count);
         Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Succeeded);
-        Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.FinalizeRevision && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.FinalizeCriticReport && n.Status == AgentNodeStatuses.Succeeded);
         Assert.NotNull(retriedDetail.OutputJson);
         Assert.Equal(2, criticAgent.CallCount);
     }
@@ -728,6 +756,33 @@ public sealed class AgentRunServiceTests
         using var finalizeOutput = JsonDocument.Parse(finalizeNode.OutputJson);
         Assert.Equal("None", finalizeOutput.RootElement.GetProperty(CriticReviewFields.OverallSeverity).GetString());
         Assert.False(finalizeOutput.RootElement.GetProperty(CriticReviewFields.RequiresRevision).GetBoolean());
+    }
+
+    [Fact]
+    public async Task CreateEvidenceRemediationAsync_Creates9NodeRunWithPolicySnapshot()
+    {
+        await using var db = CreateDbContext(); var queue = new RecordingAgentRunQueue(); var state = new AgentRunStateMachine(); var nodeState = new AgentNodeStateMachine();
+        var service = new AgentRunService(db, [new EvidenceRemediationWorkflowDefinitionProvider()], state, nodeState, queue);
+
+        var summary = await service.CreateEvidenceRemediationAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(AgentWorkflowTypes.EvidenceRemediation, summary.WorkflowType); Assert.Equal(AgentRunStatuses.Pending, summary.Status); Assert.Single(queue.Messages);
+        var detail = await service.GetByIdAsync(summary.Id, null, CancellationToken.None); Assert.NotNull(detail); Assert.Equal(15, detail.Nodes.Count);
+        using var definition = JsonDocument.Parse(detail.WorkflowDefinitionJson); Assert.All(definition.RootElement.GetProperty("nodes").EnumerateArray(), node => Assert.True(node.TryGetProperty("executionPolicy", out _)));
+    }
+
+    [Fact]
+    public async Task CreateEvidenceReanalysisAsync_CreatesSevenNodeStatefulRunWithPolicySnapshot()
+    {
+        await using var db = CreateDbContext(); var queue = new RecordingAgentRunQueue(); var state = new AgentRunStateMachine(); var nodeState = new AgentNodeStateMachine(); var userId = Guid.NewGuid();
+        var source = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, Guid.NewGuid()); source.Status = AgentRunStatuses.Succeeded; var sourceBoard = AgentNodeJson.ParseBlackboard(source.BlackboardJson); var packet = new RemediatedEvidencePacket("Supported", [new("claim-1", "claim", "Supported", [1], [])], [new(1, "LocalDocument", "年報", "AnnualReport", null, "evidence", .9)], [], true, ["關鍵結論改變"]); sourceBoard[AgentBlackboardKeys.RemediatedEvidencePacket] = JsonSerializer.SerializeToNode(packet, AgentNodeJson.SerializerOptions); source.BlackboardJson = sourceBoard.ToJsonString(AgentNodeJson.SerializerOptions); source.OutputJson = AgentNodeJson.Serialize(new EvidenceRemediationOutput("原回答", "修正版", "summary", "Supported", packet.Evidence, [], true, ["關鍵結論改變"])); db.AgentRuns.Add(source); await db.SaveChangesAsync();
+        var service = new AgentRunService(db, [new EvidenceReanalysisWorkflowDefinitionProvider()], state, nodeState, queue);
+
+        var summary = await service.CreateEvidenceReanalysisAsync(userId, source.Id, CancellationToken.None);
+
+        Assert.Equal(AgentWorkflowTypes.EvidenceReanalysis, summary.WorkflowType); Assert.Equal(AgentTypes.Analysis, summary.AgentType); Assert.Equal(AgentRunStatuses.Pending, summary.Status); Assert.Single(queue.Messages);
+        var detail = await service.GetByIdAsync(summary.Id, null, CancellationToken.None); Assert.NotNull(detail); Assert.Equal(7, detail.Nodes.Count);
+        using var definition = JsonDocument.Parse(detail.WorkflowDefinitionJson); Assert.Equal("Stateful", definition.RootElement.GetProperty("orchestrationMode").GetString()); Assert.All(definition.RootElement.GetProperty("nodes").EnumerateArray(), node => Assert.True(node.TryGetProperty("executionPolicy", out _)));
     }
 
     [Fact]
@@ -1045,7 +1100,9 @@ public sealed class AgentRunServiceTests
         Assert.Equal(ResearchQualityReviewWorkflow.Version, root.GetProperty("version").GetInt32());
 
         var nodes = root.GetProperty("nodes").EnumerateArray().ToArray();
-        Assert.Equal(7, nodes.Length);
+        Assert.Equal("DynamicStateful", root.GetProperty("orchestrationMode").GetString());
+        Assert.Equal(DynamicGoalStatuses.Complete, root.GetProperty("goalStatus").GetString());
+        Assert.Equal(5, nodes.Length);
         Assert.Equal(ResearchQualityReviewNodeKeys.LoadResearchRun, nodes[0].GetProperty("id").GetString());
         Assert.Equal(ResearchQualityReviewNodeTypes.LoadResearchRun, nodes[0].GetProperty("type").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.BuildEvidencePacket, nodes[1].GetProperty("id").GetString());
@@ -1056,13 +1113,8 @@ public sealed class AgentRunServiceTests
         Assert.Equal(ResearchQualityReviewNodeTypes.CritiqueAnswer, nodes[3].GetProperty("type").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeCriticReport, nodes[4].GetProperty("id").GetString());
         Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, nodes[4].GetProperty("type").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.DraftRevisedAnswer, nodes[5].GetProperty("id").GetString());
-        Assert.Equal(ResearchQualityReviewNodeTypes.DraftRevisedAnswer, nodes[5].GetProperty("type").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeRevision, nodes[6].GetProperty("id").GetString());
-        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeRevision, nodes[6].GetProperty("type").GetString());
-
         var edges = root.GetProperty("edges").EnumerateArray().ToArray();
-        Assert.Equal(6, edges.Length);
+        Assert.Equal(4, edges.Length);
         Assert.Equal(ResearchQualityReviewNodeKeys.LoadResearchRun, edges[0].GetProperty("from").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.BuildEvidencePacket, edges[0].GetProperty("to").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.BuildEvidencePacket, edges[1].GetProperty("from").GetString());
@@ -1071,10 +1123,6 @@ public sealed class AgentRunServiceTests
         Assert.Equal(ResearchQualityReviewNodeKeys.CritiqueAnswer, edges[2].GetProperty("to").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.CritiqueAnswer, edges[3].GetProperty("from").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeCriticReport, edges[3].GetProperty("to").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeCriticReport, edges[4].GetProperty("from").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.DraftRevisedAnswer, edges[4].GetProperty("to").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.DraftRevisedAnswer, edges[5].GetProperty("from").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeRevision, edges[5].GetProperty("to").GetString());
     }
 
     private static AgentRunService CreateService(
@@ -1083,7 +1131,8 @@ public sealed class AgentRunServiceTests
         ICriticReviewAgent criticReviewAgent,
         IAgentRunStateMachine? runStateMachine = null,
         IAgentNodeStateMachine? nodeStateMachine = null,
-        IAgentRunQueue? agentRunQueue = null)
+        IAgentRunQueue? agentRunQueue = null,
+        IAgentWorkflowAdminService? workflowAdminService = null)
     {
         runStateMachine ??= new AgentRunStateMachine();
         nodeStateMachine ??= new AgentNodeStateMachine();
@@ -1095,7 +1144,8 @@ public sealed class AgentRunServiceTests
             [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider(), new ResearchQualityReviewWorkflowDefinitionProvider()],
             runStateMachine,
             nodeStateMachine,
-            agentRunQueue);
+            agentRunQueue,
+            workflowAdminService);
     }
 
     private static AgentRunService CreateServiceWithHandlers(
@@ -1154,6 +1204,7 @@ public sealed class AgentRunServiceTests
     private sealed class AutoExecutingAgentRunQueue : IAgentRunQueue
     {
         private readonly IAgentRunExecutor _executor;
+        private readonly EquityLensDbContext _db;
 
         public AutoExecutingAgentRunQueue(
             EquityLensDbContext db,
@@ -1161,6 +1212,7 @@ public sealed class AgentRunServiceTests
             IAgentRunStateMachine runStateMachine,
             IAgentNodeStateMachine nodeStateMachine)
         {
+            _db = db;
             _executor = new AgentRunExecutor(
                 db,
                 new AgentWorkflowPlanner(),
@@ -1168,12 +1220,19 @@ public sealed class AgentRunServiceTests
                 runStateMachine,
                 nodeStateMachine,
                 handlers,
-                NullLogger<AgentRunExecutor>.Instance);
+                NullLogger<AgentRunExecutor>.Instance,
+                dynamicPlanner: new TestQualityWorkflowPlanner());
         }
 
         public async Task EnqueueAsync(AgentRunQueueMessage message, CancellationToken cancellationToken = default)
         {
-            await _executor.ExecuteAsync(message.RunId, message.UserId, cancellationToken);
+            for (var wake = 0; wake < 100; wake++)
+            {
+                await _executor.ExecuteAsync(message.RunId, message.UserId, cancellationToken);
+                var status = await _db.AgentRuns.Where(x => x.Id == message.RunId).Select(x => x.Status).SingleAsync(cancellationToken);
+                if (status is AgentRunStatuses.Succeeded or AgentRunStatuses.Failed or AgentRunStatuses.Cancelled) return;
+            }
+            throw new InvalidOperationException("Auto executing queue exceeded 100 orchestration wakes.");
         }
 
         public Task<AgentRunQueueItem?> ReadNextAsync(string consumerName, CancellationToken cancellationToken = default) =>
@@ -1187,6 +1246,24 @@ public sealed class AgentRunServiceTests
 
         public Task AcknowledgeAsync(string streamId, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
+    }
+
+    private sealed class TestQualityWorkflowPlanner : IAgentWorkflowPlanner
+    {
+        public Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default)
+        {
+            if (context.CompletedNodeTypes.Contains(DraftRevisionNodeTypes.FinalizeRevision))
+                return Task.FromResult(new DynamicPlanProposal(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, DynamicGoalStatuses.Complete, "Test revision completed.", ["quality-finalization"], [], "Test"));
+            var review = context.Blackboard[AgentBlackboardKeys.CriticReview] as JsonObject;
+            if (review?[CriticReviewFields.RequiresRevision]?.GetValue<bool>() != true)
+                return Task.FromResult(new DynamicPlanProposal(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, DynamicGoalStatuses.Complete, "Test critic accepted answer.", ["quality-finalization"], [], "Test"));
+            IReadOnlyList<DynamicPlanAction> actions =
+            [
+                new("draftRevisedAnswer", "revise-answer", DraftRevisionNodeTypes.DraftRevisedAnswer, [ResearchQualityReviewNodeKeys.FinalizeCriticReport], new JsonObject()),
+                new("finalizeRevision", "finalize-revision", DraftRevisionNodeTypes.FinalizeRevision, ["draftRevisedAnswer"], new JsonObject())
+            ];
+            return Task.FromResult(new DynamicPlanProposal(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, DynamicGoalStatuses.Continue, "Test bounded revision.", ["answer-revision"], actions, "Test"));
+        }
     }
 
     private sealed class RecordingAgentRunQueue : IAgentRunQueue

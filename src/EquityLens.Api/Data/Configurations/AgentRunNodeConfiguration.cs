@@ -21,6 +21,8 @@ public class AgentRunNodeConfiguration : IEntityTypeConfiguration<AgentRunNode>
         builder.Property(x => x.StartedAtUtc).HasColumnName("started_at_utc");
         builder.Property(x => x.CompletedAtUtc).HasColumnName("completed_at_utc");
         builder.Property(x => x.DurationMs).HasColumnName("duration_ms");
+        builder.Property(x => x.TemplateNodeKey).HasColumnName("template_node_key").HasMaxLength(128).IsRequired();
+        builder.Property(x => x.Iteration).HasColumnName("iteration");
 
         builder.HasIndex(x => x.AgentRunId);
         builder.HasIndex(x => new { x.AgentRunId, x.NodeKey }).IsUnique();

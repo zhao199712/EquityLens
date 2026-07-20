@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
@@ -15,19 +16,28 @@ public sealed class AgentRunService : IAgentRunService
     private readonly IAgentRunStateMachine _runStateMachine;
     private readonly IAgentNodeStateMachine _nodeStateMachine;
     private readonly IAgentRunQueue _agentRunQueue;
+    private readonly IAgentWorkflowAdminService? _workflowAdminService;
+    private readonly PortfolioDiagnosisWorkflowDefinitionProvider? _portfolioDiagnosisProvider;
+    private readonly IAgentWorkflowCatalog _catalog;
 
     public AgentRunService(
         EquityLensDbContext dbContext,
         IEnumerable<IAgentWorkflowDefinitionProvider> workflowProviders,
         IAgentRunStateMachine runStateMachine,
         IAgentNodeStateMachine nodeStateMachine,
-        IAgentRunQueue agentRunQueue)
+        IAgentRunQueue agentRunQueue,
+        IAgentWorkflowAdminService? workflowAdminService = null,
+        PortfolioDiagnosisWorkflowDefinitionProvider? portfolioDiagnosisProvider = null,
+        IAgentWorkflowCatalog? catalog = null)
     {
         _dbContext = dbContext;
         _workflowProviders = CreateWorkflowProviderRegistry(workflowProviders);
         _runStateMachine = runStateMachine;
         _nodeStateMachine = nodeStateMachine;
         _agentRunQueue = agentRunQueue;
+        _workflowAdminService = workflowAdminService;
+        _portfolioDiagnosisProvider = portfolioDiagnosisProvider;
+        _catalog = catalog ?? new AgentWorkflowCatalog();
     }
 
     public async Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
@@ -35,8 +45,10 @@ public sealed class AgentRunService : IAgentRunService
         Guid researchRunId,
         CancellationToken cancellationToken = default)
     {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.CriticReview, cancellationToken);
         var provider = GetWorkflowProvider(AgentWorkflowTypes.CriticReview);
         var run = provider.CreateRun(userId, researchRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "CriticReview run created.", new { researchRunId });
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -50,8 +62,10 @@ public sealed class AgentRunService : IAgentRunService
         Guid criticReviewRunId,
         CancellationToken cancellationToken = default)
     {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.DraftRevision, cancellationToken);
         var provider = GetWorkflowProvider(AgentWorkflowTypes.DraftRevision);
         var run = provider.CreateRun(userId, criticReviewRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "DraftRevision run created.", new { criticReviewRunId });
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -65,12 +79,68 @@ public sealed class AgentRunService : IAgentRunService
         Guid researchRunId,
         CancellationToken cancellationToken = default)
     {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.ResearchQualityReview, cancellationToken);
         var provider = GetWorkflowProvider(AgentWorkflowTypes.ResearchQualityReview);
         var run = provider.CreateRun(userId, researchRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchQualityReview run created.", new { researchRunId });
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await EnqueueAsync(run, userId, cancellationToken);
+        return MapSummary(run);
+    }
+
+    public async Task<AgentRunSummaryResponse> CreateEvidenceRemediationAsync(
+        Guid userId,
+        Guid criticReviewRunId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.EvidenceRemediation, cancellationToken);
+        var provider = GetWorkflowProvider(AgentWorkflowTypes.EvidenceRemediation);
+        var run = provider.CreateRun(userId, criticReviewRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
+        _dbContext.AgentRuns.Add(run);
+        AddEvent(run, null, AgentEventTypes.RunCreated, "EvidenceRemediation run created.", new { criticReviewRunId });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await EnqueueAsync(run, userId, cancellationToken);
+        return MapSummary(run);
+    }
+
+    public async Task<AgentRunSummaryResponse> CreateEvidenceReanalysisAsync(
+        Guid userId,
+        Guid evidenceRemediationRunId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.EvidenceReanalysis, cancellationToken);
+        await EvidenceReanalysisSourceValidator.ValidateAsync(_dbContext, userId, evidenceRemediationRunId, cancellationToken);
+        var provider = GetWorkflowProvider(AgentWorkflowTypes.EvidenceReanalysis);
+        var run = provider.CreateRun(userId, evidenceRemediationRunId);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
+        _dbContext.AgentRuns.Add(run);
+        AddEvent(run, null, AgentEventTypes.RunCreated, "EvidenceReanalysis run created.", new { evidenceRemediationRunId });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await EnqueueAsync(run, userId, cancellationToken);
+        return MapSummary(run);
+    }
+
+    public async Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(
+        Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
+    {
+        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.PortfolioDiagnosis, cancellationToken);
+        var isOwner = await _dbContext.Portfolios.AnyAsync(
+            x => x.Id == portfolioId && x.OwnerUserId == userId && x.IsActive,
+            cancellationToken);
+        if (!isOwner) throw new InvalidOperationException("Portfolio was not found.");
+        var provider = _portfolioDiagnosisProvider ?? throw new InvalidOperationException("PortfolioDiagnosis workflow provider is not registered.");
+        var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var start = from ?? end.AddMonths(-1);
+        if (start >= end) throw new InvalidOperationException("Diagnosis start date must be before end date.");
+        var run = provider.CreateRun(userId, portfolioId, start, end);
+        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
+        _dbContext.AgentRuns.Add(run);
+        AddEvent(run, null, AgentEventTypes.RunCreated, "PortfolioDiagnosis run created.", new { portfolioId, from = start, to = end });
+        await _dbContext.SaveChangesAsync(cancellationToken);
         await EnqueueAsync(run, userId, cancellationToken);
         return MapSummary(run);
     }
@@ -125,7 +195,7 @@ public sealed class AgentRunService : IAgentRunService
             .OrderBy(x => x.StartedAtUtc ?? DateTime.MaxValue)
             .ThenBy(x => x.NodeKey)
             .Select(x => new AgentRunNodeResponse(
-                x.Id, x.NodeKey, x.NodeType, x.Status, x.InputJson, x.OutputJson,
+                x.Id, x.NodeKey, x.TemplateNodeKey, x.Iteration, x.NodeType, x.Status, x.InputJson, x.OutputJson,
                 x.ErrorMessage, x.StartedAtUtc, x.CompletedAtUtc, x.DurationMs))
             .ToListAsync(cancellationToken);
 
@@ -175,10 +245,11 @@ public sealed class AgentRunService : IAgentRunService
         run.BlackboardJson = provider.CreateInitialBlackboardJson(GetSourceRunId(run.InputJson));
         run.StartedAtUtc = null;
         run.CompletedAtUtc = null;
+        var plannedArguments = GetPlannedArguments(run.WorkflowDefinitionJson);
         foreach (var node in run.Nodes)
         {
             _nodeStateMachine.ResetForRetry(node);
-            node.InputJson = null;
+            node.InputJson = plannedArguments.TryGetValue(node.NodeKey, out var arguments) ? arguments : null;
             node.OutputJson = null;
             node.ErrorMessage = null;
             node.StartedAtUtc = null;
@@ -190,6 +261,23 @@ public sealed class AgentRunService : IAgentRunService
 
         await EnqueueAsync(run, userId, cancellationToken);
         return MapSummary(run);
+    }
+
+    internal static IReadOnlyDictionary<string, string> GetPlannedArguments(string definitionJson)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            var nodes = JsonNode.Parse(definitionJson)?["nodes"]?.AsArray();
+            if (nodes is null) return result;
+            foreach (var node in nodes.OfType<JsonObject>())
+            {
+                var key = node["id"]?.GetValue<string>(); var arguments = node["plannedArguments"];
+                if (!string.IsNullOrWhiteSpace(key) && arguments is not null) result[key] = arguments.ToJsonString(AgentNodeJson.SerializerOptions);
+            }
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException) { }
+        return result;
     }
 
     public async Task<AgentRunSummaryResponse?> CancelAsync(
@@ -213,6 +301,27 @@ public sealed class AgentRunService : IAgentRunService
         _agentRunQueue.EnqueueAsync(
             new AgentRunQueueMessage(run.Id, userId, run.WorkflowType, DateTime.UtcNow),
             cancellationToken);
+
+    private async Task SnapshotExecutionPoliciesAsync(AgentRun run, CancellationToken cancellationToken)
+    {
+        var root = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
+        var nodeTypes = root["nodes"]!.AsArray()
+            .OfType<JsonObject>()
+            .Select(x => x["type"]!.GetValue<string>())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var policies = _workflowAdminService is null
+            ? nodeTypes.ToDictionary(x => x, x => _catalog.GetNode(x).DefaultPolicy)
+            : await _workflowAdminService.GetPoliciesAsync(nodeTypes, cancellationToken);
+        foreach (var node in root["nodes"]!.AsArray().OfType<JsonObject>())
+        {
+            var type = node["type"]!.GetValue<string>();
+            var p = policies[type];
+            node["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = p.TimeoutSeconds, ["maxRetryCount"] = p.MaxRetryCount };
+            node["contract"] = JsonSerializer.SerializeToNode(_catalog.GetNode(type).Contract, AgentNodeJson.SerializerOptions);
+        }
+        run.WorkflowDefinitionJson = root.ToJsonString(AgentNodeJson.SerializerOptions);
+    }
 
     private static IReadOnlyDictionary<string, IAgentWorkflowDefinitionProvider> CreateWorkflowProviderRegistry(
         IEnumerable<IAgentWorkflowDefinitionProvider> workflowProviders)
@@ -246,6 +355,7 @@ public sealed class AgentRunService : IAgentRunService
         {
             return criticReviewRunId.GetGuid();
         }
+        if (root.TryGetProperty("portfolioId", out var portfolioId)) return portfolioId.GetGuid();
 
         throw new InvalidOperationException("Agent run input is missing source id.");
     }

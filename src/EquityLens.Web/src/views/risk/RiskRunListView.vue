@@ -24,7 +24,7 @@ onMounted(async () => {
   try {
     portfolios.value = await getPortfolios()
   } catch (e) {
-    error.value = '無法載入投資組合列表，請稍後再試。'
+    error.value = '無法載入投資組合列表,請稍後再試。'
   } finally {
     loading.value = false
   }
@@ -36,91 +36,145 @@ function formatDate(iso: string) {
 </script>
 
 <template>
-  <div class="kimi-page-dark" style="padding-top: 40px; padding-bottom: 80px">
-    <div class="kimi-content" style="margin-top: 0; padding-top: 20px">
+  <div class="prestige-page">
+    <div class="prestige-section">
       <!-- Header -->
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px">
+      <div class="prestige-section-head">
         <div>
-          <h1 style="font-size: 28px; font-weight: 700; margin: 0; color: #FFFFFF">風險分析</h1>
-          <span class="kimi-caption" style="margin-top: 4px; display: block">RISK ANALYSIS RUNS</span>
+          <span class="prestige-label">Risk Analysis Runs</span>
+          <h2 class="prestige-section-title">風險分析</h2>
         </div>
       </div>
 
       <!-- Search -->
-      <div style="margin-bottom: 24px">
-        <input
-          v-model="search"
-          placeholder="搜尋投資組合..."
-          class="kimi-input-dark"
-          style="width: 300px"
-        />
+      <div class="search-row">
+        <input v-model="search" placeholder="搜尋投資組合..." class="prestige-input search-input" />
       </div>
 
-      <!-- Loading / Error -->
-      <div v-if="loading" style="color: #666666; font-size: 14px">載入中...</div>
-      <div v-else-if="error" style="color: #f87171; font-size: 14px; margin-bottom: 24px">{{ error }}</div>
+      <!-- Error -->
+      <div v-if="error" class="prestige-error" style="margin-bottom: 20px">{{ error }}</div>
+
+      <!-- Loading skeleton -->
+      <div v-if="loading" class="run-grid">
+        <div v-for="i in 3" :key="i" class="prestige-skeleton" />
+      </div>
 
       <!-- Portfolio Grid -->
-      <div v-else class="kimi-grid-3">
-        <ScrollReveal v-for="(run, i) in filteredPortfolios" :key="run.id" :delay="i * 0.1">
+      <div v-else class="run-grid">
+        <ScrollReveal v-for="(run, i) in filteredPortfolios" :key="run.id" :delay="i * 0.06">
           <div
-            class="kimi-panel-dark"
-            style="cursor: pointer; transition: all 0.2s ease"
+            class="prestige-panel prestige-panel-pad run-card"
             @click="router.push({ name: 'risk-run-detail', params: { id: run.id } })"
           >
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
-              <span class="kimi-tag-dark">{{ run.baseCurrency }}</span>
-              <span class="kimi-tag-dark" style="border-color: #34d399; color: #34d399">AVAILABLE</span>
+            <div class="card-top">
+              <span class="prestige-tag prestige-mono">{{ run.baseCurrency }}</span>
+              <span class="prestige-tag available">
+                <span class="status-dot" />
+                AVAILABLE
+              </span>
             </div>
 
-            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 600; color: #FFFFFF">{{ run.name }}</h3>
-            <p style="margin: 0 0 16px; font-size: 13px; color: #666666">{{ run.description || '無描述' }}</p>
+            <h3 class="card-title">{{ run.name }}</h3>
+            <p class="card-desc">{{ run.description || '無描述' }}</p>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+            <div class="stat-grid">
               <div>
-                <span style="font-size: 11px; color: #666666; display: block; margin-bottom: 4px">持股數</span>
-                <span style="font-size: 16px; font-weight: 600; color: #FFFFFF">{{ run.holdingCount }}</span>
+                <span class="stat-label">持股數</span>
+                <span class="stat-value prestige-mono">{{ run.holdingCount }}</span>
               </div>
               <div>
-                <span style="font-size: 11px; color: #666666; display: block; margin-bottom: 4px">更新於</span>
-                <span style="font-size: 16px; font-weight: 600; color: #FFFFFF">{{ formatDate(run.updatedAtUtc) }}</span>
+                <span class="stat-label">更新於</span>
+                <span class="stat-value prestige-mono">{{ formatDate(run.updatedAtUtc) }}</span>
               </div>
             </div>
           </div>
         </ScrollReveal>
       </div>
 
-      <div v-if="!loading && !error && filteredPortfolios.length === 0" style="color: #666666; margin-top: 24px">
-        沒有符合條件的投資組合。
+      <div v-if="!loading && !error && filteredPortfolios.length === 0" class="prestige-empty">
+        沒有符合條件的投資組合
       </div>
-
-      <div style="height: 80px" />
     </div>
-
-    <footer class="kimi-footer kimi-footer-dark">
-      <span style="color: #666666">EQUITYLENS 2026</span>
-      <span class="kimi-font-mono" style="letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px; color: #666666">RISK</span>
-      <span style="color: #666666">數據僅供參考</span>
-    </footer>
   </div>
 </template>
 
 <style scoped>
-.kimi-input-dark {
-  padding: 8px 12px;
-  font-size: 14px;
-  font-family: var(--kimi-font-body);
-  border: 1px solid var(--kimi-border-dark);
-  background: transparent;
-  color: var(--kimi-text-dark);
-  outline: none;
-  transition: border-color 0.2s;
-  width: 100%;
+.prestige-page {
+  min-height: calc(100vh - 60px);
 }
-.kimi-input-dark:focus {
-  border-color: #FFFFFF;
+
+.search-row {
+  margin-bottom: 24px;
 }
-.kimi-input-dark::placeholder {
-  color: #666666;
+
+.search-input {
+  max-width: 320px;
+}
+
+.run-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.run-card {
+  cursor: pointer;
+  transition: transform 0.25s ease, border-color 0.3s ease;
+}
+
+.run-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(201, 168, 106, 0.45);
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--up);
+}
+
+.card-title {
+  margin: 0 0 4px;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.card-desc {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 18px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gold-border-soft);
+}
+
+.stat-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ivory);
 }
 </style>

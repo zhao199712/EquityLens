@@ -9,6 +9,13 @@ public interface IAgentRunGraphValidator
 
 public sealed class AgentRunGraphValidator : IAgentRunGraphValidator
 {
+    private readonly IAgentWorkflowCatalog _catalog;
+
+    public AgentRunGraphValidator(IAgentWorkflowCatalog? catalog = null)
+    {
+        _catalog = catalog ?? new AgentWorkflowCatalog();
+    }
+
     public void Validate(AgentRun run, IReadOnlyList<string> plannedNodeKeys)
     {
         var duplicateNodeKey = run.Nodes
@@ -34,6 +41,26 @@ public sealed class AgentRunGraphValidator : IAgentRunGraphValidator
         if (extraNodeKey is not null)
         {
             throw new InvalidOperationException($"Agent run contains node '{extraNodeKey}' not present in workflow definition.");
+        }
+
+        var blackboard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var available = blackboard.Where(x => x.Value is not null).Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
+        foreach (var nodeKey in plannedNodeKeys)
+        {
+            var node = run.Nodes.Single(x => x.NodeKey == nodeKey);
+            if (!_catalog.Nodes.Any(x => x.NodeType == node.NodeType))
+            {
+                continue;
+            }
+            var contract = _catalog.GetNode(node.NodeType).Contract;
+            var hasPlannedSearchIntents = node.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence
+                && RetrieveRemediationEvidenceNodeHandler.TryCompileDynamicPlan(node.InputJson, blackboard[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty, out _);
+            var missing = contract.RequiredBlackboardKeys.FirstOrDefault(x => !(hasPlannedSearchIntents && x == AgentBlackboardKeys.RetrievalPlan) && !available.Contains(x));
+            if (missing is not null)
+            {
+                throw new InvalidOperationException($"Node '{node.NodeType}' requires blackboard key '{missing}' but no preceding node produces it.");
+            }
+            available.UnionWith(contract.ProducedBlackboardKeys);
         }
     }
 }

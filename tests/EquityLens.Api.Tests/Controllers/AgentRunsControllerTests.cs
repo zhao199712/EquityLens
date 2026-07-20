@@ -110,13 +110,33 @@ public sealed class AgentRunsControllerTests
         Assert.True(service.CreateResearchQualityReviewWasCalled);
     }
 
+    [Fact]
+    public async Task CreateEvidenceRemediation_ValidRequest_CallsService()
+    {
+        var service = new FakeAgentRunService(); var controller = new AgentRunsController(service, new FakeCurrentUserContext()); var criticRunId = Guid.NewGuid();
+        var result = await controller.CreateEvidenceRemediation(new CreateEvidenceRemediationRequest(criticRunId), CancellationToken.None);
+        var ok = Assert.IsType<OkObjectResult>(result.Result); var response = Assert.IsType<AgentRunSummaryResponse>(ok.Value);
+        Assert.Equal(AgentWorkflowTypes.EvidenceRemediation, response.WorkflowType); Assert.Equal(criticRunId, service.LastCriticReviewRunId); Assert.True(service.CreateEvidenceRemediationWasCalled);
+    }
+
+    [Fact]
+    public async Task CreateEvidenceReanalysis_ValidRequest_CallsService()
+    {
+        var service = new FakeAgentRunService(); var controller = new AgentRunsController(service, new FakeCurrentUserContext()); var sourceRunId = Guid.NewGuid();
+        var result = await controller.CreateEvidenceReanalysis(new CreateEvidenceReanalysisRequest(sourceRunId), CancellationToken.None);
+        var ok = Assert.IsType<OkObjectResult>(result.Result); var response = Assert.IsType<AgentRunSummaryResponse>(ok.Value);
+        Assert.Equal(AgentWorkflowTypes.EvidenceReanalysis, response.WorkflowType); Assert.Equal(sourceRunId, service.LastEvidenceRemediationRunId);
+    }
+
     private sealed class FakeAgentRunService : IAgentRunService
     {
         public bool CreateWasCalled { get; private set; }
         public bool CreateDraftRevisionWasCalled { get; private set; }
         public bool CreateResearchQualityReviewWasCalled { get; private set; }
+        public bool CreateEvidenceRemediationWasCalled { get; private set; }
         public Guid LastResearchRunId { get; private set; }
         public Guid LastCriticReviewRunId { get; private set; }
+        public Guid LastEvidenceRemediationRunId { get; private set; }
         public AgentRunDetailResponse? Detail { get; set; } = new(
             new AgentRunSummaryResponse(Guid.NewGuid(), "CriticReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null),
             [], [], [], [], "{}", "{}", "{}");
@@ -144,6 +164,22 @@ public sealed class AgentRunsControllerTests
             return Task.FromResult(new AgentRunSummaryResponse(
                 Guid.NewGuid(), "ResearchQualityReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null));
         }
+
+        public Task<AgentRunSummaryResponse> CreateEvidenceRemediationAsync(Guid userId, Guid criticReviewRunId, CancellationToken cancellationToken = default)
+        {
+            CreateEvidenceRemediationWasCalled = true; LastCriticReviewRunId = criticReviewRunId;
+            return Task.FromResult(new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.EvidenceRemediation, AgentTypes.Research, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null));
+        }
+
+        public Task<AgentRunSummaryResponse> CreateEvidenceReanalysisAsync(Guid userId, Guid evidenceRemediationRunId, CancellationToken cancellationToken = default)
+        {
+            LastEvidenceRemediationRunId = evidenceRemediationRunId;
+            return Task.FromResult(new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.EvidenceReanalysis, AgentTypes.Analysis, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null));
+        }
+
+        public Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentRunSummaryResponse(
+                Guid.NewGuid(), "PortfolioDiagnosis", "PortfolioDiagnosisAgent", "Pending", DateTime.UtcNow, null, null, null));
 
         public Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(Guid? userId, int limit = 50, string? workflowType = null, string? status = null, Guid? researchRunId = null, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<AgentRunSummaryResponse>>([]);

@@ -12,7 +12,10 @@ public sealed record CriticReviewInput(
     int CitationCount,
     int CandidateCount,
     string SourceStatus,
-    IReadOnlyList<CriticFinding> EvidenceFindings);
+    IReadOnlyList<CriticFinding> EvidenceFindings,
+    IReadOnlyList<CriticEvidenceItem>? Evidence = null);
+
+public sealed record CriticEvidenceItem(int Index, string? Title, string? SourceType, string Content);
 
 public sealed record CriticReviewResult(
     string Summary,

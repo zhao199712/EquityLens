@@ -1,0 +1,5 @@
+namespace EquityLens.Api.Contracts.Risk;
+
+public sealed record PortfolioRiskScenarioWeightRequest(Guid SecurityId, decimal TargetWeight);
+public sealed record PortfolioRiskScenarioRequest(IReadOnlyList<PortfolioRiskScenarioWeightRequest> TargetWeights);
+public sealed record PortfolioRiskScenarioResponse(Guid PortfolioId, decimal CashWeight, PortfolioRiskResponse Current, PortfolioRiskResponse Scenario, IReadOnlyList<PortfolioStressScenarioResponse> CurrentStress, IReadOnlyList<PortfolioStressScenarioResponse> ScenarioStress, PortfolioRiskGovernanceResponse CurrentGovernance, PortfolioRiskGovernanceResponse ScenarioGovernance);

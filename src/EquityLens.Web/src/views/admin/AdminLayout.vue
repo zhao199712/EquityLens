@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NLayout, NLayoutSider, NLayoutContent, NMenu } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutContent, NMenu, NMessageProvider } from 'naive-ui'
 import {
   PeopleOutline,
   BusinessOutline,
@@ -11,6 +11,10 @@ import {
   ShieldCheckmarkOutline,
   SparklesOutline,
   TimeOutline,
+  TerminalOutline,
+  FlaskOutline,
+  GitNetworkOutline,
+  CubeOutline,
 } from '@vicons/ionicons5'
 import { renderIcon } from '../../utils/icons'
 
@@ -26,6 +30,26 @@ function handleMenuSelect(key: string) {
 }
 
 const menuOptions = computed(() => [
+  { label: 'Workflows', key: 'workflows', icon: renderIcon(GitNetworkOutline), path: '/admin/workflows' },
+  { label: 'Node Catalog', key: 'nodes', icon: renderIcon(CubeOutline), path: '/admin/nodes' },
+  {
+    label: 'Agent Runs',
+    key: 'agent-runs',
+    icon: renderIcon(TerminalOutline),
+    path: '/admin/agent-runs',
+  },
+  {
+    label: 'Research Runs',
+    key: 'research-runs',
+    icon: renderIcon(FlaskOutline),
+    path: '/admin/research-runs',
+  },
+  {
+    label: 'Import Jobs',
+    key: 'jobs',
+    icon: renderIcon(TimeOutline),
+    path: '/admin/jobs',
+  },
   {
     label: t('admin.layout.userMgmt'),
     key: 'users',
@@ -62,12 +86,6 @@ const menuOptions = computed(() => [
     icon: renderIcon(SparklesOutline),
     path: '/admin/ai-settings',
   },
-  {
-    label: t('admin.layout.jobMgmt'),
-    key: 'jobs',
-    icon: renderIcon(TimeOutline),
-    path: '/admin/jobs',
-  },
 ])
 
 const activeMenuKey = computed(() => {
@@ -78,19 +96,19 @@ const activeMenuKey = computed(() => {
 </script>
 
 <template>
-  <NLayout has-sider style="min-height: calc(100vh - 68px);">
+  <NLayout class="admin-layout prestige-page" has-sider style="min-height: calc(100vh - 68px);">
     <NLayoutSider
+      class="admin-sider"
       bordered
       collapse-mode="width"
       :collapsed-width="64"
       :width="240"
       show-trigger
-      style="background: var(--bg-secondary); border-color: var(--border-subtle);"
+      style="background: transparent;"
     >
-      <div style="padding: 20px 16px 12px;">
-        <div style="color: var(--text-tertiary); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">
-          {{ t('admin.layout.title') }}
-        </div>
+      <div class="admin-brand">
+        <div class="admin-brand-mark">EquityLens</div>
+        <div class="prestige-label admin-brand-label">{{ t('admin.layout.title') }}</div>
       </div>
       <NMenu
         :value="activeMenuKey"
@@ -103,39 +121,115 @@ const activeMenuKey = computed(() => {
       />
     </NLayoutSider>
 
-    <NLayoutContent style="padding: 32px; background: transparent;">
-      <RouterView />
+    <NLayoutContent class="admin-content">
+      <NMessageProvider>
+        <RouterView />
+      </NMessageProvider>
     </NLayoutContent>
   </NLayout>
 </template>
 
 <style scoped>
+.admin-layout {
+  background: linear-gradient(180deg, #0b1220 0%, #101a2e 100%) !important;
+  border-top: 1px solid var(--gold-border-soft);
+}
+
+.admin-sider {
+  border-color: var(--gold-border-soft) !important;
+}
+
+.admin-brand {
+  padding: 20px 16px 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--gold-border-soft);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.admin-brand-mark {
+  margin-bottom: 6px;
+  font-family: var(--serif);
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  color: var(--ivory);
+}
+
+.admin-brand-label {
+  font-size: 10px;
+}
+
+.admin-content {
+  padding: 32px;
+  background: transparent !important;
+}
+
+:deep(.n-layout-sider__border) {
+  background-color: var(--gold-border-soft) !important;
+}
+
+/* 尚未轉換的管理頁暫用 Prestige 配色,避免深色畫布上出現淺色標題 */
+:deep(.page-heading h1) {
+  color: var(--ivory) !important;
+  font-family: var(--serif);
+}
+
+:deep(.page-heading .eyebrow) {
+  color: var(--gold) !important;
+}
+
 :deep(.n-layout-sider-trigger) {
-  background: var(--bg-tertiary) !important;
-  color: var(--text-secondary) !important;
-  border-color: var(--border-subtle) !important;
+  background: #0d1526 !important;
+  color: var(--gold) !important;
+  border-color: var(--gold-border-soft) !important;
 }
 
 :deep(.n-menu-item) {
-  margin: 4px 8px !important;
-  border-radius: var(--radius-sm) !important;
+  margin: 2px 10px !important;
 }
 
 :deep(.n-menu-item-content) {
-  color: var(--text-secondary) !important;
+  border-radius: 4px !important;
+  transition: box-shadow 0.2s ease;
 }
 
-:deep(.n-menu-item-content:hover) {
-  color: var(--text-primary) !important;
-  background: var(--bg-glass) !important;
+:deep(.n-menu-item-content .n-menu-item-content-header) {
+  color: var(--muted) !important;
+  transition: color 0.2s ease;
+}
+
+:deep(.n-menu-item-content .n-menu-item-content__icon) {
+  color: var(--muted) !important;
+  transition: color 0.2s ease;
+}
+
+:deep(.n-menu-item-content:hover::before) {
+  background-color: rgba(201, 168, 106, 0.06) !important;
+}
+
+:deep(.n-menu-item-content:hover .n-menu-item-content-header) {
+  color: var(--ivory) !important;
+}
+
+:deep(.n-menu-item-content:hover .n-menu-item-content__icon) {
+  color: var(--gold) !important;
 }
 
 :deep(.n-menu-item-content--selected) {
-  color: var(--accent-primary) !important;
-  background: var(--bg-glass) !important;
+  box-shadow: inset 3px 0 0 var(--gold);
 }
 
 :deep(.n-menu-item-content--selected::before) {
-  background: var(--accent-primary) !important;
+  background-color: rgba(201, 168, 106, 0.08) !important;
+}
+
+:deep(.n-menu-item-content--selected .n-menu-item-content-header),
+:deep(.n-menu-item-content--selected:hover .n-menu-item-content-header) {
+  color: var(--gold) !important;
+}
+
+:deep(.n-menu-item-content--selected .n-menu-item-content__icon),
+:deep(.n-menu-item-content--selected:hover .n-menu-item-content__icon) {
+  color: var(--gold) !important;
 }
 </style>
