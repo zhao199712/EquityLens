@@ -196,7 +196,11 @@ public sealed class AgentRunService : IAgentRunService
             .ThenBy(x => x.NodeKey)
             .Select(x => new AgentRunNodeResponse(
                 x.Id, x.NodeKey, x.TemplateNodeKey, x.Iteration, x.NodeType, x.Status, x.InputJson, x.OutputJson,
-                x.ErrorMessage, x.StartedAtUtc, x.CompletedAtUtc, x.DurationMs))
+                x.ErrorMessage, x.ErrorCode, x.ErrorCategory, x.ErrorRetryable,
+                x.InputBlackboardVersion, x.OutputBlackboardVersion, x.ProducedBlackboardKeys,
+                x.BlackboardSnapshotJson,
+                x.InputTokens, x.OutputTokens, x.EstimatedCostUsd,
+                x.StartedAtUtc, x.CompletedAtUtc, x.DurationMs))
             .ToListAsync(cancellationToken);
 
         var events = await _dbContext.AgentRunEvents.AsNoTracking()
@@ -382,7 +386,10 @@ public sealed class AgentRunService : IAgentRunService
         run.CreatedAtUtc,
         run.StartedAtUtc,
         run.CompletedAtUtc,
-        run.ErrorMessage);
+        run.ErrorMessage,
+        run.TotalInputTokens,
+        run.TotalOutputTokens,
+        run.TotalEstimatedCostUsd);
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, SerializerOptions);
 }

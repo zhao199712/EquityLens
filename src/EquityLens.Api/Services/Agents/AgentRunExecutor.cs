@@ -165,6 +165,8 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var stopwatch = Stopwatch.StartNew();
+        var boardBefore = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        node.InputBlackboardVersion = boardBefore["blackboardVersion"]?.GetValue<int>() ?? 0;
         try
         {
             if (!_nodeHandlers.TryGetValue(node.NodeType, out var handler))
@@ -177,26 +179,77 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             await handler.ExecuteAsync(new AgentNodeExecutionContext(_dbContext, run, node, AddEvent), linked.Token);
 
             stopwatch.Stop();
+            var boardAfter = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+            node.OutputBlackboardVersion = boardAfter["blackboardVersion"]?.GetValue<int>() ?? 0;
+            node.ProducedBlackboardKeys = AgentNodeJson.DetectChangedKeys(boardBefore, boardAfter);
+            AgentNodeJson.IncrementBlackboardVersion(boardAfter);
+            run.BlackboardJson = boardAfter.ToJsonString(AgentNodeJson.SerializerOptions);
             _nodeStateMachine.Transition(node, AgentNodeStatuses.Succeeded);
             node.CompletedAtUtc = DateTime.UtcNow;
             node.DurationMs = stopwatch.ElapsedMilliseconds;
+            if (run.EnableBlackboardSnapshots)
+            {
+                node.BlackboardSnapshotJson = run.BlackboardJson;
+            }
+            run.TotalInputTokens += node.InputTokens ?? 0;
+            run.TotalOutputTokens += node.OutputTokens ?? 0;
+            run.TotalEstimatedCostUsd += node.EstimatedCostUsd ?? 0;
             AddEvent(run, node, AgentEventTypes.NodeCompleted, $"Node {nodeKey} completed.", new { durationMs = node.DurationMs });
             await _dbContext.SaveChangesAsync(cancellationToken);
             return;
+        }
+        catch (AgentNodeException ex)
+        {
+            EquityLensTelemetry.MarkError(activity, ex);
+            stopwatch.Stop();
+            _nodeStateMachine.Transition(node, AgentNodeStatuses.Failed);
+            node.ErrorMessage = ex.Message;
+            node.ErrorCode = ex.ErrorCode;
+            node.ErrorCategory = ex.ErrorCategory;
+            node.ErrorRetryable = ex.Retryable;
+            node.CompletedAtUtc = DateTime.UtcNow;
+            node.DurationMs = stopwatch.ElapsedMilliseconds;
+            AddEvent(run, node, AgentEventTypes.NodeFailed, $"Node {nodeKey} failed.", new { error = ex.Message, ex.ErrorCode, ex.ErrorCategory, ex.Retryable });
+            if (attempt >= policy.MaxRetryCount || !ex.Retryable) throw;
+            AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Retrying {nodeKey}.", new { attempt = attempt + 2, policy.MaxRetryCount });
+            _nodeStateMachine.ResetForRetry(node);
+            node.ErrorMessage = null; node.ErrorCode = null; node.ErrorCategory = null; node.ErrorRetryable = null;
+            node.InputBlackboardVersion = null; node.OutputBlackboardVersion = null; node.ProducedBlackboardKeys = null;
+            node.StartedAtUtc = null; node.CompletedAtUtc = null; node.DurationMs = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            EquityLensTelemetry.MarkError(activity, new TimeoutException());
+            stopwatch.Stop();
+            _nodeStateMachine.Transition(node, AgentNodeStatuses.Failed);
+            node.ErrorMessage = $"Node timed out after {policy.TimeoutSeconds} seconds.";
+            node.ErrorCode = "timeout";
+            node.ErrorCategory = AgentNodeErrorCategories.TimedOut;
+            node.ErrorRetryable = false;
+            node.CompletedAtUtc = DateTime.UtcNow;
+            node.DurationMs = stopwatch.ElapsedMilliseconds;
+            AddEvent(run, node, AgentEventTypes.NodeFailed, $"Node {nodeKey} timed out.", new { policy.TimeoutSeconds });
+            throw;
         }
         catch (Exception exception)
         {
             EquityLensTelemetry.MarkError(activity, exception);
             stopwatch.Stop();
             _nodeStateMachine.Transition(node, AgentNodeStatuses.Failed);
-            node.ErrorMessage = exception is OperationCanceledException && !cancellationToken.IsCancellationRequested ? $"Node timed out after {policy.TimeoutSeconds} seconds." : exception.Message;
+            node.ErrorMessage = exception.Message;
+            node.ErrorCode = "unhandled_exception";
+            node.ErrorCategory = AgentNodeErrorCategories.PermanentFailure;
+            node.ErrorRetryable = false;
             node.CompletedAtUtc = DateTime.UtcNow;
             node.DurationMs = stopwatch.ElapsedMilliseconds;
             AddEvent(run, node, AgentEventTypes.NodeFailed, $"Node {nodeKey} failed.", new { error = exception.Message });
             if (attempt >= policy.MaxRetryCount) throw;
             AddEvent(run, node, AgentEventTypes.SupervisorDecision, $"Retrying {nodeKey}.", new { attempt = attempt + 2, policy.MaxRetryCount });
             _nodeStateMachine.ResetForRetry(node);
-            node.ErrorMessage = null; node.StartedAtUtc = null; node.CompletedAtUtc = null; node.DurationMs = null;
+            node.ErrorMessage = null; node.ErrorCode = null; node.ErrorCategory = null; node.ErrorRetryable = null;
+            node.InputBlackboardVersion = null; node.OutputBlackboardVersion = null; node.ProducedBlackboardKeys = null;
+            node.StartedAtUtc = null; node.CompletedAtUtc = null; node.DurationMs = null;
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
         }

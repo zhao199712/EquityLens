@@ -40,7 +40,7 @@ public sealed class EvidenceReanalysisWorkflowTests
         if (scenario == "invalid-json") source.OutputJson = "not-json";
         if (scenario == "not-required") { var output = JsonSerializer.Deserialize<EvidenceRemediationOutput>(source.OutputJson!, AgentNodeJson.SerializerOptions)!; source.OutputJson = AgentNodeJson.Serialize(output with { RequiresReanalysis = false }); }
         db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceReanalysisWorkflowDefinitionProvider().CreateRun(scenario == "wrong-user" ? Guid.NewGuid() : userId, source.Id);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationNodeHandler().ExecuteAsync(new(db, run, run.Nodes.ElementAt(0), (_, _, _, _, _) => { })));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => new LoadEvidenceRemediationNodeHandler().ExecuteAsync(new(db, run, run.Nodes.ElementAt(0), (_, _, _, _, _) => { })));
         Assert.Equal(expected, exception.Message);
     }
 
@@ -48,7 +48,7 @@ public sealed class EvidenceReanalysisWorkflowTests
     public async Task Validate_MissingReasons_Rejects()
     {
         await using var db = CreateDb(); var run = new EvidenceReanalysisWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.RequiresReanalysis] = true; board[AgentBlackboardKeys.ReanalysisReasons] = new JsonArray(); board[AgentBlackboardKeys.RemediatedEvidencePacket] = JsonSerializer.SerializeToNode(Packet(), AgentNodeJson.SerializerOptions); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new ValidateReanalysisRequestNodeHandler().ExecuteAsync(new(db, run, run.Nodes.ElementAt(1), (_, _, _, _, _) => { }))); Assert.Equal("Reanalysis reasons are missing.", exception.Message);
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => new ValidateReanalysisRequestNodeHandler().ExecuteAsync(new(db, run, run.Nodes.ElementAt(1), (_, _, _, _, _) => { }))); Assert.Equal("Reanalysis reasons are missing.", exception.Message);
     }
 
     [Fact]

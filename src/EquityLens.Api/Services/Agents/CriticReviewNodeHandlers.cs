@@ -49,7 +49,7 @@ public sealed class LoadResearchRunNodeHandler : IAgentNodeHandler
             toolCall.CompletedAtUtc = DateTime.UtcNow;
             toolCall.DurationMs = stopwatch.ElapsedMilliseconds;
             context.AddEvent(run, node, AgentEventTypes.ToolCallFailed, "Tool getResearchRun failed.", new { error = toolCall.ErrorMessage });
-            throw new InvalidOperationException("Research run not found.");
+            throw new AgentNodeException("research_run_not_found", AgentNodeErrorCategories.PermanentFailure, "Research run not found.", retryable: false);
         }
 
         var resultJson = AgentNodeJson.Serialize(detail);
@@ -154,7 +154,7 @@ public sealed class BuildEvidencePacketNodeHandler : IAgentNodeHandler
         var node = context.Node;
         var blackboard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
         var researchRun = AgentNodeJson.GetRequiredBlackboardObject(blackboard, AgentBlackboardKeys.ResearchRun);
-        var runSummary = researchRun["run"]?.AsObject() ?? throw new InvalidOperationException("Research run summary is missing.");
+        var runSummary = researchRun["run"]?.AsObject() ?? throw new AgentNodeException("research_run_summary_missing", AgentNodeErrorCategories.ValidationFailure, "Research run summary is missing.");
         var citations = researchRun["citations"]?.AsArray() ?? [];
         var candidates = researchRun["candidates"]?.AsArray() ?? [];
         var ticker = runSummary["ticker"]?.GetValue<string>();
@@ -357,7 +357,7 @@ public sealed class FinalizeCriticReportNodeHandler : IAgentNodeHandler
         var criticReview = AgentNodeJson.GetRequiredBlackboardObject(blackboard, AgentBlackboardKeys.CriticReview);
         if (!_policyEvaluators.TryGetValue(run.WorkflowType, out var policyEvaluator))
         {
-            throw new InvalidOperationException($"Unsupported workflow policy evaluator for '{run.WorkflowType}'.");
+            throw new AgentNodeException("unsupported_policy_evaluator", AgentNodeErrorCategories.PermanentFailure, $"Unsupported workflow policy evaluator for '{run.WorkflowType}'.");
         }
 
         var policyDecision = policyEvaluator.Evaluate(new WorkflowPolicyContext(

@@ -50,7 +50,7 @@ public sealed class LlmDraftRevisionAgentTests
             new FakeChatCompletionService("not json"),
             NullLogger<LlmDraftRevisionAgent>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.ReviseAsync(CreateInput(requiresRevision: true)));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => agent.ReviseAsync(CreateInput(requiresRevision: true)));
 
         Assert.Equal("LLM draft revision returned invalid JSON content.", exception.Message);
     }
@@ -62,7 +62,7 @@ public sealed class LlmDraftRevisionAgentTests
             new FakeChatCompletionService(""),
             NullLogger<LlmDraftRevisionAgent>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.ReviseAsync(CreateInput(requiresRevision: true)));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => agent.ReviseAsync(CreateInput(requiresRevision: true)));
 
         Assert.Equal("LLM draft revision returned empty JSON content.", exception.Message);
     }
@@ -81,7 +81,7 @@ public sealed class LlmDraftRevisionAgentTests
                 """),
             NullLogger<LlmDraftRevisionAgent>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.ReviseAsync(CreateInput(requiresRevision: true)));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => agent.ReviseAsync(CreateInput(requiresRevision: true)));
 
         Assert.Equal("LLM draft revision result is missing appliedRecommendation.", exception.Message);
     }

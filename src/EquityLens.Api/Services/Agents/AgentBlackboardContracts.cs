@@ -143,7 +143,9 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.ReanalysisCriticReview] = null,
         [AgentBlackboardKeys.ReanalysisPolicyDecision] = null,
         [AgentBlackboardKeys.ReanalysisFinalRevision] = null,
-        [AgentBlackboardKeys.FinalOutput] = null
+        [AgentBlackboardKeys.FinalOutput] = null,
+        ["schemaVersion"] = 1,
+        ["blackboardVersion"] = 0
     };
 
     public static JsonObject CreateInitialPortfolioDiagnosisBlackboard(Guid portfolioId, DateOnly from, DateOnly to) => new()
@@ -157,7 +159,9 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.RiskAnalysisPriorities] = new JsonArray(),
         [AgentBlackboardKeys.PortfolioEvidencePacket] = null,
         [AgentBlackboardKeys.PortfolioDiagnosisDraft] = null,
-        [AgentBlackboardKeys.FinalOutput] = null
+        [AgentBlackboardKeys.FinalOutput] = null,
+        ["schemaVersion"] = 1,
+        ["blackboardVersion"] = 0
     };
 
 
@@ -173,7 +177,9 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.RevisedAnswer] = null,
         [AgentBlackboardKeys.RevisionSummary] = null,
         [AgentBlackboardKeys.AppliedRecommendation] = null,
-        [AgentBlackboardKeys.FinalOutput] = null
+        [AgentBlackboardKeys.FinalOutput] = null,
+        ["schemaVersion"] = 1,
+        ["blackboardVersion"] = 0
     };
 
     public static JsonObject CreateEvidenceChecks(
@@ -223,7 +229,9 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.RevisedAnswer] = null,
         [AgentBlackboardKeys.RevisionSummary] = null,
         [AgentBlackboardKeys.AppliedRecommendation] = null,
-        [AgentBlackboardKeys.FinalOutput] = null
+        [AgentBlackboardKeys.FinalOutput] = null,
+        ["schemaVersion"] = 1,
+        ["blackboardVersion"] = 0
     };
 
     public static JsonObject CreateInitialEvidenceRemediationBlackboard(Guid criticReviewRunId) => new()
@@ -259,7 +267,9 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.Runtime] = new JsonObject { ["iteration"] = 0, ["maxIterations"] = EvidenceRemediationWorkflow.MaxIterations, ["webFallbackCount"] = 0 },
         [AgentBlackboardKeys.RevisedAnswer] = null,
         [AgentBlackboardKeys.RevisionSummary] = null,
-        [AgentBlackboardKeys.FinalOutput] = null
+        [AgentBlackboardKeys.FinalOutput] = null,
+        ["schemaVersion"] = 1,
+        ["blackboardVersion"] = 0
     };
 
     public static JsonObject CreateInitialEvidenceReanalysisBlackboard(Guid evidenceRemediationRunId) => new()
@@ -287,7 +297,9 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.ReanalysisCriticReview] = null,
         [AgentBlackboardKeys.ReanalysisPolicyDecision] = null,
         [AgentBlackboardKeys.ReanalysisFinalRevision] = null,
-        [AgentBlackboardKeys.FinalOutput] = null
+        [AgentBlackboardKeys.FinalOutput] = null,
+        ["schemaVersion"] = 1,
+        ["blackboardVersion"] = 0
     };
 
     public static JsonObject CreateFinding(string severity, string category, string message, string recommendation) => new()

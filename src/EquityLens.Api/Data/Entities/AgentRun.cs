@@ -18,6 +18,10 @@ public class AgentRun
     public long OrchestrationVersion { get; set; }
     public string? LeaseOwner { get; set; }
     public DateTime? LeaseExpiresAtUtc { get; set; }
+    public bool EnableBlackboardSnapshots { get; set; }
+    public int TotalInputTokens { get; set; }
+    public int TotalOutputTokens { get; set; }
+    public decimal TotalEstimatedCostUsd { get; set; }
 
     public ICollection<AgentRunNode> Nodes { get; set; } = [];
     public ICollection<AgentRunEvent> Events { get; set; } = [];

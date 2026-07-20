@@ -16,12 +16,12 @@ internal static class StructuredLlmOutput
             previousOutput = response.Content;
             try
             {
-                if (string.IsNullOrWhiteSpace(response.Content)) throw new InvalidOperationException("Model returned empty content.");
+                if (string.IsNullOrWhiteSpace(response.Content)) throw new AgentNodeException("llm_empty_content", AgentNodeErrorCategories.ValidationFailure, "Model returned empty content.");
                 var value = parseAndValidate(response.Content);
                 attempts.Add(new(attempt, attempt == 1 ? "Llm" : "LlmRepair", response.Model, response.PromptTokens, response.CompletionTokens, AgentNodeJson.Trim(response.Content, 500), null));
                 return (value, attempts, null);
             }
-            catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+            catch (Exception exception) when (exception is JsonException or AgentNodeException)
             {
                 validationError = exception.Message;
                 attempts.Add(new(attempt, attempt == 1 ? "Llm" : "LlmRepair", response.Model, response.PromptTokens, response.CompletionTokens, AgentNodeJson.Trim(response.Content ?? string.Empty, 500), validationError));

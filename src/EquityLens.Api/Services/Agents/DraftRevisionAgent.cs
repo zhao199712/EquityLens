@@ -95,7 +95,7 @@ public sealed class LlmDraftRevisionAgent : IDraftRevisionAgent
 
         if (string.IsNullOrWhiteSpace(response.Content))
         {
-            throw new InvalidOperationException("LLM draft revision returned empty JSON content.");
+            throw new AgentNodeException("llm_draft_empty_content", AgentNodeErrorCategories.ValidationFailure, "LLM draft revision returned empty JSON content.");
         }
 
         DraftRevisionResult? result;
@@ -106,12 +106,12 @@ public sealed class LlmDraftRevisionAgent : IDraftRevisionAgent
         catch (JsonException exception)
         {
             _logger.LogWarning(exception, "LLM draft revision returned invalid JSON: {Content}", response.Content);
-            throw new InvalidOperationException("LLM draft revision returned invalid JSON content.", exception);
+            throw new AgentNodeException("llm_draft_invalid_json", AgentNodeErrorCategories.ValidationFailure, "LLM draft revision returned invalid JSON content.", retryable: false, innerException: exception);
         }
 
         if (result is null)
         {
-            throw new InvalidOperationException("LLM draft revision returned empty JSON object.");
+            throw new AgentNodeException("llm_draft_empty_object", AgentNodeErrorCategories.ValidationFailure, "LLM draft revision returned empty JSON object.");
         }
 
         Validate(result, input.RequiresRevision);
@@ -166,15 +166,15 @@ public sealed class LlmDraftRevisionAgent : IDraftRevisionAgent
     {
         if (string.IsNullOrWhiteSpace(result.RevisedAnswer))
         {
-            throw new InvalidOperationException("LLM draft revision result is missing revisedAnswer.");
+            throw new AgentNodeException("llm_draft_missing_answer", AgentNodeErrorCategories.ValidationFailure, "LLM draft revision result is missing revisedAnswer.");
         }
         if (string.IsNullOrWhiteSpace(result.RevisionSummary))
         {
-            throw new InvalidOperationException("LLM draft revision result is missing revisionSummary.");
+            throw new AgentNodeException("llm_draft_missing_summary", AgentNodeErrorCategories.ValidationFailure, "LLM draft revision result is missing revisionSummary.");
         }
         if (requiresRevision && string.IsNullOrWhiteSpace(result.AppliedRecommendation))
         {
-            throw new InvalidOperationException("LLM draft revision result is missing appliedRecommendation.");
+            throw new AgentNodeException("llm_draft_missing_recommendation", AgentNodeErrorCategories.ValidationFailure, "LLM draft revision result is missing appliedRecommendation.");
         }
     }
 }

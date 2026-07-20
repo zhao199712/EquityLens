@@ -17,8 +17,8 @@ public sealed record PortfolioDiagnosisOutput(string Summary, decimal? Portfolio
 
 internal static class PortfolioDiagnosisBlackboard
 {
-    public static PortfolioDiagnosisContext Context(JsonObject board) => JsonSerializer.Deserialize<PortfolioDiagnosisContext>(board[AgentBlackboardKeys.PortfolioContext]?.ToJsonString() ?? throw new InvalidOperationException("Portfolio diagnosis context is missing."), AgentNodeJson.SerializerOptions)!;
-    public static T Required<T>(JsonObject board, string key) => JsonSerializer.Deserialize<T>(board[key]?.ToJsonString() ?? throw new InvalidOperationException($"Blackboard key '{key}' is missing."), AgentNodeJson.SerializerOptions)!;
+    public static PortfolioDiagnosisContext Context(JsonObject board) => JsonSerializer.Deserialize<PortfolioDiagnosisContext>(board[AgentBlackboardKeys.PortfolioContext]?.ToJsonString() ?? throw new AgentNodeException("blackboard_key_missing", AgentNodeErrorCategories.ValidationFailure, $"Blackboard key '{AgentBlackboardKeys.PortfolioContext}' is missing."), AgentNodeJson.SerializerOptions)!;
+    public static T Required<T>(JsonObject board, string key) => JsonSerializer.Deserialize<T>(board[key]?.ToJsonString() ?? throw new AgentNodeException("blackboard_key_missing", AgentNodeErrorCategories.ValidationFailure, $"Blackboard key '{key}' is missing."), AgentNodeJson.SerializerOptions)!;
     public static void Set<T>(JsonObject board, string key, T value) => board[key] = JsonSerializer.SerializeToNode(value, AgentNodeJson.SerializerOptions);
 }
 
@@ -34,7 +34,7 @@ public sealed class LoadPortfolioDiagnosisContextNodeHandler : IAgentNodeHandler
         var to = DateOnly.Parse(root.GetProperty("to").GetString()!);
         var portfolio = await context.DbContext.Portfolios.Include(x => x.Holdings).AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == portfolioId, cancellationToken)
-            ?? throw new InvalidOperationException("Portfolio was not found.");
+            ?? throw new AgentNodeException("portfolio_not_found", AgentNodeErrorCategories.PermanentFailure, "Portfolio was not found.", retryable: false);
         var output = new PortfolioDiagnosisContext(portfolio.Id, portfolio.Name, portfolio.BaseCurrency, from, to, portfolio.Holdings.Count);
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioContext, output);
@@ -55,7 +55,7 @@ public sealed class CalculatePerformanceAttributionNodeHandler : IAgentNodeHandl
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
         var diagnosis = PortfolioDiagnosisBlackboard.Context(board);
         var historyResult = await _valuations.GetValuationHistoryForUserAsync(diagnosis.PortfolioId, context.Run.UserId, diagnosis.From, diagnosis.To, cancellationToken);
-        if (!historyResult.IsSuccess || historyResult.Value is null) throw new InvalidOperationException(historyResult.ErrorMessage ?? "Portfolio valuation history is unavailable.");
+        if (!historyResult.IsSuccess || historyResult.Value is null) throw new AgentNodeException("valuation_history_unavailable", AgentNodeErrorCategories.TransientFailure, historyResult.ErrorMessage ?? "Portfolio valuation history is unavailable.", retryable: true);
         var portfolio = await context.DbContext.Portfolios.Include(x => x.Holdings).ThenInclude(x => x.Security).AsNoTracking()
             .SingleAsync(x => x.Id == diagnosis.PortfolioId, cancellationToken);
         var ids = portfolio.Holdings.Select(x => x.SecurityId).ToList();

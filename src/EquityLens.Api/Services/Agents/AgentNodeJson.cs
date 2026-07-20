@@ -16,7 +16,7 @@ internal static class AgentNodeJson
         blackboard[key]?.AsObject();
 
     public static JsonObject GetRequiredBlackboardObject(JsonObject blackboard, string key) =>
-        GetBlackboardObject(blackboard, key) ?? throw new InvalidOperationException($"Blackboard is missing {key}.");
+        GetBlackboardObject(blackboard, key) ?? throw new AgentNodeException("blackboard_key_missing", AgentNodeErrorCategories.ValidationFailure, $"Blackboard is missing {key}.");
 
     public static T? GetBlackboardValue<T>(JsonObject blackboard, string key) =>
         blackboard[key] is null ? default : blackboard[key]!.GetValue<T>();
@@ -83,4 +83,22 @@ internal static class AgentNodeJson
 
     public static string Trim(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..maxLength] + "...";
+
+    public static string[] DetectChangedKeys(JsonObject before, JsonObject after)
+    {
+        var changed = new List<string>();
+        foreach (var kv in after)
+        {
+            if (kv.Key is "schemaVersion" or "blackboardVersion") continue;
+            if (before[kv.Key] is null || before[kv.Key]!.ToJsonString() != kv.Value!.ToJsonString())
+                changed.Add(kv.Key);
+        }
+        return changed.ToArray();
+    }
+
+    public static void IncrementBlackboardVersion(JsonObject blackboard)
+    {
+        var current = blackboard["blackboardVersion"]?.GetValue<int>() ?? 0;
+        blackboard["blackboardVersion"] = current + 1;
+    }
 }

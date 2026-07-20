@@ -3,6 +3,7 @@ using System;
 using EquityLens.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Pgvector;
 namespace EquityLens.Api.Migrations
 {
     [DbContext(typeof(EquityLensDbContext))]
-    partial class EquityLensDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260720043827_AddBlackboardVersioning")]
+    partial class AddBlackboardVersioning
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -150,9 +153,6 @@ namespace EquityLens.Api.Migrations
                         .HasColumnName("created_at_utc")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<bool>("EnableBlackboardSnapshots")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("text")
                         .HasColumnName("error_message");
@@ -189,15 +189,6 @@ namespace EquityLens.Api.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .HasColumnName("status");
-
-                    b.Property<decimal>("TotalEstimatedCostUsd")
-                        .HasColumnType("numeric");
-
-                    b.Property<int>("TotalInputTokens")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TotalOutputTokens")
-                        .HasColumnType("integer");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
@@ -282,9 +273,6 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("agent_run_id");
 
-                    b.Property<string>("BlackboardSnapshotJson")
-                        .HasColumnType("text");
-
                     b.Property<DateTime?>("CompletedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at_utc");
@@ -306,18 +294,12 @@ namespace EquityLens.Api.Migrations
                     b.Property<bool?>("ErrorRetryable")
                         .HasColumnType("boolean");
 
-                    b.Property<decimal?>("EstimatedCostUsd")
-                        .HasColumnType("numeric");
-
                     b.Property<int?>("InputBlackboardVersion")
                         .HasColumnType("integer");
 
                     b.Property<string>("InputJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("input_json");
-
-                    b.Property<int?>("InputTokens")
-                        .HasColumnType("integer");
 
                     b.Property<int>("Iteration")
                         .HasColumnType("integer")
@@ -341,9 +323,6 @@ namespace EquityLens.Api.Migrations
                     b.Property<string>("OutputJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("output_json");
-
-                    b.Property<int?>("OutputTokens")
-                        .HasColumnType("integer");
 
                     b.PrimitiveCollection<string[]>("ProducedBlackboardKeys")
                         .HasColumnType("text[]");

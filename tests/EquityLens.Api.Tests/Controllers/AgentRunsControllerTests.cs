@@ -138,7 +138,7 @@ public sealed class AgentRunsControllerTests
         public Guid LastCriticReviewRunId { get; private set; }
         public Guid LastEvidenceRemediationRunId { get; private set; }
         public AgentRunDetailResponse? Detail { get; set; } = new(
-            new AgentRunSummaryResponse(Guid.NewGuid(), "CriticReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null),
+            new AgentRunSummaryResponse(Guid.NewGuid(), "CriticReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null, 0, 0, 0m),
             [], [], [], [], "{}", "{}", "{}");
 
         public Task<AgentRunSummaryResponse> CreateCriticReviewAsync(Guid userId, Guid researchRunId, CancellationToken cancellationToken = default)
@@ -146,7 +146,7 @@ public sealed class AgentRunsControllerTests
             CreateWasCalled = true;
             LastResearchRunId = researchRunId;
             return Task.FromResult(new AgentRunSummaryResponse(
-                Guid.NewGuid(), "CriticReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null));
+                Guid.NewGuid(), "CriticReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null, 0, 0, 0m));
         }
 
         public Task<AgentRunSummaryResponse> CreateDraftRevisionAsync(Guid userId, Guid criticReviewRunId, CancellationToken cancellationToken = default)
@@ -154,7 +154,7 @@ public sealed class AgentRunsControllerTests
             CreateDraftRevisionWasCalled = true;
             LastCriticReviewRunId = criticReviewRunId;
             return Task.FromResult(new AgentRunSummaryResponse(
-                Guid.NewGuid(), "DraftRevision", "DraftAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null));
+                Guid.NewGuid(), "DraftRevision", "DraftAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null, 0, 0, 0m));
         }
 
         public Task<AgentRunSummaryResponse> CreateResearchQualityReviewAsync(Guid userId, Guid researchRunId, CancellationToken cancellationToken = default)
@@ -162,24 +162,24 @@ public sealed class AgentRunsControllerTests
             CreateResearchQualityReviewWasCalled = true;
             LastResearchRunId = researchRunId;
             return Task.FromResult(new AgentRunSummaryResponse(
-                Guid.NewGuid(), "ResearchQualityReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null));
+                Guid.NewGuid(), "ResearchQualityReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null, 0, 0, 0m));
         }
 
         public Task<AgentRunSummaryResponse> CreateEvidenceRemediationAsync(Guid userId, Guid criticReviewRunId, CancellationToken cancellationToken = default)
         {
             CreateEvidenceRemediationWasCalled = true; LastCriticReviewRunId = criticReviewRunId;
-            return Task.FromResult(new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.EvidenceRemediation, AgentTypes.Research, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null));
+            return Task.FromResult(new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.EvidenceRemediation, AgentTypes.Research, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0m));
         }
 
         public Task<AgentRunSummaryResponse> CreateEvidenceReanalysisAsync(Guid userId, Guid evidenceRemediationRunId, CancellationToken cancellationToken = default)
         {
             LastEvidenceRemediationRunId = evidenceRemediationRunId;
-            return Task.FromResult(new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.EvidenceReanalysis, AgentTypes.Analysis, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null));
+            return Task.FromResult(new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.EvidenceReanalysis, AgentTypes.Analysis, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0m));
         }
 
         public Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
             => Task.FromResult(new AgentRunSummaryResponse(
-                Guid.NewGuid(), "PortfolioDiagnosis", "PortfolioDiagnosisAgent", "Pending", DateTime.UtcNow, null, null, null));
+                Guid.NewGuid(), "PortfolioDiagnosis", "PortfolioDiagnosisAgent", "Pending", DateTime.UtcNow, null, null, null, 0, 0, 0m));
 
         public Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(Guid? userId, int limit = 50, string? workflowType = null, string? status = null, Guid? researchRunId = null, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<AgentRunSummaryResponse>>([]);

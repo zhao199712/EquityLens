@@ -55,7 +55,7 @@ public sealed class LlmCriticReviewAgent : ICriticReviewAgent
 
         if (string.IsNullOrWhiteSpace(response.Content))
         {
-            throw new InvalidOperationException("LLM critic returned empty JSON content.");
+            throw new AgentNodeException("llm_critic_empty_content", AgentNodeErrorCategories.ValidationFailure, "LLM critic returned empty JSON content.");
         }
 
         CriticReviewResult? result;
@@ -66,12 +66,12 @@ public sealed class LlmCriticReviewAgent : ICriticReviewAgent
         catch (JsonException exception)
         {
             _logger.LogWarning(exception, "LLM critic returned invalid JSON: {Content}", response.Content);
-            throw new InvalidOperationException("LLM critic returned invalid JSON content.", exception);
+            throw new AgentNodeException("llm_critic_invalid_json", AgentNodeErrorCategories.ValidationFailure, "LLM critic returned invalid JSON content.", retryable: false, innerException: exception);
         }
 
         if (result is null)
         {
-            throw new InvalidOperationException("LLM critic returned empty JSON object.");
+            throw new AgentNodeException("llm_critic_empty_object", AgentNodeErrorCategories.ValidationFailure, "LLM critic returned empty JSON object.");
         }
 
         Validate(result, input.CitationCount);
@@ -142,23 +142,23 @@ public sealed class LlmCriticReviewAgent : ICriticReviewAgent
     {
         if (string.IsNullOrWhiteSpace(result.Summary))
         {
-            throw new InvalidOperationException("LLM critic result is missing summary.");
+            throw new AgentNodeException("llm_critic_missing_summary", AgentNodeErrorCategories.ValidationFailure, "LLM critic result is missing summary.");
         }
         if (!AllowedSeverities.Contains(result.OverallSeverity))
         {
-            throw new InvalidOperationException($"LLM critic result has invalid overallSeverity '{result.OverallSeverity}'.");
+            throw new AgentNodeException("llm_critic_invalid_severity", AgentNodeErrorCategories.ValidationFailure, $"LLM critic result has invalid overallSeverity '{result.OverallSeverity}'.");
         }
         if (result.Findings is null)
         {
-            throw new InvalidOperationException("LLM critic result is missing findings.");
+            throw new AgentNodeException("llm_critic_missing_findings", AgentNodeErrorCategories.ValidationFailure, "LLM critic result is missing findings.");
         }
         if (result.Findings.Count == 0 && !string.Equals(result.OverallSeverity, "None", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("LLM critic result with no findings must use overallSeverity None.");
+            throw new AgentNodeException("llm_critic_severity_findings_mismatch", AgentNodeErrorCategories.ValidationFailure, "LLM critic result with no findings must use overallSeverity None.");
         }
         if (result.Findings.Count > 0 && string.Equals(result.OverallSeverity, "None", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("LLM critic result with findings cannot use overallSeverity None.");
+            throw new AgentNodeException("llm_critic_severity_findings_mismatch", AgentNodeErrorCategories.ValidationFailure, "LLM critic result with findings cannot use overallSeverity None.");
         }
 
         foreach (var finding in result.Findings)
@@ -171,29 +171,29 @@ public sealed class LlmCriticReviewAgent : ICriticReviewAgent
     {
         if (!AllowedFindingSeverities.Contains(finding.Severity))
         {
-            throw new InvalidOperationException($"LLM critic finding has invalid severity '{finding.Severity}'.");
+            throw new AgentNodeException("llm_critic_invalid_finding_severity", AgentNodeErrorCategories.ValidationFailure, $"LLM critic finding has invalid severity '{finding.Severity}'.");
         }
         if (!AllowedCategories.Contains(finding.Category))
         {
-            throw new InvalidOperationException($"LLM critic finding has invalid category '{finding.Category}'.");
+            throw new AgentNodeException("llm_critic_invalid_finding_category", AgentNodeErrorCategories.ValidationFailure, $"LLM critic finding has invalid category '{finding.Category}'.");
         }
         if (string.IsNullOrWhiteSpace(finding.Message))
         {
-            throw new InvalidOperationException("LLM critic finding is missing message.");
+            throw new AgentNodeException("llm_critic_finding_missing_message", AgentNodeErrorCategories.ValidationFailure, "LLM critic finding is missing message.");
         }
         if (string.IsNullOrWhiteSpace(finding.Recommendation))
         {
-            throw new InvalidOperationException("LLM critic finding is missing recommendation.");
+            throw new AgentNodeException("llm_critic_finding_missing_recommendation", AgentNodeErrorCategories.ValidationFailure, "LLM critic finding is missing recommendation.");
         }
         if (finding.RelatedCitationIndexes is null)
         {
-            throw new InvalidOperationException("LLM critic finding is missing relatedCitationIndexes.");
+            throw new AgentNodeException("llm_critic_finding_missing_citations", AgentNodeErrorCategories.ValidationFailure, "LLM critic finding is missing relatedCitationIndexes.");
         }
         foreach (var citationIndex in finding.RelatedCitationIndexes)
         {
             if (citationIndex < 1 || citationIndex > citationCount)
             {
-                throw new InvalidOperationException($"LLM critic finding has out-of-range citation index {citationIndex}.");
+                throw new AgentNodeException("llm_critic_invalid_citation_index", AgentNodeErrorCategories.ValidationFailure, $"LLM critic finding has out-of-range citation index {citationIndex}.");
             }
         }
     }

@@ -47,7 +47,7 @@ public sealed class LlmCriticReviewAgentTests
             new FakeChatCompletionService("not json"),
             NullLogger<LlmCriticReviewAgent>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.CritiqueAsync(CreateInput()));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => agent.CritiqueAsync(CreateInput()));
 
         Assert.Equal("LLM critic returned invalid JSON content.", exception.Message);
     }
@@ -59,7 +59,7 @@ public sealed class LlmCriticReviewAgentTests
             new FakeChatCompletionService(""),
             NullLogger<LlmCriticReviewAgent>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.CritiqueAsync(CreateInput()));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => agent.CritiqueAsync(CreateInput()));
 
         Assert.Equal("LLM critic returned empty JSON content.", exception.Message);
     }
@@ -79,7 +79,7 @@ public sealed class LlmCriticReviewAgentTests
                 """),
             NullLogger<LlmCriticReviewAgent>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.CritiqueAsync(CreateInput()));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => agent.CritiqueAsync(CreateInput()));
 
         Assert.Equal("LLM critic result has invalid overallSeverity 'Severe'.", exception.Message);
     }
@@ -107,7 +107,7 @@ public sealed class LlmCriticReviewAgentTests
                 """),
             NullLogger<LlmCriticReviewAgent>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.CritiqueAsync(CreateInput()));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => agent.CritiqueAsync(CreateInput()));
 
         Assert.Equal("LLM critic finding has out-of-range citation index 3.", exception.Message);
     }
@@ -135,7 +135,7 @@ public sealed class LlmCriticReviewAgentTests
                 """),
             NullLogger<LlmCriticReviewAgent>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.CritiqueAsync(CreateInput()));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => agent.CritiqueAsync(CreateInput()));
 
         Assert.Equal("LLM critic finding has invalid category 'RandomCategory'.", exception.Message);
     }

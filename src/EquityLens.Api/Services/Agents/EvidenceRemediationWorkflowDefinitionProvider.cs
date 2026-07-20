@@ -32,6 +32,7 @@ public sealed class EvidenceRemediationWorkflowDefinitionProvider : IAgentWorkfl
         Status = AgentRunStatuses.Pending, InputJson = AgentNodeJson.Serialize(new { criticReviewRunId }),
         BlackboardJson = CreateInitialBlackboardJson(criticReviewRunId),
         WorkflowDefinitionJson = CreateDefinition().ToJsonString(AgentNodeJson.SerializerOptions), CreatedAtUtc = DateTime.UtcNow,
+        EnableBlackboardSnapshots = true,
         Nodes = Steps.Select(step => new AgentRunNode { Id = Guid.NewGuid(), NodeKey = step.Key, TemplateNodeKey = step.Template, Iteration = step.Iteration, NodeType = step.Type, Status = AgentNodeStatuses.Pending }).ToList()
     };
 

@@ -35,7 +35,7 @@ public sealed class LlmInvestmentReanalysisAgent(IChatCompletionService chat) : 
             previousOutput = attempt == 1 ? null : previous,
             validationError = attempt == 1 ? null : error
         }, JsonOptions), content => ParseAndValidate(content, context), 4096, cancellationToken);
-        if (execution.Value is null) throw new InvalidOperationException($"Investment reanalysis structured output remained invalid after repair: {execution.LastError}");
+        if (execution.Value is null) throw new AgentNodeException("reanalysis_output_invalid", AgentNodeErrorCategories.ValidationFailure, $"Investment reanalysis structured output remained invalid after repair: {execution.LastError}", retryable: false);
         return new(execution.Value, AgentIdentity, chat.Provider, execution.Attempts[^1].Model, execution.Attempts.Sum(x => x.PromptTokens), execution.Attempts.Sum(x => x.CompletionTokens), null, execution.Attempts.Count == 1 ? "Llm" : "LlmRepair", execution.Attempts);
     }
 
@@ -45,21 +45,21 @@ public sealed class LlmInvestmentReanalysisAgent(IChatCompletionService chat) : 
         try
         {
             using var document = JsonDocument.Parse(content); var required = new[] { "reanalyzedAnswer", "analysisChangeSummary", "changedClaimIds", "keyConclusionChanges" };
-            if (document.RootElement.ValueKind != JsonValueKind.Object || required.Any(field => !document.RootElement.TryGetProperty(field, out _))) throw new InvalidOperationException("Investment reanalysis result is missing required fields.");
-            draft = JsonSerializer.Deserialize<InvestmentReanalysisDraft>(content, JsonOptions) ?? throw new InvalidOperationException("Investment reanalysis agent returned empty JSON object.");
+            if (document.RootElement.ValueKind != JsonValueKind.Object || required.Any(field => !document.RootElement.TryGetProperty(field, out _))) throw new AgentNodeException("reanalysis_missing_fields", AgentNodeErrorCategories.ValidationFailure, "Investment reanalysis result is missing required fields.");
+            draft = JsonSerializer.Deserialize<InvestmentReanalysisDraft>(content, JsonOptions) ?? throw new AgentNodeException("reanalysis_empty_object", AgentNodeErrorCategories.ValidationFailure, "Investment reanalysis agent returned empty JSON object.");
         }
-        catch (JsonException exception) { throw new InvalidOperationException("Investment reanalysis agent returned invalid JSON content.", exception); }
+        catch (JsonException exception) { throw new AgentNodeException("reanalysis_invalid_json", AgentNodeErrorCategories.ValidationFailure, "Investment reanalysis agent returned invalid JSON content.", retryable: false, innerException: exception); }
         Validate(draft, context); return draft;
     }
 
     private static void Validate(InvestmentReanalysisDraft draft, InvestmentReanalysisContext context)
     {
-        if (string.IsNullOrWhiteSpace(draft.ReanalyzedAnswer)) throw new InvalidOperationException("Investment reanalysis result is missing reanalyzedAnswer.");
-        if (string.IsNullOrWhiteSpace(draft.AnalysisChangeSummary)) throw new InvalidOperationException("Investment reanalysis result is missing analysisChangeSummary.");
-        if (draft.ChangedClaimIds is null || draft.KeyConclusionChanges is null) throw new InvalidOperationException("Investment reanalysis result is missing change details.");
+        if (string.IsNullOrWhiteSpace(draft.ReanalyzedAnswer)) throw new AgentNodeException("reanalysis_missing_answer", AgentNodeErrorCategories.ValidationFailure, "Investment reanalysis result is missing reanalyzedAnswer.");
+        if (string.IsNullOrWhiteSpace(draft.AnalysisChangeSummary)) throw new AgentNodeException("reanalysis_missing_summary", AgentNodeErrorCategories.ValidationFailure, "Investment reanalysis result is missing analysisChangeSummary.");
+        if (draft.ChangedClaimIds is null || draft.KeyConclusionChanges is null) throw new AgentNodeException("reanalysis_missing_change_details", AgentNodeErrorCategories.ValidationFailure, "Investment reanalysis result is missing change details.");
         var allowedClaims = context.AffectedClaims.Select(x => x.ClaimId).ToHashSet(StringComparer.Ordinal);
-        if (draft.ChangedClaimIds.Any(x => !allowedClaims.Contains(x))) throw new InvalidOperationException("Investment reanalysis result contains an unknown changed claim id.");
-        if (System.Text.RegularExpressions.Regex.Matches(draft.ReanalyzedAnswer, @"\[(\d+)\]").Select(x => int.Parse(x.Groups[1].Value)).Any(x => context.Evidence.All(e => e.Index != x))) throw new InvalidOperationException("Investment reanalysis result contains an invalid citation index.");
+        if (draft.ChangedClaimIds.Any(x => !allowedClaims.Contains(x))) throw new AgentNodeException("reanalysis_unknown_claim_id", AgentNodeErrorCategories.ValidationFailure, "Investment reanalysis result contains an unknown changed claim id.");
+        if (System.Text.RegularExpressions.Regex.Matches(draft.ReanalyzedAnswer, @"\[(\d+)\]").Select(x => int.Parse(x.Groups[1].Value)).Any(x => context.Evidence.All(e => e.Index != x))) throw new AgentNodeException("reanalysis_invalid_citation_index", AgentNodeErrorCategories.ValidationFailure, "Investment reanalysis result contains an invalid citation index.");
     }
 
     private const string SystemPrompt = """
@@ -78,7 +78,7 @@ public sealed class EvidenceReanalysisWorkflowDefinitionProvider : IAgentWorkflo
         (EvidenceReanalysisNodeKeys.Finalize, EvidenceReanalysisNodeTypes.Finalize)
     ];
     public string WorkflowType => AgentWorkflowTypes.EvidenceReanalysis;
-    public AgentRun CreateRun(Guid userId, Guid sourceRunId) => new() { Id = Guid.NewGuid(), UserId = userId, WorkflowType = WorkflowType, AgentType = AgentTypes.Analysis, Status = AgentRunStatuses.Pending, InputJson = AgentNodeJson.Serialize(new { evidenceRemediationRunId = sourceRunId }), BlackboardJson = CreateInitialBlackboardJson(sourceRunId), WorkflowDefinitionJson = Definition().ToJsonString(AgentNodeJson.SerializerOptions), CreatedAtUtc = DateTime.UtcNow, Nodes = Steps.Select(x => new AgentRunNode { Id = Guid.NewGuid(), NodeKey = x.Key, NodeType = x.Type, Status = AgentNodeStatuses.Pending }).ToList() };
+    public AgentRun CreateRun(Guid userId, Guid sourceRunId) => new() { Id = Guid.NewGuid(), UserId = userId, WorkflowType = WorkflowType, AgentType = AgentTypes.Analysis, Status = AgentRunStatuses.Pending, InputJson = AgentNodeJson.Serialize(new { evidenceRemediationRunId = sourceRunId }), BlackboardJson = CreateInitialBlackboardJson(sourceRunId), WorkflowDefinitionJson = Definition().ToJsonString(AgentNodeJson.SerializerOptions), CreatedAtUtc = DateTime.UtcNow, EnableBlackboardSnapshots = true, Nodes = Steps.Select(x => new AgentRunNode { Id = Guid.NewGuid(), NodeKey = x.Key, NodeType = x.Type, Status = AgentNodeStatuses.Pending }).ToList() };
     public string CreateInitialBlackboardJson(Guid sourceRunId) => AgentBlackboardContracts.CreateInitialEvidenceReanalysisBlackboard(sourceRunId).ToJsonString(AgentNodeJson.SerializerOptions);
     private static JsonObject Definition() => new() { ["workflowType"] = AgentWorkflowTypes.EvidenceReanalysis, ["version"] = EvidenceReanalysisWorkflow.Version, ["orchestrationMode"] = "Stateful", ["nodes"] = new JsonArray(Steps.Select(x => (JsonNode)new JsonObject { ["id"] = x.Key, ["type"] = x.Type, ["required"] = true }).ToArray()), ["edges"] = new JsonArray(Steps.Zip(Steps.Skip(1), (a, b) => (JsonNode)new JsonObject { ["from"] = a.Key, ["to"] = b.Key }).ToArray()) };
 }
@@ -86,7 +86,7 @@ public sealed class EvidenceReanalysisWorkflowDefinitionProvider : IAgentWorkflo
 internal static class EvidenceReanalysisBoard
 {
     public static JsonObject Parse(AgentRun run) => AgentNodeJson.ParseBlackboard(run.BlackboardJson);
-    public static T Required<T>(JsonObject board, string key) => JsonSerializer.Deserialize<T>(board[key]?.ToJsonString() ?? throw new InvalidOperationException($"Evidence reanalysis blackboard key '{key}' is missing."), AgentNodeJson.SerializerOptions)!;
+    public static T Required<T>(JsonObject board, string key) => JsonSerializer.Deserialize<T>(board[key]?.ToJsonString() ?? throw new AgentNodeException("blackboard_key_missing", AgentNodeErrorCategories.ValidationFailure, $"Evidence reanalysis blackboard key '{key}' is missing."), AgentNodeJson.SerializerOptions)!;
     public static void Set<T>(JsonObject board, string key, T value) => board[key] = JsonSerializer.SerializeToNode(value, AgentNodeJson.SerializerOptions);
     public static void Commit(AgentNodeExecutionContext context, JsonObject board, object output) { context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(output); }
 }
@@ -97,22 +97,22 @@ internal static class EvidenceReanalysisSourceValidator
 {
     public static async Task<EvidenceReanalysisSourceSnapshot> ValidateAsync(EquityLens.Api.Data.EquityLensDbContext db, Guid userId, Guid sourceId, CancellationToken cancellationToken)
     {
-        var source = await db.AgentRuns.AsNoTracking().SingleOrDefaultAsync(x => x.Id == sourceId && x.UserId == userId, cancellationToken) ?? throw new InvalidOperationException("Evidence remediation run not found.");
-        if (source.WorkflowType != AgentWorkflowTypes.EvidenceRemediation) throw new InvalidOperationException("Source run is not an EvidenceRemediation workflow.");
-        if (source.Status != AgentRunStatuses.Succeeded) throw new InvalidOperationException("Evidence remediation run has not succeeded.");
-        if (string.IsNullOrWhiteSpace(source.OutputJson)) throw new InvalidOperationException("Evidence remediation output is missing.");
+        var source = await db.AgentRuns.AsNoTracking().SingleOrDefaultAsync(x => x.Id == sourceId && x.UserId == userId, cancellationToken) ?? throw new AgentNodeException("source_run_not_found", AgentNodeErrorCategories.PermanentFailure, "Evidence remediation run not found.", retryable: false);
+        if (source.WorkflowType != AgentWorkflowTypes.EvidenceRemediation) throw new AgentNodeException("source_run_type_mismatch", AgentNodeErrorCategories.PermanentFailure, "Source run is not an EvidenceRemediation workflow.", retryable: false);
+        if (source.Status != AgentRunStatuses.Succeeded) throw new AgentNodeException("source_run_not_completed", AgentNodeErrorCategories.PermanentFailure, "Evidence remediation run has not succeeded.", retryable: false);
+        if (string.IsNullOrWhiteSpace(source.OutputJson)) throw new AgentNodeException("source_output_missing", AgentNodeErrorCategories.PermanentFailure, "Evidence remediation output is missing.", retryable: false);
         EvidenceRemediationOutput output;
-        try { output = JsonSerializer.Deserialize<EvidenceRemediationOutput>(source.OutputJson, AgentNodeJson.SerializerOptions) ?? throw new InvalidOperationException("Evidence remediation output is missing."); }
-        catch (JsonException exception) { throw new InvalidOperationException("Evidence remediation output is invalid.", exception); }
-        if (!output.RequiresReanalysis) throw new InvalidOperationException("Evidence remediation does not require reanalysis.");
-        if (output.ReanalysisReasons is null || output.ReanalysisReasons.Count == 0 || output.ReanalysisReasons.Any(string.IsNullOrWhiteSpace)) throw new InvalidOperationException("Reanalysis reasons are missing.");
+        try { output = JsonSerializer.Deserialize<EvidenceRemediationOutput>(source.OutputJson, AgentNodeJson.SerializerOptions) ?? throw new AgentNodeException("source_output_deserialize_failed", AgentNodeErrorCategories.ValidationFailure, "Evidence remediation output is missing."); }
+        catch (JsonException exception) { throw new AgentNodeException("source_output_invalid", AgentNodeErrorCategories.ValidationFailure, "Evidence remediation output is invalid.", retryable: false, innerException: exception); }
+        if (!output.RequiresReanalysis) throw new AgentNodeException("reanalysis_not_required", AgentNodeErrorCategories.PolicyRejection, "Evidence remediation does not require reanalysis.", retryable: false);
+        if (output.ReanalysisReasons is null || output.ReanalysisReasons.Count == 0 || output.ReanalysisReasons.Any(string.IsNullOrWhiteSpace)) throw new AgentNodeException("reanalysis_reasons_missing", AgentNodeErrorCategories.ValidationFailure, "Reanalysis reasons are missing.", retryable: false);
         var sourceBoard = AgentNodeJson.ParseBlackboard(source.BlackboardJson);
         RemediatedEvidencePacket packet;
         try { packet = EvidenceReanalysisBoard.Required<RemediatedEvidencePacket>(sourceBoard, AgentBlackboardKeys.RemediatedEvidencePacket); }
-        catch (Exception exception) when (exception is JsonException or InvalidOperationException) { throw new InvalidOperationException("Validated evidence packet is missing or invalid.", exception); }
+        catch (Exception exception) when (exception is JsonException or AgentNodeException) { throw new AgentNodeException("evidence_packet_invalid", AgentNodeErrorCategories.ValidationFailure, "Validated evidence packet is missing or invalid.", retryable: false, innerException: exception); }
         var evidenceIds = packet.Evidence.Select(x => x.Index).ToHashSet(); var validClaims = packet.Claims.Where(x => x.ValidationErrors.Count == 0 && x.EvidenceIndexes.Count > 0 && x.Status is "Supported" or "Contradicted").ToList();
-        if (validClaims.Count == 0) throw new InvalidOperationException("Reanalysis has no validated claims.");
-        if (validClaims.SelectMany(x => x.EvidenceIndexes).Any(x => !evidenceIds.Contains(x))) throw new InvalidOperationException("Reanalysis claim mapping contains an invalid evidence index.");
+        if (validClaims.Count == 0) throw new AgentNodeException("no_validated_claims", AgentNodeErrorCategories.InsufficientEvidence, "Reanalysis has no validated claims.", retryable: false);
+        if (validClaims.SelectMany(x => x.EvidenceIndexes).Any(x => !evidenceIds.Contains(x))) throw new AgentNodeException("invalid_evidence_index", AgentNodeErrorCategories.ValidationFailure, "Reanalysis claim mapping contains an invalid evidence index.", retryable: false);
         return new(source, output, sourceBoard);
     }
 }
@@ -122,7 +122,7 @@ public sealed class LoadEvidenceRemediationNodeHandler : IAgentNodeHandler
     public string NodeType => EvidenceReanalysisNodeTypes.Load;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = EvidenceReanalysisBoard.Parse(context.Run); var sourceId = board[AgentBlackboardKeys.EvidenceRemediationRunId]?.GetValue<Guid>() ?? throw new InvalidOperationException("Evidence remediation run id is missing.");
+        var board = EvidenceReanalysisBoard.Parse(context.Run); var sourceId = board[AgentBlackboardKeys.EvidenceRemediationRunId]?.GetValue<Guid>() ?? throw new AgentNodeException("source_run_id_missing", AgentNodeErrorCategories.ValidationFailure, "Evidence remediation run id is missing.");
         var snapshot = await EvidenceReanalysisSourceValidator.ValidateAsync(context.DbContext, context.Run.UserId, sourceId, cancellationToken); var source = snapshot.Run; var output = snapshot.Output; var sourceBoard = snapshot.Blackboard;
         board[AgentBlackboardKeys.EvidenceRemediationRun] = JsonSerializer.SerializeToNode(new { source.Id, source.WorkflowType, source.Status }, AgentNodeJson.SerializerOptions); EvidenceReanalysisBoard.Set(board, AgentBlackboardKeys.EvidenceRemediationOutput, output);
         foreach (var key in new[] { AgentBlackboardKeys.ResearchRunId, AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question, AgentBlackboardKeys.Answer, AgentBlackboardKeys.CriticFindings, AgentBlackboardKeys.ExtractedClaims, AgentBlackboardKeys.RequiredResearchDimensions, AgentBlackboardKeys.MissingResearchDimensions, AgentBlackboardKeys.EvidenceValidationResults, AgentBlackboardKeys.RemediatedEvidencePacket }) if (sourceBoard[key] is not null) board[key] = sourceBoard[key]!.DeepClone();
@@ -137,11 +137,11 @@ public sealed class ValidateReanalysisRequestNodeHandler : IAgentNodeHandler
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = EvidenceReanalysisBoard.Parse(context.Run); var reasons = EvidenceReanalysisBoard.Required<List<string>>(board, AgentBlackboardKeys.ReanalysisReasons); var packet = EvidenceReanalysisBoard.Required<RemediatedEvidencePacket>(board, AgentBlackboardKeys.RemediatedEvidencePacket);
-        if (board[AgentBlackboardKeys.RequiresReanalysis]?.GetValue<bool>() != true) throw new InvalidOperationException("Reanalysis request is not required.");
-        if (reasons.Count == 0 || reasons.Any(string.IsNullOrWhiteSpace)) throw new InvalidOperationException("Reanalysis reasons are missing.");
+        if (board[AgentBlackboardKeys.RequiresReanalysis]?.GetValue<bool>() != true) throw new AgentNodeException("reanalysis_not_required", AgentNodeErrorCategories.PolicyRejection, "Reanalysis request is not required.", retryable: false);
+        if (reasons.Count == 0 || reasons.Any(string.IsNullOrWhiteSpace)) throw new AgentNodeException("reanalysis_reasons_missing", AgentNodeErrorCategories.ValidationFailure, "Reanalysis reasons are missing.", retryable: false);
         var evidenceIds = packet.Evidence.Select(x => x.Index).ToHashSet(); var validClaims = packet.Claims.Where(x => x.ValidationErrors.Count == 0 && x.EvidenceIndexes.Count > 0 && x.Status is "Supported" or "Contradicted").ToList();
-        if (validClaims.Count == 0) throw new InvalidOperationException("Reanalysis has no validated claims.");
-        if (validClaims.SelectMany(x => x.EvidenceIndexes).Any(x => !evidenceIds.Contains(x))) throw new InvalidOperationException("Reanalysis claim mapping contains an invalid evidence index.");
+        if (validClaims.Count == 0) throw new AgentNodeException("no_validated_claims", AgentNodeErrorCategories.InsufficientEvidence, "Reanalysis has no validated claims.", retryable: false);
+        if (validClaims.SelectMany(x => x.EvidenceIndexes).Any(x => !evidenceIds.Contains(x))) throw new AgentNodeException("invalid_evidence_index", AgentNodeErrorCategories.ValidationFailure, "Reanalysis claim mapping contains an invalid evidence index.", retryable: false);
         var result = new { validClaimCount = validClaims.Count, evidenceCount = packet.Evidence.Count, reasonCount = reasons.Count }; context.Node.InputJson = AgentNodeJson.Serialize(new { packet.EvidenceStatus }); EvidenceReanalysisBoard.Commit(context, board, result); return Task.CompletedTask;
     }
 }

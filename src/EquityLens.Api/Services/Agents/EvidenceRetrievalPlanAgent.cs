@@ -43,7 +43,7 @@ public sealed class EvidenceRetrievalPlanAgent(IChatCompletionService chat, IRet
                 var plan = ParseAndValidate(result.Content, input.PreviousQueries);
                 return new(plan, attempt == 0 ? "Llm" : "LlmRepair", result.Model, result.PromptTokens, result.CompletionTokens, null);
             }
-            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+            catch (Exception ex) when (ex is JsonException or AgentNodeException)
             {
                 reason = ex.Message;
             }
@@ -62,12 +62,12 @@ public sealed class EvidenceRetrievalPlanAgent(IChatCompletionService chat, IRet
             x.TryGetProperty("reason", out var r) ? r.GetString() ?? string.Empty : string.Empty,
             x.TryGetProperty("targetClaim", out var t) ? t.GetString() : null,
             x.TryGetProperty("freshness", out var f) && f.ValueKind != JsonValueKind.Null ? f.GetString() : null)).ToList();
-        if (searches.Count is < 1 or > 3) throw new InvalidOperationException("Planner must return 1-3 searches.");
-        if (searches.Any(x => string.IsNullOrWhiteSpace(x.Query) || string.IsNullOrWhiteSpace(x.Reason) || string.IsNullOrWhiteSpace(x.TargetClaim) || x.TopK is < 1 or > 8)) throw new InvalidOperationException("Planner query, targetClaim, reason, or topK is invalid.");
-        if (searches.Any(x => x.DocumentType is not (null or "AnnualReport" or "EarningsPresentation"))) throw new InvalidOperationException("Planner documentType is not allowed.");
-        if (searches.Any(x => x.SourceRole is not ("Primary" or "Supporting"))) throw new InvalidOperationException("Planner sourceRole is not allowed.");
-        if (searches.Any(x => x.Freshness is not (null or "day" or "week" or "month" or "year"))) throw new InvalidOperationException("Planner freshness is not allowed.");
-        if (searches.Select(x => x.Query.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != searches.Count || searches.Any(x => previous.Contains(x.Query, StringComparer.OrdinalIgnoreCase))) throw new InvalidOperationException("Planner returned a duplicate query.");
+        if (searches.Count is < 1 or > 3) throw new AgentNodeException("planner_invalid_search_count", AgentNodeErrorCategories.ValidationFailure, "Planner must return 1-3 searches.");
+        if (searches.Any(x => string.IsNullOrWhiteSpace(x.Query) || string.IsNullOrWhiteSpace(x.Reason) || string.IsNullOrWhiteSpace(x.TargetClaim) || x.TopK is < 1 or > 8)) throw new AgentNodeException("planner_invalid_search_params", AgentNodeErrorCategories.ValidationFailure, "Planner query, targetClaim, reason, or topK is invalid.");
+        if (searches.Any(x => x.DocumentType is not (null or "AnnualReport" or "EarningsPresentation"))) throw new AgentNodeException("planner_invalid_document_type", AgentNodeErrorCategories.ValidationFailure, "Planner documentType is not allowed.");
+        if (searches.Any(x => x.SourceRole is not ("Primary" or "Supporting"))) throw new AgentNodeException("planner_invalid_source_role", AgentNodeErrorCategories.ValidationFailure, "Planner sourceRole is not allowed.");
+        if (searches.Any(x => x.Freshness is not (null or "day" or "week" or "month" or "year"))) throw new AgentNodeException("planner_invalid_freshness", AgentNodeErrorCategories.ValidationFailure, "Planner freshness is not allowed.");
+        if (searches.Select(x => x.Query.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != searches.Count || searches.Any(x => previous.Contains(x.Query, StringComparer.OrdinalIgnoreCase))) throw new AgentNodeException("planner_duplicate_query", AgentNodeErrorCategories.ValidationFailure, "Planner returned a duplicate query.");
         return new("Auto", searches);
     }
 }

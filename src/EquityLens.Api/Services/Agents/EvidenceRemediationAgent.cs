@@ -64,7 +64,7 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
     public async Task<IReadOnlyList<EvidenceClaim>> ExtractAsync(ClaimExtractionInput input, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(input.Answer) && string.IsNullOrWhiteSpace(input.Question) && input.CriticFindings.Count == 0)
-            throw new InvalidOperationException("Claim extraction requires an answer, question, or Critic finding.");
+            throw new AgentNodeException("claim_extraction_no_input", AgentNodeErrorCategories.ValidationFailure, "Claim extraction requires an answer, question, or Critic finding.");
         const string prompt = "Extract domain claims that help answer the user's research question. If the answer abstains, ignore its meta claim and decompose the question and Critic findings into answerable factual, mechanism, and judgment investigation claims. Cover every required research dimension identified by the question; claims must directly support retrieval or analysis, not merely say historical data may be useful. When validationErrors are supplied, repair every listed defect. Answerability statements such as 'data is insufficient' may be labelled Answerability but must not dominate. Output JSON only: {\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"numericValues\":[\"123\"],\"kind\":\"AnswerClaim|InvestigationClaim\",\"claimType\":\"Factual|Mechanism|Judgment|Answerability\",\"researchDimension\":\"...\"}]}. numericValues may contain JSON strings or numbers; never objects, arrays or booleans. Keep exact numbers, dates, percentages and currencies. Never return an empty claims array when a research question exists.";
         string? parseError = null;
         for (var attempt = 0; attempt < 2; attempt++)
@@ -75,7 +75,7 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
             {
                 var claims = ParseClaims(content); return claims.Count > 0 ? Normalize(claims) : [];
             }
-            catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+            catch (Exception exception) when (exception is JsonException or AgentNodeException)
             {
                 parseError = exception.Message;
             }
@@ -88,36 +88,36 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
         var input = JsonSerializer.Serialize(new { question, sourceAnswer, packet }, JsonOptions);
         var mode = IsAbstention(sourceAnswer) ? InvestigationModes.RecoverAnswer : InvestigationModes.CorrectExistingAnswer;
         var content = await CompleteAsync($"Produce the final answer in Traditional Chinese using only validated evidence. Mode={mode}. In RecoverAnswer mode replace the abstention and directly answer the original question with: verified facts, bounded financial mechanisms, a conditional judgment, and explicit uncertainty. Distinguish inability to quantify precisely from inability to analyze. Secondary web sources may support directional analysis but not invented forecasts. Cite evidence as [n]. Output JSON only: {{\"revisedAnswer\":\"...\",\"revisionSummary\":\"...\",\"answeredDimensions\":[\"...\"],\"inferenceLimitations\":[\"...\"]}}. Do not fabricate facts or citations.", input, cancellationToken);
-        return JsonSerializer.Deserialize<EvidenceBackedRevisionResult>(content, JsonOptions) ?? throw new InvalidOperationException("Evidence-backed revision returned no result.");
+        return JsonSerializer.Deserialize<EvidenceBackedRevisionResult>(content, JsonOptions) ?? throw new AgentNodeException("revision_empty_result", AgentNodeErrorCategories.ValidationFailure, "Evidence-backed revision returned no result.");
     }
 
     private async Task<string> CompleteAsync(string systemPrompt, string userPrompt, CancellationToken cancellationToken)
     {
         var response = await _chat.CompleteAsync(new ChatCompletionRequest(systemPrompt, userPrompt, 0.1, 4096, ChatResponseFormat.JsonObject), cancellationToken);
-        if (string.IsNullOrWhiteSpace(response.Content)) throw new InvalidOperationException("Evidence remediation LLM returned empty content.");
+        if (string.IsNullOrWhiteSpace(response.Content)) throw new AgentNodeException("llm_empty_content", AgentNodeErrorCategories.ValidationFailure, "Evidence remediation LLM returned empty content.");
         return response.Content;
     }
 
     private static IReadOnlyList<EvidenceClaim> ParseClaims(string content)
     {
         using var document = JsonDocument.Parse(content);
-        if (!document.RootElement.TryGetProperty("claims", out var claimsElement) || claimsElement.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("Claim extraction response is missing claims array.");
+        if (!document.RootElement.TryGetProperty("claims", out var claimsElement) || claimsElement.ValueKind != JsonValueKind.Array) throw new AgentNodeException("claim_extraction_missing_array", AgentNodeErrorCategories.ValidationFailure, "Claim extraction response is missing claims array.");
         var claims = new List<EvidenceClaim>();
         foreach (var item in claimsElement.EnumerateArray())
         {
-            if (item.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("Claim extraction returned a non-object claim.");
+            if (item.ValueKind != JsonValueKind.Object) throw new AgentNodeException("claim_extraction_non_object", AgentNodeErrorCategories.ValidationFailure, "Claim extraction returned a non-object claim.");
             var text = RequiredString(item, "text");
             var numbers = new List<string>();
             if (item.TryGetProperty("numericValues", out var values))
             {
-                if (values.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("Claim numericValues must be an array.");
+                if (values.ValueKind != JsonValueKind.Array) throw new AgentNodeException("claim_numeric_values_not_array", AgentNodeErrorCategories.ValidationFailure, "Claim numericValues must be an array.");
                 foreach (var value in values.EnumerateArray())
                 {
                     var normalized = value.ValueKind switch
                     {
                         JsonValueKind.String => value.GetString(),
                         JsonValueKind.Number => value.GetRawText(),
-                        _ => throw new InvalidOperationException("Claim numericValues may contain only strings or numbers.")
+                        _ => throw new AgentNodeException("claim_numeric_values_invalid_type", AgentNodeErrorCategories.ValidationFailure, "Claim numericValues may contain only strings or numbers.")
                     };
                     if (!string.IsNullOrWhiteSpace(normalized)) numbers.Add(normalized.Trim());
                 }
@@ -127,11 +127,11 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
         return claims;
     }
 
-    private static string RequiredString(JsonElement item, string name) => OptionalString(item, name) ?? throw new InvalidOperationException($"Claim extraction field '{name}' must be a non-empty string.");
+    private static string RequiredString(JsonElement item, string name) => OptionalString(item, name) ?? throw new AgentNodeException("claim_field_required", AgentNodeErrorCategories.ValidationFailure, $"Claim extraction field '{name}' must be a non-empty string.");
     private static string? OptionalString(JsonElement item, string name)
     {
         if (!item.TryGetProperty(name, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return null;
-        if (value.ValueKind != JsonValueKind.String) throw new InvalidOperationException($"Claim extraction field '{name}' must be a string.");
+        if (value.ValueKind != JsonValueKind.String) throw new AgentNodeException("claim_field_not_string", AgentNodeErrorCategories.ValidationFailure, $"Claim extraction field '{name}' must be a string.");
         var text = value.GetString()?.Trim(); return string.IsNullOrWhiteSpace(text) ? null : text;
     }
 
@@ -145,7 +145,7 @@ public sealed class LlmEvidenceRemediationAgent : IClaimExtractionAgent, IEviden
         var text = !string.IsNullOrWhiteSpace(input.Question)
             ? input.Question.Trim()
             : input.CriticFindings.Select(x => x.Message).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
-        if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("Claim extraction returned no claims and no investigation target is available.");
+        if (string.IsNullOrWhiteSpace(text)) throw new AgentNodeException("claim_extraction_no_target", AgentNodeErrorCategories.ValidationFailure, "Claim extraction returned no claims and no investigation target is available.");
         if (ContainsAny(text, "資本支出", "capex", "自由現金流", "FCF", "股東回報", "股利"))
         {
             return

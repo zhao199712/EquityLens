@@ -47,7 +47,7 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); source.OutputJson = "not-json"; db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
 
         Assert.Equal("Critic review output is invalid.", exception.Message);
     }
@@ -57,7 +57,7 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); var output = JsonNode.Parse(source.OutputJson!)!.AsObject(); output[CriticReviewFields.RequiresMoreEvidence] = false; source.OutputJson = output.ToJsonString(); db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
 
         Assert.Equal("Critic review does not require more evidence.", exception.Message);
     }
@@ -69,7 +69,7 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); source.WorkflowType = workflowType; source.Status = status; db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
 
         Assert.Equal(expectedMessage, exception.Message);
     }
@@ -79,7 +79,7 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); var sourceBoard = AgentNodeJson.ParseBlackboard(source.BlackboardJson); sourceBoard[AgentBlackboardKeys.FinalOutput] = null; sourceBoard[AgentBlackboardKeys.CriticReview] = null; source.OutputJson = null; source.BlackboardJson = sourceBoard.ToJsonString(AgentNodeJson.SerializerOptions); db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
 
         Assert.Equal("Critic review output is missing.", exception.Message);
     }
@@ -89,7 +89,7 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         await using var db = CreateDb(); var source = CriticSource(Guid.NewGuid()); db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => new LoadEvidenceRemediationContextNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
 
         Assert.Equal("Critic review run not found.", exception.Message);
     }
@@ -210,7 +210,7 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var draft = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.DraftRevision); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); board[AgentBlackboardKeys.Question] = "未來資本支出會壓縮自由現金流嗎？"; board[AgentBlackboardKeys.Answer] = "目前資料不足，無法回答。"; board[AgentBlackboardKeys.RemediatedEvidencePacket] = JsonSerializerNode(new RemediatedEvidencePacket("Supported", [new ValidatedClaimSupport("claim-1", "資本支出增加會壓低短期自由現金流。", "Supported", [1], [])], [new RemediationEvidenceItem(1, "Web", "Capex", "WebSearch", "https://example.test", "Higher capex may reduce near-term FCF.", .8)], [])); run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => new DraftEvidenceBackedRevisionNodeHandler(new FixedRevisionAgent("目前資料不足，無法回答。[1]")).ExecuteAsync(new AgentNodeExecutionContext(db, run, draft, (_, _, _, _, _) => { })));
+        var exception = await Assert.ThrowsAsync<AgentNodeException>(() => new DraftEvidenceBackedRevisionNodeHandler(new FixedRevisionAgent("目前資料不足，無法回答。[1]")).ExecuteAsync(new AgentNodeExecutionContext(db, run, draft, (_, _, _, _, _) => { })));
 
         Assert.Contains("still primarily abstains", exception.Message);
     }

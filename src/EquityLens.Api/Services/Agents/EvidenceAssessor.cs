@@ -62,21 +62,21 @@ public sealed class LlmEvidenceAssessor(IChatCompletionService chat) : IEvidence
     private static IReadOnlyList<ClaimSupportAssessment> ParseAndValidate(string content, EvidenceAssessmentInput input)
     {
         using var document = JsonDocument.Parse(content);
-        if (!document.RootElement.TryGetProperty("assessments", out var rawAssessments) || rawAssessments.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("Evidence assessor response is missing assessments.");
+        if (!document.RootElement.TryGetProperty("assessments", out var rawAssessments) || rawAssessments.ValueKind != JsonValueKind.Array) throw new AgentNodeException("assessor_missing_array", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor response is missing assessments.");
         var requiredFields = new[] { "claimId", "status", "evidenceIndexes", "reason", "confidence", "analysisImpact", "impactReason", "questionRelevance", "answerabilityEffect" };
-        if (rawAssessments.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.Object || requiredFields.Any(field => !item.TryGetProperty(field, out _)))) throw new InvalidOperationException("Evidence assessor response is missing required assessment fields.");
-        var assessments = JsonSerializer.Deserialize<AssessmentEnvelope>(content, JsonOptions)?.Assessments ?? throw new InvalidOperationException("Evidence assessor returned no assessments.");
-        if (assessments.Count == 0) throw new InvalidOperationException("Evidence assessor returned no assessments.");
+        if (rawAssessments.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.Object || requiredFields.Any(field => !item.TryGetProperty(field, out _)))) throw new AgentNodeException("assessor_missing_fields", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor response is missing required assessment fields.");
+        var assessments = JsonSerializer.Deserialize<AssessmentEnvelope>(content, JsonOptions)?.Assessments ?? throw new AgentNodeException("assessor_empty_result", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned no assessments.");
+        if (assessments.Count == 0) throw new AgentNodeException("assessor_empty_result", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned no assessments.");
         var allowedClaims = input.Claims.Select(x => x.Id).ToHashSet(StringComparer.Ordinal); var allowedEvidence = input.Evidence.Select(x => x.Index).ToHashSet();
-        if (assessments.Select(x => x.ClaimId).Distinct(StringComparer.Ordinal).Count() != assessments.Count) throw new InvalidOperationException("Evidence assessor returned a duplicate claim id.");
-        if (assessments.Any(x => !allowedClaims.Contains(x.ClaimId))) throw new InvalidOperationException("Evidence assessor returned an unknown claim id.");
-        var missing = allowedClaims.Except(assessments.Select(x => x.ClaimId), StringComparer.Ordinal).FirstOrDefault(); if (missing is not null) throw new InvalidOperationException($"Evidence assessor omitted claim '{missing}'.");
-        if (assessments.Any(x => x.Status is not ("Supported" or "PartiallySupported" or "Unsupported" or "Contradicted" or "Unverifiable"))) throw new InvalidOperationException("Evidence assessor returned an invalid status.");
-        if (assessments.Any(x => x.AnalysisImpact is not ("None" or "WordingOnly" or "Material"))) throw new InvalidOperationException("Evidence assessor returned an invalid analysisImpact.");
-        if (assessments.Any(x => x.QuestionRelevance is not ("None" or "Peripheral" or "Core"))) throw new InvalidOperationException("Evidence assessor returned an invalid questionRelevance.");
-        if (assessments.Any(x => x.AnswerabilityEffect is not ("NoChange" or "EnablesBoundedAnswer" or "EnablesDirectAnswer"))) throw new InvalidOperationException("Evidence assessor returned an invalid answerabilityEffect.");
-        if (assessments.Any(x => x.Confidence is < 0 or > 1)) throw new InvalidOperationException("Evidence assessor returned confidence outside 0-1.");
-        if (assessments.SelectMany(x => x.EvidenceIndexes).Any(x => !allowedEvidence.Contains(x))) throw new InvalidOperationException("Evidence assessor returned an invalid evidence index.");
+        if (assessments.Select(x => x.ClaimId).Distinct(StringComparer.Ordinal).Count() != assessments.Count) throw new AgentNodeException("assessor_duplicate_claim_id", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned a duplicate claim id.");
+        if (assessments.Any(x => !allowedClaims.Contains(x.ClaimId))) throw new AgentNodeException("assessor_unknown_claim_id", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned an unknown claim id.");
+        var missing = allowedClaims.Except(assessments.Select(x => x.ClaimId), StringComparer.Ordinal).FirstOrDefault(); if (missing is not null) throw new AgentNodeException("assessor_omitted_claim", AgentNodeErrorCategories.ValidationFailure, $"Evidence assessor omitted claim '{missing}'.");
+        if (assessments.Any(x => x.Status is not ("Supported" or "PartiallySupported" or "Unsupported" or "Contradicted" or "Unverifiable"))) throw new AgentNodeException("assessor_invalid_status", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned an invalid status.");
+        if (assessments.Any(x => x.AnalysisImpact is not ("None" or "WordingOnly" or "Material"))) throw new AgentNodeException("assessor_invalid_impact", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned an invalid analysisImpact.");
+        if (assessments.Any(x => x.QuestionRelevance is not ("None" or "Peripheral" or "Core"))) throw new AgentNodeException("assessor_invalid_relevance", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned an invalid questionRelevance.");
+        if (assessments.Any(x => x.AnswerabilityEffect is not ("NoChange" or "EnablesBoundedAnswer" or "EnablesDirectAnswer"))) throw new AgentNodeException("assessor_invalid_answerability", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned an invalid answerabilityEffect.");
+        if (assessments.Any(x => x.Confidence is < 0 or > 1)) throw new AgentNodeException("assessor_invalid_confidence", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned confidence outside 0-1.");
+        if (assessments.SelectMany(x => x.EvidenceIndexes).Any(x => !allowedEvidence.Contains(x))) throw new AgentNodeException("assessor_invalid_evidence_index", AgentNodeErrorCategories.ValidationFailure, "Evidence assessor returned an invalid evidence index.");
         return assessments;
     }
 

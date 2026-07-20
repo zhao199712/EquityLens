@@ -15,6 +15,16 @@ public class AgentRunNode
     public long? DurationMs { get; set; }
     public string TemplateNodeKey { get; set; } = string.Empty;
     public int Iteration { get; set; }
+    public string? ErrorCode { get; set; }
+    public string? ErrorCategory { get; set; }
+    public bool? ErrorRetryable { get; set; }
+    public int? InputBlackboardVersion { get; set; }
+    public int? OutputBlackboardVersion { get; set; }
+    public string[]? ProducedBlackboardKeys { get; set; }
+    public string? BlackboardSnapshotJson { get; set; }
+    public int? InputTokens { get; set; }
+    public int? OutputTokens { get; set; }
+    public decimal? EstimatedCostUsd { get; set; }
 
     public AgentRun Run { get; set; } = null!;
     public ICollection<AgentRunEvent> Events { get; set; } = [];

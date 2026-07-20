@@ -18,7 +18,10 @@ public sealed record AgentRunSummaryResponse(
     DateTime CreatedAtUtc,
     DateTime? StartedAtUtc,
     DateTime? CompletedAtUtc,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    int TotalInputTokens,
+    int TotalOutputTokens,
+    decimal TotalEstimatedCostUsd);
 
 public sealed record AgentRunNodeResponse(
     Guid Id,
@@ -30,6 +33,16 @@ public sealed record AgentRunNodeResponse(
     string? InputJson,
     string? OutputJson,
     string? ErrorMessage,
+    string? ErrorCode,
+    string? ErrorCategory,
+    bool? ErrorRetryable,
+    int? InputBlackboardVersion,
+    int? OutputBlackboardVersion,
+    string[]? ProducedBlackboardKeys,
+    string? BlackboardSnapshotJson,
+    int? InputTokens,
+    int? OutputTokens,
+    decimal? EstimatedCostUsd,
     DateTime? StartedAtUtc,
     DateTime? CompletedAtUtc,
     long? DurationMs);

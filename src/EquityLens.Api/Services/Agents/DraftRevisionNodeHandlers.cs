@@ -22,15 +22,15 @@ public sealed class LoadCriticReviewRunNodeHandler : IAgentNodeHandler
             .FirstOrDefaultAsync(x => x.Id == criticReviewRunId && x.UserId == run.UserId, cancellationToken);
         if (sourceRun is null)
         {
-            throw new InvalidOperationException("Critic review run not found.");
+            throw new AgentNodeException("critic_review_run_not_found", AgentNodeErrorCategories.PermanentFailure, "Critic review run not found.", retryable: false);
         }
         if (!string.Equals(sourceRun.WorkflowType, AgentWorkflowTypes.CriticReview, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Source run is not a CriticReview workflow.");
+            throw new AgentNodeException("source_run_type_mismatch", AgentNodeErrorCategories.PermanentFailure, "Source run is not a CriticReview workflow.", retryable: false);
         }
         if (sourceRun.Status != AgentRunStatuses.Succeeded || string.IsNullOrWhiteSpace(sourceRun.OutputJson))
         {
-            throw new InvalidOperationException("Critic review run has no completed output.");
+            throw new AgentNodeException("critic_review_not_completed", AgentNodeErrorCategories.PermanentFailure, "Critic review run has no completed output.", retryable: false);
         }
 
         var sourceBlackboard = AgentNodeJson.ParseBlackboard(sourceRun.BlackboardJson);
