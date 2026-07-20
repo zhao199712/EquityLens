@@ -397,16 +397,20 @@ const nodeMap = computed(() => {
 }
 
 /* ---- Timeline ---- */
-.agent-run-detail :deep(.n-timeline-item-content__title) {
+.agent-run-detail.agent-run-detail :deep(.n-timeline-item-content__title) {
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.agent-run-detail.agent-run-detail :deep(.n-timeline-item-content__content) {
   color: var(--ivory);
+  font-size: 13px;
 }
 
-.agent-run-detail :deep(.n-timeline-item-content__content) {
+.agent-run-detail.agent-run-detail :deep(.n-timeline-item-content__meta) {
   color: var(--muted);
-}
-
-.agent-run-detail :deep(.n-timeline-item-content__meta) {
-  color: var(--muted);
+  font-size: 12px;
 }
 
 .agent-run-detail :deep(.n-timeline-item-timeline__line) {
