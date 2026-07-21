@@ -81,19 +81,20 @@ public sealed class ClaimSetValidator : IClaimSetValidator
 
 public interface IAnswerQualityValidator
 {
-    AnswerQualityValidationResult Validate(string answer, string investigationMode, IReadOnlyList<EvidenceClaim> claims, IReadOnlyList<string> requiredDimensions, IReadOnlySet<string> supportedClaimIds, IReadOnlySet<int> allowedEvidenceIndexes);
+    AnswerQualityValidationResult Validate(string answer, string investigationMode, IReadOnlyList<EvidenceClaim> claims, IReadOnlyList<string> requiredDimensions, IReadOnlySet<string> supportedClaimIds, IReadOnlySet<int> allowedEvidenceIndexes, bool allowUncitedInsufficiency = false);
 }
 
 public sealed class AnswerQualityValidator : IAnswerQualityValidator
 {
-    public AnswerQualityValidationResult Validate(string answer, string investigationMode, IReadOnlyList<EvidenceClaim> claims, IReadOnlyList<string> requiredDimensions, IReadOnlySet<string> supportedClaimIds, IReadOnlySet<int> allowedEvidenceIndexes)
+    public AnswerQualityValidationResult Validate(string answer, string investigationMode, IReadOnlyList<EvidenceClaim> claims, IReadOnlyList<string> requiredDimensions, IReadOnlySet<string> supportedClaimIds, IReadOnlySet<int> allowedEvidenceIndexes, bool allowUncitedInsufficiency = false)
     {
         var errors = new List<string>();
         if (string.IsNullOrWhiteSpace(answer)) errors.Add("Final answer is empty.");
         var cited = System.Text.RegularExpressions.Regex.Matches(answer, @"\[(\d+)\]").Select(x => int.Parse(x.Groups[1].Value)).ToList();
-        if (cited.Count == 0 && allowedEvidenceIndexes.Count > 0) errors.Add("Final answer must cite validated evidence.");
+        var acceptedInsufficiency = allowUncitedInsufficiency && LlmEvidenceRemediationAgent.IsAbstention(answer);
+        if (cited.Count == 0 && allowedEvidenceIndexes.Count > 0 && !acceptedInsufficiency) errors.Add("Final answer must cite validated evidence.");
         if (cited.Any(x => !allowedEvidenceIndexes.Contains(x))) errors.Add("Final answer cites evidence that was not validated.");
-        if (investigationMode == InvestigationModes.RecoverAnswer && LlmEvidenceRemediationAgent.IsMetaClaim(answer) && answer.Length < 180)
+        if (investigationMode == InvestigationModes.RecoverAnswer && LlmEvidenceRemediationAgent.IsMetaClaim(answer) && answer.Length < 180 && !acceptedInsufficiency)
             errors.Add("Recovered answer still primarily abstains despite available evidence.");
         if (errors.Count > 0) throw new AgentNodeException("claim_set_invalid", AgentNodeErrorCategories.ValidationFailure, string.Join(" ", errors), retryable: false);
         var answered = claims.Where(x => supportedClaimIds.Contains(x.Id)).Select(x => x.ResearchDimension ?? x.Text).Distinct().ToList();

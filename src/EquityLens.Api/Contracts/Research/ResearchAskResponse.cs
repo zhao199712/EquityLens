@@ -10,6 +10,8 @@ public sealed record ResearchAskResponse(
     string Status = "Answered",
     Guid? ResearchRunId = null);
 
+public sealed record ResearchInvestigationCreatedResponse(Guid AgentRunId, Guid ResearchRunId, string WorkflowType, string Status);
+
 public sealed record ResearchRetrievalStrategy(
     string Mode,
     IReadOnlyList<ResearchRetrievalSearch> Searches);

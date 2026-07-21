@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
-import { askResearch, listResearchRuns, type ResearchRunSummary, type ResearchAskResponse } from '../../services/research'
+import { createResearchInvestigation, listResearchRuns, type ResearchRunSummary } from '../../services/research'
 
 const router = useRouter()
 const runs = ref<ResearchRunSummary[]>([])
@@ -11,7 +11,6 @@ const error = ref('')
 const search = ref('')
 const askLoading = ref(false)
 const askError = ref('')
-const askResult = ref<ResearchAskResponse | null>(null)
 const showAskForm = ref(false)
 
 const ticker = ref('')
@@ -42,14 +41,9 @@ async function handleAsk() {
   if (!ticker.value.trim() || !question.value.trim()) return
   askLoading.value = true
   askError.value = ''
-  askResult.value = null
   try {
-    const result = await askResearch({ ticker: ticker.value.trim(), question: question.value.trim() })
-    askResult.value = result
-    await loadRuns()
-    if (result.researchRunId) {
-      router.push({ name: 'research-run-detail', params: { id: result.researchRunId } })
-    }
+    const result = await createResearchInvestigation({ ticker: ticker.value.trim(), question: question.value.trim(), sourcePolicy: 'Auto' })
+    router.push({ name: 'agent-run-detail', params: { id: result.agentRunId } })
   } catch {
     askError.value = '研究請求失敗，請稍後再試。'
   } finally {

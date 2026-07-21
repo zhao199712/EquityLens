@@ -1,6 +1,8 @@
 import { http } from './http'
 
-export interface WorkflowAdmin { workflowType:string; displayName:string; description:string; agentType:string; isEnabled:boolean; nodeTypes:string[]; edges:{from:string;to:string}[] }
+export interface WorkflowNode { nodeKey:string; nodeType:string }
+export interface WorkflowEdge { from:string; to:string }
+export interface WorkflowAdmin { workflowType:string; displayName:string; description:string; agentType:string; isEnabled:boolean; nodeTypes:string[]; edges:WorkflowEdge[]; orchestrationMode:string; initialNodes:WorkflowNode[]; initialEdges:WorkflowEdge[]; dynamicNodeTypes:string[] }
 export interface UpdateWorkflowSetting { isEnabled:boolean; displayName:string; description:string }
 export interface NodeContract { nodeType:string; version:number; displayName:string; description:string; stage:string; sideEffectLevel:string; inputSchema:string; outputSchema:string; requiredBlackboardKeys:string[]; optionalBlackboardKeys:string[]; producedBlackboardKeys:string[]; allowedPreviousNodeTypes:string[]; allowedNextNodeTypes:string[]; defaultPolicy:{timeoutSeconds:number;maxRetryCount:number}; isIdempotent:boolean; supportsLoop:boolean; requiresHumanInput:boolean }
 export interface NodeAdmin { nodeType:string; displayName:string; description:string; stage:string; sideEffectLevel:string; isEnabled:boolean; timeoutSeconds:number; maxRetryCount:number; metadata:Record<string, unknown>|null; contract:NodeContract; requiredBlackboardKeys:string[]; producedBlackboardKeys:string[]; allowedNextNodeTypes:string[] }

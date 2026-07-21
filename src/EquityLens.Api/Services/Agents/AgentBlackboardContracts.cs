@@ -59,6 +59,11 @@ public static class AgentBlackboardKeys
     public const string ReanalysisPolicyDecision = "reanalysisPolicyDecision";
     public const string ReanalysisFinalRevision = "reanalysisFinalRevision";
     public const string Runtime = "runtime";
+    public const string ResearchRequest = "researchRequest";
+    public const string ResearchIntent = "researchIntent";
+    public const string InitialEvidence = "initialEvidence";
+    public const string SelectedEvidence = "selectedEvidence";
+    public const string InitialEvidencePolicy = "initialEvidencePolicy";
 }
 
 public static class EvidenceCheckFields

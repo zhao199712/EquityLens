@@ -111,10 +111,11 @@ public sealed class ResearchAnswerService : IResearchAnswerService
 
             var chunks = new List<RetrievedDocumentChunk>();
             var webChunks = new List<RetrievedDocumentChunk>();
-            var shouldSearchWeb = request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalAndWeb;
+            var shouldSearchWeb = request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalAndWeb
+                || request.SourcePolicy == SourcePolicy.Auto && Services.Agents.ResearchInvestigationPlanning.IsFreshnessSensitive(request.Question);
 
             var localRetrievalStart = DateTime.UtcNow;
-            if (request.SourcePolicy is SourcePolicy.LocalOnly or SourcePolicy.LocalThenWeb or SourcePolicy.LocalAndWeb)
+            if (request.SourcePolicy is SourcePolicy.Auto or SourcePolicy.LocalOnly or SourcePolicy.LocalThenWeb or SourcePolicy.LocalAndWeb)
             {
                 var localChunks = await _documentRetriever.RetrieveAsync(strategy, request.Ticker, cancellationToken);
                 chunks.AddRange(localChunks);

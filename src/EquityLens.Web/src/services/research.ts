@@ -50,6 +50,12 @@ export interface ResearchAskResponse {
   status: string
   researchRunId: string | null
 }
+export interface ResearchInvestigationCreated {
+  agentRunId: string
+  researchRunId: string
+  workflowType: string
+  status: string
+}
 
 export interface ResearchRunSummary {
   id: string
@@ -114,6 +120,10 @@ export interface ResearchRunDetail {
 
 export async function askResearch(request: ResearchAskRequest): Promise<ResearchAskResponse> {
   const response = await http.post<ResearchAskResponse>('/research/ask', request)
+  return response.data
+}
+export async function createResearchInvestigation(request: ResearchAskRequest): Promise<ResearchInvestigationCreated> {
+  const response = await http.post<ResearchInvestigationCreated>('/research/investigations', request)
   return response.data
 }
 

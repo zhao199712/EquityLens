@@ -356,6 +356,7 @@ public sealed class RetrievalPipelineComponentTests
 
         [Theory]
         [InlineData("\"LocalOnly\"", SourcePolicy.LocalOnly)]
+        [InlineData("\"Auto\"", SourcePolicy.Auto)]
         [InlineData("\"LocalThenWeb\"", SourcePolicy.LocalThenWeb)]
         [InlineData("\"LocalAndWeb\"", SourcePolicy.LocalAndWeb)]
         [InlineData("\"WebOnly\"", SourcePolicy.WebOnly)]
@@ -375,10 +376,10 @@ public sealed class RetrievalPipelineComponentTests
         }
 
         [Fact]
-        public void Read_Null_ReturnsLocalOnly()
+        public void Read_Null_ReturnsAuto()
         {
             var policy = JsonSerializer.Deserialize<SourcePolicy>("null", _options);
-            Assert.Equal(SourcePolicy.LocalOnly, policy);
+            Assert.Equal(SourcePolicy.Auto, policy);
         }
     }
 }

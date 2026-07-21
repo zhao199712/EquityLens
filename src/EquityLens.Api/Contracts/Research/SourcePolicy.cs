@@ -6,6 +6,7 @@ namespace EquityLens.Api.Contracts.Research;
 [JsonConverter(typeof(SourcePolicyJsonConverter))]
 public enum SourcePolicy
 {
+    Auto,
     LocalOnly,
     LocalThenWeb,
     LocalAndWeb,
@@ -32,7 +33,7 @@ public sealed class SourcePolicyJsonConverter : JsonConverter<SourcePolicy>
             throw new JsonException("sourcePolicy must be a string, not a number.");
         }
 
-        return SourcePolicy.LocalOnly;
+        return SourcePolicy.Auto;
     }
 
     public override void Write(Utf8JsonWriter writer, SourcePolicy value, JsonSerializerOptions options)

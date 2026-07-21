@@ -39,8 +39,10 @@ public sealed class ResearchPreflightService : IResearchPreflightService
                 "目前僅支援 0050 成分股。");
         }
 
-        // WebOnly and LocalThenWeb do not require local documents to proceed
-        if (request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalThenWeb)
+        // Web-capable policies and freshness-sensitive Auto requests can proceed
+        // without local documents; the supervisor may materialize a Web branch.
+        if (request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalThenWeb
+            || request.SourcePolicy == SourcePolicy.Auto && Services.Agents.ResearchInvestigationPlanning.IsFreshnessSensitive(request.Question))
         {
             return Result<ResearchPreflightResult>.Success(new ResearchPreflightResult(
                 security.Id,

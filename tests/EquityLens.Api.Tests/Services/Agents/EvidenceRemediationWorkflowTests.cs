@@ -13,6 +13,14 @@ namespace EquityLens.Api.Tests.Services.Agents;
 public sealed class EvidenceRemediationWorkflowTests
 {
     [Fact]
+    public void AnswerQualityValidator_AllowsPolicyApprovedUncitedInsufficiency()
+    {
+        var result = new AnswerQualityValidator().Validate("目前提供的證據不足以回答此問題。", InvestigationModes.RecoverAnswer, [], [], new HashSet<string>(), new HashSet<int> { 1 }, allowUncitedInsufficiency: true);
+
+        Assert.Equal("Complete", result.Status);
+    }
+
+    [Fact]
     public async Task LoadContext_UsesCriticSnapshotWithoutReadingResearchRun()
     {
         await using var db = CreateDb(); var userId = Guid.NewGuid(); var source = CriticSource(userId); db.AgentRuns.Add(source); await db.SaveChangesAsync(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(userId, source.Id); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.LoadContext);
