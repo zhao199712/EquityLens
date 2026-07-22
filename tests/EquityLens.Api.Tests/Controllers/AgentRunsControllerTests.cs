@@ -187,6 +187,12 @@ public sealed class AgentRunsControllerTests
             => Task.FromResult(new AgentRunSummaryResponse(
                 Guid.NewGuid(), "PortfolioDiagnosis", "PortfolioDiagnosisAgent", "Pending", DateTime.UtcNow, null, null, null, 0, 0, 0m));
 
+        public Task<SubmitAgentFeedbackResponse> SubmitFeedbackAsync(Guid runId, Guid userId, SubmitAgentFeedbackRequest request, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException();
+
+        public Task<IReadOnlyList<AgentRunSummaryResponse>> ListChildrenAsync(Guid parentRunId, Guid userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<AgentRunSummaryResponse>>([]);
+
         public Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(Guid? userId, int limit = 50, string? workflowType = null, string? status = null, Guid? researchRunId = null, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<AgentRunSummaryResponse>>([]);
 

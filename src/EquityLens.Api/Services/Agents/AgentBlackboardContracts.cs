@@ -64,6 +64,15 @@ public static class AgentBlackboardKeys
     public const string InitialEvidence = "initialEvidence";
     public const string SelectedEvidence = "selectedEvidence";
     public const string InitialEvidencePolicy = "initialEvidencePolicy";
+    public const string MathInputs = "mathInputs";
+    public const string MathResults = "mathResults";
+    public const string ParentAgentRunId = "parentAgentRunId";
+    public const string ParentResearchRunId = "parentResearchRunId";
+    public const string FeedbackId = "feedbackId";
+    public const string FeedbackComment = "feedbackComment";
+    public const string FeedbackIntent = "feedbackIntent";
+    public const string RevisionContext = "revisionContext";
+    public const string OriginalAnswer = "originalAnswer";
 }
 
 public static class EvidenceCheckFields
@@ -164,6 +173,8 @@ public static class AgentBlackboardContracts
         [AgentBlackboardKeys.RiskAnalysisPriorities] = new JsonArray(),
         [AgentBlackboardKeys.PortfolioEvidencePacket] = null,
         [AgentBlackboardKeys.PortfolioDiagnosisDraft] = null,
+        [AgentBlackboardKeys.MathInputs] = null,
+        [AgentBlackboardKeys.MathResults] = new JsonArray(),
         [AgentBlackboardKeys.FinalOutput] = null,
         ["schemaVersion"] = 1,
         ["blackboardVersion"] = 0

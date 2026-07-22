@@ -10,6 +10,8 @@ public sealed record CreateEvidenceReanalysisRequest(Guid EvidenceRemediationRun
 
 public sealed record CreatePortfolioDiagnosisRequest(DateOnly? From = null, DateOnly? To = null);
 
+public sealed record SubmitAgentFeedbackRequest(Guid RequestId, string FeedbackType, string? Comment = null);
+
 public sealed record AgentRunSummaryResponse(
     Guid Id,
     string WorkflowType,
@@ -21,7 +23,8 @@ public sealed record AgentRunSummaryResponse(
     string? ErrorMessage,
     int TotalInputTokens,
     int TotalOutputTokens,
-    decimal TotalEstimatedCostUsd);
+    decimal TotalEstimatedCostUsd,
+    Guid? ParentAgentRunId = null);
 
 public sealed record AgentRunNodeResponse(
     Guid Id,
@@ -29,6 +32,9 @@ public sealed record AgentRunNodeResponse(
     string TemplateNodeKey,
     int Iteration,
     string NodeType,
+    string DisplayName,
+    string? Description,
+    string Stage,
     string Status,
     string? InputJson,
     string? OutputJson,
@@ -76,7 +82,14 @@ public sealed record AgentFeedbackResponse(
     string Prompt,
     string? ResponseJson,
     DateTime CreatedAtUtc,
-    DateTime? RespondedAtUtc);
+    DateTime? RespondedAtUtc,
+    Guid ClientRequestId = default,
+    Guid? FollowUpAgentRunId = null);
+
+public sealed record SubmitAgentFeedbackResponse(
+    AgentFeedbackResponse Feedback,
+    AgentRunSummaryResponse? FollowUpAgentRun,
+    Guid? FollowUpResearchRunId);
 
 public sealed record AgentRunDetailResponse(
     AgentRunSummaryResponse Run,

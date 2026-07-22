@@ -12,6 +12,8 @@ public class ResearchRunConfiguration : IEntityTypeConfiguration<ResearchRun>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
         builder.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
+        builder.Property(x => x.ParentResearchRunId).HasColumnName("parent_research_run_id");
+        builder.Property(x => x.RevisionFeedbackId).HasColumnName("revision_feedback_id");
         builder.Property(x => x.TraceId).HasColumnName("trace_id").HasMaxLength(64).IsRequired();
         builder.Property(x => x.Ticker).HasColumnName("ticker").HasMaxLength(32).IsRequired();
         builder.Property(x => x.Question).HasColumnName("question").IsRequired();
@@ -31,10 +33,13 @@ public class ResearchRunConfiguration : IEntityTypeConfiguration<ResearchRun>
         builder.HasMany(x => x.Steps).WithOne(s => s.Run).HasForeignKey(s => s.RunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(x => x.Candidates).WithOne(c => c.Run).HasForeignKey(c => c.RunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(x => x.Citations).WithOne(c => c.Run).HasForeignKey(c => c.RunId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.ParentResearchRun).WithMany(x => x.ChildResearchRuns).HasForeignKey(x => x.ParentResearchRunId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.Ticker, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.Status, x.CreatedAtUtc });
         builder.HasIndex(x => x.TraceId);
+        builder.HasIndex(x => x.ParentResearchRunId);
+        builder.HasIndex(x => x.RevisionFeedbackId).IsUnique();
     }
 }

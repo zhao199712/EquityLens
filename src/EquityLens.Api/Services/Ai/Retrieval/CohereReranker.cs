@@ -18,7 +18,7 @@ public sealed class CohereReranker : IDocumentReranker
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<RetrievedDocumentChunk>> RerankAsync(
+    public async Task<DocumentRerankResult> RerankAsync(
         string query,
         IReadOnlyList<RetrievedDocumentChunk> chunks,
         int topN,
@@ -26,7 +26,7 @@ public sealed class CohereReranker : IDocumentReranker
     {
         if (chunks.Count == 0)
         {
-            return [];
+            return new([], new("Cohere", "Skipped", null, false, null, 0, 0, 0, 0, null));
         }
 
         using var activity = EquityLensTelemetry.ActivitySource.StartActivity("cohere.rerank");
@@ -38,9 +38,10 @@ public sealed class CohereReranker : IDocumentReranker
 
         if (response.Results.Count == 0)
         {
-            _logger.LogWarning("Cohere rerank returned 0 results; falling back to original order");
+            _logger.LogWarning("Cohere rerank returned no results with status {Status}; falling back to original order", response.Status);
             activity?.SetStatus(ActivityStatusCode.Ok);
-            return chunks.Take(topN).ToList();
+            var fallback = chunks.Take(topN).ToList();
+            return new(fallback, new("Cohere", response.Status, response.Model, true, response.FallbackReason ?? "CohereEmptyResults", response.DurationMs, response.CandidateCount, fallback.Count, response.PayloadBytes, response.HttpStatusCode));
         }
 
         var scoreMap = response.Results.ToDictionary(r => r.Index, r => r.RelevanceScore);
@@ -77,6 +78,6 @@ public sealed class CohereReranker : IDocumentReranker
         activity?.SetTag("rerank.selected_count", reranked.Count);
         activity?.SetStatus(ActivityStatusCode.Ok);
 
-        return reranked;
+        return new(reranked, new("Cohere", response.Status, response.Model, false, null, response.DurationMs, response.CandidateCount, reranked.Count, response.PayloadBytes, response.HttpStatusCode));
     }
 }

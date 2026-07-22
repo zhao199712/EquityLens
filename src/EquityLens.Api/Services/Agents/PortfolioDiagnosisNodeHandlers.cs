@@ -123,7 +123,7 @@ public sealed class BuildPortfolioEvidencePacketNodeHandler : IAgentNodeHandler
     public string NodeType => PortfolioDiagnosisNodeTypes.BuildEvidencePacket;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var packet = new { context = PortfolioDiagnosisBlackboard.Context(board), attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution), riskProfile = board[AgentBlackboardKeys.RiskProfile]?.DeepClone(), priorities = PortfolioDiagnosisBlackboard.Required<List<RiskAnalysisPriority>>(board, AgentBlackboardKeys.RiskAnalysisPriorities) };
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var packet = new { context = PortfolioDiagnosisBlackboard.Context(board), attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution), riskProfile = board[AgentBlackboardKeys.RiskProfile]?.DeepClone(), priorities = PortfolioDiagnosisBlackboard.Required<List<RiskAnalysisPriority>>(board, AgentBlackboardKeys.RiskAnalysisPriorities), mathResults = board[AgentBlackboardKeys.MathResults]?.DeepClone() };
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioEvidencePacket, packet); context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(packet); context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Portfolio evidence packet snapshot written.", null); return Task.CompletedTask;
     }
 }

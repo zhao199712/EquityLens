@@ -8,4 +8,5 @@ public sealed record ResearchAskRequest(
     SourcePolicy SourcePolicy = default,
     int TopK = 8,
     double Temperature = 0.2,
-    bool Debug = false);
+    bool Debug = false,
+    Guid? PortfolioId = null);

@@ -196,6 +196,7 @@ builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, CriticReviewWorkflo
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, DraftRevisionWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchQualityReviewWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchInvestigationWorkflowDefinitionProvider>();
+builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, FeedbackRevisionWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceRemediationWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceReanalysisWorkflowDefinitionProvider>();
 builder.Services.AddScoped<PortfolioDiagnosisWorkflowDefinitionProvider>();
@@ -203,7 +204,10 @@ builder.Services.AddScoped<IAgentWorkflowDefinitionProvider>(sp => sp.GetRequire
 builder.Services.AddSingleton<IWorkflowGraphTopologyService, WorkflowGraphTopologyService>();
 builder.Services.AddSingleton<IWorkflowSkillCatalog, WorkflowSkillCatalog>();
 builder.Services.AddSingleton<INodeCapabilityRegistry, NodeCapabilityRegistry>();
+builder.Services.AddScoped<IPortfolioRiskMathInputProvider, PortfolioRiskMathInputProvider>();
+builder.Services.AddSingleton<IPortfolioRiskMathExecutor, PortfolioRiskMathExecutor>();
 builder.Services.AddScoped<IAgentWorkflowPlanner, LlmAgentWorkflowPlanner>();
+builder.Services.AddScoped<IAgentWorkflowQueryService, AgentWorkflowQueryService>();
 builder.Services.AddScoped<IDynamicPlanValidator, DynamicPlanValidator>();
 builder.Services.AddScoped<IGraphMaterializer, GraphMaterializer>();
 builder.Services.AddScoped<IAgentRunGraphValidator, AgentRunGraphValidator>();
@@ -212,6 +216,7 @@ builder.Services.AddSingleton<IAgentNodeStateMachine, AgentNodeStateMachine>();
 builder.Services.AddScoped<IWorkflowPolicyEvaluator, CriticReviewPolicyEvaluator>();
 builder.Services.AddScoped<IWorkflowPolicyEvaluator, ResearchQualityReviewPolicyEvaluator>();
 builder.Services.AddScoped<IWorkflowPolicyEvaluator, ResearchInvestigationPolicyEvaluator>();
+builder.Services.AddScoped<IWorkflowPolicyEvaluator, FeedbackRevisionPolicyEvaluator>();
 builder.Services.AddScoped<IWorkflowPolicyEvaluator, EvidenceReanalysisPolicyEvaluator>();
 builder.Services.AddScoped<IAgentNodeHandler, LoadResearchRunNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, BuildEvidencePacketNodeHandler>();
@@ -222,6 +227,8 @@ builder.Services.AddScoped<IAgentNodeHandler, LoadCriticReviewRunNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, DraftRevisedAnswerNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, FinalizeRevisionNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, LoadPortfolioDiagnosisContextNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, PreparePortfolioRiskMathInputsNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, ExecutePortfolioRiskMathNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, CalculatePerformanceAttributionNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, LoadRiskProfileNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, PrioritizeRiskAnalysesNodeHandler>();
@@ -254,6 +261,8 @@ builder.Services.AddScoped<IAgentNodeHandler, EvaluateInitialEvidencePolicyNodeH
 builder.Services.AddScoped<IAgentNodeHandler, RetrieveWebResearchEvidenceNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, RankAndSelectResearchEvidenceNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, DraftResearchAnswerNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, LoadFeedbackRevisionContextNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, ValidateFeedbackRevisionContextNodeHandler>();
 builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
 builder.Services.AddScoped<IAgentRunService, AgentRunService>();
     builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();
@@ -313,7 +322,11 @@ builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 builder.Services.AddScoped<IFinancialDataService, FinancialDataService>();
 builder.Services.AddHttpClient<IJinaSearchService, JinaSearchService>();
 builder.Services.AddHttpClient<IBraveSearchService, BraveSearchService>();
-builder.Services.AddHttpClient<ICohereRerankService, CohereRerankService>();
+builder.Services.AddHttpClient<ICohereRerankService, CohereRerankService>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<CohereOptions>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 1, 60));
+});
 
 builder.Services.AddScoped<IFinMindFinancialImportService, FinMindFinancialImportService>();
 builder.Services.AddHttpClient<FinMindFinancialImportService>((sp, client) =>

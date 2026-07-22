@@ -101,6 +101,7 @@ const activeMenuKey = computed(() => {
   if (name.startsWith('admin-')) return 'admin-agent-runs'
   if (name.startsWith('research')) return 'research'
   if (name.startsWith('agent-run')) return 'agent-runs'
+  if (name === 'ask-agent') return 'ask-agent'
   return name
 })
 
@@ -157,6 +158,12 @@ function handleMenuSelect(key: string) {
             @click="handleMenuSelect('research')"
           >
             Research
+          </button>
+          <button
+            :class="['kimi-nav-item', activeMenuKey === 'ask-agent' && 'active']"
+            @click="handleMenuSelect('ask-agent')"
+          >
+            Ask Agent
           </button>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'agent-runs' && 'active']"

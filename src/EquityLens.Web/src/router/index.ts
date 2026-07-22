@@ -27,8 +27,10 @@ import RiskModelManagementView from '../views/admin/RiskModelManagementView.vue'
 import AISettingsView from '../views/admin/AISettingsView.vue'
 import WorkflowManagementView from '../views/admin/WorkflowManagementView.vue'
 import NodeCatalogManagementView from '../views/admin/NodeCatalogManagementView.vue'
+import AgentRegistryView from '../views/admin/AgentRegistryView.vue'
 import AgentRunListView from '../views/agent-runs/AgentRunListView.vue'
 import AgentRunDetailView from '../views/agent-runs/AgentRunDetailView.vue'
+import AgentQueryView from '../views/agent-runs/AgentQueryView.vue'
 import ResearchRunListView from '../views/research/ResearchRunListView.vue'
 import ResearchRunDetailView from '../views/research/ResearchRunDetailView.vue'
 import AgentRunManagementView from '../views/admin/AgentRunManagementView.vue'
@@ -134,6 +136,11 @@ export const router = createRouter({
       component: FinancialReportDetailView,
     },
     {
+      path: '/ask-agent',
+      name: 'ask-agent',
+      component: AgentQueryView,
+    },
+    {
       path: '/agent-runs',
       name: 'agent-runs',
       component: AgentRunListView,
@@ -166,6 +173,7 @@ export const router = createRouter({
       children: [
         { path: 'workflows', name: 'admin-workflows', component: WorkflowManagementView },
         { path: 'nodes', name: 'admin-nodes', component: NodeCatalogManagementView },
+        { path: 'registry', name: 'admin-registry', component: AgentRegistryView },
         {
           path: 'agent-runs',
           name: 'admin-agent-runs',

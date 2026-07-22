@@ -87,7 +87,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             {
                 _runStateMachine.Transition(run, AgentRunStatuses.Running);
                 run.StartedAtUtc ??= DateTime.UtcNow;
-                if (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation && run.ResearchRunId is Guid researchRunId)
+                if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)
                 {
                     var artifact = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == researchRunId, cancellationToken);
                     artifact.Status = "Running";
@@ -310,7 +310,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     private void CompleteRun(AgentRun run)
     {
         _runStateMachine.Transition(run, AgentRunStatuses.Succeeded); run.CompletedAtUtc = DateTime.UtcNow;
-        if (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation && run.ResearchRunId is Guid researchRunId)
+        if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)
         {
             var artifact = _dbContext.ResearchRuns.Local.SingleOrDefault(x => x.Id == researchRunId)
                 ?? _dbContext.ResearchRuns.Single(x => x.Id == researchRunId);
@@ -326,13 +326,15 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     private async Task<bool> TryAdvanceDynamicPlanAsync(AgentRun run, CancellationToken cancellationToken)
     {
         using var definition = JsonDocument.Parse(run.WorkflowDefinitionJson);
-        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.ResearchInvestigation) || definition.RootElement.TryGetProperty("orchestrationMode", out var mode) is false || mode.GetString() != "DynamicStateful") return false;
+        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) || definition.RootElement.TryGetProperty("orchestrationMode", out var mode) is false || mode.GetString() != "DynamicStateful") return false;
         var planner = _dynamicPlanner ?? new DeterministicPlannerAdapter();
         var capabilities = _capabilities ?? new NodeCapabilityRegistry(); var skills = _skills ?? new WorkflowSkillCatalog();
         var validator = _dynamicPlanValidator ?? new DynamicPlanValidator(capabilities, _catalog ?? new AgentWorkflowCatalog(), _topology);
         var materializer = _graphMaterializer ?? new GraphMaterializer(_dbContext, _catalog ?? new AgentWorkflowCatalog());
         var last = run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).OrderByDescending(x => x.CompletedAtUtc).FirstOrDefault();
-        var trigger = last?.NodeType == ResearchInvestigationNodeTypes.DetectIntent && run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation
+        var trigger = last?.NodeType == FeedbackRevisionNodeTypes.ValidateContext && run.WorkflowType == AgentWorkflowTypes.FeedbackRevision
+            ? DynamicPlanningTriggers.FeedbackContextReady
+            : last?.NodeType == ResearchInvestigationNodeTypes.DetectIntent && run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation
             ? DynamicPlanningTriggers.ResearchContextReady
             : last?.NodeType == EvidenceRemediationNodeTypes.Route
                 ? DynamicPlanningTriggers.EvidenceValidated
@@ -340,7 +342,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                     ? DynamicPlanningTriggers.CriticCompleted
                     : DynamicPlanningTriggers.BranchCompleted;
         if (trigger == DynamicPlanningTriggers.CriticCompleted
-            && run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation
+            && (run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision)
             && AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.CriticReview]?[CriticReviewFields.RecommendedNextAction]?.GetValue<string>() == "AcceptAnswer")
         {
             var completedDefinition = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
@@ -350,7 +352,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             return false;
         }
         var dynamicNodeCount = run.Nodes.Count(x => !string.IsNullOrWhiteSpace(x.TemplateNodeKey)
-            && (run.WorkflowType != AgentWorkflowTypes.ResearchInvestigation || x.Iteration > 0));
+            && (run.WorkflowType is not (AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) || x.Iteration > 0));
         var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, AgentNodeJson.ParseBlackboard(run.BlackboardJson), run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), skills.Skills, capabilities.Capabilities, run.Nodes.Where(x => (x.NodeType is EvidenceRemediationNodeTypes.RetrieveEvidence or EvidenceRemediationNodeTypes.RetrieveWebEvidence) && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), dynamicNodeCount, last?.NodeKey);
         var started = DateTime.UtcNow;
         AddEvent(run, last, AgentEventTypes.SupervisorPlanningStarted, $"Supervisor planning started for {trigger}.", new { trigger, context.OrchestrationVersion });
@@ -449,7 +451,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
 
     private async Task UpdateResearchArtifactTerminalAsync(AgentRun run, string status, CancellationToken cancellationToken)
     {
-        if (run.WorkflowType != AgentWorkflowTypes.ResearchInvestigation || run.ResearchRunId is not Guid researchRunId) return;
+        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) || run.ResearchRunId is not Guid researchRunId) return;
         var artifact = await _dbContext.ResearchRuns.SingleOrDefaultAsync(x => x.Id == researchRunId, cancellationToken);
         if (artifact is null) return;
         artifact.Status = status; artifact.ErrorMessage = run.ErrorMessage;

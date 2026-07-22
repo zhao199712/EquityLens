@@ -39,6 +39,10 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("agent_run_node_id");
 
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_request_id");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -50,6 +54,10 @@ namespace EquityLens.Api.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
                         .HasColumnName("feedback_type");
+
+                    b.Property<Guid?>("FollowUpAgentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("follow_up_agent_run_id");
 
                     b.Property<string>("Prompt")
                         .IsRequired()
@@ -73,6 +81,11 @@ namespace EquityLens.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AgentRunNodeId");
+
+                    b.HasIndex("FollowUpAgentRunId");
+
+                    b.HasIndex("AgentRunId", "ClientRequestId")
+                        .IsUnique();
 
                     b.HasIndex("AgentRunId", "CreatedAtUtc");
 
@@ -180,6 +193,10 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("output_json");
 
+                    b.Property<Guid?>("ParentAgentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_agent_run_id");
+
                     b.Property<Guid?>("ResearchRunId")
                         .HasColumnType("uuid")
                         .HasColumnName("research_run_id");
@@ -219,6 +236,8 @@ namespace EquityLens.Api.Migrations
                         .HasColumnName("workflow_type");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ParentAgentRunId");
 
                     b.HasIndex("ResearchRunId");
 
@@ -2013,6 +2032,10 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("model");
 
+                    b.Property<Guid?>("ParentResearchRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_research_run_id");
+
                     b.Property<string>("Question")
                         .IsRequired()
                         .HasColumnType("text")
@@ -2023,6 +2046,10 @@ namespace EquityLens.Api.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .HasColumnName("retrieval_mode");
+
+                    b.Property<Guid?>("RevisionFeedbackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revision_feedback_id");
 
                     b.Property<string>("SourcePolicy")
                         .IsRequired()
@@ -2061,6 +2088,11 @@ namespace EquityLens.Api.Migrations
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ParentResearchRunId");
+
+                    b.HasIndex("RevisionFeedbackId")
+                        .IsUnique();
 
                     b.HasIndex("TraceId");
 
@@ -2882,6 +2914,13 @@ namespace EquityLens.Api.Migrations
                         .HasForeignKey("AgentRunNodeId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "FollowUpRun")
+                        .WithMany()
+                        .HasForeignKey("FollowUpAgentRunId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("FollowUpRun");
+
                     b.Navigation("Node");
 
                     b.Navigation("Run");
@@ -2889,6 +2928,11 @@ namespace EquityLens.Api.Migrations
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRun", b =>
                 {
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "ParentRun")
+                        .WithMany("ChildRuns")
+                        .HasForeignKey("ParentAgentRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("EquityLens.Api.Data.Entities.ResearchRun", "ResearchRun")
                         .WithMany()
                         .HasForeignKey("ResearchRunId")
@@ -2899,6 +2943,8 @@ namespace EquityLens.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ParentRun");
 
                     b.Navigation("ResearchRun");
                 });
@@ -3291,6 +3337,16 @@ namespace EquityLens.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRun", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.ResearchRun", "ParentResearchRun")
+                        .WithMany("ChildResearchRuns")
+                        .HasForeignKey("ParentResearchRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ParentResearchRun");
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRunCandidate", b =>
                 {
                     b.HasOne("EquityLens.Api.Data.Entities.ResearchRun", "Run")
@@ -3407,6 +3463,8 @@ namespace EquityLens.Api.Migrations
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRun", b =>
                 {
+                    b.Navigation("ChildRuns");
+
                     b.Navigation("Events");
 
                     b.Navigation("Feedback");
@@ -3490,6 +3548,8 @@ namespace EquityLens.Api.Migrations
             modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRun", b =>
                 {
                     b.Navigation("Candidates");
+
+                    b.Navigation("ChildResearchRuns");
 
                     b.Navigation("Citations");
 

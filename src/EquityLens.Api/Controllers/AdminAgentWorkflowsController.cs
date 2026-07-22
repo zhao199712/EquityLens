@@ -29,3 +29,14 @@ public sealed class AdminAgentNodesController(IAgentWorkflowAdminService service
         catch (ArgumentOutOfRangeException) { return BadRequest(new { code = "invalid_execution_policy" }); }
     }
 }
+
+[Authorize(Roles = "Admin")]
+[ApiController]
+[Route("api/admin/agent-registry")]
+public sealed class AdminAgentRegistryController(
+    IWorkflowSkillCatalog skills,
+    INodeCapabilityRegistry capabilities) : ControllerBase
+{
+    [HttpGet]
+    public AgentRegistryAdminResponse List() => new(skills.Skills, capabilities.Capabilities);
+}

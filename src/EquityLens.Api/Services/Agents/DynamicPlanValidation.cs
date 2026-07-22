@@ -14,8 +14,8 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
     {
         if (proposal.BaseOrchestrationVersion != run.OrchestrationVersion) throw new InvalidOperationException("Dynamic plan is stale.");
         if (proposal.GoalStatus is not (DynamicGoalStatuses.Continue or DynamicGoalStatuses.Complete)) throw new InvalidOperationException("Dynamic plan goalStatus is invalid.");
-        if (proposal.Trigger == DynamicPlanningTriggers.ResearchContextReady && proposal.GoalStatus != DynamicGoalStatuses.Continue)
-            throw new InvalidOperationException("Initial research planning must continue with a research branch.");
+        if ((proposal.Trigger is DynamicPlanningTriggers.ResearchContextReady or DynamicPlanningTriggers.FeedbackContextReady) && proposal.GoalStatus != DynamicGoalStatuses.Continue)
+            throw new InvalidOperationException("Initial planning must continue with an executable branch.");
         var allowedSkills = new WorkflowSkillCatalog().Skills.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
         if (proposal.SelectedSkills.Any(x => !allowedSkills.Contains(x))) throw new InvalidOperationException("Dynamic plan selected an unknown skill.");
         if (proposal.GoalStatus == DynamicGoalStatuses.Complete && proposal.Actions.Count > 0) throw new InvalidOperationException("A completed plan cannot contain actions.");
@@ -25,7 +25,7 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         if (proposal.GoalStatus == DynamicGoalStatuses.Continue && proposal.Actions.Count == 0) throw new InvalidOperationException("A continuing plan must contain actions.");
         var initialNodeCount = run.Nodes.Count(x => string.IsNullOrWhiteSpace(x.TemplateNodeKey));
         var dynamicBudget = ResearchQualityReviewWorkflow.MaxDynamicNodes
-            + (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation ? ResearchInvestigationWorkflow.MaxInitialPlanNodes : 0);
+            + (run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision ? ResearchInvestigationWorkflow.MaxInitialPlanNodes : 0);
         if (run.Nodes.Count + proposal.Actions.Count > initialNodeCount + dynamicBudget) throw new InvalidOperationException("Dynamic node budget exceeded.");
         var webOccurrences = run.Nodes.Count(x => x.NodeType is EvidenceRemediationNodeTypes.RetrieveWebEvidence or ResearchInvestigationNodeTypes.RetrieveWeb)
             + proposal.Actions.Count(x => x.NodeType is EvidenceRemediationNodeTypes.RetrieveWebEvidence or ResearchInvestigationNodeTypes.RetrieveWeb);
@@ -49,8 +49,17 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
             try { capability = capabilities.Get(action.Capability); } catch (InvalidOperationException) { throw new InvalidOperationException($"Unknown capability '{action.Capability}'."); }
             if (capability.NodeType != action.NodeType) throw new InvalidOperationException($"Capability '{action.Capability}' does not map to node type '{action.NodeType}'.");
             if (action.DependsOn.Count == 0 || action.DependsOn.Any(x => !availableDependencies.Contains(x))) throw new InvalidOperationException($"Node '{action.ClientNodeKey}' has an unknown or empty dependency.");
-            var occurrences = run.Nodes.Count(x => x.NodeType == action.NodeType) + proposal.Actions.Count(x => x.NodeType == action.NodeType);
+            var occurrences = action.NodeType == PortfolioRiskMathNodeTypes.Execute
+                ? run.Nodes.Count(x => x.TemplateNodeKey == action.Capability) + proposal.Actions.Count(x => x.Capability == action.Capability)
+                : run.Nodes.Count(x => x.NodeType == action.NodeType) + proposal.Actions.Count(x => x.NodeType == action.NodeType);
             if (occurrences > capability.MaxOccurrences) throw new InvalidOperationException($"Capability '{action.Capability}' occurrence budget exceeded.");
+            if (action.NodeType == PortfolioRiskMathNodeTypes.Execute)
+            {
+                if (proposal.Actions.Count(x => x.NodeType == PortfolioRiskMathNodeTypes.Execute) > 8) throw new InvalidOperationException("A plan may contain at most eight math capabilities.");
+                string[] forbidden = ["prices", "returns", "weights", "covarianceMatrix", "holdings", "initialValues"];
+                if (action.Arguments.Any(x => forbidden.Contains(x.Key, StringComparer.OrdinalIgnoreCase))) throw new InvalidOperationException("Math source values must come from Blackboard.");
+                if (capability.InputMode is "MultiAsset" or "Matrix" && request?.PortfolioId is null && board[AgentBlackboardKeys.PortfolioId] is null) throw new InvalidOperationException($"Math capability '{action.Capability}' requires a portfolioId.");
+            }
             if (action.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence)
             {
                 ValidateSearchIntents(action.Arguments, 8, requireTargets: false);
@@ -67,8 +76,29 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         foreach (var action in proposal.Actions) { nodes.Add(new JsonObject { ["id"] = action.ClientNodeKey, ["type"] = action.NodeType }); foreach (var dependency in action.DependsOn) edges.Add(new JsonObject { ["from"] = dependency, ["to"] = action.ClientNodeKey }); }
         topology.GetExecutionOrder(definition.ToJsonString());
         ValidateInitialResearchPlan(run, proposal, request);
+        ValidateFeedbackRevisionPlan(proposal);
         ValidateWebPlacement(run, proposal.Actions);
         return new(proposal, proposal.Actions);
+    }
+
+    private static void ValidateFeedbackRevisionPlan(DynamicPlanProposal proposal)
+    {
+        if (proposal.Trigger != DynamicPlanningTriggers.FeedbackContextReady) return;
+        string[] required = [ResearchInvestigationNodeTypes.DraftAnswer, ResearchQualityReviewNodeTypes.BuildEvidencePacket,
+            ResearchQualityReviewNodeTypes.CheckEvidence, ResearchQualityReviewNodeTypes.CritiqueAnswer,
+            ResearchQualityReviewNodeTypes.FinalizeCriticReport];
+        foreach (var type in required)
+            if (proposal.Actions.Count(x => x.NodeType == type) != 1)
+                throw new InvalidOperationException($"Feedback revision plan must contain exactly one '{type}' node.");
+        var actions = proposal.Actions.ToDictionary(x => x.ClientNodeKey, StringComparer.Ordinal);
+        var previous = FeedbackRevisionNodeKeys.ValidateContext;
+        foreach (var type in required)
+        {
+            var action = proposal.Actions.Single(x => x.NodeType == type);
+            if (!DependsTransitivelyOn(action, previous, actions))
+                throw new InvalidOperationException($"Feedback revision node '{action.ClientNodeKey}' must depend on the preceding required stage.");
+            previous = action.ClientNodeKey;
+        }
     }
 
     private static void ValidateInitialResearchPlan(AgentRun run, DynamicPlanProposal proposal, EquityLens.Api.Contracts.Research.ResearchAskRequest? request)

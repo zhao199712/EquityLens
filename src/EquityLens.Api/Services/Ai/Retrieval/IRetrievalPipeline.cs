@@ -39,7 +39,7 @@ public interface IWebRetriever
 
 public interface IDocumentReranker
 {
-    Task<IReadOnlyList<RetrievedDocumentChunk>> RerankAsync(
+    Task<DocumentRerankResult> RerankAsync(
         string query,
         IReadOnlyList<RetrievedDocumentChunk> chunks,
         int topN,
@@ -56,7 +56,8 @@ public interface IResultReranker
     Task<RankedSelection> Rank(
         IReadOnlyList<RetrievedDocumentChunk> chunks,
         ResearchQuestionIntent intent,
-        int topK);
+        int topK,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IContextSelector

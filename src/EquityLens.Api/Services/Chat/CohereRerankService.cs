@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Diagnostics;
 using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Services.Chat;
@@ -38,6 +39,8 @@ public sealed class CohereRerankService : ICohereRerankService
         };
 
         var jsonPayload = JsonSerializer.Serialize(payload);
+        var payloadBytes = Encoding.UTF8.GetByteCount(jsonPayload);
+        var stopwatch = Stopwatch.StartNew();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Headers.Add("Authorization", $"Bearer {_options.ApiKey}");
@@ -51,7 +54,7 @@ public sealed class CohereRerankService : ICohereRerankService
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Cohere rerank failed with {StatusCode}", response.StatusCode);
-                return new CohereRerankResponse(_options.RerankModel, []);
+                return new CohereRerankResponse(_options.RerankModel, [], "HttpError", $"CohereHttp{(int)response.StatusCode}", stopwatch.ElapsedMilliseconds, documents.Count, payloadBytes, (int)response.StatusCode);
             }
 
             var doc = JsonDocument.Parse(body);
@@ -67,12 +70,24 @@ public sealed class CohereRerankService : ICohereRerankService
                 }
             }
 
-            return new CohereRerankResponse(_options.RerankModel, results);
+            var status = results.Count == 0 ? "EmptyResults" : "Succeeded";
+            return new CohereRerankResponse(_options.RerankModel, results, status, results.Count == 0 ? "CohereEmptyResults" : null, stopwatch.ElapsedMilliseconds, documents.Count, payloadBytes, (int)response.StatusCode);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            stopwatch.Stop();
+            _logger.LogWarning("Cohere rerank timed out after {DurationMs}ms for {CandidateCount} candidates and {PayloadBytes} payload bytes", stopwatch.ElapsedMilliseconds, documents.Count, payloadBytes);
+            return new CohereRerankResponse(_options.RerankModel, [], "TimedOut", "CohereTimeout", stopwatch.ElapsedMilliseconds, documents.Count, payloadBytes, null);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Cohere rerank error for query: {Query}", query);
-            return new CohereRerankResponse(_options.RerankModel, []);
+            stopwatch.Stop();
+            _logger.LogError(exception, "Cohere rerank network error for query length {QueryLength}, {CandidateCount} candidates and {PayloadBytes} payload bytes", query.Length, documents.Count, payloadBytes);
+            return new CohereRerankResponse(_options.RerankModel, [], "NetworkError", "CohereNetworkError", stopwatch.ElapsedMilliseconds, documents.Count, payloadBytes, null);
         }
     }
 }

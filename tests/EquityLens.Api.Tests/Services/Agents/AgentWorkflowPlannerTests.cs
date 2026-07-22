@@ -68,6 +68,8 @@ public sealed class AgentWorkflowPlannerTests
         Assert.Equal(
         [
             PortfolioDiagnosisNodeKeys.LoadContext,
+            PortfolioRiskMathNodeKeys.PrepareInputs,
+            PortfolioRiskMathNodeKeys.ExecuteCore,
             PortfolioDiagnosisNodeKeys.CalculateAttribution,
             PortfolioDiagnosisNodeKeys.LoadRiskProfile,
             PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses,

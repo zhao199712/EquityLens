@@ -13,6 +13,7 @@ public class AgentRunConfiguration : IEntityTypeConfiguration<AgentRun>
         builder.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
         builder.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
         builder.Property(x => x.ResearchRunId).HasColumnName("research_run_id");
+        builder.Property(x => x.ParentAgentRunId).HasColumnName("parent_agent_run_id");
         builder.Property(x => x.WorkflowType).HasColumnName("workflow_type").HasMaxLength(64).IsRequired();
         builder.Property(x => x.AgentType).HasColumnName("agent_type").HasMaxLength(64).IsRequired();
         builder.Property(x => x.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
@@ -34,10 +35,12 @@ public class AgentRunConfiguration : IEntityTypeConfiguration<AgentRun>
         builder.HasMany(x => x.Feedback).WithOne(f => f.Run).HasForeignKey(f => f.AgentRunId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<AppUser>().WithMany(u => u.AgentRuns).HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.ResearchRun).WithMany().HasForeignKey(x => x.ResearchRunId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(x => x.ParentRun).WithMany(x => x.ChildRuns).HasForeignKey(x => x.ParentAgentRunId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.WorkflowType, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.Status, x.CreatedAtUtc });
         builder.HasIndex(x => x.ResearchRunId);
+        builder.HasIndex(x => x.ParentAgentRunId);
     }
 }

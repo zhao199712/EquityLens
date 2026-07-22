@@ -335,12 +335,13 @@ public static class RiskMath
         int days,
         int simulations = 10000,
         decimal confidenceLevel = 0.95m,
-        int tradingDays = 252)
+        int tradingDays = 252,
+        int? randomSeed = null)
     {
         if (simulations <= 0 || days <= 0)
             return new MonteCarloResult(initialValue, initialValue, initialValue, initialValue, 0, 0, confidenceLevel);
 
-        var random = new Random();
+        var random = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
         var finalValues = new decimal[simulations];
         var dt = 1.0 / tradingDays;
         var sigma = (double)annualizedVolatility;
@@ -759,7 +760,8 @@ public static class RiskMath
         decimal confidenceLevel = 0.95m,
         decimal? initialPortfolioValue = null,
         IReadOnlyList<decimal>? portfolioWeights = null,
-        int tradingDays = 252)
+        int tradingDays = 252,
+        int? randomSeed = null)
     {
         var n = initialValues.Count;
 
@@ -770,7 +772,7 @@ public static class RiskMath
         if (L is null)
             return new MonteCarloResult(0, 0, 0, 0, 0, 0, confidenceLevel);
 
-        var random = new Random();
+        var random = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
         var finalValues = new decimal[simulations];
         var dt = 1.0 / tradingDays;
         var sqrtDt = Math.Sqrt(dt);
@@ -924,11 +926,12 @@ public static class RiskMath
         decimal lambda = 0.94m,
         decimal shrinkageAlpha = 0.10m,
         int tradingDays = 252,
-        decimal residualCapQuantile = 0m)
+        decimal residualCapQuantile = 0m,
+        int? randomSeed = null)
     {
         return RunMultivariateFhsSimulationForConfidenceLevels(
             returnMatrix, weights, initialPortfolioValue, horizonDays, simulations,
-            [confidenceLevel], lambda, shrinkageAlpha, tradingDays, residualCapQuantile)[0];
+            [confidenceLevel], lambda, shrinkageAlpha, tradingDays, residualCapQuantile, randomSeed)[0];
     }
 
     /// <summary>
@@ -945,7 +948,8 @@ public static class RiskMath
         decimal lambda = 0.94m,
         decimal shrinkageAlpha = 0.10m,
         int tradingDays = 252,
-        decimal residualCapQuantile = 0m)
+        decimal residualCapQuantile = 0m,
+        int? randomSeed = null)
     {
         var n = returnMatrix.Count;
         var levels = confidenceLevels.Count == 0 ? [0.95m] : confidenceLevels;
@@ -981,7 +985,7 @@ public static class RiskMath
         var residualCap = residualCapQuantile > 0m ? Quantile(residualNorms, residualCapQuantile) : 0m;
 
         // Step 6: Monte Carlo simulation
-        var random = new Random();
+        var random = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
         var finalValues = new decimal[simulations];
         var basePortfolioValue = initialPortfolioValue;
         var residualCount = residuals.Count;

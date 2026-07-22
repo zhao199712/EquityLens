@@ -38,6 +38,17 @@ public interface IAgentRunService
         DateOnly? to,
         CancellationToken cancellationToken = default);
 
+    Task<SubmitAgentFeedbackResponse> SubmitFeedbackAsync(
+        Guid runId,
+        Guid userId,
+        SubmitAgentFeedbackRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AgentRunSummaryResponse>> ListChildrenAsync(
+        Guid parentRunId,
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(
         Guid? userId,
         int limit = 50,

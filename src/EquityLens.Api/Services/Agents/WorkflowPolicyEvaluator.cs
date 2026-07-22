@@ -190,3 +190,15 @@ public sealed class ResearchInvestigationPolicyEvaluator : IWorkflowPolicyEvalua
         return inner.Evaluate(context with { WorkflowType = AgentWorkflowTypes.ResearchQualityReview });
     }
 }
+
+public sealed class FeedbackRevisionPolicyEvaluator : IWorkflowPolicyEvaluator
+{
+    private readonly ResearchInvestigationPolicyEvaluator inner = new();
+    public string WorkflowType => AgentWorkflowTypes.FeedbackRevision;
+
+    public WorkflowPolicyDecision Evaluate(WorkflowPolicyContext context)
+    {
+        if (context.WorkflowType != WorkflowType) throw new InvalidOperationException($"Unsupported workflow type '{context.WorkflowType}'.");
+        return inner.Evaluate(context with { WorkflowType = AgentWorkflowTypes.ResearchInvestigation });
+    }
+}

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
+import AgentRunProgress from '../../components/agents/AgentRunProgress.vue'
 import {
   cancelAgentRun,
   createDraftRevision,
@@ -64,7 +65,7 @@ const activeTab = ref<'timeline' | 'nodes' | 'toolCalls' | 'feedback' | 'blackbo
 const debugExpanded = ref(false)
 
 const runId = computed(() => route.params.id as string)
-const { agentRun: run, isLoading, isPolling, isTerminalStatus, error: pollError, startPolling, refresh } = useAgentRunPolling(runId.value)
+const { agentRun: run, isLoading, isPolling, isTerminalStatus, error: pollError, startPolling, refresh } = useAgentRunPolling(runId)
 const error = ref('')
 
 onMounted(startPolling)
@@ -232,6 +233,7 @@ const nextActionLabel = computed(() => {
             <div class="run-id prestige-mono">{{ run.run.id }}</div>
 
             <div class="action-row">
+              <button v-if="run.run.parentAgentRunId" class="prestige-btn" @click="router.push({ name: 'agent-run-detail', params: { id: run.run.parentAgentRunId } })">查看父版本</button>
               <button v-if="run.run.status === 'Failed'" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
               <button v-if="run.run.status === 'Running' || run.run.status === 'Pending'" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
               <button v-if="canCreateDraftRevision" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleCreateDraftRevision">產生修訂稿</button>
@@ -257,6 +259,14 @@ const nextActionLabel = computed(() => {
               自動重新整理中
             </div>
           </div>
+
+          <AgentRunProgress
+            :nodes="run.nodes"
+            :workflow-definition="run.workflowDefinitionJson"
+            :run-status="run.run.status"
+            :started-at-utc="run.run.startedAtUtc"
+            :completed-at-utc="run.run.completedAtUtc"
+          />
 
           <!-- Waiting for output -->
           <div v-if="!isTerminalStatus || run.outputJson === null" class="prestige-empty waiting-block">
@@ -476,6 +486,7 @@ const nextActionLabel = computed(() => {
                     <span>建立：{{ formatDate(item.createdAtUtc) }}</span>
                     <span>回覆：{{ formatDate(item.respondedAtUtc) }}</span>
                   </div>
+                  <button v-if="item.followUpAgentRunId" class="prestige-btn follow-up-link" @click="router.push({ name: 'agent-run-detail', params: { id: item.followUpAgentRunId } })">查看修訂版本 →</button>
                   <pre v-if="item.responseJson" class="code-block prestige-mono">{{ prettyJson(item.responseJson) }}</pre>
                 </div>
                 <div v-if="run.feedback.length === 0" class="prestige-empty inner-empty">暫無 feedback。</div>

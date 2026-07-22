@@ -21,15 +21,18 @@ public sealed class ResultReranker : IResultReranker
         _reranker = reranker;
     }
 
-    public async Task<RankedSelection> Rank(IReadOnlyList<RetrievedDocumentChunk> chunks, ResearchQuestionIntent intent, int topK)
+    public async Task<RankedSelection> Rank(IReadOnlyList<RetrievedDocumentChunk> chunks, ResearchQuestionIntent intent, int topK, CancellationToken cancellationToken = default)
     {
         IReadOnlyList<RetrievedDocumentChunk> rerankedChunks = chunks;
+        RerankDiagnostics? diagnostics = null;
         var externalRerank = _options.RerankProvider != "None" && _reranker is not null;
 
         if (externalRerank && _reranker is not null)
         {
             var query = chunks.FirstOrDefault()?.Query ?? "";
-            rerankedChunks = await _reranker.RerankAsync(query, chunks, Math.Max(topK * 2, _options.LocalCandidateCountForRerank));
+            var result = await _reranker.RerankAsync(query, chunks, Math.Max(topK * 2, _options.LocalCandidateCountForRerank), cancellationToken);
+            rerankedChunks = result.Results;
+            diagnostics = result.Diagnostics;
         }
 
         var safeHarborKeptCount = 0;
@@ -189,7 +192,7 @@ public sealed class ResultReranker : IResultReranker
         deduplicateActivity?.SetTag("discarded.count", decisions.Count - selectedCandidates.Count);
         deduplicateActivity?.SetStatus(ActivityStatusCode.Ok);
 
-        return new RankedSelection(selectedCandidates, decisions);
+        return new RankedSelection(selectedCandidates, decisions, diagnostics);
     }
 
     private ResearchTraceScoreBreakdown ScoreChunk(RetrievedDocumentChunk chunk, ResearchQuestionIntent intent, int? rerankPosition = null, int totalCount = 0)

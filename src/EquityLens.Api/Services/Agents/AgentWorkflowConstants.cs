@@ -9,6 +9,7 @@ public static class AgentWorkflowTypes
     public const string EvidenceRemediation = "EvidenceRemediation";
     public const string EvidenceReanalysis = "EvidenceReanalysis";
     public const string ResearchInvestigation = "ResearchInvestigation";
+    public const string FeedbackRevision = "FeedbackRevision";
 }
 
 public static class AgentTypes
@@ -41,6 +42,23 @@ public static class ResearchInvestigationWorkflow
 {
     public const int Version = 1;
     public const int MaxInitialPlanNodes = 10;
+}
+
+public static class FeedbackRevisionWorkflow
+{
+    public const int Version = 1;
+}
+
+public static class FeedbackRevisionNodeKeys
+{
+    public const string LoadContext = "loadFeedbackRevisionContext";
+    public const string ValidateContext = "validateFeedbackRevisionContext";
+}
+
+public static class FeedbackRevisionNodeTypes
+{
+    public const string LoadContext = "LoadFeedbackRevisionContext";
+    public const string ValidateContext = "ValidateFeedbackRevisionContext";
 }
 
 public static class ResearchInvestigationNodeKeys
@@ -157,6 +175,18 @@ public static class PortfolioDiagnosisNodeTypes
     public const string FinalizeDiagnosis = "FinalizePortfolioDiagnosis";
 }
 
+public static class PortfolioRiskMathNodeTypes
+{
+    public const string PrepareInputs = "PreparePortfolioRiskMathInputs";
+    public const string Execute = "ExecutePortfolioRiskMath";
+}
+
+public static class PortfolioRiskMathNodeKeys
+{
+    public const string PrepareInputs = "preparePortfolioRiskMathInputs";
+    public const string ExecuteCore = "executePortfolioRiskCoreMetrics";
+}
+
 public static class CriticReviewNodeKeys
 {
     public const string LoadResearchRun = "loadResearchRun";
@@ -265,4 +295,18 @@ public static class AgentEventTypes
     public const string PlanValidated = "PlanValidated";
     public const string PlanRejected = "PlanRejected";
     public const string GraphMaterialized = "GraphMaterialized";
+    public const string FeedbackSubmitted = "FeedbackSubmitted";
+    public const string FeedbackContextLoaded = "FeedbackContextLoaded";
+    public const string FollowUpRunCreated = "FollowUpRunCreated";
+}
+
+public static class AgentFeedbackTypes
+{
+    public const string Helpful = "Helpful";
+    public const string NeedsCorrection = "NeedsCorrection";
+}
+
+public static class AgentFeedbackStatuses
+{
+    public const string Responded = "Responded";
 }

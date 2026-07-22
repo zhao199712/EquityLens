@@ -41,9 +41,26 @@ public sealed record RankingDecision(
     string Reason,
     Guid? DuplicateOfChunkId);
 
+public sealed record RerankDiagnostics(
+    string Provider,
+    string Status,
+    string? Model,
+    bool UsedFallback,
+    string? FallbackReason,
+    long DurationMs,
+    int CandidateCount,
+    int SelectedCount,
+    int PayloadBytes,
+    int? HttpStatusCode);
+
+public sealed record DocumentRerankResult(
+    IReadOnlyList<RetrievedDocumentChunk> Results,
+    RerankDiagnostics Diagnostics);
+
 public sealed record RankedSelection(
     IReadOnlyList<RetrievedDocumentChunk> SelectedResults,
-    IReadOnlyList<RankingDecision> Decisions);
+    IReadOnlyList<RankingDecision> Decisions,
+    RerankDiagnostics? RerankDiagnostics = null);
 
 public sealed record SelectedChunk(
     RetrievedDocumentChunk Chunk,

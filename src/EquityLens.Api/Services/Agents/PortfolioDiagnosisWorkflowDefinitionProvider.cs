@@ -8,10 +8,10 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
     public string WorkflowType => AgentWorkflowTypes.PortfolioDiagnosis;
 
     public AgentRun CreateRun(Guid userId, Guid portfolioId) =>
-        CreateRun(userId, portfolioId, DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(-1), DateOnly.FromDateTime(DateTime.UtcNow));
+        CreateRun(userId, portfolioId, DateOnly.FromDateTime(DateTime.UtcNow).AddYears(-1), DateOnly.FromDateTime(DateTime.UtcNow));
 
     public string CreateInitialBlackboardJson(Guid portfolioId) =>
-        AgentBlackboardContracts.CreateInitialPortfolioDiagnosisBlackboard(portfolioId, DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(-1), DateOnly.FromDateTime(DateTime.UtcNow)).ToJsonString(AgentNodeJson.SerializerOptions);
+        AgentBlackboardContracts.CreateInitialPortfolioDiagnosisBlackboard(portfolioId, DateOnly.FromDateTime(DateTime.UtcNow).AddYears(-1), DateOnly.FromDateTime(DateTime.UtcNow)).ToJsonString(AgentNodeJson.SerializerOptions);
 
     public AgentRun CreateRun(Guid userId, Guid portfolioId, DateOnly from, DateOnly to) => new()
     {
@@ -23,6 +23,8 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
         CreatedAtUtc = DateTime.UtcNow,
         Nodes = [
             Node(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext),
+            Node(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeTypes.PrepareInputs),
+            new AgentRunNode { Id = Guid.NewGuid(), NodeKey = PortfolioRiskMathNodeKeys.ExecuteCore, NodeType = PortfolioRiskMathNodeTypes.Execute, TemplateNodeKey = "portfolio-risk-core", Status = AgentNodeStatuses.Pending, InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-portfolio-return", "calculate-concentration", "calculate-annualized-volatility", "calculate-max-drawdown", "calculate-historical-var", "calculate-expected-shortfall", "calculate-portfolio-volatility", "calculate-volatility-risk-contribution" } }) },
             Node(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution),
             Node(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile),
             Node(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses),
@@ -39,11 +41,11 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
         ["version"] = PortfolioDiagnosisWorkflow.Version,
         ["nodes"] = new JsonArray
         {
-            N(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext), N(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution), N(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile), N(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses), N(PortfolioDiagnosisNodeKeys.BuildEvidencePacket, PortfolioDiagnosisNodeTypes.BuildEvidencePacket), N(PortfolioDiagnosisNodeKeys.DraftDiagnosis, PortfolioDiagnosisNodeTypes.DraftDiagnosis), N(PortfolioDiagnosisNodeKeys.FinalizeDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeDiagnosis)
+            N(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext), N(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeTypes.PrepareInputs), N(PortfolioRiskMathNodeKeys.ExecuteCore, PortfolioRiskMathNodeTypes.Execute), N(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution), N(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile), N(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses), N(PortfolioDiagnosisNodeKeys.BuildEvidencePacket, PortfolioDiagnosisNodeTypes.BuildEvidencePacket), N(PortfolioDiagnosisNodeKeys.DraftDiagnosis, PortfolioDiagnosisNodeTypes.DraftDiagnosis), N(PortfolioDiagnosisNodeKeys.FinalizeDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeDiagnosis)
         },
         ["edges"] = new JsonArray
         {
-            E(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeKeys.CalculateAttribution), E(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeKeys.LoadRiskProfile), E(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses), E(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeKeys.BuildEvidencePacket), E(PortfolioDiagnosisNodeKeys.BuildEvidencePacket, PortfolioDiagnosisNodeKeys.DraftDiagnosis), E(PortfolioDiagnosisNodeKeys.DraftDiagnosis, PortfolioDiagnosisNodeKeys.FinalizeDiagnosis)
+            E(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioRiskMathNodeKeys.PrepareInputs), E(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeKeys.ExecuteCore), E(PortfolioRiskMathNodeKeys.ExecuteCore, PortfolioDiagnosisNodeKeys.CalculateAttribution), E(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeKeys.LoadRiskProfile), E(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses), E(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeKeys.BuildEvidencePacket), E(PortfolioDiagnosisNodeKeys.BuildEvidencePacket, PortfolioDiagnosisNodeKeys.DraftDiagnosis), E(PortfolioDiagnosisNodeKeys.DraftDiagnosis, PortfolioDiagnosisNodeKeys.FinalizeDiagnosis)
         }
     };
 

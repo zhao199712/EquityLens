@@ -7,4 +7,5 @@ public sealed class CohereOptions
     public string ApiKey { get; set; } = "";
     public string BaseUrl { get; set; } = "https://api.cohere.com/v2";
     public string RerankModel { get; set; } = "rerank-v4.0-fast";
+    public int TimeoutSeconds { get; set; } = 10;
 }

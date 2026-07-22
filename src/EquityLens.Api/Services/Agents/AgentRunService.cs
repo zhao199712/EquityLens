@@ -168,6 +168,85 @@ public sealed class AgentRunService : IAgentRunService
         return MapSummary(run);
     }
 
+    public async Task<SubmitAgentFeedbackResponse> SubmitFeedbackAsync(
+        Guid runId, Guid userId, SubmitAgentFeedbackRequest request, CancellationToken cancellationToken = default)
+    {
+        if (request.RequestId == Guid.Empty) throw new AgentFeedbackException("feedback_request_id_required", "requestId is required.");
+        var type = request.FeedbackType?.Trim();
+        if (type is not (AgentFeedbackTypes.Helpful or AgentFeedbackTypes.NeedsCorrection))
+            throw new AgentFeedbackException("feedback_type_invalid", "feedbackType must be Helpful or NeedsCorrection.");
+        var comment = request.Comment?.Trim();
+        if (type == AgentFeedbackTypes.NeedsCorrection && (comment is null || comment.Length is < 5 or > 2000))
+            throw new AgentFeedbackException("feedback_comment_invalid", "修正要求必須為 5 到 2000 個字元。");
+
+        var source = await _dbContext.AgentRuns.SingleOrDefaultAsync(x => x.Id == runId && x.UserId == userId, cancellationToken)
+            ?? throw new AgentFeedbackException("agent_run_not_found", "Agent run not found.");
+        var existing = await _dbContext.AgentFeedback.AsNoTracking().SingleOrDefaultAsync(
+            x => x.AgentRunId == runId && x.ClientRequestId == request.RequestId, cancellationToken);
+        if (existing is not null)
+        {
+            var followUp = existing.FollowUpAgentRunId is Guid followUpId
+                ? await _dbContext.AgentRuns.AsNoTracking().SingleAsync(x => x.Id == followUpId, cancellationToken)
+                : null;
+            return new(MapFeedback(existing), followUp is null ? null : MapSummary(followUp), followUp?.ResearchRunId);
+        }
+        if (source.Status != AgentRunStatuses.Succeeded)
+            throw new AgentFeedbackException("agent_run_not_complete", "Only a succeeded run can receive feedback.");
+
+        var feedback = new AgentFeedback
+        {
+            Id = Guid.NewGuid(), AgentRunId = source.Id, ClientRequestId = request.RequestId,
+            FeedbackType = type, Status = AgentFeedbackStatuses.Responded,
+            Prompt = type == AgentFeedbackTypes.Helpful ? "使用者認為此結果有幫助。" : "使用者要求修正研究答案。",
+            ResponseJson = AgentNodeJson.Serialize(new { comment }), CreatedAtUtc = DateTime.UtcNow, RespondedAtUtc = DateTime.UtcNow
+        };
+        _dbContext.AgentFeedback.Add(feedback);
+        AddEvent(source, null, AgentEventTypes.FeedbackSubmitted, "User feedback submitted.", new { feedback.Id, feedback.FeedbackType, feedback.ClientRequestId });
+
+        AgentRun? childRun = null;
+        ResearchRun? childResearch = null;
+        if (type == AgentFeedbackTypes.NeedsCorrection)
+        {
+            if (source.WorkflowType is not (AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) || source.ResearchRunId is null)
+                throw new AgentFeedbackException("feedback_revision_unsupported", "NeedsCorrection currently supports completed research runs only.");
+            var parentResearch = await _dbContext.ResearchRuns.AsNoTracking().SingleAsync(x => x.Id == source.ResearchRunId, cancellationToken);
+            childResearch = new ResearchRun
+            {
+                Id = Guid.NewGuid(), UserId = userId, ParentResearchRunId = parentResearch.Id, RevisionFeedbackId = feedback.Id,
+                TraceId = Guid.NewGuid().ToString("N"), Ticker = parentResearch.Ticker, Question = parentResearch.Question,
+                Answer = string.Empty, Status = "Pending", RetrievalMode = parentResearch.RetrievalMode,
+                SourcePolicy = parentResearch.SourcePolicy, DocumentType = parentResearch.DocumentType,
+                TopK = parentResearch.TopK, Temperature = parentResearch.Temperature, CreatedAtUtc = DateTime.UtcNow
+            };
+            var provider = GetWorkflowProvider(AgentWorkflowTypes.FeedbackRevision);
+            childRun = provider.CreateRun(userId, source.Id);
+            childRun.ResearchRunId = childResearch.Id;
+            childRun.ParentAgentRunId = source.Id;
+            feedback.FollowUpAgentRunId = childRun.Id;
+            await SnapshotExecutionPoliciesAsync(childRun, cancellationToken);
+            _dbContext.ResearchRuns.Add(childResearch);
+            _dbContext.AgentRuns.Add(childRun);
+            AddEvent(childRun, null, AgentEventTypes.RunCreated, "FeedbackRevision child run created.", new { parentAgentRunId = source.Id, parentResearchRunId = parentResearch.Id, feedbackId = feedback.Id });
+            AddEvent(source, null, AgentEventTypes.FollowUpRunCreated, "Feedback child run created.", new { feedbackId = feedback.Id, childAgentRunId = childRun.Id, childResearchRunId = childResearch.Id });
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (childRun is not null) await EnqueueAsync(childRun, userId, cancellationToken);
+        return new(MapFeedback(feedback), childRun is null ? null : MapSummary(childRun), childResearch?.Id);
+    }
+
+    public async Task<IReadOnlyList<AgentRunSummaryResponse>> ListChildrenAsync(
+        Guid parentRunId, Guid userId, CancellationToken cancellationToken = default)
+    {
+        var ownsParent = await _dbContext.AgentRuns.AsNoTracking().AnyAsync(x => x.Id == parentRunId && x.UserId == userId, cancellationToken);
+        if (!ownsParent) return [];
+        return await _dbContext.AgentRuns.AsNoTracking()
+            .Where(x => x.ParentAgentRunId == parentRunId && x.UserId == userId)
+            .OrderBy(x => x.CreatedAtUtc)
+            .Select(x => new AgentRunSummaryResponse(x.Id, x.WorkflowType, x.AgentType, x.Status, x.CreatedAtUtc, x.StartedAtUtc, x.CompletedAtUtc, x.ErrorMessage, x.TotalInputTokens, x.TotalOutputTokens, x.TotalEstimatedCostUsd, x.ParentAgentRunId))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(
         Guid? userId,
         int limit = 50,
@@ -209,18 +288,25 @@ public sealed class AgentRunService : IAgentRunService
         var run = await runQuery.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (run is null) return null;
 
-        var nodes = await _dbContext.AgentRunNodes.AsNoTracking()
+        var nodeEntities = await _dbContext.AgentRunNodes.AsNoTracking()
             .Where(x => x.AgentRunId == id)
             .OrderBy(x => x.StartedAtUtc ?? DateTime.MaxValue)
             .ThenBy(x => x.NodeKey)
-            .Select(x => new AgentRunNodeResponse(
-                x.Id, x.NodeKey, x.TemplateNodeKey, x.Iteration, x.NodeType, x.Status, x.InputJson, x.OutputJson,
+            .ToListAsync(cancellationToken);
+        var catalogNodes = _catalog.Nodes.ToDictionary(x => x.NodeType, StringComparer.Ordinal);
+        var nodes = nodeEntities.Select(x =>
+        {
+            catalogNodes.TryGetValue(x.NodeType, out var metadata);
+            return new AgentRunNodeResponse(
+                x.Id, x.NodeKey, x.TemplateNodeKey, x.Iteration, x.NodeType,
+                metadata?.DisplayName ?? x.NodeType, metadata?.Description, metadata?.Stage ?? "Processing",
+                x.Status, x.InputJson, x.OutputJson,
                 x.ErrorMessage, x.ErrorCode, x.ErrorCategory, x.ErrorRetryable,
                 x.InputBlackboardVersion, x.OutputBlackboardVersion, x.ProducedBlackboardKeys,
                 x.BlackboardSnapshotJson,
                 x.InputTokens, x.OutputTokens, x.EstimatedCostUsd,
-                x.StartedAtUtc, x.CompletedAtUtc, x.DurationMs))
-            .ToListAsync(cancellationToken);
+                x.StartedAtUtc, x.CompletedAtUtc, x.DurationMs);
+        }).ToList();
 
         var events = await _dbContext.AgentRunEvents.AsNoTracking()
             .Where(x => x.AgentRunId == id)
@@ -242,7 +328,7 @@ public sealed class AgentRunService : IAgentRunService
             .OrderBy(x => x.CreatedAtUtc)
             .Select(x => new AgentFeedbackResponse(
                 x.Id, x.AgentRunNodeId, x.FeedbackType, x.Status, x.Prompt, x.ResponseJson,
-                x.CreatedAtUtc, x.RespondedAtUtc))
+                x.CreatedAtUtc, x.RespondedAtUtc, x.ClientRequestId, x.FollowUpAgentRunId))
             .ToListAsync(cancellationToken);
 
         return new AgentRunDetailResponse(
@@ -281,6 +367,13 @@ public sealed class AgentRunService : IAgentRunService
         else
         {
             run.BlackboardJson = provider.CreateInitialBlackboardJson(GetSourceRunId(run.InputJson));
+            if (run.WorkflowType == AgentWorkflowTypes.FeedbackRevision && run.ResearchRunId is Guid feedbackResearchRunId)
+            {
+                var researchRun = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == feedbackResearchRunId, cancellationToken);
+                researchRun.Status = "Pending";
+                researchRun.Answer = string.Empty;
+                researchRun.ErrorMessage = null;
+            }
         }
         run.StartedAtUtc = null;
         run.CompletedAtUtc = null;
@@ -331,7 +424,7 @@ public sealed class AgentRunService : IAgentRunService
 
         _runStateMachine.Transition(run, AgentRunStatuses.Cancelled);
         run.CompletedAtUtc = DateTime.UtcNow;
-        if (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation && run.ResearchRunId is Guid researchRunId)
+        if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)
         {
             var artifact = await _dbContext.ResearchRuns.SingleOrDefaultAsync(x => x.Id == researchRunId, cancellationToken);
             if (artifact is not null) artifact.Status = "Cancelled";
@@ -400,6 +493,7 @@ public sealed class AgentRunService : IAgentRunService
             return criticReviewRunId.GetGuid();
         }
         if (root.TryGetProperty("portfolioId", out var portfolioId)) return portfolioId.GetGuid();
+        if (root.TryGetProperty("parentAgentRunId", out var parentAgentRunId)) return parentAgentRunId.GetGuid();
 
         throw new InvalidOperationException("Agent run input is missing source id.");
     }
@@ -429,7 +523,17 @@ public sealed class AgentRunService : IAgentRunService
         run.ErrorMessage,
         run.TotalInputTokens,
         run.TotalOutputTokens,
-        run.TotalEstimatedCostUsd);
+        run.TotalEstimatedCostUsd,
+        run.ParentAgentRunId);
+
+    private static AgentFeedbackResponse MapFeedback(AgentFeedback feedback) => new(
+        feedback.Id, feedback.AgentRunNodeId, feedback.FeedbackType, feedback.Status, feedback.Prompt,
+        feedback.ResponseJson, feedback.CreatedAtUtc, feedback.RespondedAtUtc, feedback.ClientRequestId, feedback.FollowUpAgentRunId);
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, SerializerOptions);
+}
+
+public sealed class AgentFeedbackException(string code, string message) : InvalidOperationException(message)
+{
+    public string Code { get; } = code;
 }

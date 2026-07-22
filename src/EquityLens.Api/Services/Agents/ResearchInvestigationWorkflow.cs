@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Research;
@@ -61,6 +62,8 @@ public sealed class ResearchInvestigationWorkflowDefinitionProvider : IAgentWork
         [AgentBlackboardKeys.Citations] = new JsonArray(),
         [AgentBlackboardKeys.Candidates] = new JsonArray(),
         [AgentBlackboardKeys.Steps] = new JsonArray()
+        ,[AgentBlackboardKeys.MathInputs] = null
+        ,[AgentBlackboardKeys.MathResults] = new JsonArray()
     }.ToJsonString(AgentNodeJson.SerializerOptions);
 
     private static string Definition()
@@ -116,7 +119,9 @@ public sealed class PlanResearchRetrievalNodeHandler(IRetrievalPlanner planner, 
     {
         var board = ResearchInvestigationBoard.Parse(context.Run); var request = ResearchInvestigationBoard.Required<ResearchAskRequest>(board, AgentBlackboardKeys.ResearchRequest);
         var topK = Math.Clamp(request.TopK <= 0 ? options.Value.DefaultTopK : request.TopK, 1, options.Value.MaxTopK);
-        var plan = planner.BuildPlan(request.Question, request.RetrievalMode, request.DocumentType, topK);
+        var feedback = board[AgentBlackboardKeys.FeedbackComment]?.GetValue<string>();
+        var retrievalQuestion = string.IsNullOrWhiteSpace(feedback) ? request.Question : $"{request.Question}\n使用者要求修正：{feedback}";
+        var plan = planner.BuildPlan(retrievalQuestion, request.RetrievalMode, request.DocumentType, topK);
         board[AgentBlackboardKeys.RetrievalPlan] = JsonSerializer.SerializeToNode(plan, AgentNodeJson.SerializerOptions);
         board[AgentBlackboardKeys.InitialEvidence] = new JsonArray();
         ResearchInvestigationBoard.Commit(context, board, plan); return Task.CompletedTask;
@@ -140,7 +145,9 @@ public sealed class EvaluateInitialEvidencePolicyNodeHandler : IAgentNodeHandler
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = ResearchInvestigationBoard.Parse(context.Run); var request = ResearchInvestigationBoard.Required<ResearchAskRequest>(board, AgentBlackboardKeys.ResearchRequest); var local = ResearchInvestigationBoard.Required<List<RetrievedDocumentChunk>>(board, AgentBlackboardKeys.InitialEvidence);
-        var freshnessSensitive = ResearchInvestigationPlanning.IsFreshnessSensitive(request.Question);
+        var feedback = board[AgentBlackboardKeys.FeedbackComment]?.GetValue<string>();
+        var freshnessSensitive = ResearchInvestigationPlanning.IsFreshnessSensitive(request.Question)
+            || (!string.IsNullOrWhiteSpace(feedback) && ResearchInvestigationPlanning.IsFreshnessSensitive(feedback));
         var useWeb = request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalAndWeb
             || request.SourcePolicy == SourcePolicy.LocalThenWeb && (local.Count == 0 || freshnessSensitive)
             || request.SourcePolicy == SourcePolicy.Auto && freshnessSensitive;
@@ -155,7 +162,9 @@ public sealed class RetrieveWebResearchEvidenceNodeHandler(IWebRetriever retriev
     {
         var board = ResearchInvestigationBoard.Parse(context.Run); var request = ResearchInvestigationBoard.Required<ResearchAskRequest>(board, AgentBlackboardKeys.ResearchRequest); var evidence = ResearchInvestigationBoard.Required<List<RetrievedDocumentChunk>>(board, AgentBlackboardKeys.InitialEvidence);
         var useWeb = board[AgentBlackboardKeys.InitialEvidencePolicy]?["useWeb"]?.GetValue<bool>() == true;
-        if (useWeb) evidence.AddRange(await retriever.RetrieveWebAsync(request.Question, options.Value.WebSearchCandidateCount, options.Value.WebSearchFreshness, cancellationToken));
+        var feedback = board[AgentBlackboardKeys.FeedbackComment]?.GetValue<string>();
+        var query = string.IsNullOrWhiteSpace(feedback) ? request.Question : $"{request.Question} 使用者要求修正：{feedback}";
+        if (useWeb) evidence.AddRange(await retriever.RetrieveWebAsync(query, options.Value.WebSearchCandidateCount, options.Value.WebSearchFreshness, cancellationToken));
         board[AgentBlackboardKeys.InitialEvidence] = JsonSerializer.SerializeToNode(evidence, AgentNodeJson.SerializerOptions); ResearchInvestigationBoard.Commit(context, board, new { source = "Web", used = useWeb, totalCount = evidence.Count });
     }
 }
@@ -166,8 +175,60 @@ public sealed class RankAndSelectResearchEvidenceNodeHandler(IResultReranker rer
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = ResearchInvestigationBoard.Parse(context.Run); var evidence = ResearchInvestigationBoard.Required<List<RetrievedDocumentChunk>>(board, AgentBlackboardKeys.InitialEvidence); var intent = ResearchInvestigationBoard.Required<IntentDetectionResult>(board, AgentBlackboardKeys.ResearchIntent); var request = ResearchInvestigationBoard.Required<ResearchAskRequest>(board, AgentBlackboardKeys.ResearchRequest);
-        var topK = Math.Clamp(request.TopK <= 0 ? options.Value.DefaultTopK : request.TopK, 1, options.Value.MaxTopK); var ranked = await reranker.Rank(evidence, intent.Selected, topK);
-        board[AgentBlackboardKeys.SelectedEvidence] = JsonSerializer.SerializeToNode(ranked, AgentNodeJson.SerializerOptions); ResearchInvestigationBoard.Commit(context, board, new { candidateCount = evidence.Count, selectedCount = ranked.SelectedResults.Count });
+        var topK = Math.Clamp(request.TopK <= 0 ? options.Value.DefaultTopK : request.TopK, 1, options.Value.MaxTopK);
+        var provider = options.Value.RerankProvider;
+        var toolName = $"{provider.Trim().ToLowerInvariant()}Rerank";
+        var toolCall = new AgentToolCall
+        {
+            Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            ToolName = toolName, Status = AgentToolCallStatuses.Running,
+            ArgumentsJson = AgentNodeJson.Serialize(new { provider, candidateCount = evidence.Count, topK }),
+            StartedAtUtc = DateTime.UtcNow
+        };
+        context.DbContext.AgentToolCalls.Add(toolCall);
+        context.AddEvent(context.Run, context.Node, AgentEventTypes.ToolCallStarted, $"Tool {toolName} started.", new { provider, candidateCount = evidence.Count, topK });
+        await context.DbContext.SaveChangesAsync(cancellationToken);
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var ranked = await reranker.Rank(evidence, intent.Selected, topK, cancellationToken);
+            stopwatch.Stop();
+            var diagnostics = ranked.RerankDiagnostics;
+            var usedFallback = diagnostics?.UsedFallback == true;
+            toolCall.Status = usedFallback ? AgentToolCallStatuses.Failed : AgentToolCallStatuses.Succeeded;
+            toolCall.ResultJson = diagnostics is null
+                ? AgentNodeJson.Serialize(new { Provider = provider, Status = "LocalOnly", UsedFallback = false, CandidateCount = evidence.Count, SelectedCount = ranked.SelectedResults.Count })
+                : AgentNodeJson.Serialize(diagnostics);
+            toolCall.ResultPreview = usedFallback
+                ? $"{diagnostics!.Status}: {diagnostics.FallbackReason} -> local ranking fallback"
+                : $"{diagnostics?.Status ?? "LocalOnly"}: {ranked.SelectedResults.Count} selected";
+            toolCall.ErrorMessage = usedFallback ? diagnostics!.FallbackReason : null;
+            toolCall.CompletedAtUtc = DateTime.UtcNow;
+            toolCall.DurationMs = diagnostics?.DurationMs ?? stopwatch.ElapsedMilliseconds;
+            context.AddEvent(context.Run, context.Node, usedFallback ? AgentEventTypes.ToolCallFailed : AgentEventTypes.ToolCallCompleted,
+                usedFallback ? $"Tool {toolName} fell back to local ranking." : $"Tool {toolName} completed.",
+                new { toolCall.DurationMs, diagnostics?.Status, diagnostics?.FallbackReason, diagnostics?.HttpStatusCode, diagnostics?.PayloadBytes, diagnostics?.CandidateCount, diagnostics?.SelectedCount, usedFallback });
+
+            board[AgentBlackboardKeys.SelectedEvidence] = JsonSerializer.SerializeToNode(ranked, AgentNodeJson.SerializerOptions);
+            ResearchInvestigationBoard.Commit(context, board, new { candidateCount = evidence.Count, selectedCount = ranked.SelectedResults.Count, rerankDiagnostics = diagnostics });
+        }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            toolCall.Status = AgentToolCallStatuses.Cancelled; toolCall.ErrorMessage = "Rerank cancelled."; toolCall.CompletedAtUtc = DateTime.UtcNow; toolCall.DurationMs = stopwatch.ElapsedMilliseconds;
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.ToolCallFailed, $"Tool {toolName} cancelled.", new { toolCall.DurationMs });
+            await context.DbContext.SaveChangesAsync(CancellationToken.None);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            stopwatch.Stop();
+            toolCall.Status = AgentToolCallStatuses.Failed; toolCall.ErrorMessage = exception.Message; toolCall.CompletedAtUtc = DateTime.UtcNow; toolCall.DurationMs = stopwatch.ElapsedMilliseconds;
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.ToolCallFailed, $"Tool {toolName} failed.", new { toolCall.DurationMs, error = exception.Message });
+            await context.DbContext.SaveChangesAsync(CancellationToken.None);
+            throw;
+        }
     }
 }
 
@@ -177,9 +238,19 @@ public sealed class DraftResearchAnswerNodeHandler(IContextSelector selector, IC
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = ResearchInvestigationBoard.Parse(context.Run); var request = ResearchInvestigationBoard.Required<ResearchAskRequest>(board, AgentBlackboardKeys.ResearchRequest); var plan = ResearchInvestigationBoard.Required<ResearchRetrievalStrategy>(board, AgentBlackboardKeys.RetrievalPlan); var intent = ResearchInvestigationBoard.Required<IntentDetectionResult>(board, AgentBlackboardKeys.ResearchIntent); var ranked = ResearchInvestigationBoard.Required<RankedSelection>(board, AgentBlackboardKeys.SelectedEvidence);
-        var selected = selector.Select(ranked, intent.Selected, plan); var answer = selected.Chunks.Count == 0 ? new AnswerGenerationResult("目前提供的資料不足以回答此問題。", generator.Model, 0, 0, 0, false, []) : await generator.GenerateAsync(request.Question, formatter.Format(selected.Chunks), selected.RetrievalNote, Math.Clamp(request.Temperature, 0, 1), selected.Chunks.Count, cancellationToken);
+        var selected = selector.Select(ranked, intent.Selected, plan);
+        var mathResults = board[AgentBlackboardKeys.MathResults] as JsonArray;
+        var feedback = board[AgentBlackboardKeys.FeedbackComment]?.GetValue<string>();
+        var originalAnswer = board[AgentBlackboardKeys.OriginalAnswer]?.GetValue<string>();
+        var revisionContext = string.IsNullOrWhiteSpace(feedback) ? string.Empty
+            : $"\n\n[User-requested revision]\nOriginal answer:\n{originalAnswer}\n\nUser feedback:\n{feedback}\nRevise the answer to address this feedback. Preserve only claims supported by the supplied evidence and cite them.";
+        var formattedContext = formatter.Format(selected.Chunks)
+            + (mathResults is { Count: > 0 } ? $"\n\n[Deterministic portfolio/risk mathematics]\n{mathResults.ToJsonString(AgentNodeJson.SerializerOptions)}" : string.Empty)
+            + revisionContext;
+        var hasEvidence = selected.Chunks.Count > 0 || mathResults is { Count: > 0 };
+        var answer = !hasEvidence ? new AnswerGenerationResult("目前提供的資料不足以回答此問題。", generator.Model, 0, 0, 0, false, []) : await generator.GenerateAsync(request.Question, formattedContext, selected.RetrievalNote, Math.Clamp(request.Temperature, 0, 1), selected.Chunks.Count, cancellationToken);
         var citations = selected.Chunks.Select(x => new ResearchCitation(x.Index, x.Chunk.SourceType, x.Chunk.SourceType == CitationSourceType.LocalDocument ? x.Chunk.Result.DocumentChunkId : null, x.Chunk.Result.DocumentId, x.Chunk.Result.DocumentTitle, x.Chunk.Result.DocumentType, x.Chunk.SourceRole, x.Chunk.Result.PageNumber, x.Chunk.Url, x.Chunk.PublishedAt, x.Chunk.RetrievedAt, Trim(x.Chunk.Result.Content), x.Chunk.Result.RelevanceScore)).ToList();
-        var status = selected.Chunks.Count == 0 ? "InsufficientEvidence" : answer.CitationValidationFailed ? "CitationValidationFailed" : "Answered";
+        var status = !hasEvidence ? "InsufficientEvidence" : answer.CitationValidationFailed ? "CitationValidationFailed" : "Answered";
         var citationNodes = JsonSerializer.SerializeToNode(citations.Select(c => new
         {
             citationIndex = c.Index,

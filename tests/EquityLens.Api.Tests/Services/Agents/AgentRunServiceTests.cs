@@ -151,6 +151,22 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
+    public void FeedbackRevisionPolicyEvaluator_UsesResearchEvidenceAcceptancePolicy()
+    {
+        var board = new JsonObject
+        {
+            [AgentBlackboardKeys.EvidencePacket] = new JsonObject { ["evidenceSummary"] = new JsonObject { ["hasAnswer"] = true, ["hasCitations"] = true, ["emptyQuoteCount"] = 0 } },
+            [AgentBlackboardKeys.EvidenceChecks] = new JsonObject { [EvidenceCheckFields.FindingCount] = 0 }
+        };
+        var review = new JsonObject { [CriticReviewFields.OverallSeverity] = "None", [CriticReviewFields.Findings] = new JsonArray() };
+
+        var decision = new FeedbackRevisionPolicyEvaluator().Evaluate(new(AgentWorkflowTypes.FeedbackRevision, "finalizeFeedbackRevision:1", board, review));
+
+        Assert.Equal("AcceptAnswer", decision.RecommendedNextAction);
+        Assert.False(decision.RequiresRevision);
+    }
+
+    [Fact]
     public void ResearchQualityReviewPolicyEvaluator_NonEvidenceFinding_SetsRouteBackToNull()
     {
         var evaluator = new ResearchQualityReviewPolicyEvaluator();
@@ -193,6 +209,10 @@ public sealed class AgentRunServiceTests
         Assert.NotNull(detail);
         Assert.Equal(5, detail.Nodes.Count);
         Assert.Contains(detail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Succeeded);
+        var critiqueNode = Assert.Single(detail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer);
+        Assert.Equal("評論答案", critiqueNode.DisplayName);
+        Assert.Equal("Analyze", critiqueNode.Stage);
+        Assert.False(string.IsNullOrWhiteSpace(critiqueNode.Description));
         AssertCriticReviewWorkflowDefinition(detail.WorkflowDefinitionJson);
         Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunStarted);
         Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunSucceeded);
@@ -1186,6 +1206,74 @@ public sealed class AgentRunServiceTests
         Assert.Equal(ResearchQualityReviewNodeKeys.CritiqueAnswer, edges[2].GetProperty("to").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.CritiqueAnswer, edges[3].GetProperty("from").GetString());
         Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeCriticReport, edges[3].GetProperty("to").GetString());
+    }
+
+    [Fact]
+    public async Task SubmitFeedbackAsync_NeedsCorrection_CreatesImmutableChildRunAndResearchArtifact()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        var sourceResearch = new ResearchRun
+        {
+            Id = Guid.NewGuid(), UserId = userId, TraceId = Guid.NewGuid().ToString("N"), Ticker = "2454",
+            Question = "聯發科的獲利表現如何？", Answer = "原始答案 [1]", Status = "Answered",
+            RetrievalMode = "Auto", SourcePolicy = "Auto", TopK = 8, Temperature = 0.1
+        };
+        var sourceRun = new AgentRun
+        {
+            Id = Guid.NewGuid(), UserId = userId, ResearchRunId = sourceResearch.Id,
+            WorkflowType = AgentWorkflowTypes.ResearchInvestigation, AgentType = AgentTypes.Research,
+            Status = AgentRunStatuses.Succeeded, InputJson = "{}", BlackboardJson = "{}",
+            WorkflowDefinitionJson = "{\"nodes\":[]}", OutputJson = "{\"answer\":\"原始答案 [1]\"}"
+        };
+        db.ResearchRuns.Add(sourceResearch); db.AgentRuns.Add(sourceRun); await db.SaveChangesAsync();
+        var queue = new RecordingAgentRunQueue();
+        var service = CreateServiceWithHandlers(db, [new FeedbackRevisionWorkflowDefinitionProvider()], [], queue);
+        var requestId = Guid.NewGuid();
+
+        var created = await service.SubmitFeedbackAsync(sourceRun.Id, userId,
+            new SubmitAgentFeedbackRequest(requestId, AgentFeedbackTypes.NeedsCorrection, "請重新檢查財報數字與引用來源。"));
+        var repeated = await service.SubmitFeedbackAsync(sourceRun.Id, userId,
+            new SubmitAgentFeedbackRequest(requestId, AgentFeedbackTypes.NeedsCorrection, "請重新檢查財報數字與引用來源。"));
+
+        Assert.NotNull(created.FollowUpAgentRun);
+        Assert.Equal(created.FollowUpAgentRun.Id, repeated.FollowUpAgentRun!.Id);
+        Assert.Equal(sourceRun.Id, created.FollowUpAgentRun.ParentAgentRunId);
+        Assert.Equal(AgentWorkflowTypes.FeedbackRevision, created.FollowUpAgentRun.WorkflowType);
+        Assert.Equal(AgentRunStatuses.Pending, created.FollowUpAgentRun.Status);
+        Assert.Equal(2, await db.AgentRuns.CountAsync());
+        Assert.Single(await db.AgentFeedback.ToListAsync());
+        var childResearch = await db.ResearchRuns.SingleAsync(x => x.Id == created.FollowUpResearchRunId);
+        Assert.Equal(sourceResearch.Id, childResearch.ParentResearchRunId);
+        Assert.Equal(created.Feedback.Id, childResearch.RevisionFeedbackId);
+        Assert.Equal("Pending", childResearch.Status);
+        Assert.Single(queue.Messages);
+        var children = await service.ListChildrenAsync(sourceRun.Id, userId);
+        Assert.Single(children);
+        Assert.Equal(created.FollowUpAgentRun.Id, children[0].Id);
+    }
+
+    [Fact]
+    public async Task SubmitFeedbackAsync_Helpful_RecordsFeedbackWithoutStartingChildRun()
+    {
+        await using var db = CreateDbContext(); var userId = Guid.NewGuid();
+        var sourceRun = new AgentRun
+        {
+            Id = Guid.NewGuid(), UserId = userId, WorkflowType = AgentWorkflowTypes.PortfolioDiagnosis,
+            AgentType = AgentTypes.Analysis, Status = AgentRunStatuses.Succeeded, InputJson = "{}",
+            BlackboardJson = "{}", WorkflowDefinitionJson = "{\"nodes\":[]}", OutputJson = "{}"
+        };
+        db.AgentRuns.Add(sourceRun); await db.SaveChangesAsync();
+        var queue = new RecordingAgentRunQueue();
+        var service = CreateServiceWithHandlers(db, [new FeedbackRevisionWorkflowDefinitionProvider()], [], queue);
+
+        var result = await service.SubmitFeedbackAsync(sourceRun.Id, userId,
+            new SubmitAgentFeedbackRequest(Guid.NewGuid(), AgentFeedbackTypes.Helpful, null));
+
+        Assert.Null(result.FollowUpAgentRun);
+        Assert.Null(result.FollowUpResearchRunId);
+        Assert.Empty(queue.Messages);
+        Assert.Single(await db.AgentFeedback.ToListAsync());
     }
 
     private static AgentRunService CreateService(

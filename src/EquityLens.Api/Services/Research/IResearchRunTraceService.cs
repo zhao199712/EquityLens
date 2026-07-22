@@ -41,7 +41,9 @@ public sealed record ResearchRunSummaryDto(
     int CitationCount,
     string RetrievalMode,
     long LatencyMs,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    Guid? ParentResearchRunId = null,
+    Guid? RevisionFeedbackId = null);
 
 public sealed record ResearchRunStepDto(
     Guid Id,

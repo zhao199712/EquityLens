@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
+import AgentRunProgress from '../../components/agents/AgentRunProgress.vue'
 import { getResearchRun, type ResearchRunDetail } from '../../services/research'
-import { listAgentRuns, type AgentRunListItem } from '../../services/agentRuns'
+import { getAgentRun, listAgentRuns, submitAgentFeedback, type AgentRunDetail, type AgentRunListItem } from '../../services/agentRuns'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,21 +13,35 @@ const loading = ref(true)
 const error = ref('')
 const activeTab = ref<'answer' | 'citations' | 'steps' | 'candidates' | 'agentRuns'>('answer')
 const agentRuns = ref<AgentRunListItem[]>([])
-const investigationRun = computed(() => agentRuns.value.find(run => run.workflowType === 'ResearchInvestigation') ?? agentRuns.value.find(run => run.workflowType === 'ResearchQualityReview') ?? null)
+const agentRunDetail = ref<AgentRunDetail | null>(null)
+const refreshing = ref(false)
+const feedbackComment = ref('')
+const showCorrection = ref(false)
+const feedbackSubmitting = ref(false)
+const feedbackMessage = ref('')
+const feedbackError = ref('')
+let pollTimer: ReturnType<typeof setInterval> | null = null
+const investigationRun = computed(() => agentRuns.value.find(run => run.workflowType === 'FeedbackRevision') ?? agentRuns.value.find(run => run.workflowType === 'ResearchInvestigation') ?? agentRuns.value.find(run => run.workflowType === 'ResearchQualityReview') ?? null)
+const isTerminal = computed(() => ['Answered', 'Failed', 'Cancelled'].includes(runDetail.value?.run.status ?? ''))
 
-onMounted(loadRun)
+onMounted(() => { loadRun(true); pollTimer = setInterval(() => loadRun(false), 2000) })
+onUnmounted(stopPolling)
 
-async function loadRun() {
+async function loadRun(showLoading = false) {
+  if (refreshing.value) return
   const id = route.params.id as string
-  loading.value = true
+  refreshing.value = true
+  if (showLoading) loading.value = true
   error.value = ''
   try {
     runDetail.value = await getResearchRun(id)
     await loadAgentRuns(id)
+    if (isTerminal.value) stopPolling()
   } catch {
     error.value = '無法載入研究結果。'
   } finally {
     loading.value = false
+    refreshing.value = false
   }
 }
 
@@ -34,9 +49,40 @@ async function loadAgentRuns(researchRunId: string) {
   try {
     const all = await listAgentRuns({ limit: 50, researchRunId })
     agentRuns.value = all
+    const investigation = all.find(run => run.workflowType === 'FeedbackRevision') ?? all.find(run => run.workflowType === 'ResearchInvestigation') ?? all.find(run => run.workflowType === 'ResearchQualityReview')
+    agentRunDetail.value = investigation ? await getAgentRun(investigation.id) : null
   } catch {
     // non-critical
   }
+}
+
+async function sendFeedback(type: 'Helpful' | 'NeedsCorrection') {
+  if (!investigationRun.value || feedbackSubmitting.value) return
+  feedbackError.value = ''
+  feedbackMessage.value = ''
+  if (type === 'NeedsCorrection' && feedbackComment.value.trim().length < 5) {
+    feedbackError.value = '請至少輸入 5 個字的修正要求。'
+    return
+  }
+  feedbackSubmitting.value = true
+  try {
+    const result = await submitAgentFeedback(investigationRun.value.id, type, feedbackComment.value)
+    if (result.followUpAgentRun) {
+      await router.push({ name: 'agent-run-detail', params: { id: result.followUpAgentRun.id } })
+    } else {
+      feedbackMessage.value = '謝謝你的回饋。'
+      await loadAgentRuns(route.params.id as string)
+    }
+  } catch (e: any) {
+    feedbackError.value = e?.response?.data?.message || '無法送出回饋。'
+  } finally {
+    feedbackSubmitting.value = false
+  }
+}
+
+function stopPolling() {
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = null
 }
 
 function formatDate(iso: string | null) {
@@ -81,8 +127,9 @@ function statusColor(status: string) {
           </div>
           <h2 class="question-title">{{ runDetail.run.question }}</h2>
           <div class="head-actions">
+            <button v-if="runDetail.run.parentResearchRunId" class="prestige-btn" @click="router.push({ name: 'research-run-detail', params: { id: runDetail.run.parentResearchRunId } })">查看原始版本</button>
             <button v-if="investigationRun" class="prestige-btn prestige-btn-solid" @click="router.push({ name: 'agent-run-detail', params: { id: investigationRun.id } })">查看 Investigation</button>
-            <button class="prestige-btn" @click="loadRun">重新整理</button>
+            <button class="prestige-btn" :disabled="refreshing" @click="loadRun(false)">重新整理</button>
           </div>
           <div class="meta-row">
             <span>Citations：<span class="prestige-mono">{{ runDetail.run.citationCount }}</span></span>
@@ -90,6 +137,15 @@ function statusColor(status: string) {
             <span>建立：<span class="prestige-mono">{{ formatDate(runDetail.run.createdAtUtc) }}</span></span>
           </div>
         </div>
+
+        <AgentRunProgress
+          v-if="agentRunDetail"
+          :nodes="agentRunDetail.nodes"
+          :workflow-definition="agentRunDetail.workflowDefinitionJson"
+          :run-status="agentRunDetail.run.status"
+          :started-at-utc="agentRunDetail.run.startedAtUtc"
+          :completed-at-utc="agentRunDetail.run.completedAtUtc"
+        />
 
         <!-- Tabs -->
         <div class="tabs">
@@ -106,7 +162,28 @@ function statusColor(status: string) {
         <!-- Tab content -->
         <div class="prestige-panel tab-panel">
           <!-- Tab: Answer -->
-          <div v-if="activeTab === 'answer'" class="answer-body">{{ runDetail.answer }}</div>
+          <div v-if="activeTab === 'answer' && runDetail.run.status === 'Answered'">
+            <div class="answer-body">{{ runDetail.answer }}</div>
+            <div class="feedback-panel">
+              <div class="feedback-title">這份研究結果有解決你的問題嗎？</div>
+              <div class="feedback-actions">
+                <button class="prestige-btn" :disabled="feedbackSubmitting" @click="sendFeedback('Helpful')">有幫助</button>
+                <button class="prestige-btn" :disabled="feedbackSubmitting" @click="showCorrection = !showCorrection">要求修正</button>
+              </div>
+              <div v-if="showCorrection" class="correction-form">
+                <textarea v-model="feedbackComment" class="prestige-input correction-input" maxlength="2000" placeholder="請指出需要修正的結論、證據、數字或分析方式…" />
+                <button class="prestige-btn prestige-btn-solid" :disabled="feedbackSubmitting || feedbackComment.trim().length < 5" @click="sendFeedback('NeedsCorrection')">
+                  {{ feedbackSubmitting ? '建立修訂中…' : '建立動態修訂' }}
+                </button>
+              </div>
+              <div v-if="feedbackMessage" class="feedback-success">{{ feedbackMessage }}</div>
+              <div v-if="feedbackError" class="prestige-error feedback-error">{{ feedbackError }}</div>
+            </div>
+          </div>
+          <div v-else-if="activeTab === 'answer' && (runDetail.run.status === 'Failed' || runDetail.run.status === 'Cancelled')" class="prestige-error">
+            研究流程未完成。<button v-if="investigationRun" class="prestige-btn" @click="router.push({ name: 'agent-run-detail', params: { id: investigationRun.id } })">查看錯誤詳情</button>
+          </div>
+          <div v-else-if="activeTab === 'answer'" class="prestige-empty panel-empty">研究仍在背景執行，完成後答案會自動顯示。</div>
 
           <!-- Tab: Citations -->
           <template v-if="activeTab === 'citations'">
@@ -274,6 +351,15 @@ function statusColor(status: string) {
   line-height: 1.9;
   font-size: 14px;
 }
+
+.feedback-panel { margin: 0 24px 24px; padding: 18px; border: 1px solid var(--gold-border-soft); background: rgba(201, 168, 106, 0.04); }
+.feedback-title { margin-bottom: 12px; color: var(--ivory); font-size: 13px; }
+.feedback-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.correction-form { display: grid; gap: 10px; margin-top: 14px; }
+.correction-input { min-height: 110px; padding: 12px; resize: vertical; }
+.correction-form .prestige-btn { justify-self: start; }
+.feedback-success { margin-top: 10px; color: #7fa387; font-size: 13px; }
+.feedback-error { margin-top: 10px; }
 
 .list-item {
   padding: 16px 24px;

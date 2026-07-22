@@ -1,10 +1,10 @@
-import { ref, onUnmounted, computed } from 'vue'
+import { ref, onUnmounted, computed, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { getAgentRun, type AgentRunDetail } from '../services/agentRuns'
 
 const POLLING_INTERVAL = 2000
 const TERMINAL_STATUSES = new Set(['Succeeded', 'Failed', 'Cancelled'])
 
-export function useAgentRunPolling(runId: string) {
+export function useAgentRunPolling(runId: MaybeRefOrGetter<string>) {
   const agentRun = ref<AgentRunDetail | null>(null)
   const isLoading = ref(true)
   const isPolling = ref(false)
@@ -18,7 +18,7 @@ export function useAgentRunPolling(runId: string) {
 
   async function fetchRun() {
     try {
-      agentRun.value = await getAgentRun(runId)
+      agentRun.value = await getAgentRun(toValue(runId))
       error.value = ''
       if (isTerminalStatus.value) {
         stopPolling()
@@ -50,6 +50,11 @@ export function useAgentRunPolling(runId: string) {
   }
 
   onUnmounted(stopPolling)
+  watch(() => toValue(runId), () => {
+    agentRun.value = null
+    isLoading.value = true
+    startPolling()
+  })
 
   return {
     agentRun,

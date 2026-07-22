@@ -66,6 +66,8 @@ export interface ResearchRunSummary {
   retrievalMode: string
   latencyMs: number
   createdAtUtc: string
+  parentResearchRunId?: string | null
+  revisionFeedbackId?: string | null
 }
 
 export interface ResearchRunStep {

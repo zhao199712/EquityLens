@@ -75,6 +75,30 @@ public sealed class AgentRunGraphValidatorTests
     }
 
     [Fact]
+    public void Validate_RetainedFeedbackRevisionGraph_AcceptsResetBlackboardForRetry()
+    {
+        var run = new FeedbackRevisionWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        (string Key, string Type)[] dynamicNodes =
+        [
+            ("plan:1", ResearchInvestigationNodeTypes.PlanRetrieval),
+            ("local:1", ResearchInvestigationNodeTypes.RetrieveLocal),
+            ("evaluate:1", ResearchInvestigationNodeTypes.EvaluateEvidence),
+            ("rank:1", ResearchInvestigationNodeTypes.RankEvidence),
+            ("draft:1", ResearchInvestigationNodeTypes.DraftAnswer),
+            ("packet:1", ResearchQualityReviewNodeTypes.BuildEvidencePacket),
+            ("check:1", ResearchQualityReviewNodeTypes.CheckEvidence),
+            ("critic:1", ResearchQualityReviewNodeTypes.CritiqueAnswer),
+            ("finalize:1", ResearchQualityReviewNodeTypes.FinalizeCriticReport)
+        ];
+        foreach (var (key, type) in dynamicNodes)
+            run.Nodes.Add(new AgentRunNode { Id = Guid.NewGuid(), NodeKey = key, NodeType = type, Status = AgentNodeStatuses.Pending });
+        var order = new[] { FeedbackRevisionNodeKeys.LoadContext, FeedbackRevisionNodeKeys.ValidateContext }
+            .Concat(dynamicNodes.Select(x => x.Key)).ToArray();
+
+        new AgentRunGraphValidator().Validate(run, order);
+    }
+
+    [Fact]
     public void NodeMetadata_AllCriticReviewNodeTypes_HaveMetadata()
     {
         var allMetadata = AgentNodeMetadata.GetAll();

@@ -177,10 +177,11 @@ public sealed class ResearchAnswerServiceObservabilityTests
 
     private sealed class FakeReranker : IDocumentReranker
     {
-        public Task<IReadOnlyList<RetrievedDocumentChunk>> RerankAsync(
+        public Task<DocumentRerankResult> RerankAsync(
             string query, IReadOnlyList<RetrievedDocumentChunk> chunks, int topN, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<RetrievedDocumentChunk>>(chunks.Take(topN).ToList());
+            var results = chunks.Take(topN).ToList();
+            return Task.FromResult(new DocumentRerankResult(results, new("Test", "Succeeded", "test", false, null, 1, chunks.Count, results.Count, 0, 200)));
         }
     }
 

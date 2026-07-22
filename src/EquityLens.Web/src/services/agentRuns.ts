@@ -9,6 +9,7 @@ export interface AgentRunListItem {
   createdAtUtc: string
   startedAtUtc: string | null
   completedAtUtc: string | null
+  parentAgentRunId?: string | null
 }
 
 export interface AgentRunNodeDto {
@@ -17,6 +18,9 @@ export interface AgentRunNodeDto {
   templateNodeKey: string
   iteration: number
   nodeType: string
+  displayName: string
+  description: string | null
+  stage: string
   status: string
   inputJson: Record<string, unknown> | null
   outputJson: Record<string, unknown> | null
@@ -58,6 +62,14 @@ export interface AgentFeedbackDto {
   responseJson: Record<string, unknown> | null
   createdAtUtc: string
   respondedAtUtc: string | null
+  clientRequestId?: string
+  followUpAgentRunId?: string | null
+}
+
+export interface SubmitAgentFeedbackResponse {
+  feedback: AgentFeedbackDto
+  followUpAgentRun: AgentRunListItem | null
+  followUpResearchRunId: string | null
 }
 
 export interface AgentRunDetail {
@@ -131,6 +143,22 @@ export async function retryAgentRun(id: string): Promise<AgentRunCreatedResponse
 
 export async function cancelAgentRun(id: string): Promise<AgentRunCreatedResponse> {
   const response = await http.post<AgentRunCreatedResponse>(`/agent-runs/${id}/cancel`)
+  return response.data
+}
+
+export async function submitAgentFeedback(
+  id: string,
+  feedbackType: 'Helpful' | 'NeedsCorrection',
+  comment?: string,
+): Promise<SubmitAgentFeedbackResponse> {
+  const response = await http.post<SubmitAgentFeedbackResponse>(`/agent-runs/${id}/feedback`, {
+    requestId: crypto.randomUUID(), feedbackType, comment: comment?.trim() || null,
+  })
+  return response.data
+}
+
+export async function listChildAgentRuns(id: string): Promise<AgentRunListItem[]> {
+  const response = await http.get<AgentRunListItem[]>(`/agent-runs/${id}/children`)
   return response.data
 }
 

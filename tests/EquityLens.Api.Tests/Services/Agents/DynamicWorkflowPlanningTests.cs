@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
@@ -95,6 +96,49 @@ public sealed class DynamicWorkflowPlanningTests
     }
 
     [Fact]
+    public async Task LlmPlanner_ReceivesMathToolManifestWithSchemaAndBlackboardContract()
+    {
+        var chat = new CapturingChat(); var planner = new LlmAgentWorkflowPlanner(chat);
+        await planner.PlanAsync(Context(requiresRevision: false, requiresEvidence: false));
+
+        Assert.Contains("\"tools\"", chat.Request!.UserPrompt, StringComparison.Ordinal);
+        Assert.Contains("calculate-sharpe-ratio", chat.Request.UserPrompt, StringComparison.Ordinal);
+        Assert.Contains("parameters", chat.Request.UserPrompt, StringComparison.Ordinal);
+        Assert.Contains("requiresBlackboard", chat.Request.UserPrompt, StringComparison.Ordinal);
+        Assert.Contains(AgentBlackboardKeys.MathInputs, chat.Request.UserPrompt, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Wording", false, false)]
+    [InlineData("EvidenceCorrection", true, false)]
+    [InlineData("Calculation", true, true)]
+    public void DeterministicPlanner_FeedbackRevision_ComposesIntentSpecificDag(string intent, bool expectsRetrieval, bool expectsMath)
+    {
+        var run = new FeedbackRevisionWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.FeedbackIntent] = intent;
+        board[AgentBlackboardKeys.FeedbackComment] = intent == "Calculation" ? "請重算報酬率與風險數字。" : "請依照回饋修正答案內容。";
+        board[AgentBlackboardKeys.ResearchRequest] = JsonSerializer.SerializeToNode(new EquityLens.Api.Contracts.Research.ResearchAskRequest("2454", "聯發科獲利如何？"), AgentNodeJson.SerializerOptions);
+        board[AgentBlackboardKeys.ResearchIntent] = new JsonObject { ["selected"] = 1 };
+        board[AgentBlackboardKeys.SelectedEvidence] = new JsonArray();
+        board[AgentBlackboardKeys.Ticker] = "2454";
+        board[AgentBlackboardKeys.Question] = "聯發科獲利如何？";
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, DynamicPlanningTriggers.FeedbackContextReady, board,
+            [FeedbackRevisionNodeTypes.LoadContext, FeedbackRevisionNodeTypes.ValidateContext], new WorkflowSkillCatalog().Skills,
+            new NodeCapabilityRegistry().Capabilities, 0, 0, FeedbackRevisionNodeKeys.ValidateContext);
+
+        var proposal = DeterministicDynamicWorkflowPlanner.Create(context);
+        var validated = new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService()).Validate(run, proposal);
+
+        Assert.Equal(expectsRetrieval, validated.Actions.Any(x => x.NodeType is ResearchInvestigationNodeTypes.RetrieveLocal or ResearchInvestigationNodeTypes.RetrieveWeb));
+        Assert.Equal(expectsMath, validated.Actions.Any(x => x.NodeType.StartsWith("Calculate", StringComparison.Ordinal) || x.NodeType == PortfolioRiskMathNodeTypes.PrepareInputs));
+        Assert.Contains(validated.Actions, x => x.NodeType == ResearchInvestigationNodeTypes.DraftAnswer);
+        Assert.Contains(validated.Actions, x => x.NodeType == ResearchQualityReviewNodeTypes.CritiqueAnswer);
+        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, validated.Actions[^1].NodeType);
+    }
+
+    [Fact]
     public async Task ValidatorAndMaterializer_ValidRevision_AppendsGraphArgumentsHistoryAndOutbox()
     {
         await using var db = CreateDb(); var run = new ResearchQualityReviewWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
@@ -164,5 +208,10 @@ public sealed class DynamicWorkflowPlanningTests
     {
         public int Calls { get; private set; } public string Provider => "test"; public string Model => "invalid";
         public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) { Calls++; return Task.FromResult(new ChatCompletionResult("not-json", Model, 1, 1)); }
+    }
+    private sealed class CapturingChat : IChatCompletionService
+    {
+        public ChatCompletionRequest? Request { get; private set; } public string Provider => "test"; public string Model => "capture";
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) { Request = request; return Task.FromResult(new ChatCompletionResult("{\"goalStatus\":\"Complete\",\"reason\":\"done\",\"selectedSkills\":[],\"actions\":[]}", Model, 1, 1)); }
     }
 }

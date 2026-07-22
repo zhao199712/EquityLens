@@ -14,6 +14,7 @@ public static class DynamicPlanningTriggers
     public const string CriticCompleted = "CriticCompleted";
     public const string BranchCompleted = "BranchCompleted";
     public const string EvidenceValidated = "EvidenceValidated";
+    public const string FeedbackContextReady = "FeedbackContextReady";
 }
 
 public sealed record WorkflowSkill(string Id, string Description, IReadOnlyList<string> Capabilities);
@@ -28,11 +29,13 @@ public sealed class WorkflowSkillCatalog : IWorkflowSkillCatalog
         new("financial-guidance-verification", "Verify financial guidance with primary or supporting evidence.", ["retrieve-primary-financial-evidence", "assess-claim-evidence", "validate-evidence"]),
         new("evidence-driven-reanalysis", "Reanalyze material conclusions using validated evidence only.", ["build-analysis-context", "reanalyze-investment-answer", "critique-reanalysis", "revise-reanalysis", "finalize-reanalysis"]),
         new("answer-revision", "Revise wording or conclusions from critic findings.", ["revise-answer", "finalize-revision"]),
-        new("quality-finalization", "Finish the quality workflow without adding unsupported work.", ["finalize-quality"])
+        new("quality-finalization", "Finish the quality workflow without adding unsupported work.", ["finalize-quality"]),
+        new("feedback-driven-revision", "Revise a completed research answer from explicit user feedback using the smallest validated DAG.", ["plan-research-retrieval", "retrieve-local-research-evidence", "evaluate-initial-evidence", "retrieve-web-research-evidence", "rank-research-evidence", "draft-research-answer", "build-initial-evidence-packet", "check-initial-evidence", "critique-initial-answer", "finalize-initial-critic", "extract-claims", "retrieve-primary-financial-evidence", "retrieve-web-evidence", "assess-claim-evidence", "validate-evidence", "build-evidence-packet", "revise-with-evidence", "build-analysis-context", "reanalyze-investment-answer", "critique-reanalysis", "revise-reanalysis", "finalize-reanalysis"]),
+        new("portfolio-risk-mathematics", "Run deterministic portfolio and risk mathematics from provenance-backed Blackboard inputs.", ["prepare-portfolio-risk-math-inputs", ..PortfolioRiskMathCapabilities.All.Select(x => x.Id)])
     ];
 }
 
-public sealed record NodeCapability(string Id, string NodeType, string Description, string ArgumentSchema, IReadOnlyList<string> RequiredKeys, IReadOnlyList<string> ProducedKeys, string SideEffectLevel, bool Idempotent, bool SupportsLoop, int MaxOccurrences);
+public sealed record NodeCapability(string Id, string NodeType, string Description, string ArgumentSchema, IReadOnlyList<string> RequiredKeys, IReadOnlyList<string> ProducedKeys, string SideEffectLevel, bool Idempotent, bool SupportsLoop, int MaxOccurrences, JsonObject? ParametersSchema = null, string InputMode = "Any");
 public interface INodeCapabilityRegistry { IReadOnlyList<NodeCapability> Capabilities { get; } NodeCapability Get(string id); }
 public sealed class NodeCapabilityRegistry : INodeCapabilityRegistry
 {
@@ -63,7 +66,9 @@ public sealed class NodeCapabilityRegistry : INodeCapabilityRegistry
         C("reanalyze-investment-answer", EvidenceReanalysisNodeTypes.Reanalyze, "Reanalyze material conclusions without searching."),
         C("critique-reanalysis", EvidenceReanalysisNodeTypes.Critique, "Independently critique the reanalysis."),
         C("revise-reanalysis", EvidenceReanalysisNodeTypes.Revise, "Apply one bounded reanalysis revision."),
-        C("finalize-reanalysis", EvidenceReanalysisNodeTypes.Finalize, "Finalize the reanalysis result.")
+        C("finalize-reanalysis", EvidenceReanalysisNodeTypes.Finalize, "Finalize the reanalysis result."),
+        new("prepare-portfolio-risk-math-inputs", PortfolioRiskMathNodeTypes.PrepareInputs, "Load authorized market and portfolio data into provenance-backed Blackboard math inputs.", "PreparePortfolioRiskMathInputs", [], [AgentBlackboardKeys.MathInputs], "ReadOnly", true, false, 1, new JsonObject { ["type"] = "object", ["additionalProperties"] = false }, "Any"),
+        ..PortfolioRiskMathCapabilities.All
     ];
     public NodeCapability Get(string id) => Capabilities.Single(x => x.Id == id);
     private static NodeCapability C(string id, string type, string description, bool loop = false, int max = 1)
@@ -98,7 +103,13 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
                 {
                     context.RunId, context.OrchestrationVersion, context.Trigger, context.PlanningAnchorNodeKey,
                     blackboard = Summarize(context.Blackboard), context.CompletedNodeTypes,
-                    skills = context.Skills, capabilities = context.Capabilities.Select(x => new { x.Id, x.NodeType, x.Description, x.MaxOccurrences }),
+                    skills = context.Skills,
+                    tools = VisibleCapabilities(context).Select(x => new
+                    {
+                        name = x.Id, x.NodeType, x.Description, parameters = x.ParametersSchema,
+                        requiresBlackboard = x.RequiredKeys, producesBlackboard = x.ProducedKeys,
+                        x.InputMode, x.SideEffectLevel, x.MaxOccurrences
+                    }),
                     budget = new { maxRetrievalIterations = 2, maxDynamicNodes = ResearchQualityReviewWorkflow.MaxDynamicNodes }, validationError = error
                 }, Json), .1, 3000, ChatResponseFormat.JsonObject), timeout.Token);
                 var finished = await Task.WhenAny(completion, Task.Delay(TimeSpan.FromSeconds(TimeoutSeconds), cancellationToken));
@@ -132,9 +143,15 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
             x.TryGetProperty("iteration", out var i) ? i.GetInt32() : 0)).ToList() : [];
         return new(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, goal, reason, skills, actions, mode, response.Model, response.PromptTokens, response.CompletionTokens);
     }
-    private static object Summarize(JsonObject board) => new { question = board[AgentBlackboardKeys.Question], researchRequest = board[AgentBlackboardKeys.ResearchRequest], researchIntent = board[AgentBlackboardKeys.ResearchIntent], initialEvidencePolicy = board[AgentBlackboardKeys.InitialEvidencePolicy], plannerValidationError = board["plannerValidationError"], criticReview = board[AgentBlackboardKeys.CriticReview], unresolvedClaims = board[AgentBlackboardKeys.UnresolvedClaims], requiredResearchDimensions = board[AgentBlackboardKeys.RequiredResearchDimensions], missingResearchDimensions = board[AgentBlackboardKeys.MissingResearchDimensions], routeDecision = board[AgentBlackboardKeys.RouteDecision], requiresReanalysis = board[AgentBlackboardKeys.RequiresReanalysis], reanalysisReasons = board[AgentBlackboardKeys.ReanalysisReasons] };
+    private static object Summarize(JsonObject board) => new { question = board[AgentBlackboardKeys.Question], researchRequest = board[AgentBlackboardKeys.ResearchRequest], researchIntent = board[AgentBlackboardKeys.ResearchIntent], initialEvidencePolicy = board[AgentBlackboardKeys.InitialEvidencePolicy], revisionContext = board[AgentBlackboardKeys.RevisionContext], feedbackIntent = board[AgentBlackboardKeys.FeedbackIntent], plannerValidationError = board["plannerValidationError"], criticReview = board[AgentBlackboardKeys.CriticReview], unresolvedClaims = board[AgentBlackboardKeys.UnresolvedClaims], requiredResearchDimensions = board[AgentBlackboardKeys.RequiredResearchDimensions], missingResearchDimensions = board[AgentBlackboardKeys.MissingResearchDimensions], routeDecision = board[AgentBlackboardKeys.RouteDecision], requiresReanalysis = board[AgentBlackboardKeys.RequiresReanalysis], reanalysisReasons = board[AgentBlackboardKeys.ReanalysisReasons] };
+    private static IEnumerable<NodeCapability> VisibleCapabilities(WorkflowPlanningContext context)
+    {
+        var request = context.Blackboard[AgentBlackboardKeys.ResearchRequest]?.Deserialize<ResearchAskRequest>(AgentNodeJson.SerializerOptions);
+        var hasPortfolio = request?.PortfolioId is not null || context.Blackboard[AgentBlackboardKeys.PortfolioId] is not null;
+        return context.Capabilities.Where(x => x.NodeType != PortfolioRiskMathNodeTypes.Execute || hasPortfolio || x.InputMode is "SingleAsset" or "Any");
+    }
     private const string SystemPrompt = """
-You are the constrained supervisor planner for an equity research run. Return one JSON object only. Select only supplied skills, capabilities and nodeTypes. Never output providers, tools, code, raw Blackboard writes, unknown nodes, or graph cycles. Output {"goalStatus":"Continue|Complete","reason":"...","selectedSkills":["..."],"actions":[{"clientNodeKey":"unique-key","capability":"...","nodeType":"...","dependsOn":["client-key-or-existing-node-key"],"iteration":0,"arguments":{}}]}. Every action requires at least one dependency. The first action must depend on PlanningAnchorNodeKey exactly; every later action must depend on a preceding action key. On ResearchContextReady, build a complete initial research branch ending in FinalizeCriticReport. Use current-market-event-investigation and Web research for questions about a specific recent date, price move, news, or current event unless sourcePolicy forbids Web. Respect sourcePolicy: LocalOnly forbids Web, WebOnly forbids actual local retrieval, LocalAndWeb requires Web, and Auto selects based on freshness. Retrieval nodes own concrete tool calls. On remediation triggers, use missingResearchDimensions and routeDecision as retrieval targets. If evidence is missing, provide 1-3 searchIntents with targetClaims, topic, preferredSourceRoles, freshness and topK. Dynamic remediation local retrieval must set allowWebFallback=false. Respect all budgets, including at most one Web retrieval node.
+You are the constrained supervisor planner for an equity research run. Return one JSON object only. Select only supplied skills, tools and nodeTypes. A tool is a capability that becomes a backend workflow node after validation; you do not execute tools directly. Never output providers, code, raw Blackboard writes, unknown nodes, or graph cycles. Output {"goalStatus":"Continue|Complete","reason":"...","selectedSkills":["..."],"actions":[{"clientNodeKey":"unique-key","capability":"...","nodeType":"...","dependsOn":["client-key-or-existing-node-key"],"iteration":0,"arguments":{}}]}. Every action requires at least one dependency. The first action must depend on PlanningAnchorNodeKey exactly; every later action must depend on a preceding action key. Math tools may receive only bounded configuration parameters described by their schema; never provide prices, returns, holdings, weights, covariance matrices, or other numeric source data because those must come from Blackboard. Select math tools only when the user explicitly needs a calculation, risk measure, simulation or portfolio comparison, with at most eight math actions and no duplicate math capability. On ResearchContextReady, build a complete initial research branch ending in FinalizeCriticReport. On FeedbackContextReady, use feedbackIntent and revisionContext to build the smallest sufficient revision DAG: wording feedback may reuse selected evidence and start at DraftResearchAnswer; evidence corrections may retrieve and rerank; reanalysis may use validated reanalysis capabilities; calculation feedback may use allowlisted math capabilities. Every FeedbackContextReady branch must draft or revise an answer, independently critique it, and end in a finalization node. Use current-market-event-investigation and Web research for questions about a specific recent date, price move, news, or current event unless sourcePolicy forbids Web. Respect sourcePolicy: LocalOnly forbids Web, WebOnly forbids actual local retrieval, LocalAndWeb requires Web, and Auto selects based on freshness. Retrieval nodes own concrete tool calls. On remediation triggers, use missingResearchDimensions and routeDecision as retrieval targets. If evidence is missing, provide 1-3 searchIntents with targetClaims, topic, preferredSourceRoles, freshness and topK. Dynamic remediation local retrieval must set allowWebFallback=false. Respect all budgets, including at most one Web retrieval node.
 """;
 }
 
@@ -162,6 +179,13 @@ public static class DeterministicDynamicWorkflowPlanner
             if (includeWeb) planned.Add(A("retrieveWebResearchEvidence:1", "retrieve-web-research-evidence", ResearchInvestigationNodeTypes.RetrieveWeb));
             planned.AddRange([
                 A("rankAndSelectResearchEvidence:1", "rank-research-evidence", ResearchInvestigationNodeTypes.RankEvidence),
+            ]);
+            if (NeedsMath(request.Question, out var mathCapability))
+            {
+                planned.Add(A("preparePortfolioRiskMathInputs:1", "prepare-portfolio-risk-math-inputs", PortfolioRiskMathNodeTypes.PrepareInputs));
+                planned.Add(A($"{mathCapability}:1", mathCapability, PortfolioRiskMathNodeTypes.Execute));
+            }
+            planned.AddRange([
                 A("draftResearchAnswer:1", "draft-research-answer", ResearchInvestigationNodeTypes.DraftAnswer),
                 A("buildEvidencePacket:1", "build-initial-evidence-packet", ResearchQualityReviewNodeTypes.BuildEvidencePacket),
                 A("checkEvidence:1", "check-initial-evidence", ResearchQualityReviewNodeTypes.CheckEvidence),
@@ -170,8 +194,44 @@ public static class DeterministicDynamicWorkflowPlanner
             ]);
             actions = Chain(planned, ResearchInvestigationNodeKeys.DetectIntent);
             skills = includeWeb ? ["research-investigation", "current-market-event-investigation"] : ["research-investigation"];
+            if (planned.Any(x => x.NodeType == PortfolioRiskMathNodeTypes.Execute)) skills = [..skills, "portfolio-risk-mathematics"];
             goal = DynamicGoalStatuses.Continue;
             reason = includeWeb ? "The research request requires a Web-capable initial evidence branch." : "The research request can begin with local evidence.";
+        }
+        else if (c.Trigger == DynamicPlanningTriggers.FeedbackContextReady)
+        {
+            var request = board[AgentBlackboardKeys.ResearchRequest]?.Deserialize<ResearchAskRequest>(AgentNodeJson.SerializerOptions)
+                ?? new ResearchAskRequest(board[AgentBlackboardKeys.Ticker]?.GetValue<string>() ?? string.Empty, board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty);
+            var feedback = board[AgentBlackboardKeys.FeedbackComment]?.GetValue<string>() ?? string.Empty;
+            var intent = board[AgentBlackboardKeys.FeedbackIntent]?.GetValue<string>() ?? "Wording";
+            var planned = new List<DynamicPlanAction>();
+            if (intent != "Wording")
+            {
+                planned.Add(A("planFeedbackRetrieval:1", "plan-research-retrieval", ResearchInvestigationNodeTypes.PlanRetrieval));
+                if (request.SourcePolicy != SourcePolicy.WebOnly) planned.Add(A("retrieveFeedbackLocalEvidence:1", "retrieve-local-research-evidence", ResearchInvestigationNodeTypes.RetrieveLocal));
+                planned.Add(A("evaluateFeedbackEvidence:1", "evaluate-initial-evidence", ResearchInvestigationNodeTypes.EvaluateEvidence));
+                var includeWeb = request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalAndWeb or SourcePolicy.LocalThenWeb
+                    || request.SourcePolicy == SourcePolicy.Auto && (ResearchInvestigationPlanning.IsFreshnessSensitive(feedback) || feedback.Contains("最新", StringComparison.OrdinalIgnoreCase));
+                if (includeWeb) planned.Add(A("retrieveFeedbackWebEvidence:1", "retrieve-web-research-evidence", ResearchInvestigationNodeTypes.RetrieveWeb));
+                planned.Add(A("rankFeedbackEvidence:1", "rank-research-evidence", ResearchInvestigationNodeTypes.RankEvidence));
+            }
+            if (intent == "Calculation" && NeedsMath(feedback, out var feedbackMath))
+            {
+                planned.Add(A("prepareFeedbackMathInputs:1", "prepare-portfolio-risk-math-inputs", PortfolioRiskMathNodeTypes.PrepareInputs));
+                planned.Add(A($"{feedbackMath}:feedback", feedbackMath, PortfolioRiskMathNodeTypes.Execute));
+            }
+            planned.AddRange([
+                A("draftFeedbackRevision:1", "draft-research-answer", ResearchInvestigationNodeTypes.DraftAnswer),
+                A("buildFeedbackEvidencePacket:1", "build-initial-evidence-packet", ResearchQualityReviewNodeTypes.BuildEvidencePacket),
+                A("checkFeedbackEvidence:1", "check-initial-evidence", ResearchQualityReviewNodeTypes.CheckEvidence),
+                A("critiqueFeedbackRevision:1", "critique-initial-answer", ResearchQualityReviewNodeTypes.CritiqueAnswer),
+                A("finalizeFeedbackRevision:1", "finalize-initial-critic", ResearchQualityReviewNodeTypes.FinalizeCriticReport)
+            ]);
+            actions = Chain(planned, FeedbackRevisionNodeKeys.ValidateContext);
+            skills = planned.Any(x => x.NodeType == PortfolioRiskMathNodeTypes.Execute)
+                ? ["feedback-driven-revision", "portfolio-risk-mathematics"] : ["feedback-driven-revision"];
+            goal = DynamicGoalStatuses.Continue;
+            reason = intent == "Wording" ? "User feedback can be addressed with the existing selected evidence." : $"User feedback requires a bounded {intent} revision branch.";
         }
         else if (c.CompletedNodeTypes.Any(x => x is DraftRevisionNodeTypes.FinalizeRevision or EvidenceRemediationNodeTypes.Finalize or EvidenceReanalysisNodeTypes.Finalize))
         { actions = []; skills = ["quality-finalization"]; goal = DynamicGoalStatuses.Complete; reason = "The planned finalization node completed."; }
@@ -223,6 +283,17 @@ public static class DeterministicDynamicWorkflowPlanner
     { var result = new List<DynamicPlanAction>(); var previous = predecessor; foreach (var action in actions) { result.Add(action with { DependsOn = [previous] }); previous = action.ClientNodeKey; } return result; }
     private static string Last(WorkflowPlanningContext c) => c.Blackboard["dynamicLastNodeKey"]?.GetValue<string>() ?? ResearchQualityReviewNodeKeys.FinalizeCriticReport;
     private static JsonObject Args(JsonObject board, bool local = true) => new() { ["allowWebFallback"] = local ? false : null, ["searchIntents"] = new JsonArray { new JsonObject { ["targetClaims"] = Targets(board), ["topic"] = board[AgentBlackboardKeys.Question]?.DeepClone(), ["preferredSourceRoles"] = new JsonArray("Primary"), ["freshness"] = "year", ["topK"] = local ? 6 : 5 } } };
+    private static bool NeedsMath(string question, out string capability)
+    {
+        var rules = new (string Capability, string[] Terms)[]
+        {
+            ("calculate-sharpe-ratio", ["sharpe", "夏普"]), ("calculate-max-drawdown", ["drawdown", "回撤"]),
+            ("calculate-historical-var", ["var", "風險值"]), ("calculate-expected-shortfall", ["expected shortfall", "cvar", "預期短缺"]),
+            ("calculate-annualized-volatility", ["volatility", "波動率"]), ("calculate-return", ["return", "報酬率", "漲幅", "跌幅"])
+        };
+        var match = rules.FirstOrDefault(rule => rule.Terms.Any(term => question.Contains(term, StringComparison.OrdinalIgnoreCase)));
+        capability = match.Capability ?? string.Empty; return capability.Length > 0;
+    }
     private static JsonNode Targets(JsonObject board)
     {
         if (board[AgentBlackboardKeys.MissingResearchDimensions] is JsonArray { Count: > 0 } dimensions) return dimensions.DeepClone();

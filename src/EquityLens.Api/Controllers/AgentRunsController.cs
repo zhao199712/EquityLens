@@ -160,6 +160,29 @@ public sealed class AgentRunsController : ControllerBase
         return Ok(detail);
     }
 
+    [HttpPost("{runId:guid}/feedback")]
+    public async Task<ActionResult<SubmitAgentFeedbackResponse>> SubmitFeedback(
+        Guid runId, SubmitAgentFeedbackRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return Ok(await _agentRunService.SubmitFeedbackAsync(runId, _currentUser.UserId, request, cancellationToken));
+        }
+        catch (AgentFeedbackException exception) when (exception.Code == "agent_run_not_found")
+        {
+            return NotFound(new ApiError(exception.Code, exception.Message));
+        }
+        catch (AgentFeedbackException exception)
+        {
+            return BadRequest(new ApiError(exception.Code, exception.Message));
+        }
+    }
+
+    [HttpGet("{runId:guid}/children")]
+    public async Task<ActionResult<IReadOnlyList<AgentRunSummaryResponse>>> ListChildren(
+        Guid runId, CancellationToken cancellationToken = default) =>
+        Ok(await _agentRunService.ListChildrenAsync(runId, _currentUser.UserId, cancellationToken));
+
     /// <summary>
     /// 重新執行失敗的 Agent run。第一版以整個 run 為 retry 單位。
     /// </summary>

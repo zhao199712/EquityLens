@@ -4,6 +4,8 @@ public class ResearchRun
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
+    public Guid? ParentResearchRunId { get; set; }
+    public Guid? RevisionFeedbackId { get; set; }
     public string TraceId { get; set; } = string.Empty;
     public string Ticker { get; set; } = string.Empty;
     public string Question { get; set; } = string.Empty;
@@ -23,4 +25,6 @@ public class ResearchRun
     public ICollection<ResearchRunStep> Steps { get; set; } = [];
     public ICollection<ResearchRunCandidate> Candidates { get; set; } = [];
     public ICollection<ResearchRunCitation> Citations { get; set; } = [];
+    public ResearchRun? ParentResearchRun { get; set; }
+    public ICollection<ResearchRun> ChildResearchRuns { get; set; } = [];
 }

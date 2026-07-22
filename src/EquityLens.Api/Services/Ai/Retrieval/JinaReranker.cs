@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Observability;
 using EquityLens.Api.Services.Chat;
@@ -18,7 +19,7 @@ public sealed class JinaReranker : IDocumentReranker
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<RetrievedDocumentChunk>> RerankAsync(
+    public async Task<DocumentRerankResult> RerankAsync(
         string query,
         IReadOnlyList<RetrievedDocumentChunk> chunks,
         int topN,
@@ -26,7 +27,7 @@ public sealed class JinaReranker : IDocumentReranker
     {
         if (chunks.Count == 0)
         {
-            return [];
+            return new([], new("Jina", "Skipped", null, false, null, 0, 0, 0, 0, null));
         }
 
         using var rerankActivity = EquityLensTelemetry.ActivitySource.StartActivity("jina.rerank");
@@ -34,13 +35,17 @@ public sealed class JinaReranker : IDocumentReranker
         rerankActivity?.SetTag("rerank.top_n", topN);
 
         var documents = chunks.Select(c => c.Result.Content).ToList();
+        var stopwatch = Stopwatch.StartNew();
+        var payloadBytes = Encoding.UTF8.GetByteCount(query) + documents.Sum(document => Encoding.UTF8.GetByteCount(document));
         var response = await _jinaSearch.RerankAsync(query, documents, chunks.Count, cancellationToken);
+        stopwatch.Stop();
 
         if (response.Results.Count == 0)
         {
             _logger.LogWarning("Jina rerank returned 0 results; falling back to original order");
             rerankActivity?.SetStatus(ActivityStatusCode.Ok);
-            return chunks.Take(topN).ToList();
+            var fallback = chunks.Take(topN).ToList();
+            return new(fallback, new("Jina", "EmptyResults", response.Model, true, "JinaEmptyResults", stopwatch.ElapsedMilliseconds, chunks.Count, fallback.Count, payloadBytes, null));
         }
 
         var scoreMap = response.Results.ToDictionary(r => r.Index, r => r.RelevanceScore);
@@ -78,6 +83,6 @@ public sealed class JinaReranker : IDocumentReranker
         rerankActivity?.SetTag("rerank.selected_count", reranked.Count);
         rerankActivity?.SetStatus(ActivityStatusCode.Ok);
 
-        return reranked;
+        return new(reranked, new("Jina", "Succeeded", response.Model, false, null, stopwatch.ElapsedMilliseconds, chunks.Count, reranked.Count, payloadBytes, null));
     }
 }

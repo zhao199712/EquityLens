@@ -97,6 +97,10 @@
 - Workflow Orchestration
 - Execution Trace
 - Human Feedback Loop
+  - [x] Research 結果支援 Helpful / NeedsCorrection 回饋
+  - [x] NeedsCorrection 建立不可變 child run，由 Planner 依回饋動態組 DAG
+  - [x] 父子 Agent Run / Research Run 可追溯，前端可查看版本與執行 stage
+  - [ ] 高風險工具的 Human Approval / Reject gate
 
 ### 後台 / 系統能力
 - Prompt 管理

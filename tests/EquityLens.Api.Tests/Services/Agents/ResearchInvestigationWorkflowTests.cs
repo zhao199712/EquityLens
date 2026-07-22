@@ -3,7 +3,10 @@ using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Agents;
+using EquityLens.Api.Services.Ai;
+using EquityLens.Api.Services.Ai.Retrieval;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Tests.Services.Agents;
 
@@ -94,6 +97,44 @@ public sealed class ResearchInvestigationWorkflowTests
         Assert.Equal(artifact.Id, board.RootElement.GetProperty(AgentBlackboardKeys.ResearchRunId).GetGuid());
     }
 
+    [Fact]
+    public async Task RankEvidence_RerankTimeout_PersistsFailedToolCallAndCompletesWithFallback()
+    {
+        await using var db = CreateDbContext();
+        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(
+            Guid.NewGuid(), Guid.NewGuid(), new ResearchAskRequest("2454", "成長與風險", TopK: 5));
+        run.Status = AgentRunStatuses.Running;
+        var node = new AgentRunNode
+        {
+            Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "rank:1",
+            NodeType = ResearchInvestigationNodeTypes.RankEvidence, Status = AgentNodeStatuses.Running
+        };
+        run.Nodes.Add(node);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.InitialEvidence] = JsonSerializer.SerializeToNode(Array.Empty<RetrievedDocumentChunk>(), AgentNodeJson.SerializerOptions);
+        board[AgentBlackboardKeys.ResearchIntent] = JsonSerializer.SerializeToNode(new IntentDetectionResult(ResearchQuestionIntent.General, [], 1), AgentNodeJson.SerializerOptions);
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        db.AgentRuns.Add(run);
+        await db.SaveChangesAsync();
+        var events = new List<string>();
+        var handler = new RankAndSelectResearchEvidenceNodeHandler(
+            new TimeoutFallbackReranker(),
+            Options.Create(new RetrievalOptions { RerankProvider = "Cohere", DefaultTopK = 10, MaxTopK = 20 }));
+
+        await handler.ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, eventType, _, _) => events.Add(eventType)));
+        await db.SaveChangesAsync();
+
+        var toolCall = await db.AgentToolCalls.SingleAsync();
+        Assert.Equal("cohereRerank", toolCall.ToolName);
+        Assert.Equal(AgentToolCallStatuses.Failed, toolCall.Status);
+        Assert.Equal("CohereTimeout", toolCall.ErrorMessage);
+        Assert.Contains("TimedOut", toolCall.ResultJson);
+        Assert.Contains("local ranking fallback", toolCall.ResultPreview);
+        Assert.Contains(AgentEventTypes.ToolCallFailed, events);
+        using var output = JsonDocument.Parse(node.OutputJson!);
+        Assert.True(output.RootElement.GetProperty("rerankDiagnostics").GetProperty("usedFallback").GetBoolean());
+    }
+
     private static EquityLensDbContext CreateDbContext() => new TestDbContext(
         new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
@@ -119,5 +160,17 @@ public sealed class ResearchInvestigationWorkflowTests
         public Task<AgentRunQueueItem?> ReadNextAsync(string consumerName, CancellationToken cancellationToken = default) => Task.FromResult<AgentRunQueueItem?>(null);
         public Task<AgentRunQueueItem?> ReadStalePendingAsync(string consumerName, TimeSpan minIdleTime, CancellationToken cancellationToken = default) => Task.FromResult<AgentRunQueueItem?>(null);
         public Task AcknowledgeAsync(string streamId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class TimeoutFallbackReranker : IResultReranker
+    {
+        public Task<RankedSelection> Rank(
+            IReadOnlyList<RetrievedDocumentChunk> chunks,
+            ResearchQuestionIntent intent,
+            int topK,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new RankedSelection([], [], new(
+                "Cohere", "TimedOut", "rerank-v4.0-fast", true, "CohereTimeout",
+                10_001, chunks.Count, 0, 70_822, null)));
     }
 }
