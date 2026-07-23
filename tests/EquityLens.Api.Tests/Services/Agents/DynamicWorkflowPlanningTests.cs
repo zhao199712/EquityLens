@@ -165,13 +165,26 @@ public sealed class DynamicWorkflowPlanningTests
         Assert.Contains("parameters", chat.Request.UserPrompt, StringComparison.Ordinal);
         Assert.Contains("requiresBlackboard", chat.Request.UserPrompt, StringComparison.Ordinal);
         Assert.Contains(AgentBlackboardKeys.MathInputs, chat.Request.UserPrompt, StringComparison.Ordinal);
-        Assert.Contains("Every Chinese string value", chat.Request.SystemPrompt, StringComparison.Ordinal);
+        Assert.Contains("reason field MUST be written in Traditional Chinese", chat.Request.SystemPrompt, StringComparison.Ordinal);
         Assert.Contains("Preserve company names and tickers exactly", chat.Request.SystemPrompt, StringComparison.Ordinal);
         Assert.Contains("never transliterate or convert them to Simplified Chinese", chat.Request.SystemPrompt, StringComparison.Ordinal);
         var prompt = JsonNode.Parse(chat.Request.UserPrompt)!.AsObject();
         var expectedShortfall = prompt["tools"]!.AsArray().Single(x => x!["name"]!.GetValue<string>() == "calculate-expected-shortfall")!;
         Assert.Equal(["confidenceLevel"], expectedShortfall["parameters"]!["properties"]!.AsObject().Select(x => x.Key).ToArray());
         Assert.Null(expectedShortfall["parameters"]!["properties"]!["shrinkageAlpha"]);
+    }
+
+    [Fact]
+    public async Task LlmPlanner_EnglishReason_IsRejectedAndRepairedInTraditionalChinese()
+    {
+        var chat = new RepairingChat();
+        var planner = new LlmAgentWorkflowPlanner(chat);
+
+        var proposal = await planner.PlanAsync(Context(requiresRevision: false, requiresEvidence: false));
+
+        Assert.Equal(2, chat.Calls);
+        Assert.Equal("規劃已完成。", proposal.Reason);
+        Assert.Equal("LlmRepair", proposal.Mode);
     }
 
     [Theory]
@@ -303,6 +316,18 @@ public sealed class DynamicWorkflowPlanningTests
     private sealed class CapturingChat : IChatCompletionService
     {
         public ChatCompletionRequest? Request { get; private set; } public string Provider => "test"; public string Model => "capture";
-        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) { Request = request; return Task.FromResult(new ChatCompletionResult("{\"goalStatus\":\"Complete\",\"reason\":\"done\",\"selectedSkills\":[],\"actions\":[]}", Model, 1, 1)); }
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) { Request = request; return Task.FromResult(new ChatCompletionResult("{\"goalStatus\":\"Complete\",\"reason\":\"規劃已完成。\",\"selectedSkills\":[],\"actions\":[]}", Model, 1, 1)); }
+    }
+    private sealed class RepairingChat : IChatCompletionService
+    {
+        public int Calls { get; private set; }
+        public string Provider => "test";
+        public string Model => "repair";
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            var reason = Calls == 1 ? "Planning complete." : "規劃已完成。";
+            return Task.FromResult(new ChatCompletionResult($"{{\"goalStatus\":\"Complete\",\"reason\":\"{reason}\",\"selectedSkills\":[],\"actions\":[]}}", Model, 1, 1));
+        }
     }
 }
