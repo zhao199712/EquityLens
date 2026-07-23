@@ -82,7 +82,12 @@ public sealed class ConversationService(
         {
             var context = JsonNode.Parse(session.ContextJson) as JsonObject ?? new JsonObject();
             var history = session.Messages.OrderBy(x => x.SequenceNumber).ToList();
-            var decision = await agent.DecideAsync(new(content, context, history), cancellationToken);
+            var portfolios = await db.Portfolios.AsNoTracking()
+                .Where(x => x.OwnerUserId == userId && x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new ConversationPortfolioOption(x.Id, x.Name))
+                .ToListAsync(cancellationToken);
+            var decision = await agent.DecideAsync(new(content, context, history, portfolios), cancellationToken);
             turn.Action = decision.Action;
             turn.ReasonCode = decision.ReasonCode;
             turn.StandaloneQuery = decision.StandaloneQuery;

@@ -15,7 +15,7 @@ public sealed class ConversationAgentTests
             """);
         var agent = new LlmConversationAgent(chat);
 
-        var decision = await agent.DecideAsync(new("你好", new JsonObject(), []));
+        var decision = await agent.DecideAsync(new("你好", new JsonObject(), [], []));
 
         Assert.Equal(ConversationActions.DirectResponse, decision.Action);
         Assert.Equal("你好！", decision.Response);
@@ -33,7 +33,7 @@ public sealed class ConversationAgentTests
             """{"action":"DirectResponse","response":"你好","standaloneQuery":null,"reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":""}""");
         var agent = new LlmConversationAgent(chat);
 
-        var decision = await agent.DecideAsync(new("你好", new JsonObject(), []));
+        var decision = await agent.DecideAsync(new("你好", new JsonObject(), [], []));
 
         Assert.Equal("你好", decision.Response);
         Assert.Equal(2, chat.CallCount);
@@ -46,10 +46,27 @@ public sealed class ConversationAgentTests
             """{"action":"DirectResponse","response":"请问有什么可以帮你？","standaloneQuery":null,"reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":""}""",
             """{"action":"DirectResponse","response":"請問有什麼可以幫你？","standaloneQuery":null,"reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":""}""");
 
-        var decision = await new LlmConversationAgent(chat).DecideAsync(new("你好", new JsonObject(), []));
+        var decision = await new LlmConversationAgent(chat).DecideAsync(new("你好", new JsonObject(), [], []));
 
         Assert.Equal("請問有什麼可以幫你？", decision.Response);
         Assert.Equal(2, chat.CallCount);
+    }
+
+    [Fact]
+    public async Task DecideAsync_IncludesAvailablePortfoliosInPrompt()
+    {
+        var chat = new FakeChat("""
+            {"action":"RouteWorkflow","response":"幫你診斷投組。","standaloneQuery":"診斷投資組合「˙777」最近一年的風險","reasonCode":"portfolio_diagnosis","confidence":"high","contextPatch":{},"summary":""}
+            """);
+        var agent = new LlmConversationAgent(chat);
+        var portfolios = new[] { new ConversationPortfolioOption(Guid.NewGuid(), "˙777") };
+
+        var decision = await agent.DecideAsync(new("我的投資組合最近一年的風險如何？", new JsonObject(), [], portfolios));
+
+        Assert.Equal(ConversationActions.RouteWorkflow, decision.Action);
+        Assert.Contains("availablePortfolios", chat.LastRequest?.UserPrompt);
+        Assert.Contains("777", chat.LastRequest?.UserPrompt);
+        Assert.Contains("禁止再追問持股明細", chat.LastRequest?.SystemPrompt);
     }
 
     private sealed class FakeChat(string content) : IChatCompletionService
