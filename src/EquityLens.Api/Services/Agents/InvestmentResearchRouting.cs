@@ -179,6 +179,7 @@ public static class InvestmentResearchSkillPrompts
         5. 只使用提供的證據，保留跨語言不確定性，不產生交易指令。
 
         # 輸出結構
+        無論證據是否充足，都必須保留以下六個段落及順序；證據不足的段落應明確標示 unresolved/open item，不可省略整個段落。
         1. Top Takeaways / 核心要點
         2. Guidance Delta / 指引變化
         3. Tone Shift / 語氣變化

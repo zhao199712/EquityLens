@@ -165,6 +165,9 @@ public sealed class DynamicWorkflowPlanningTests
         Assert.Contains("parameters", chat.Request.UserPrompt, StringComparison.Ordinal);
         Assert.Contains("requiresBlackboard", chat.Request.UserPrompt, StringComparison.Ordinal);
         Assert.Contains(AgentBlackboardKeys.MathInputs, chat.Request.UserPrompt, StringComparison.Ordinal);
+        Assert.Contains("Every Chinese string value", chat.Request.SystemPrompt, StringComparison.Ordinal);
+        Assert.Contains("Preserve company names and tickers exactly", chat.Request.SystemPrompt, StringComparison.Ordinal);
+        Assert.Contains("never transliterate or convert them to Simplified Chinese", chat.Request.SystemPrompt, StringComparison.Ordinal);
         var prompt = JsonNode.Parse(chat.Request.UserPrompt)!.AsObject();
         var expectedShortfall = prompt["tools"]!.AsArray().Single(x => x!["name"]!.GetValue<string>() == "calculate-expected-shortfall")!;
         Assert.Equal(["confidenceLevel"], expectedShortfall["parameters"]!["properties"]!.AsObject().Select(x => x.Key).ToArray());

@@ -35,6 +35,7 @@ public sealed class InvestmentResearchSkillPromptTests
         Assert.Contains("global evidence, citation, attribution, language and non-fabrication rules above have higher priority", chat.Request.SystemPrompt);
         Assert.Contains("Guidance Delta / 指引變化", chat.Request.SystemPrompt);
         Assert.Contains("缺少基線時標記 unresolved/open item", chat.Request.SystemPrompt);
+        Assert.Contains("無論證據是否充足，都必須保留以下六個段落及順序", chat.Request.SystemPrompt);
     }
 
     private sealed class CapturingChat : IChatCompletionService
