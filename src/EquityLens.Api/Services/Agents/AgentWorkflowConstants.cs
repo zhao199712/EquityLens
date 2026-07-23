@@ -299,6 +299,10 @@ public static class AgentEventTypes
     public const string FeedbackContextLoaded = "FeedbackContextLoaded";
     public const string FollowUpRunCreated = "FollowUpRunCreated";
     public const string QuestionRouted = "QuestionRouted";
+    public const string CapabilityRequested = "CapabilityRequested";
+    public const string CapabilityRequestNotNeeded = "CapabilityRequestNotNeeded";
+    public const string CapabilityRequestApproved = "CapabilityRequestApproved";
+    public const string CapabilityRequestRejected = "CapabilityRequestRejected";
 }
 
 public static class AgentFeedbackTypes

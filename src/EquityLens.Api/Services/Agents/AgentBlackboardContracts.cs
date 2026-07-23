@@ -64,6 +64,8 @@ public static class AgentBlackboardKeys
     public const string InitialEvidence = "initialEvidence";
     public const string SelectedEvidence = "selectedEvidence";
     public const string InitialEvidencePolicy = "initialEvidencePolicy";
+    public const string CapabilityRequestAssessment = "capabilityRequestAssessment";
+    public const string CapabilityRequests = "capabilityRequests";
     public const string MathInputs = "mathInputs";
     public const string MathResults = "mathResults";
     public const string ParentAgentRunId = "parentAgentRunId";

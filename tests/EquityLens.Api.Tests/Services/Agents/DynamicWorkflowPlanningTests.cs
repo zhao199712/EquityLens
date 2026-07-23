@@ -41,7 +41,53 @@ public sealed class DynamicWorkflowPlanningTests
 
         Assert.Equal(["conference-call-takeaways"], proposal.SelectedSkills);
         Assert.All(validated.Actions, action => Assert.Contains(action.Capability, lead.Capabilities));
-        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, validated.Actions[^1].NodeType);
+        Assert.Equal(3, validated.Actions.Count);
+        Assert.Equal(ResearchInvestigationNodeTypes.EvaluateEvidence, validated.Actions[^1].NodeType);
+    }
+
+    [Fact]
+    public async Task CapabilityRequestReady_PendingWebRequest_MaterializesApprovedWebContinuation()
+    {
+        await using var db = CreateDb();
+        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(
+            Guid.NewGuid(), Guid.NewGuid(), new("2454", "聯發科法說會相較上季改變了什麼？"));
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.ResearchIntent] = new JsonObject();
+        board[AgentBlackboardKeys.LeadSkill] = "conference-call-takeaways";
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var catalog = new WorkflowSkillCatalog();
+        var registry = new NodeCapabilityRegistry();
+        var validator = new DynamicPlanValidator(registry, new AgentWorkflowCatalog(), new WorkflowGraphTopologyService());
+        var lead = catalog.Skills.Single(x => x.Id == "conference-call-takeaways");
+        var visible = registry.Capabilities.Where(x => lead.Capabilities.Contains(x.Id)).ToList();
+        var initialContext = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, DynamicPlanningTriggers.ResearchContextReady, board,
+            [ResearchInvestigationNodeTypes.Validate, ResearchInvestigationNodeTypes.DetectIntent], [lead], visible, 0, 0, ResearchInvestigationNodeKeys.DetectIntent);
+        var initial = validator.Validate(run, DeterministicDynamicWorkflowPlanner.Create(initialContext));
+        db.AgentRuns.Add(run);
+        new GraphMaterializer(db, new AgentWorkflowCatalog()).Materialize(run, initial);
+        foreach (var node in run.Nodes.Where(x => x.TemplateNodeKey is not null)) node.Status = AgentNodeStatuses.Succeeded;
+        var evaluate = run.Nodes.Single(x => x.NodeType == ResearchInvestigationNodeTypes.EvaluateEvidence);
+        board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.InitialEvidencePolicy] = new JsonObject { ["capabilityGate"] = true, ["useWeb"] = false };
+        board[AgentBlackboardKeys.CapabilityRequests] = new JsonArray(new JsonObject
+        {
+            ["requestId"] = Guid.NewGuid(),
+            ["capabilityId"] = "retrieve-web-research-evidence",
+            ["status"] = "Pending"
+        });
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var continuationContext = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, DynamicPlanningTriggers.CapabilityRequestsReady, board,
+            run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), [lead], visible, 0, 3, evaluate.NodeKey);
+
+        var continuation = validator.Validate(run, DeterministicDynamicWorkflowPlanner.Create(continuationContext));
+        new GraphMaterializer(db, new AgentWorkflowCatalog()).Materialize(run, continuation);
+        board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+
+        Assert.Equal(ResearchInvestigationNodeTypes.RetrieveWeb, continuation.Actions[0].NodeType);
+        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, continuation.Actions[^1].NodeType);
+        Assert.Equal("Approved", board[AgentBlackboardKeys.CapabilityRequests]![0]!["status"]!.GetValue<string>());
+        Assert.True(board[AgentBlackboardKeys.InitialEvidencePolicy]!["useWeb"]!.GetValue<bool>());
+        Assert.Contains(db.AgentRunEvents.Local, x => x.EventType == AgentEventTypes.CapabilityRequestApproved);
     }
 
     [Fact]

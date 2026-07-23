@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import AgentRunProgress from '../../components/agents/AgentRunProgress.vue'
+import CapabilityRequestStatus from '../../components/agents/CapabilityRequestStatus.vue'
 import {
   cancelAgentRun,
   createDraftRevision,
@@ -217,6 +218,28 @@ const routingContext = computed((): RoutingContext | null => {
   return (run.value.blackboardJson.routingContext as unknown as RoutingContext) ?? null
 })
 
+const capabilityAssessment = computed(() => {
+  if (!run.value) return null
+  return (run.value.blackboardJson.capabilityRequestAssessment as {
+    decision: string
+    reason: string
+    evidenceGaps?: string[]
+    confidence: string
+    mode: string
+  } | null) ?? null
+})
+
+const capabilityRequests = computed(() => {
+  if (!run.value) return []
+  return (run.value.blackboardJson.capabilityRequests as Array<{
+    requestId: string
+    capabilityId: string
+    status: string
+    reason: string
+    reviewReason?: string | null
+  }>) ?? []
+})
+
 const nextActionLabel = computed(() => {
   const action = criticOutput.value?.recommendedNextAction
   if (!action) return null
@@ -303,6 +326,11 @@ const nextActionLabel = computed(() => {
             :run-status="run.run.status"
             :started-at-utc="run.run.startedAtUtc"
             :completed-at-utc="run.run.completedAtUtc"
+          />
+
+          <CapabilityRequestStatus
+            :assessment="capabilityAssessment"
+            :requests="capabilityRequests"
           />
 
           <!-- Waiting for output -->

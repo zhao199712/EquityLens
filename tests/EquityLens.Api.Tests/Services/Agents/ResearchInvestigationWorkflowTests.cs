@@ -160,6 +160,41 @@ public sealed class ResearchInvestigationWorkflowTests
         Assert.True(output.RootElement.GetProperty("rerankDiagnostics").GetProperty("usedFallback").GetBoolean());
     }
 
+    [Fact]
+    public async Task EvaluateEvidence_NodeAgent_OnlyWritesPendingWebRequestToBlackboard()
+    {
+        await using var db = CreateDbContext();
+        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(
+            Guid.NewGuid(), Guid.NewGuid(), new ResearchAskRequest("2454", "聯發科法說會相較上季改變了什麼？"), RoutingContext());
+        run.Status = AgentRunStatuses.Running;
+        var node = new AgentRunNode
+        {
+            Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "evaluate:1",
+            NodeType = ResearchInvestigationNodeTypes.EvaluateEvidence, Status = AgentNodeStatuses.Running
+        };
+        run.Nodes.Add(node);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.InitialEvidence] = JsonSerializer.SerializeToNode(Array.Empty<RetrievedDocumentChunk>(), AgentNodeJson.SerializerOptions);
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        db.AgentRuns.Add(run);
+        await db.SaveChangesAsync();
+        var events = new List<string>();
+        var handler = new EvaluateInitialEvidencePolicyNodeHandler(new RequestingCapabilityAgent());
+
+        await handler.ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, eventType, _, _) => events.Add(eventType)));
+        await db.SaveChangesAsync();
+
+        board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var request = Assert.Single(board[AgentBlackboardKeys.CapabilityRequests]!.AsArray())!.AsObject();
+        Assert.Equal("retrieve-web-research-evidence", request["capabilityId"]!.GetValue<string>());
+        Assert.Equal("Pending", request["status"]!.GetValue<string>());
+        Assert.False(board[AgentBlackboardKeys.InitialEvidencePolicy]!["useWeb"]!.GetValue<bool>());
+        Assert.Contains(AgentEventTypes.CapabilityRequested, events);
+        var toolCall = await db.AgentToolCalls.SingleAsync();
+        Assert.Equal("evidenceNeedsAgentLLM", toolCall.ToolName);
+        Assert.Equal(AgentToolCallStatuses.Succeeded, toolCall.Status);
+    }
+
     private static EquityLensDbContext CreateDbContext() => new TestDbContext(
         new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
@@ -215,5 +250,15 @@ public sealed class ResearchInvestigationWorkflowTests
             Task.FromResult(new RankedSelection([], [], new(
                 "Cohere", "TimedOut", "rerank-v4.0-fast", true, "CohereTimeout",
                 10_001, chunks.Count, 0, 70_822, null)));
+    }
+
+    private sealed class RequestingCapabilityAgent : IWebCapabilityRequestAgent
+    {
+        public Task<WebCapabilityAssessment> AssessAsync(
+            ResearchAskRequest request,
+            IReadOnlyList<RetrievedDocumentChunk> localEvidence,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WebCapabilityAssessment(
+                "Request", "缺少前一季法說會基線，建議搜尋公開資料。", ["前一季指引"], "high", "Llm", "test", 10, 5));
     }
 }

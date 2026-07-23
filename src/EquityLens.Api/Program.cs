@@ -208,6 +208,7 @@ builder.Services.AddScoped<IPortfolioRiskMathInputProvider, PortfolioRiskMathInp
 builder.Services.AddSingleton<IPortfolioRiskMathExecutor, PortfolioRiskMathExecutor>();
 builder.Services.AddScoped<IAgentWorkflowPlanner, LlmAgentWorkflowPlanner>();
 builder.Services.AddScoped<IInvestmentResearchRouter, InvestmentResearchRouter>();
+builder.Services.AddScoped<IWebCapabilityRequestAgent, LlmWebCapabilityRequestAgent>();
 builder.Services.AddScoped<IAgentWorkflowQueryService, AgentWorkflowQueryService>();
 builder.Services.AddScoped<IDynamicPlanValidator, DynamicPlanValidator>();
 builder.Services.AddScoped<IGraphMaterializer, GraphMaterializer>();

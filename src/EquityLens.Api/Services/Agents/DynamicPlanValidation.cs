@@ -21,7 +21,7 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         if (proposal.SelectedSkills.Any(x => !allowedSkills.Contains(x))) throw new InvalidOperationException("Dynamic plan selected an unknown skill.");
         if (proposal.GoalStatus == DynamicGoalStatuses.Complete && proposal.Actions.Count > 0) throw new InvalidOperationException("A completed plan cannot contain actions.");
         var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); var review = board[AgentBlackboardKeys.CriticReview] as JsonObject;
-        if (proposal.Trigger == DynamicPlanningTriggers.ResearchContextReady
+        if ((proposal.Trigger is DynamicPlanningTriggers.ResearchContextReady or DynamicPlanningTriggers.CapabilityRequestsReady)
             && board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>() is { Length: > 0 } leadSkillId)
         {
             var leadSkill = skillCatalog.Skills.SingleOrDefault(x => x.Id == leadSkillId && x.Routable)
@@ -50,6 +50,7 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         if (request?.SourcePolicy == EquityLens.Api.Contracts.Research.SourcePolicy.WebOnly
             && proposal.Actions.Any(x => x.NodeType is EvidenceRemediationNodeTypes.RetrieveEvidence or ResearchInvestigationNodeTypes.RetrieveLocal))
             throw new InvalidOperationException("Source policy WebOnly forbids local retrieval.");
+        ValidateCapabilityRequestGate(run, proposal, board, request);
         var duplicate = proposal.Actions.GroupBy(x => x.ClientNodeKey, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1)?.Key;
         if (duplicate is not null) throw new InvalidOperationException($"Dynamic plan contains duplicate node key '{duplicate}'.");
         var existing = run.Nodes.Select(x => x.NodeKey).ToHashSet(StringComparer.Ordinal);
@@ -119,13 +120,19 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         if (proposal.Trigger != DynamicPlanningTriggers.ResearchContextReady) return;
         var requiredTypes = new List<string> { ResearchInvestigationNodeTypes.PlanRetrieval };
         if (request?.SourcePolicy != EquityLens.Api.Contracts.Research.SourcePolicy.WebOnly) requiredTypes.Add(ResearchInvestigationNodeTypes.RetrieveLocal);
-        requiredTypes.AddRange([ResearchInvestigationNodeTypes.EvaluateEvidence, ResearchInvestigationNodeTypes.RankEvidence, ResearchInvestigationNodeTypes.DraftAnswer, ResearchQualityReviewNodeTypes.BuildEvidencePacket, ResearchQualityReviewNodeTypes.CheckEvidence, ResearchQualityReviewNodeTypes.CritiqueAnswer, ResearchQualityReviewNodeTypes.FinalizeCriticReport]);
+        requiredTypes.Add(ResearchInvestigationNodeTypes.EvaluateEvidence);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var gated = request is not null && DeterministicDynamicWorkflowPlanner.IsConferenceCapabilityGate(board, request);
+        if (!gated)
+            requiredTypes.AddRange([ResearchInvestigationNodeTypes.RankEvidence, ResearchInvestigationNodeTypes.DraftAnswer, ResearchQualityReviewNodeTypes.BuildEvidencePacket, ResearchQualityReviewNodeTypes.CheckEvidence, ResearchQualityReviewNodeTypes.CritiqueAnswer, ResearchQualityReviewNodeTypes.FinalizeCriticReport]);
         foreach (var type in requiredTypes)
             if (proposal.Actions.Count(x => x.NodeType == type) != 1) throw new InvalidOperationException($"Initial research plan must contain exactly one '{type}' node.");
+        if (gated && proposal.Actions.Count != requiredTypes.Count)
+            throw new InvalidOperationException("Capability-gated initial research plan must stop after evidence evaluation.");
 
         var needsWeb = request?.SourcePolicy is EquityLens.Api.Contracts.Research.SourcePolicy.WebOnly or EquityLens.Api.Contracts.Research.SourcePolicy.LocalAndWeb or EquityLens.Api.Contracts.Research.SourcePolicy.LocalThenWeb
             || request?.SourcePolicy == EquityLens.Api.Contracts.Research.SourcePolicy.Auto && ResearchInvestigationPlanning.IsFreshnessSensitive(request.Question);
-        if (needsWeb && proposal.Actions.Count(x => x.NodeType == ResearchInvestigationNodeTypes.RetrieveWeb) != 1)
+        if (!gated && needsWeb && proposal.Actions.Count(x => x.NodeType == ResearchInvestigationNodeTypes.RetrieveWeb) != 1)
             throw new InvalidOperationException("Initial research plan requires a Web retrieval capability.");
 
         var actions = proposal.Actions.ToDictionary(x => x.ClientNodeKey, StringComparer.Ordinal);
@@ -138,6 +145,48 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
             var action = proposal.Actions.Single(x => x.NodeType == type);
             if (!DependsTransitivelyOn(action, previousKey, actions)) throw new InvalidOperationException($"Initial research node '{action.ClientNodeKey}' must depend on the preceding research stage.");
             previousKey = action.ClientNodeKey;
+        }
+    }
+
+    private static void ValidateCapabilityRequestGate(
+        AgentRun run,
+        DynamicPlanProposal proposal,
+        JsonObject board,
+        EquityLens.Api.Contracts.Research.ResearchAskRequest? request)
+    {
+        if (proposal.Trigger != DynamicPlanningTriggers.CapabilityRequestsReady) return;
+        if (board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>() != "conference-call-takeaways")
+            throw new InvalidOperationException("Capability request planning is limited to conference-call-takeaways.");
+        var pending = DeterministicDynamicWorkflowPlanner.PendingWebRequest(board);
+        var webCount = proposal.Actions.Count(x => x.NodeType == ResearchInvestigationNodeTypes.RetrieveWeb);
+        if (webCount > 0 && pending is null)
+            throw new InvalidOperationException("Web retrieval requires a Pending capability request.");
+        string[] required =
+        [
+            ResearchInvestigationNodeTypes.RankEvidence,
+            ResearchInvestigationNodeTypes.DraftAnswer,
+            ResearchQualityReviewNodeTypes.BuildEvidencePacket,
+            ResearchQualityReviewNodeTypes.CheckEvidence,
+            ResearchQualityReviewNodeTypes.CritiqueAnswer,
+            ResearchQualityReviewNodeTypes.FinalizeCriticReport
+        ];
+        foreach (var type in required)
+            if (proposal.Actions.Count(x => x.NodeType == type) != 1)
+                throw new InvalidOperationException($"Capability request continuation must contain exactly one '{type}' node.");
+        var permittedCount = required.Length + webCount;
+        if (proposal.Actions.Count != permittedCount)
+            throw new InvalidOperationException("Capability request continuation contains an unauthorized node.");
+        if (request?.SourcePolicy == EquityLens.Api.Contracts.Research.SourcePolicy.LocalOnly && webCount > 0)
+            throw new InvalidOperationException("Source policy LocalOnly forbids Web retrieval.");
+        var actions = proposal.Actions.ToDictionary(x => x.ClientNodeKey, StringComparer.Ordinal);
+        var ordered = webCount == 1 ? new[] { ResearchInvestigationNodeTypes.RetrieveWeb }.Concat(required) : required;
+        var previous = run.Nodes.Single(x => x.NodeType == ResearchInvestigationNodeTypes.EvaluateEvidence && x.Status == AgentNodeStatuses.Succeeded).NodeKey;
+        foreach (var type in ordered)
+        {
+            var action = proposal.Actions.Single(x => x.NodeType == type);
+            if (!DependsTransitivelyOn(action, previous, actions))
+                throw new InvalidOperationException($"Capability continuation node '{action.ClientNodeKey}' must depend on the preceding stage.");
+            previous = action.ClientNodeKey;
         }
     }
 
@@ -206,7 +255,25 @@ public sealed class GraphMaterializer(EquityLensDbContext db, IAgentWorkflowCata
         }
         var patches = definition["planningHistory"] as JsonArray ?? new JsonArray(); patches.Add(JsonSerializer.SerializeToNode(new { validated.Proposal.ProposalId, validated.Proposal.Trigger, validated.Proposal.GoalStatus, validated.Proposal.Reason, validated.Proposal.SelectedSkills, addedNodes = validated.Actions.Select(x => x.ClientNodeKey), baseOrchestrationVersion = validated.Proposal.BaseOrchestrationVersion }, AgentNodeJson.SerializerOptions)); definition["planningHistory"] = patches;
         definition["goalStatus"] = validated.Proposal.GoalStatus; definition["orchestrationMode"] = "DynamicStateful"; run.WorkflowDefinitionJson = definition.ToJsonString(AgentNodeJson.SerializerOptions);
-        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); if (last is not null) board["dynamicLastNodeKey"] = last.NodeKey; run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        if (validated.Proposal.Trigger == DynamicPlanningTriggers.CapabilityRequestsReady)
+        {
+            var approved = validated.Actions.Any(x => x.NodeType == ResearchInvestigationNodeTypes.RetrieveWeb);
+            if (board[AgentBlackboardKeys.CapabilityRequests] is JsonArray requests)
+            {
+                foreach (var request in requests.OfType<JsonObject>().Where(x => x["status"]?.GetValue<string>() == "Pending"))
+                {
+                    request["status"] = approved ? "Approved" : "Rejected";
+                    request["reviewedAtUtc"] = DateTime.UtcNow;
+                    request["reviewReason"] = validated.Proposal.Reason;
+                    AddEvent(run, approved ? AgentEventTypes.CapabilityRequestApproved : AgentEventTypes.CapabilityRequestRejected,
+                        approved ? "Planner and Validator approved Web research capability." : "Planner declined Web research capability.",
+                        new { requestId = request["requestId"]?.GetValue<Guid>(), capabilityId = request["capabilityId"]?.GetValue<string>(), validated.Proposal.Reason });
+                }
+            }
+            if (board[AgentBlackboardKeys.InitialEvidencePolicy] is JsonObject policy) policy["useWeb"] = approved;
+        }
+        if (last is not null) board["dynamicLastNodeKey"] = last.NodeKey; run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
         run.OrchestrationVersion++;
         AddEvent(run, AgentEventTypes.GraphMaterialized, $"Materialized {validated.Actions.Count} dynamic nodes.", new { validated.Proposal.ProposalId, validated.Proposal.Trigger, nodes = validated.Actions.Select(x => x.ClientNodeKey), run.OrchestrationVersion });
         var definitionVersion = definition["version"]?.GetValue<int>() ?? 1;

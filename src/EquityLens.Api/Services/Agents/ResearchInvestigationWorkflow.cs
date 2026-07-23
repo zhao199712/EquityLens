@@ -92,6 +92,8 @@ public sealed class ResearchInvestigationWorkflowDefinitionProvider : IAgentWork
         ,[AgentBlackboardKeys.MathResults] = new JsonArray()
         ,[AgentBlackboardKeys.LeadSkill] = routingContext?.LeadSkill
         ,[AgentBlackboardKeys.RoutingContext] = JsonSerializer.SerializeToNode(routingContext, AgentNodeJson.SerializerOptions)
+        ,[AgentBlackboardKeys.CapabilityRequestAssessment] = null
+        ,[AgentBlackboardKeys.CapabilityRequests] = new JsonArray()
     }.ToJsonString(AgentNodeJson.SerializerOptions);
 
     private static string Definition()
@@ -167,19 +169,173 @@ public sealed class RetrieveLocalResearchEvidenceNodeHandler(IDocumentRetriever 
     }
 }
 
-public sealed class EvaluateInitialEvidencePolicyNodeHandler : IAgentNodeHandler
+public sealed record WebCapabilityAssessment(
+    string Decision,
+    string Reason,
+    IReadOnlyList<string> EvidenceGaps,
+    string Confidence,
+    string Mode,
+    string Model,
+    int PromptTokens,
+    int CompletionTokens);
+
+public interface IWebCapabilityRequestAgent
+{
+    Task<WebCapabilityAssessment> AssessAsync(
+        ResearchAskRequest request,
+        IReadOnlyList<RetrievedDocumentChunk> localEvidence,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class LlmWebCapabilityRequestAgent(IChatCompletionService chat) : IWebCapabilityRequestAgent
+{
+    public const string PromptTemplateId = "conference-call-web-capability-request";
+    public const int PromptVersion = 1;
+    public const int TimeoutSeconds = 10;
+
+    public async Task<WebCapabilityAssessment> AssessAsync(
+        ResearchAskRequest request,
+        IReadOnlyList<RetrievedDocumentChunk> localEvidence,
+        CancellationToken cancellationToken = default)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(TimeoutSeconds));
+        try
+        {
+            var evidence = localEvidence.Take(8).Select(x => new
+            {
+                x.Result.DocumentTitle,
+                x.Result.DocumentType,
+                x.Result.PageNumber,
+                content = AgentNodeJson.Trim(x.Result.Content, 500)
+            });
+            var result = await chat.CompleteAsync(new ChatCompletionRequest(
+                """
+                You are an evidence-needs node agent. You cannot call tools. You may only propose the supplied capability by returning JSON.
+                Decide whether local evidence is insufficient and Web search is materially necessary to answer the question.
+                Return {"decision":"Request|NotNeeded","reason":"繁體中文理由","evidenceGaps":["..."],"confidence":"high|medium|low"}.
+                Use Traditional Chinese for every string. Request only when Web evidence can plausibly close a specific material gap. Never invent another capability.
+                """,
+                JsonSerializer.Serialize(new
+                {
+                    request.Ticker,
+                    request.Question,
+                    sourcePolicy = request.SourcePolicy.ToString(),
+                    availableCapability = new
+                    {
+                        id = "retrieve-web-research-evidence",
+                        description = "Retrieve current Web evidence after Planner and Validator approval."
+                    },
+                    localEvidence = evidence
+                }, AgentNodeJson.SerializerOptions),
+                .1,
+                900,
+                ChatResponseFormat.JsonObject), timeout.Token);
+            using var document = JsonDocument.Parse(result.Content);
+            var root = document.RootElement;
+            var decision = root.GetProperty("decision").GetString();
+            var reason = root.GetProperty("reason").GetString();
+            var confidence = root.GetProperty("confidence").GetString();
+            var gaps = root.GetProperty("evidenceGaps").EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => x.Length > 0).Take(5).ToList();
+            if (decision is not ("Request" or "NotNeeded") || string.IsNullOrWhiteSpace(reason) || confidence is not ("high" or "medium" or "low"))
+                throw new JsonException("Capability assessment fields are invalid.");
+            if (!reason.Any(x => x is >= '\u3400' and <= '\u9fff')
+                || reason.IndexOfAny("发为会这与后国语变从对个们业产当应还进过数资实据".ToCharArray()) >= 0)
+                throw new JsonException("Capability assessment reason must use Traditional Chinese.");
+            return new(decision, reason, gaps, confidence, "Llm", result.Model, result.PromptTokens, result.CompletionTokens);
+        }
+        catch (Exception exception) when (exception is JsonException or OperationCanceledException || exception is HttpRequestException)
+        {
+            var freshness = ResearchInvestigationPlanning.IsFreshnessSensitive(request.Question);
+            var requestWeb = request.SourcePolicy == SourcePolicy.LocalThenWeb && (localEvidence.Count == 0 || freshness)
+                || request.SourcePolicy == SourcePolicy.Auto && (localEvidence.Count == 0 || freshness);
+            return new(
+                requestWeb ? "Request" : "NotNeeded",
+                requestWeb ? "規則降級判斷本地證據不足或問題具時效性，建議提出 Web 檢索。" : "規則降級判斷可先使用本地證據回答。",
+                requestWeb ? ["本地證據不足或缺少時效性資料"] : [],
+                "low",
+                "DeterministicFallback",
+                chat.Model,
+                0,
+                0);
+        }
+    }
+}
+
+public sealed class EvaluateInitialEvidencePolicyNodeHandler(IWebCapabilityRequestAgent capabilityAgent) : IAgentNodeHandler
 {
     public string NodeType => ResearchInvestigationNodeTypes.EvaluateEvidence;
-    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = ResearchInvestigationBoard.Parse(context.Run); var request = ResearchInvestigationBoard.Required<ResearchAskRequest>(board, AgentBlackboardKeys.ResearchRequest); var local = ResearchInvestigationBoard.Required<List<RetrievedDocumentChunk>>(board, AgentBlackboardKeys.InitialEvidence);
         var feedback = board[AgentBlackboardKeys.FeedbackComment]?.GetValue<string>();
         var freshnessSensitive = ResearchInvestigationPlanning.IsFreshnessSensitive(request.Question)
             || (!string.IsNullOrWhiteSpace(feedback) && ResearchInvestigationPlanning.IsFreshnessSensitive(feedback));
-        var useWeb = request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalAndWeb
-            || request.SourcePolicy == SourcePolicy.LocalThenWeb && (local.Count == 0 || freshnessSensitive)
-            || request.SourcePolicy == SourcePolicy.Auto && freshnessSensitive;
-        var output = new { useWeb, localCount = local.Count, freshnessSensitive, sourcePolicy = request.SourcePolicy.ToString() }; board[AgentBlackboardKeys.InitialEvidencePolicy] = JsonSerializer.SerializeToNode(output, AgentNodeJson.SerializerOptions); ResearchInvestigationBoard.Commit(context, board, output); return Task.CompletedTask;
+        var isPilot = board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>() == "conference-call-takeaways"
+            && request.SourcePolicy is SourcePolicy.Auto or SourcePolicy.LocalThenWeb;
+        WebCapabilityAssessment? assessment = null;
+        AgentToolCall? toolCall = null;
+        var started = DateTime.UtcNow;
+        if (isPilot)
+        {
+            toolCall = new AgentToolCall
+            {
+                Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+                ToolName = "evidenceNeedsAgentLLM", Status = AgentToolCallStatuses.Running,
+                ArgumentsJson = AgentNodeJson.Serialize(new { ticker = request.Ticker, localEvidenceCount = local.Count, capability = "retrieve-web-research-evidence", promptTemplateId = LlmWebCapabilityRequestAgent.PromptTemplateId, promptVersion = LlmWebCapabilityRequestAgent.PromptVersion }),
+                StartedAtUtc = started
+            };
+            context.DbContext.AgentToolCalls.Add(toolCall);
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.ToolCallStarted, "Tool evidenceNeedsAgentLLM started.", new { localEvidenceCount = local.Count });
+            await context.DbContext.SaveChangesAsync(cancellationToken);
+            assessment = await capabilityAgent.AssessAsync(request, local, cancellationToken);
+            toolCall.Status = assessment.Mode == "DeterministicFallback" ? AgentToolCallStatuses.Failed : AgentToolCallStatuses.Succeeded;
+            toolCall.ResultJson = AgentNodeJson.Serialize(assessment);
+            toolCall.ResultPreview = $"{assessment.Decision}: {AgentNodeJson.Trim(assessment.Reason, 140)}";
+            toolCall.ErrorMessage = assessment.Mode == "DeterministicFallback" ? "Evidence needs agent used deterministic fallback." : null;
+            toolCall.CompletedAtUtc = DateTime.UtcNow;
+            toolCall.DurationMs = (long)(toolCall.CompletedAtUtc.Value - started).TotalMilliseconds;
+            context.AddEvent(context.Run, context.Node,
+                assessment.Mode == "DeterministicFallback" ? AgentEventTypes.ToolCallFailed : AgentEventTypes.ToolCallCompleted,
+                assessment.Mode == "DeterministicFallback" ? "Tool evidenceNeedsAgentLLM fell back to rules." : "Tool evidenceNeedsAgentLLM completed.",
+                new { toolCall.DurationMs, assessment.Mode, assessment.Decision });
+        }
+        var mandatoryWeb = request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalAndWeb;
+        var useWeb = mandatoryWeb;
+        var requestId = assessment?.Decision == "Request" ? Guid.NewGuid() : (Guid?)null;
+        var output = new
+        {
+            useWeb,
+            localCount = local.Count,
+            freshnessSensitive,
+            sourcePolicy = request.SourcePolicy.ToString(),
+            capabilityGate = isPilot,
+            assessment
+        };
+        board[AgentBlackboardKeys.InitialEvidencePolicy] = JsonSerializer.SerializeToNode(output, AgentNodeJson.SerializerOptions);
+        board[AgentBlackboardKeys.CapabilityRequestAssessment] = JsonSerializer.SerializeToNode(assessment, AgentNodeJson.SerializerOptions);
+        board[AgentBlackboardKeys.CapabilityRequests] = requestId is null
+            ? new JsonArray()
+            : new JsonArray(JsonSerializer.SerializeToNode(new
+            {
+                requestId,
+                capabilityId = "retrieve-web-research-evidence",
+                requestedByNodeKey = context.Node.NodeKey,
+                status = "Pending",
+                assessment!.Reason,
+                assessment.EvidenceGaps,
+                assessment.Confidence,
+                createdAtUtc = DateTime.UtcNow,
+                reviewedAtUtc = (DateTime?)null,
+                reviewReason = (string?)null
+            }, AgentNodeJson.SerializerOptions));
+        context.Node.InputTokens = assessment?.PromptTokens;
+        context.Node.OutputTokens = assessment?.CompletionTokens;
+        if (requestId is not null)
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.CapabilityRequested, "Node Agent proposed Web research capability.", new { requestId, capability = "retrieve-web-research-evidence", assessment!.Reason, assessment.Mode });
+        else if (isPilot)
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.CapabilityRequestNotNeeded, "Node Agent determined Web research was not needed.", new { assessment!.Reason, assessment.Mode });
+        ResearchInvestigationBoard.Commit(context, board, output);
     }
 }
 

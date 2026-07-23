@@ -15,6 +15,7 @@ public static class DynamicPlanningTriggers
     public const string BranchCompleted = "BranchCompleted";
     public const string EvidenceValidated = "EvidenceValidated";
     public const string FeedbackContextReady = "FeedbackContextReady";
+    public const string CapabilityRequestsReady = "CapabilityRequestsReady";
 }
 
 public static class WorkflowSkillKinds
@@ -189,7 +190,7 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
     private static bool ContainsCjk(string value) => value.Any(x => x is >= '\u3400' and <= '\u9fff');
     private static bool ContainsSimplifiedChineseMarker(string value) =>
         value.IndexOfAny("发为会这与后国语变从对个们业产当应还进过数资实据".ToCharArray()) >= 0;
-    private static object Summarize(JsonObject board) => new { question = board[AgentBlackboardKeys.Question], researchRequest = board[AgentBlackboardKeys.ResearchRequest], researchIntent = board[AgentBlackboardKeys.ResearchIntent], leadSkill = board[AgentBlackboardKeys.LeadSkill], routingContext = board[AgentBlackboardKeys.RoutingContext], initialEvidencePolicy = board[AgentBlackboardKeys.InitialEvidencePolicy], revisionContext = board[AgentBlackboardKeys.RevisionContext], feedbackIntent = board[AgentBlackboardKeys.FeedbackIntent], plannerValidationError = board["plannerValidationError"], criticReview = board[AgentBlackboardKeys.CriticReview], unresolvedClaims = board[AgentBlackboardKeys.UnresolvedClaims], requiredResearchDimensions = board[AgentBlackboardKeys.RequiredResearchDimensions], missingResearchDimensions = board[AgentBlackboardKeys.MissingResearchDimensions], routeDecision = board[AgentBlackboardKeys.RouteDecision], requiresReanalysis = board[AgentBlackboardKeys.RequiresReanalysis], reanalysisReasons = board[AgentBlackboardKeys.ReanalysisReasons] };
+    private static object Summarize(JsonObject board) => new { question = board[AgentBlackboardKeys.Question], researchRequest = board[AgentBlackboardKeys.ResearchRequest], researchIntent = board[AgentBlackboardKeys.ResearchIntent], leadSkill = board[AgentBlackboardKeys.LeadSkill], routingContext = board[AgentBlackboardKeys.RoutingContext], initialEvidencePolicy = board[AgentBlackboardKeys.InitialEvidencePolicy], capabilityRequestAssessment = board[AgentBlackboardKeys.CapabilityRequestAssessment], capabilityRequests = board[AgentBlackboardKeys.CapabilityRequests], revisionContext = board[AgentBlackboardKeys.RevisionContext], feedbackIntent = board[AgentBlackboardKeys.FeedbackIntent], plannerValidationError = board["plannerValidationError"], criticReview = board[AgentBlackboardKeys.CriticReview], unresolvedClaims = board[AgentBlackboardKeys.UnresolvedClaims], requiredResearchDimensions = board[AgentBlackboardKeys.RequiredResearchDimensions], missingResearchDimensions = board[AgentBlackboardKeys.MissingResearchDimensions], routeDecision = board[AgentBlackboardKeys.RouteDecision], requiresReanalysis = board[AgentBlackboardKeys.RequiresReanalysis], reanalysisReasons = board[AgentBlackboardKeys.ReanalysisReasons] };
     private static IEnumerable<NodeCapability> VisibleCapabilities(WorkflowPlanningContext context)
     {
         var request = context.Blackboard[AgentBlackboardKeys.ResearchRequest]?.Deserialize<ResearchAskRequest>(AgentNodeJson.SerializerOptions);
@@ -197,7 +198,7 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
         return context.Capabilities.Where(x => x.NodeType != PortfolioRiskMathNodeTypes.Execute || hasPortfolio || x.InputMode is "SingleAsset" or "Any");
     }
     private const string SystemPrompt = """
-You are the constrained supervisor planner for an equity research run. Return one JSON object only. Select only supplied skills, tools and nodeTypes. A tool is a capability that becomes a backend workflow node after validation; you do not execute tools directly. Never output providers, code, raw Blackboard writes, unknown nodes, or graph cycles. Output {"goalStatus":"Continue|Complete","reason":"...","selectedSkills":["..."],"actions":[{"clientNodeKey":"unique-key","capability":"...","nodeType":"...","dependsOn":["client-key-or-existing-node-key"],"iteration":0,"arguments":{}}]}. The reason field MUST be written in Traditional Chinese and include the original ticker when one is available. Every other Chinese string value, including searchIntents, must also use Traditional Chinese. Preserve company names and tickers exactly as supplied in Blackboard; never transliterate or convert them to Simplified Chinese. Every action requires at least one dependency. The first action must depend on PlanningAnchorNodeKey exactly; every later action must depend on a preceding action key. Math tools may receive only bounded configuration parameters described by their schema; never provide prices, returns, holdings, weights, covariance matrices, or other numeric source data because those must come from Blackboard. Select math tools only when the user explicitly needs a calculation, risk measure, simulation or portfolio comparison, with at most eight math actions and no duplicate math capability. On ResearchContextReady, build a complete initial research branch ending in FinalizeCriticReport. On FeedbackContextReady, use feedbackIntent and revisionContext to build the smallest sufficient revision DAG: wording feedback may reuse selected evidence and start at DraftResearchAnswer; evidence corrections may retrieve and rerank; reanalysis may use validated reanalysis capabilities; calculation feedback may use allowlisted math capabilities. Every FeedbackContextReady branch must draft or revise an answer, independently critique it, and end in a finalization node. Use current-market-event-investigation and Web research for questions about a specific recent date, price move, news, or current event unless sourcePolicy forbids Web. Respect sourcePolicy: LocalOnly forbids Web, WebOnly forbids actual local retrieval, LocalAndWeb requires Web, and Auto selects based on freshness. Retrieval nodes own concrete tool calls. On remediation triggers, use missingResearchDimensions and routeDecision as retrieval targets. If evidence is missing, provide 1-3 searchIntents with targetClaims, topic, preferredSourceRoles, freshness and topK. Dynamic remediation local retrieval must set allowWebFallback=false. Respect all budgets, including at most one Web retrieval node.
+You are the constrained supervisor planner for an equity research run. Return one JSON object only. Select only supplied skills, tools and nodeTypes. A tool is a capability that becomes a backend workflow node after validation; you do not execute tools directly. Never output providers, code, raw Blackboard writes, unknown nodes, or graph cycles. Output {"goalStatus":"Continue|Complete","reason":"...","selectedSkills":["..."],"actions":[{"clientNodeKey":"unique-key","capability":"...","nodeType":"...","dependsOn":["client-key-or-existing-node-key"],"iteration":0,"arguments":{}}]}. The reason field MUST be written in Traditional Chinese and include the original ticker when one is available. Every other Chinese string value, including searchIntents, must also use Traditional Chinese. Preserve company names and tickers exactly as supplied in Blackboard; never transliterate or convert them to Simplified Chinese. Every action requires at least one dependency. The first action must depend on PlanningAnchorNodeKey exactly; every later action must depend on a preceding action key. For conference-call-takeaways with Auto or LocalThenWeb, ResearchContextReady must stop after PlanResearchRetrieval, RetrieveLocalResearchEvidence and EvaluateInitialEvidencePolicy. On CapabilityRequestsReady, add RetrieveWebResearchEvidence only when capabilityRequests contains a Pending matching request, then complete the branch through Rank, Draft, evidence checks, Critic and Finalize. Without a Pending request, continue without Web. Math tools may receive only bounded configuration parameters described by their schema; never provide prices, returns, holdings, weights, covariance matrices, or other numeric source data because those must come from Blackboard. Select math tools only when the user explicitly needs a calculation, risk measure, simulation or portfolio comparison, with at most eight math actions and no duplicate math capability. On other ResearchContextReady requests, build a complete initial research branch ending in FinalizeCriticReport. On FeedbackContextReady, use feedbackIntent and revisionContext to build the smallest sufficient revision DAG. Respect sourcePolicy: LocalOnly forbids Web, WebOnly forbids actual local retrieval, LocalAndWeb requires Web. Retrieval nodes own concrete tool calls. Respect all budgets, including at most one Web retrieval node.
 """;
 }
 
@@ -216,13 +217,16 @@ public static class DeterministicDynamicWorkflowPlanner
             var includeWeb = request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalAndWeb
                 || request.SourcePolicy == SourcePolicy.Auto && ResearchInvestigationPlanning.IsFreshnessSensitive(request.Question)
                 || request.SourcePolicy == SourcePolicy.LocalThenWeb;
+            var capabilityGate = IsConferenceCapabilityGate(board, request);
             var planned = new List<DynamicPlanAction>
             {
                 A("planResearchRetrieval:1", "plan-research-retrieval", ResearchInvestigationNodeTypes.PlanRetrieval)
             };
             if (request.SourcePolicy != SourcePolicy.WebOnly) planned.Add(A("retrieveLocalResearchEvidence:1", "retrieve-local-research-evidence", ResearchInvestigationNodeTypes.RetrieveLocal));
             planned.Add(A("evaluateInitialEvidencePolicy:1", "evaluate-initial-evidence", ResearchInvestigationNodeTypes.EvaluateEvidence));
-            if (includeWeb) planned.Add(A("retrieveWebResearchEvidence:1", "retrieve-web-research-evidence", ResearchInvestigationNodeTypes.RetrieveWeb));
+            if (!capabilityGate && includeWeb) planned.Add(A("retrieveWebResearchEvidence:1", "retrieve-web-research-evidence", ResearchInvestigationNodeTypes.RetrieveWeb));
+            if (!capabilityGate)
+            {
             planned.AddRange([
                 A("rankAndSelectResearchEvidence:1", "rank-research-evidence", ResearchInvestigationNodeTypes.RankEvidence),
             ]);
@@ -238,6 +242,7 @@ public static class DeterministicDynamicWorkflowPlanner
                 A("critiqueAnswer:1", "critique-initial-answer", ResearchQualityReviewNodeTypes.CritiqueAnswer),
                 A("finalizeCriticReport:1", "finalize-initial-critic", ResearchQualityReviewNodeTypes.FinalizeCriticReport)
             ]);
+            }
             actions = Chain(planned, ResearchInvestigationNodeKeys.DetectIntent);
             var routedLeadSkill = board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>();
             skills = !string.IsNullOrWhiteSpace(routedLeadSkill)
@@ -246,7 +251,25 @@ public static class DeterministicDynamicWorkflowPlanner
             if (string.IsNullOrWhiteSpace(routedLeadSkill) && planned.Any(x => x.NodeType == PortfolioRiskMathNodeTypes.Execute))
                 skills = [..skills, "portfolio-risk-mathematics"];
             goal = DynamicGoalStatuses.Continue;
-            reason = includeWeb ? "研究請求需要包含 Web 檢索的初始證據分支。" : "研究請求可先使用本地證據建立初始分支。";
+            reason = capabilityGate ? "先取得本地證據，再由 Node Agent 提出能力需求供 Planner 審核。" : includeWeb ? "研究請求需要包含 Web 檢索的初始證據分支。" : "研究請求可先使用本地證據建立初始分支。";
+        }
+        else if (c.Trigger == DynamicPlanningTriggers.CapabilityRequestsReady)
+        {
+            var pendingWeb = PendingWebRequest(board) is not null;
+            var planned = new List<DynamicPlanAction>();
+            if (pendingWeb) planned.Add(A("retrieveWebResearchEvidence:approved", "retrieve-web-research-evidence", ResearchInvestigationNodeTypes.RetrieveWeb));
+            planned.AddRange([
+                A("rankAndSelectResearchEvidence:approved", "rank-research-evidence", ResearchInvestigationNodeTypes.RankEvidence),
+                A("draftResearchAnswer:approved", "draft-research-answer", ResearchInvestigationNodeTypes.DraftAnswer),
+                A("buildEvidencePacket:approved", "build-initial-evidence-packet", ResearchQualityReviewNodeTypes.BuildEvidencePacket),
+                A("checkEvidence:approved", "check-initial-evidence", ResearchQualityReviewNodeTypes.CheckEvidence),
+                A("critiqueAnswer:approved", "critique-initial-answer", ResearchQualityReviewNodeTypes.CritiqueAnswer),
+                A("finalizeCriticReport:approved", "finalize-initial-critic", ResearchQualityReviewNodeTypes.FinalizeCriticReport)
+            ]);
+            actions = Chain(planned, c.PlanningAnchorNodeKey ?? Last(c));
+            skills = ["conference-call-takeaways"];
+            goal = DynamicGoalStatuses.Continue;
+            reason = pendingWeb ? "Planner 核准 Node Agent 提出的 Web 檢索能力需求。" : "Node Agent 未提出 Web 能力需求，使用本地證據繼續研究流程。";
         }
         else if (c.Trigger == DynamicPlanningTriggers.FeedbackContextReady)
         {
@@ -328,6 +351,14 @@ public static class DeterministicDynamicWorkflowPlanner
         else { actions = []; skills = ["quality-finalization"]; goal = DynamicGoalStatuses.Complete; reason = "評論已接受目前答案。"; }
         return new(Guid.NewGuid(), c.OrchestrationVersion, c.Trigger, goal, reason, skills, actions, "DeterministicFallback", model, 0, 0, fallbackReason);
     }
+    internal static bool IsConferenceCapabilityGate(JsonObject board, ResearchAskRequest request) =>
+        board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>() == "conference-call-takeaways"
+        && request.SourcePolicy is SourcePolicy.Auto or SourcePolicy.LocalThenWeb;
+    internal static JsonObject? PendingWebRequest(JsonObject board) =>
+        (board[AgentBlackboardKeys.CapabilityRequests] as JsonArray)?
+        .OfType<JsonObject>()
+        .FirstOrDefault(x => x["capabilityId"]?.GetValue<string>() == "retrieve-web-research-evidence"
+            && x["status"]?.GetValue<string>() == "Pending");
     private static DynamicPlanAction A(string key, string capability, string type, JsonObject? args = null, int iteration = 0) => new(key, capability, type, [], args ?? new JsonObject(), null, iteration);
     private static IReadOnlyList<DynamicPlanAction> Chain(IReadOnlyList<DynamicPlanAction> actions, string predecessor)
     { var result = new List<DynamicPlanAction>(); var previous = predecessor; foreach (var action in actions) { result.Add(action with { DependsOn = [previous] }); previous = action.ClientNodeKey; } return result; }

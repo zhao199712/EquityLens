@@ -336,6 +336,9 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             ? DynamicPlanningTriggers.FeedbackContextReady
             : last?.NodeType == ResearchInvestigationNodeTypes.DetectIntent && run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation
             ? DynamicPlanningTriggers.ResearchContextReady
+            : last?.NodeType == ResearchInvestigationNodeTypes.EvaluateEvidence
+                && AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.InitialEvidencePolicy]?["capabilityGate"]?.GetValue<bool>() == true
+            ? DynamicPlanningTriggers.CapabilityRequestsReady
             : last?.NodeType == EvidenceRemediationNodeTypes.Route
                 ? DynamicPlanningTriggers.EvidenceValidated
                 : last?.NodeType == ResearchQualityReviewNodeTypes.FinalizeCriticReport
@@ -356,7 +359,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         var planningBoard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
         IReadOnlyList<WorkflowSkill> visibleSkills = skills.Skills;
         IReadOnlyList<NodeCapability> visibleCapabilities = capabilities.Capabilities;
-        if (trigger == DynamicPlanningTriggers.ResearchContextReady
+        if ((trigger is DynamicPlanningTriggers.ResearchContextReady or DynamicPlanningTriggers.CapabilityRequestsReady)
             && planningBoard[AgentBlackboardKeys.LeadSkill]?.GetValue<string>() is { Length: > 0 } leadSkillId)
         {
             var leadSkill = skills.Skills.SingleOrDefault(x => x.Id == leadSkillId && x.Routable)
