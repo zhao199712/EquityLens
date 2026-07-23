@@ -75,6 +75,40 @@ public sealed class ConversationServiceTests
         Assert.False(context.ContainsKey("security"));
     }
 
+    [Fact]
+    public async Task RunCard_PrefersResearchAnswerOverCriticSummary()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+        var researchId = Guid.NewGuid();
+        db.ChatSessions.Add(new ChatSession { Id = sessionId, UserId = userId });
+        db.ResearchRuns.Add(new ResearchRun
+        {
+            Id = researchId, UserId = userId, TraceId = "trace", Ticker = "2454",
+            Question = "問題", Answer = "正式研究答案", RetrievalMode = "Auto", SourcePolicy = "Auto"
+        });
+        db.AgentRuns.Add(new AgentRun
+        {
+            Id = runId, UserId = userId, ResearchRunId = researchId,
+            WorkflowType = AgentWorkflowTypes.ResearchInvestigation, AgentType = AgentTypes.Research,
+            Status = AgentRunStatuses.Succeeded, OutputJson = """{"summary":"Critic 摘要"}"""
+        });
+        db.ChatMessages.Add(new ChatMessage
+        {
+            Id = Guid.NewGuid(), ChatSessionId = sessionId, AgentRunId = runId,
+            Role = "assistant", MessageType = "AgentRun", SequenceNumber = 0
+        });
+        await db.SaveChangesAsync();
+        var service = new ConversationService(db, Agent(ConversationActions.DirectResponse, "x", null, new()),
+            new FakeWorkflowQueries(), new FakeAgentRuns(), new AgentWorkflowCatalog());
+
+        var card = await service.GetRunCardAsync(userId, sessionId, runId);
+
+        Assert.Equal("正式研究答案", card?.FinalAnswer);
+    }
+
     private static IConversationAgent Agent(string action, string response, string? query, JsonObject patch) =>
         new FakeConversationAgent(new(action, response, query, action, "high", patch, string.Empty,
             "test", "test", 1, 1, 1));

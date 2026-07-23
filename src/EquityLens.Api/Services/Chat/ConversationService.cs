@@ -161,15 +161,18 @@ public sealed class ConversationService(
             .AnyAsync(x => x.ChatSessionId == sessionId && x.AgentRunId == agentRunId
                 && x.ChatSession.UserId == userId, cancellationToken);
         if (!linked) return null;
-        var run = await db.AgentRuns.AsNoTracking().Include(x => x.Nodes)
+        var run = await db.AgentRuns.AsNoTracking().Include(x => x.Nodes).Include(x => x.ResearchRun)
             .FirstOrDefaultAsync(x => x.Id == agentRunId && x.UserId == userId, cancellationToken);
         if (run is null) return null;
         var current = run.Nodes.Where(x => x.Status == AgentNodeStatuses.Running).OrderBy(x => x.StartedAtUtc).FirstOrDefault()
             ?? run.Nodes.Where(x => x.Status == AgentNodeStatuses.Pending).OrderBy(x => x.NodeKey).FirstOrDefault();
         var currentContract = current is null ? null : workflowCatalog.GetNode(current.NodeType).Contract;
+        var finalAnswer = !string.IsNullOrWhiteSpace(run.ResearchRun?.Answer)
+            ? run.ResearchRun.Answer
+            : ExtractFinalAnswer(run.OutputJson);
         return new(run.Id, run.ResearchRunId, run.WorkflowType, run.Status, currentContract?.Stage, currentContract?.DisplayName,
             run.Nodes.Count(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped),
-            run.Nodes.Count, ExtractFinalAnswer(run.OutputJson), run.ErrorMessage);
+            run.Nodes.Count, finalAnswer, run.ErrorMessage);
     }
 
     private static JsonObject MergeContext(JsonObject current, JsonObject patch)
