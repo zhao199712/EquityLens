@@ -158,12 +158,54 @@ public sealed class AgentWorkflowQueryServiceTests
         Assert.Equal("conference-call-takeaways", runs.RoutingContext?.LeadSkill);
     }
 
+    [Fact]
+    public async Task ResearchQuestion_WhenRouterChangesExplicitYearsAndQuarters_RepairsObjectiveFromOriginalQuestion()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid();
+        db.Securities.Add(new Security { Id = Guid.NewGuid(), Ticker = "2454", Name = "聯發科", IsActive = true });
+        await db.SaveChangesAsync();
+        const string question = "聯發科2026年第一季法說會提供的2026年第二季營收與毛利率指引是什麼？";
+        var runs = new FakeAgentRuns();
+        var route = ResearchRoute(
+            "聯發科",
+            "conference-call-takeaways",
+            "整理聯發科2025年第一季法說會提供的2025年第二季營收與毛利率指引");
+        var service = new AgentWorkflowQueryService(db, Router(route), runs);
+
+        var result = await service.CreateAsync(userId, new(question));
+
+        Assert.Equal($"回答使用者問題：{question}", result.Objective);
+        Assert.DoesNotContain("2025", result.Objective);
+        Assert.Equal(InvestmentResearchRouter.PromptVersion, runs.RoutingContext?.PromptVersion);
+    }
+
+    [Fact]
+    public async Task ResearchQuestion_WhenObjectivePreservesExplicitConstraints_KeepsRouterObjective()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid();
+        db.Securities.Add(new Security { Id = Guid.NewGuid(), Ticker = "2454", Name = "聯發科", IsActive = true });
+        await db.SaveChangesAsync();
+        const string objective = "整理聯發科2026年第一季法說會提供的2026年第二季營收與毛利率指引";
+        var runs = new FakeAgentRuns();
+        var service = new AgentWorkflowQueryService(
+            db,
+            Router(ResearchRoute("聯發科", "conference-call-takeaways", objective)),
+            runs);
+
+        var result = await service.CreateAsync(userId, new("聯發科2026年第一季法說會提供的2026年第二季營收與毛利率指引是什麼？"));
+
+        Assert.Equal(objective, result.Objective);
+    }
+
     private static TestDb CreateDb() => new(new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
     private static InvestmentResearchRouter Router(string content) => Router(new FakeChat(content));
     private static InvestmentResearchRouter Router(FakeChat chat) => new(chat, new WorkflowSkillCatalog());
-    private static string ResearchRoute(string? securityQuery, string leadSkill = "research-investigation") => $$"""
-        {"workflowType":"ResearchInvestigation","portfolioId":null,"securityQuery":{{JsonSerializer.Serialize(securityQuery)}},"leadSkill":"{{leadSkill}}","objective":"分析使用者指定的公司研究問題","contextEnvelope":{"market":"TW","asset":"equity","depth":"standard","horizon":null,"currency":"TWD","language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"routingReason":"需要公司研究","confidence":"high"}
+    private static string ResearchRoute(
+        string? securityQuery,
+        string leadSkill = "research-investigation",
+        string objective = "分析使用者指定的公司研究問題") => $$"""
+        {"workflowType":"ResearchInvestigation","portfolioId":null,"securityQuery":{{JsonSerializer.Serialize(securityQuery)}},"leadSkill":"{{leadSkill}}","objective":{{JsonSerializer.Serialize(objective)}},"contextEnvelope":{"market":"TW","asset":"equity","depth":"standard","horizon":null,"currency":"TWD","language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"routingReason":"需要公司研究","confidence":"high"}
         """;
     private static string PortfolioRoute() => """
         {"workflowType":"PortfolioDiagnosis","portfolioId":null,"securityQuery":null,"leadSkill":"portfolio-risk-summary","objective":"診斷投資組合風險","contextEnvelope":{"market":"TW","asset":"portfolio","depth":"standard","horizon":null,"currency":"TWD","language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"routingReason":"需要檢查投組風險","confidence":"high"}

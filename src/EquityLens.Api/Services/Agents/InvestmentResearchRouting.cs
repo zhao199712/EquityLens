@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Services.Ai;
 
@@ -26,7 +27,7 @@ public sealed class InvestmentResearchRouter(
     IWorkflowSkillCatalog skillCatalog) : IInvestmentResearchRouter
 {
     public const string PromptTemplateId = "investment-research-question-router";
-    public const int PromptVersion = 1;
+    public const int PromptVersion = 2;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly TimeSpan RoutingTimeout = TimeSpan.FromSeconds(15);
     private static readonly HashSet<string> ConfidenceValues = new(StringComparer.OrdinalIgnoreCase) { "high", "medium", "low" };
@@ -85,7 +86,10 @@ public sealed class InvestmentResearchRouter(
         if (!ConfidenceValues.Contains(output.Confidence ?? string.Empty))
             throw new AgentWorkflowQueryException("workflow_routing_unavailable", "LLM 路由信心度格式無效。");
 
-        var objective = Required(output.Objective, "objective");
+        var objective = PreserveExplicitQuestionConstraints(
+            question,
+            Required(output.Objective, "objective"),
+            Trim(output.SecurityQuery));
         var reason = Required(output.RoutingReason, "routingReason");
         var context = output.ContextEnvelope ?? throw new AgentWorkflowQueryException("workflow_routing_unavailable", "LLM 未提供 ContextEnvelope。");
         var market = Allowed(Default(context.Market, "unknown"), MarketValues, "market");
@@ -131,6 +135,7 @@ public sealed class InvestmentResearchRouter(
         Choose portfolio-risk-summary for portfolio performance, holdings, concentration, drawdown, volatility, VaR, attribution, allocation, or portfolio health.
         For PortfolioDiagnosis choose only a portfolioId copied from availablePortfolios. If multiple portfolios exist and the question does not identify one, return portfolioId null.
         For ResearchInvestigation, securityQuery MUST be either a ticker copied verbatim from the question or a company name copied verbatim from the question. Never translate, simplify, normalize, rewrite, or invent it.
+        The objective MUST preserve every company name, ticker, explicit year, and quarter from the user question verbatim. Never substitute a different year or reporting period.
         All Chinese strings MUST use Traditional Chinese. inferredFields must disclose every inference. Return at most three clarifyingQuestions.
         Return JSON only:
         {"workflowType":"PortfolioDiagnosis|ResearchInvestigation","portfolioId":null,"securityQuery":null,"leadSkill":"allowed-id","objective":"one precise Traditional Chinese objective","contextEnvelope":{"market":"TW|CN-A|HK|US|Global|unknown","asset":"equity|ETF|index|sector|theme|bond|convertible|option|portfolio|unknown","depth":"quick|standard|deep|monitoring","horizon":null,"currency":null,"language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"routingReason":"short Traditional Chinese reason","confidence":"high|medium|low"}.
@@ -149,6 +154,50 @@ public sealed class InvestmentResearchRouter(
     private static IReadOnlyList<string> Bounded(IReadOnlyList<string>? values, int max = 20) =>
         (values ?? []).Select(x => x?.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).Take(max).Select(x => Clip(x!, 500)).ToList();
     private static string Clip(string value, int maxLength) => value.Length <= maxLength ? value : value[..maxLength];
+
+    private static string PreserveExplicitQuestionConstraints(string question, string objective, string? securityQuery)
+    {
+        var questionYears = ExtractYears(question);
+        var objectiveYears = ExtractYears(objective);
+        var questionQuarters = ExtractQuarters(question);
+        var objectiveQuarters = ExtractQuarters(objective);
+        var securityWasCopiedFromQuestion = !string.IsNullOrWhiteSpace(securityQuery)
+            && question.Contains(securityQuery, StringComparison.OrdinalIgnoreCase);
+        var securityIsMissing = securityWasCopiedFromQuestion
+            && !objective.Contains(securityQuery!, StringComparison.OrdinalIgnoreCase);
+
+        return securityIsMissing
+            || !questionYears.SequenceEqual(objectiveYears, StringComparer.Ordinal)
+            || !questionQuarters.SequenceEqual(objectiveQuarters, StringComparer.Ordinal)
+                ? $"回答使用者問題：{question.Trim()}"
+                : objective;
+    }
+
+    private static IReadOnlyList<string> ExtractYears(string value) =>
+        Regex.Matches(value, @"(?<!\d)(?:19|20)\d{2}(?!\d)", RegexOptions.CultureInvariant)
+            .Select(match => match.Value)
+            .ToList();
+
+    private static IReadOnlyList<string> ExtractQuarters(string value)
+    {
+        var quarters = Regex.Matches(
+                value,
+                @"(?<![A-Za-z0-9])Q([1-4])(?![A-Za-z0-9])|第?\s*([一二三四1-4])\s*季",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            .Select(match => match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value)
+            .Select(NormalizeQuarter)
+            .ToList();
+        return quarters;
+    }
+
+    private static string NormalizeQuarter(string value) => value switch
+    {
+        "一" => "1",
+        "二" => "2",
+        "三" => "3",
+        "四" => "4",
+        _ => value
+    };
 
     private sealed record RouterContextEnvelope(string? Market, string? Asset, string? Depth, string? Horizon, string? Currency, string? Language);
     private sealed record RouterOutput(
