@@ -30,7 +30,6 @@ interface ToolExecution {
 }
 
 interface ChatState {
-  isOpen: boolean
   sessions: ChatSession[]
   currentSessionId: string | null
   messages: ChatMessage[]
@@ -43,7 +42,6 @@ interface ChatState {
 
 export const useChatStore = defineStore('chat', {
   state: (): ChatState => ({
-    isOpen: false,
     sessions: [],
     currentSessionId: null,
     messages: [],
@@ -60,24 +58,6 @@ export const useChatStore = defineStore('chat', {
   },
 
   actions: {
-    toggleSidebar() {
-      this.isOpen = !this.isOpen
-      if (this.isOpen && this.sessions.length === 0) {
-        this.loadSessions()
-      }
-    },
-
-    openSidebar() {
-      this.isOpen = true
-      if (this.sessions.length === 0) {
-        this.loadSessions()
-      }
-    },
-
-    closeSidebar() {
-      this.isOpen = false
-    },
-
     async loadSessions() {
       try {
         this.sessions = await listSessions()

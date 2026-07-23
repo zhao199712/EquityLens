@@ -5,13 +5,10 @@ import { NConfigProvider, darkTheme } from 'naive-ui'
 import { enUS, zhTW } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from './stores/auth'
-import { useChatStore } from './stores/chat'
-import ChatSidebar from './components/ChatSidebar.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const chatStore = useChatStore()
 const { t, locale } = useI18n()
 
 const isAuthPage = computed(() => route.name === 'login' || route.name === 'register')
@@ -181,9 +178,6 @@ function handleMenuSelect(key: string) {
         </nav>
 
         <div class="kimi-header-right">
-          <button class="kimi-chat-btn" @click="chatStore.toggleSidebar()" title="AI Chat">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          </button>
           <RouterLink class="kimi-admin-link" to="/settings">{{ t('nav.settings') }}</RouterLink>
           <button class="kimi-logout-btn" @click="handleLogout">{{ t('nav.logout') }}</button>
         </div>
@@ -193,9 +187,6 @@ function handleMenuSelect(key: string) {
       <main class="kimi-app-content">
         <RouterView />
       </main>
-
-      <!-- Chat Sidebar -->
-      <ChatSidebar />
     </div>
   </NConfigProvider>
 </template>
@@ -316,23 +307,6 @@ function handleMenuSelect(key: string) {
   display: flex;
   align-items: center;
   gap: 14px;
-}
-
-.kimi-chat-btn {
-  background: none;
-  border: 1px solid rgba(201, 168, 106, 0.25);
-  border-radius: 4px;
-  cursor: pointer;
-  padding: 6px 10px;
-  color: #9a917c;
-  display: flex;
-  align-items: center;
-  transition: all 0.2s ease;
-}
-
-.kimi-chat-btn:hover {
-  color: #c9a86a;
-  border-color: #c9a86a;
 }
 
 .kimi-logout-btn {
