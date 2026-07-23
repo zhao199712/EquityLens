@@ -53,6 +53,7 @@ public class EquityLensDbContext : DbContext
     // Chat
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<ConversationTurn> ConversationTurns => Set<ConversationTurn>();
 
     // Research trace
     public DbSet<ResearchRun> ResearchRuns => Set<ResearchRun>();

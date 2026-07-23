@@ -19,6 +19,9 @@ public class ChatMessageConfiguration : IEntityTypeConfiguration<ChatMessage>
         builder.Property(x => x.ToolName).HasColumnName("tool_name").HasMaxLength(64);
         builder.Property(x => x.ToolCallId).HasColumnName("tool_call_id").HasMaxLength(128);
         builder.Property(x => x.ToolCallsJson).HasColumnName("tool_calls_json");
+        builder.Property(x => x.MessageType).HasColumnName("message_type").HasMaxLength(32).IsRequired();
+        builder.Property(x => x.ConversationTurnId).HasColumnName("conversation_turn_id");
+        builder.Property(x => x.AgentRunId).HasColumnName("agent_run_id");
         builder.Property(x => x.SequenceNumber).HasColumnName("sequence_number");
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("now()");
 
@@ -28,5 +31,9 @@ public class ChatMessageConfiguration : IEntityTypeConfiguration<ChatMessage>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(x => new { x.ChatSessionId, x.SequenceNumber });
+        builder.HasOne(x => x.ConversationTurn).WithMany(x => x.Messages).HasForeignKey(x => x.ConversationTurnId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(x => x.AgentRun).WithMany().HasForeignKey(x => x.AgentRunId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.ConversationTurnId);
+        builder.HasIndex(x => x.AgentRunId);
     }
 }

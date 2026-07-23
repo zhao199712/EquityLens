@@ -15,6 +15,8 @@ public class ChatSessionConfiguration : IEntityTypeConfiguration<ChatSession>
 
         builder.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
         builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(256);
+        builder.Property(x => x.ContextJson).HasColumnName("context_json").HasColumnType("jsonb").IsRequired();
+        builder.Property(x => x.ContextVersion).HasColumnName("context_version").IsConcurrencyToken();
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("now()");
         builder.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").HasDefaultValueSql("now()");
 

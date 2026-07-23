@@ -31,14 +31,6 @@ async function scrollToBottom() {
 watch(() => chatStore.streamingContent, () => { scrollToBottom() })
 watch(() => chatStore.messages.length, () => { scrollToBottom() })
 
-function getToolLabel(tool: string): string {
-  switch (tool) {
-    case 'searchDocuments': return '搜尋財報文件'
-    case 'queryFinancialData': return '查詢財務數據'
-    case 'webSearch': return '網路搜尋'
-    default: return tool
-  }
-}
 </script>
 
 <template>
@@ -95,16 +87,21 @@ function getToolLabel(tool: string): string {
                 <div v-if="msg.role === 'assistant'" class="chat-msg-avatar">AI</div>
                 <div class="chat-msg-bubble">
                   <div class="chat-msg-content" v-html="renderMarkdown(msg.content || '')"></div>
+                  <div v-if="msg.runCard" class="conversation-run-card">
+                    <div class="run-card-head">
+                      <strong>{{ msg.runCard.workflowType }}</strong>
+                      <span :class="`run-status run-status--${msg.runCard.status.toLowerCase()}`">{{ msg.runCard.status }}</span>
+                    </div>
+                    <p v-if="msg.runCard.currentStageDisplayName">{{ msg.runCard.currentStageDisplayName }}</p>
+                    <div class="run-progress">
+                      <span :style="{ width: `${msg.runCard.totalNodes ? (msg.runCard.completedNodes / msg.runCard.totalNodes) * 100 : 0}%` }"></span>
+                    </div>
+                    <small>{{ msg.runCard.completedNodes }} / {{ msg.runCard.totalNodes }} stages</small>
+                    <div v-if="msg.runCard.finalAnswer" class="run-answer" v-html="renderMarkdown(msg.runCard.finalAnswer)"></div>
+                    <div v-if="msg.runCard.errorMessage" class="chat-error">{{ msg.runCard.errorMessage }}</div>
+                    <RouterLink :to="{ name: 'agent-run-detail', params: { id: msg.runCard.agentRunId } }">查看執行詳情 →</RouterLink>
+                  </div>
                 </div>
-              </div>
-
-              <!-- Tool executions -->
-              <div v-for="(tool, i) in chatStore.toolExecutions" :key="i" class="chat-tool">
-                <div class="chat-tool-icon">
-                  <svg v-if="!tool.preview" class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-                  <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                </div>
-                <span class="chat-tool-label">{{ getToolLabel(tool.tool) }}</span>
               </div>
 
               <!-- Streaming content -->
@@ -493,6 +490,17 @@ function renderMarkdown(text: string): string {
 }
 .chat-send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .chat-send-btn:not(:disabled):hover { background: #333; }
+
+.conversation-run-card { display: grid; gap: 9px; margin-top: 12px; padding: 12px; border: 1px solid #dedede; border-radius: 8px; background: #fafafa; color: #222; }
+.run-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.run-card-head strong { font-size: 12px; }
+.run-status { font-size: 10px; color: #666; text-transform: uppercase; }
+.run-status--succeeded { color: #16803d; }.run-status--failed { color: #b42318; }
+.conversation-run-card p, .conversation-run-card small { margin: 0; color: #666; font-size: 11px; }
+.run-progress { height: 4px; overflow: hidden; border-radius: 999px; background: #e5e5e5; }
+.run-progress span { display: block; height: 100%; background: #c9a86a; transition: width .25s ease; }
+.run-answer { max-height: 240px; overflow: auto; padding-top: 8px; border-top: 1px solid #e5e5e5; font-size: 12px; line-height: 1.6; }
+.conversation-run-card a { color: #85651d; font-size: 11px; }
 
 /* Transition */
 .chat-sidebar-enter-active,

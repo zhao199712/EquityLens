@@ -15,6 +15,22 @@ export interface ChatMessage {
   toolName: string | null
   sequenceNumber: number | null
   createdAtUtc: string
+  messageType: 'Text' | 'AgentRun'
+  agentRunId: string | null
+  runCard: ConversationRunCard | null
+}
+
+export interface ConversationRunCard {
+  agentRunId: string
+  researchRunId: string | null
+  workflowType: string
+  status: string
+  currentStage: string | null
+  currentStageDisplayName: string | null
+  completedNodes: number
+  totalNodes: number
+  finalAnswer: string | null
+  errorMessage: string | null
 }
 
 export async function createSession(title?: string): Promise<ChatSession> {
@@ -32,6 +48,11 @@ export async function getMessages(sessionId: string): Promise<ChatMessage[]> {
   return data
 }
 
+export async function getRunCard(sessionId: string, agentRunId: string): Promise<ConversationRunCard> {
+  const { data } = await http.get(`/chat/sessions/${sessionId}/run-cards/${agentRunId}`)
+  return data
+}
+
 export async function deleteSession(sessionId: string): Promise<void> {
   await http.delete(`/chat/sessions/${sessionId}`)
 }
@@ -43,6 +64,8 @@ export function sendMessageStream(
   onDelta: (text: string) => void,
   onToolStart: (tool: string, args: string) => void,
   onToolEnd: (tool: string, preview: string) => void,
+  onAction: (action: string) => void,
+  onRunCreated: (messageId: string, runCard: ConversationRunCard) => void,
   onDone: (model: string, promptTokens: number, completionTokens: number) => void,
   onError: (message: string) => void,
 ) {
@@ -54,7 +77,7 @@ export function sendMessageStream(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, requestId: crypto.randomUUID() }),
   }).then(async (response) => {
     if (!response.ok) {
       onError(`HTTP ${response.status}`)
@@ -94,6 +117,15 @@ export function sendMessageStream(
               break
             case 'tool_end':
               onToolEnd(evt.tool, evt.preview)
+              break
+            case 'conversation_action':
+              onAction(evt.action)
+              break
+            case 'run_created':
+              onRunCreated(evt.messageId, evt.runCard)
+              break
+            case 'clarification':
+              onDelta(evt.content)
               break
             case 'done':
               onDone(evt.model, evt.promptTokens, evt.completionTokens)

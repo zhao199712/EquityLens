@@ -10,7 +10,8 @@ public sealed record CreateSessionResponse(
     int MessageCount);
 
 public sealed record SendMessageRequest(
-    string Content);
+    string Content,
+    Guid RequestId);
 
 public sealed record ChatSessionDto(
     Guid Id,
@@ -25,4 +26,19 @@ public sealed record ChatMessageDto(
     string? Content,
     string? ToolName,
     int? SequenceNumber,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    string MessageType = "Text",
+    Guid? AgentRunId = null,
+    ConversationRunCardDto? RunCard = null);
+
+public sealed record ConversationRunCardDto(
+    Guid AgentRunId,
+    Guid? ResearchRunId,
+    string WorkflowType,
+    string Status,
+    string? CurrentStage,
+    string? CurrentStageDisplayName,
+    int CompletedNodes,
+    int TotalNodes,
+    string? FinalAnswer,
+    string? ErrorMessage);

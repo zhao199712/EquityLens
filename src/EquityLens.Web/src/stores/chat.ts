@@ -5,8 +5,10 @@ import {
   getMessages,
   deleteSession,
   sendMessageStream,
+  getRunCard,
   type ChatSession,
   type ChatMessage,
+  type ConversationRunCard,
 } from '../services/chat'
 import { useAuthStore } from './auth'
 
@@ -36,6 +38,7 @@ interface ChatState {
   streamingContent: string
   toolExecutions: ToolExecution[]
   error: string | null
+  conversationAction: string | null
 }
 
 export const useChatStore = defineStore('chat', {
@@ -48,6 +51,7 @@ export const useChatStore = defineStore('chat', {
     streamingContent: '',
     toolExecutions: [],
     error: null,
+    conversationAction: null,
   }),
 
   getters: {
@@ -86,6 +90,11 @@ export const useChatStore = defineStore('chat', {
       this.currentSessionId = sessionId
       try {
         this.messages = await getMessages(sessionId)
+        for (const message of this.messages) {
+          if (message.runCard && !['Succeeded', 'Failed', 'Cancelled'].includes(message.runCard.status)) {
+            this.pollRunCard(message.id, message.runCard.agentRunId)
+          }
+        }
       } catch {
         this.error = 'Failed to load messages'
       }
@@ -118,6 +127,9 @@ export const useChatStore = defineStore('chat', {
         toolName: null,
         sequenceNumber: this.messages.length,
         createdAtUtc: new Date().toISOString(),
+        messageType: 'Text',
+        agentRunId: null,
+        runCard: null,
       }
       this.messages.push(userMsg)
 
@@ -125,6 +137,9 @@ export const useChatStore = defineStore('chat', {
       this.streamingContent = ''
       this.toolExecutions = []
       this.error = null
+      this.conversationAction = null
+      let createdMessageId: string | null = null
+      let createdRunCard: ConversationRunCard | null = null
 
       sendMessageStream(
         sessionId,
@@ -142,19 +157,33 @@ export const useChatStore = defineStore('chat', {
             last.preview = preview
           }
         },
+        (action) => {
+          this.conversationAction = action
+        },
+        (messageId, runCard) => {
+          createdMessageId = messageId
+          createdRunCard = runCard
+        },
         (_model, _promptTokens, _completionTokens) => {
           const assistantMsg: ChatMessage = {
-            id: generateId(),
+            id: createdMessageId ?? generateId(),
             role: 'assistant',
             content: this.streamingContent,
             toolName: null,
             sequenceNumber: this.messages.length,
             createdAtUtc: new Date().toISOString(),
+            messageType: createdRunCard ? 'AgentRun' : 'Text',
+            agentRunId: createdRunCard?.agentRunId ?? null,
+            runCard: createdRunCard,
           }
           this.messages.push(assistantMsg)
           this.isStreaming = false
           this.streamingContent = ''
           this.toolExecutions = []
+          this.conversationAction = null
+          if (assistantMsg.runCard && !['Succeeded', 'Failed', 'Cancelled'].includes(assistantMsg.runCard.status)) {
+            this.pollRunCard(assistantMsg.id, assistantMsg.runCard.agentRunId)
+          }
 
           const session = this.sessions.find((s) => s.id === sessionId)
           if (session) {
@@ -170,6 +199,23 @@ export const useChatStore = defineStore('chat', {
           this.isStreaming = false
         },
       )
+    },
+
+    async pollRunCard(messageId: string, agentRunId: string) {
+      const sessionId = this.currentSessionId
+      if (!sessionId) return
+      for (let attempt = 0; attempt < 90; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        if (this.currentSessionId !== sessionId) return
+        try {
+          const card = await getRunCard(sessionId, agentRunId)
+          const message = this.messages.find(item => item.id === messageId)
+          if (message) message.runCard = card
+          if (['Succeeded', 'Failed', 'Cancelled'].includes(card.status)) return
+        } catch {
+          return
+        }
+      }
     },
 
     async removeSession(sessionId: string) {

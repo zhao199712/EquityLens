@@ -308,16 +308,16 @@ switch (chatProvider?.ToUpperInvariant())
 {
     case null or "" or "DEEPSEEK":
         builder.Services.AddHttpClient<IChatCompletionService, DeepSeekChatCompletionService>();
-        builder.Services.AddHttpClient<IChatAgentService, DeepSeekChatAgentService>();
         break;
     case "GEMINI":
         builder.Services.AddHttpClient<IChatCompletionService, GeminiChatCompletionService>();
-        builder.Services.AddHttpClient<IChatAgentService, ChatAgentService>();
         break;
     default:
         throw new InvalidOperationException(
             $"Unsupported AI:ChatProvider '{chatProvider}'. Supported values: DeepSeek, Gemini.");
 }
+builder.Services.AddScoped<IConversationAgent, LlmConversationAgent>();
+builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 
 // Agentic RAG Chat 服務

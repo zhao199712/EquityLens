@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Text;
 using System.Text.Json;
 using EquityLens.Api.Contracts.Chat;
 using EquityLens.Api.Data;
@@ -18,12 +16,12 @@ namespace EquityLens.Api.Controllers;
 public sealed class ChatController : ControllerBase
 {
     private readonly EquityLensDbContext _db;
-    private readonly IChatAgentService _chatAgentService;
+    private readonly IConversationService _conversation;
 
-    public ChatController(EquityLensDbContext db, IChatAgentService chatAgentService)
+    public ChatController(EquityLensDbContext db, IConversationService conversation)
     {
         _db = db;
-        _chatAgentService = chatAgentService;
+        _conversation = conversation;
     }
 
     [HttpPost("sessions")]
@@ -72,121 +70,57 @@ public sealed class ChatController : ControllerBase
         var messages = await _db.ChatMessages
             .Where(m => m.ChatSessionId == sessionId)
             .OrderBy(m => m.SequenceNumber)
-            .Select(m => new ChatMessageDto(
-                m.Id, m.Role, m.Content, m.ToolName, m.SequenceNumber, m.CreatedAtUtc))
             .ToListAsync(ct);
-        return Ok(messages);
+        var response = new List<ChatMessageDto>();
+        foreach (var message in messages)
+        {
+            var card = message.AgentRunId is { } runId
+                ? await _conversation.GetRunCardAsync(userId, sessionId, runId, ct)
+                : null;
+            response.Add(new(message.Id, message.Role, message.Content, message.ToolName,
+                message.SequenceNumber, message.CreatedAtUtc, message.MessageType, message.AgentRunId, card));
+        }
+        return Ok(response);
     }
 
     [HttpPost("sessions/{sessionId:guid}/messages")]
     public async Task SendMessage(
         Guid sessionId, SendMessageRequest request, CancellationToken ct)
     {
-        using var activity = EquityLensTelemetry.ActivitySource.StartActivity("chat.message");
-        activity?.SetTag("chat.session_id", sessionId);
-        activity?.SetTag("chat.message_length", request.Content.Length);
-
         var userId = GetUserId();
-        var session = await _db.ChatSessions
-            .Include(s => s.Messages)
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, ct);
-        if (session == null) { Response.StatusCode = 404; return; }
-
         Response.ContentType = "text/event-stream";
         Response.Headers.Append("Cache-Control", "no-cache");
         Response.Headers.Append("X-Accel-Buffering", "no");
 
-        var userMsg = new ChatMessage
-        {
-            ChatSessionId = sessionId,
-            Role = "user",
-            Content = request.Content,
-            SequenceNumber = session.Messages.Count
-        };
-        var history = session.Messages
-            .OrderBy(m => m.SequenceNumber)
-            .ToList();
-
-        _db.ChatMessages.Add(userMsg);
-        await _db.SaveChangesAsync(ct);
-
-        if (string.IsNullOrWhiteSpace(session.Title))
-        {
-            session.Title = request.Content.Length > 50
-                ? request.Content[..50] + "..."
-                : request.Content;
-        }
-
-        var assistantContent = new StringBuilder();
-        var toolExecutions = new List<ChatToolExecution>();
-        string? model = null;
-        int promptTokens = 0, completionTokens = 0;
-
         try
         {
-            var agentRequest = new ChatAgentRequest(sessionId, request.Content, history);
-            await foreach (var evt in _chatAgentService.ChatStreamAsync(agentRequest, ct))
-            {
-                switch (evt)
-                {
-                    case ChatAgentStreamEvent.TextDelta delta:
-                        await Response.WriteAsync($"data: {JsonSerializer.Serialize(new { type = "delta", content = delta.Delta })}\n\n", ct);
-                        await Response.Body.FlushAsync(ct);
-                        assistantContent.Append(delta.Delta);
-                        break;
-
-                    case ChatAgentStreamEvent.ToolCallStart start:
-                        await Response.WriteAsync($"data: {JsonSerializer.Serialize(new { type = "tool_start", tool = start.ToolName, args = start.Arguments })}\n\n", ct);
-                        await Response.Body.FlushAsync(ct);
-                        break;
-
-                    case ChatAgentStreamEvent.ToolCallEnd end:
-                        await Response.WriteAsync($"data: {JsonSerializer.Serialize(new { type = "tool_end", tool = end.ToolName, preview = end.ResultPreview })}\n\n", ct);
-                        await Response.Body.FlushAsync(ct);
-                        toolExecutions.Add(new ChatToolExecution(end.ToolName, "", end.ResultPreview));
-                        break;
-
-                    case ChatAgentStreamEvent.Done done:
-                        model = done.Model;
-                        promptTokens = done.PromptTokens;
-                        completionTokens = done.CompletionTokens;
-                        break;
-
-                    case ChatAgentStreamEvent.Error error:
-                        await Response.WriteAsync($"data: {JsonSerializer.Serialize(new { type = "error", message = error.Message })}\n\n", ct);
-                        await Response.Body.FlushAsync(ct);
-                        activity?.SetTag("chat.error", error.Message);
-                        break;
-                }
-            }
-
-            var assistantMsg = new ChatMessage
-            {
-                ChatSessionId = sessionId,
-                Role = "assistant",
-                Content = assistantContent.ToString(),
-                SequenceNumber = session.Messages.Count + 1
-            };
-            _db.ChatMessages.Add(assistantMsg);
-            session.UpdatedAtUtc = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
-
-            activity?.SetTag("chat.model", model);
-            activity?.SetTag("chat.prompt_tokens", promptTokens);
-            activity?.SetTag("chat.completion_tokens", completionTokens);
-            activity?.SetTag("chat.tool_count", toolExecutions.Count);
-            EquityLensTelemetry.ChatMessages.Add(1,
-                new TagList { { "model", model ?? "unknown" }, { "has_tool_calls", toolExecutions.Count > 0 } });
-
-            await Response.WriteAsync($"data: {JsonSerializer.Serialize(new { type = "done", model, promptTokens, completionTokens })}\n\n", ct);
+            var outcome = await _conversation.ProcessAsync(userId, sessionId, request, ct);
+            await WriteEventAsync(new { type = "conversation_action", action = outcome.Action }, ct);
+            if (outcome.Action == ConversationActions.AskClarification)
+                await WriteEventAsync(new { type = "clarification", content = outcome.Content }, ct);
+            else
+                await WriteEventAsync(new { type = "delta", content = outcome.Content }, ct);
+            if (outcome.RunCard is not null)
+                await WriteEventAsync(new { type = "run_created", messageId = outcome.AssistantMessageId, runCard = outcome.RunCard }, ct);
+            await WriteEventAsync(new { type = "done", outcome.Model, outcome.PromptTokens, outcome.CompletionTokens }, ct);
             await Response.Body.FlushAsync(ct);
+        }
+        catch (ConversationException exception)
+        {
+            await WriteEventAsync(new { type = "error", code = exception.Code, message = exception.Message }, CancellationToken.None);
         }
         catch (Exception ex)
         {
-            EquityLensTelemetry.MarkError(activity, ex);
-            await Response.WriteAsync($"data: {JsonSerializer.Serialize(new { type = "error", message = ex.Message })}\n\n", ct);
-            await Response.Body.FlushAsync(ct);
+            await WriteEventAsync(new { type = "error", code = "conversation_unavailable", message = ex.Message }, CancellationToken.None);
         }
+    }
+
+    [HttpGet("sessions/{sessionId:guid}/run-cards/{agentRunId:guid}")]
+    public async Task<ActionResult<ConversationRunCardDto>> GetRunCard(
+        Guid sessionId, Guid agentRunId, CancellationToken ct)
+    {
+        var card = await _conversation.GetRunCardAsync(GetUserId(), sessionId, agentRunId, ct);
+        return card is null ? NotFound() : Ok(card);
     }
 
     [HttpDelete("sessions/{sessionId:guid}")]
@@ -206,5 +140,11 @@ public sealed class ChatController : ControllerBase
     {
         var claim = User.FindFirst("sub") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
         return claim != null ? Guid.Parse(claim.Value) : Guid.Empty;
+    }
+
+    private async Task WriteEventAsync(object value, CancellationToken ct)
+    {
+        await Response.WriteAsync($"data: {JsonSerializer.Serialize(value)}\n\n", ct);
+        await Response.Body.FlushAsync(ct);
     }
 }
