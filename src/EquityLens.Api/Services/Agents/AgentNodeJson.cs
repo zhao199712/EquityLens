@@ -30,6 +30,15 @@ internal static class AgentNodeJson
             .Where(x => x is not null)
             .Cast<CriticFinding>()
             .ToList();
+        var evidence = (evidencePacket["citations"]?.AsArray() ?? [])
+            .OfType<JsonObject>()
+            .Select(x => new CriticEvidenceItem(
+                x["citationIndex"]?.GetValue<int>() ?? 0,
+                x["title"]?.GetValue<string>(),
+                x["sourceType"]?.GetValue<string>(),
+                x["quoteText"]?.GetValue<string>() ?? string.Empty))
+            .Where(x => x.Index > 0 && !string.IsNullOrWhiteSpace(x.Content))
+            .ToList();
 
         return new CriticReviewInput(
             evidencePacket[AgentBlackboardKeys.Ticker]?.GetValue<string>(),
@@ -38,7 +47,8 @@ internal static class AgentNodeJson
             evidenceChecks[EvidenceCheckFields.CitationCount]?.GetValue<int>() ?? 0,
             evidenceChecks[EvidenceCheckFields.CandidateCount]?.GetValue<int>() ?? 0,
             evidenceChecks[EvidenceCheckFields.SourceStatus]?.GetValue<string>() ?? string.Empty,
-            findings);
+            findings,
+            evidence);
     }
 
     public static FinalizeCriticReportNodeOutput CreateFinalizeCriticReportNodeOutput(

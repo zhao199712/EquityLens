@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
@@ -88,6 +89,33 @@ public sealed class ResearchInvestigationWorkflowTests
 
         using var board = JsonDocument.Parse(run.BlackboardJson);
         Assert.Equal(expected, board.RootElement.GetProperty(AgentBlackboardKeys.EvidencePacket).GetProperty("citations")[0].GetProperty("sourceType").GetString());
+    }
+
+    [Fact]
+    public void CreateCriticReviewInput_IncludesCitationContentFromEvidencePacket()
+    {
+        var packet = new EvidencePacket(
+            "2454",
+            "第二季指引是什麼？",
+            "營收指引為新台幣 1,402 億至 1,492 億元 [1]。",
+            "Answered",
+            1,
+            3,
+            [new EvidencePacketCitation(1, "LocalDocument", Guid.NewGuid(), Guid.NewGuid(), "聯發科法說會", "EarningsPresentation", 11, "合併營收：新台幣 1,402 億至 1,492 億元")],
+            new EvidencePacketSummary(true, true, 0, 1));
+        var board = new JsonObject
+        {
+            [AgentBlackboardKeys.EvidencePacket] = JsonSerializer.SerializeToNode(packet, AgentNodeJson.SerializerOptions),
+            [AgentBlackboardKeys.EvidenceChecks] = AgentBlackboardContracts.CreateEvidenceChecks(1, 3, "Answered", new JsonArray())
+        };
+
+        var input = AgentNodeJson.CreateCriticReviewInput(board);
+
+        var evidence = Assert.Single(input.Evidence!);
+        Assert.Equal(1, evidence.Index);
+        Assert.Equal("聯發科法說會", evidence.Title);
+        Assert.Equal("LocalDocument", evidence.SourceType);
+        Assert.Contains("1,402", evidence.Content);
     }
 
     [Fact]
