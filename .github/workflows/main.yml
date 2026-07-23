@@ -1,0 +1,120 @@
+name: EquityLens CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: equitylens-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: |
+            src/EquityLens.Api/EquityLens.Api.csproj
+            tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
+
+      - name: Restore backend
+        run: >
+          dotnet restore
+          src/EquityLens.Api/EquityLens.Api.csproj
+
+      - name: Restore backend tests
+        run: >
+          dotnet restore
+          tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
+
+      - name: Build backend
+        run: >
+          dotnet build
+          src/EquityLens.Api/EquityLens.Api.csproj
+          --configuration Release
+          --no-restore
+
+      - name: Build backend tests
+        run: >
+          dotnet build
+          tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
+          --configuration Release
+          --no-restore
+
+      - name: Run backend tests
+        run: >
+          dotnet test
+          tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
+          --configuration Release
+          --no-build
+          --logger "trx;LogFileName=backend-tests.trx"
+          --results-directory "${{ github.workspace }}/test-results/backend"
+          --collect "XPlat Code Coverage"
+
+      - name: Upload backend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: test-results/backend
+          if-no-files-found: warn
+          retention-days: 14
+
+  frontend:
+    name: Frontend build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: src/EquityLens.Web
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/EquityLens.Web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: equitylens-web-dist
+          path: src/EquityLens.Web/dist
+          if-no-files-found: error
+          retention-days: 14
