@@ -22,6 +22,7 @@ public sealed class ConversationAgentTests
         Assert.Equal(ChatResponseFormat.JsonObject, chat.LastRequest?.ResponseFormat);
         Assert.DoesNotContain("searchDocuments", chat.LastRequest?.SystemPrompt);
         Assert.Contains("沒有任何工具", chat.LastRequest?.SystemPrompt);
+        Assert.Contains("平行追問", chat.LastRequest?.SystemPrompt);
     }
 
     [Fact]

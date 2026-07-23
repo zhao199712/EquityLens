@@ -15,6 +15,7 @@ namespace EquityLens.Api.Controllers;
 [Route("api/chat")]
 public sealed class ChatController : ControllerBase
 {
+    private static readonly JsonSerializerOptions EventJson = new(JsonSerializerDefaults.Web);
     private readonly EquityLensDbContext _db;
     private readonly IConversationService _conversation;
 
@@ -144,7 +145,7 @@ public sealed class ChatController : ControllerBase
 
     private async Task WriteEventAsync(object value, CancellationToken ct)
     {
-        await Response.WriteAsync($"data: {JsonSerializer.Serialize(value)}\n\n", ct);
+        await Response.WriteAsync($"data: {JsonSerializer.Serialize(value, EventJson)}\n\n", ct);
         await Response.Body.FlushAsync(ct);
     }
 }
