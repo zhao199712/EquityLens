@@ -106,6 +106,10 @@ public sealed class DynamicWorkflowPlanningTests
         Assert.Contains("parameters", chat.Request.UserPrompt, StringComparison.Ordinal);
         Assert.Contains("requiresBlackboard", chat.Request.UserPrompt, StringComparison.Ordinal);
         Assert.Contains(AgentBlackboardKeys.MathInputs, chat.Request.UserPrompt, StringComparison.Ordinal);
+        var prompt = JsonNode.Parse(chat.Request.UserPrompt)!.AsObject();
+        var expectedShortfall = prompt["tools"]!.AsArray().Single(x => x!["name"]!.GetValue<string>() == "calculate-expected-shortfall")!;
+        Assert.Equal(["confidenceLevel"], expectedShortfall["parameters"]!["properties"]!.AsObject().Select(x => x.Key).ToArray());
+        Assert.Null(expectedShortfall["parameters"]!["properties"]!["shrinkageAlpha"]);
     }
 
     [Theory]
@@ -165,6 +169,31 @@ public sealed class DynamicWorkflowPlanningTests
         var error = Assert.Throws<InvalidOperationException>(() => validator.Validate(run, proposal));
         Assert.Contains("Unknown capability", error.Message, StringComparison.Ordinal);
         Assert.Equal(5, run.Nodes.Count);
+    }
+
+    [Fact]
+    public void Validator_UsesCapabilitySpecificMathArgumentContract()
+    {
+        var run = new ResearchQualityReviewWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.MathInputs] = new JsonObject();
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        DynamicPlanProposal Proposal(JsonObject arguments) => new(Guid.NewGuid(), run.OrchestrationVersion,
+            DynamicPlanningTriggers.BranchCompleted, DynamicGoalStatuses.Continue, "calculate ES",
+            ["portfolio-risk-mathematics"],
+            [new("expected-shortfall:1", "calculate-expected-shortfall", PortfolioRiskMathNodeTypes.Execute,
+                [ResearchQualityReviewNodeKeys.FinalizeCriticReport], arguments)]);
+        var validator = new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService());
+
+        var valid = validator.Validate(run, Proposal(new JsonObject { ["confidenceLevel"] = .975m }));
+        var invalid = Assert.Throws<InvalidOperationException>(() => validator.Validate(run,
+            Proposal(new JsonObject { ["confidenceLevel"] = .975m, ["shrinkageAlpha"] = .1m })));
+        var injected = Assert.Throws<InvalidOperationException>(() => validator.Validate(run,
+            Proposal(new JsonObject { ["returns"] = new JsonArray(.01m, -.02m) })));
+
+        Assert.Single(valid.Actions);
+        Assert.Contains("shrinkageAlpha", invalid.Message);
+        Assert.Contains("Blackboard", injected.Message);
     }
 
     [Fact]

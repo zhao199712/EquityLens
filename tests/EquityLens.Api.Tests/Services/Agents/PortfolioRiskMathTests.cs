@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
@@ -29,10 +30,12 @@ public sealed class PortfolioRiskMathTests
     {
         Assert.Equal(37, PortfolioRiskMathCapabilities.All.Count);
         Assert.Equal(37, PortfolioRiskMathCapabilities.All.Select(x => x.Id).Distinct().Count());
+        Assert.Equal(37, PortfolioRiskMathCapabilities.All.Select(x => x.ArgumentSchema).Distinct().Count());
         Assert.All(PortfolioRiskMathCapabilities.All, item =>
         {
             Assert.Equal(PortfolioRiskMathNodeTypes.Execute, item.NodeType);
             Assert.NotNull(item.ParametersSchema);
+            Assert.NotEqual("PortfolioRiskMathArguments", item.ArgumentSchema);
             Assert.Contains(AgentBlackboardKeys.MathInputs, item.RequiredKeys);
         });
         var skill = new WorkflowSkillCatalog().Skills.Single(x => x.Id == "portfolio-risk-mathematics");
@@ -45,9 +48,99 @@ public sealed class PortfolioRiskMathTests
     [MemberData(nameof(Operations))]
     public void Executor_RunsAllowlistedOperations(string operation)
     {
-        var result = new PortfolioRiskMathExecutor().Execute(operation, Inputs(), new JsonObject { ["simulations"] = 20, ["horizonDays"] = 2 }, Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        var result = new PortfolioRiskMathExecutor().Execute(operation, Inputs(), FastArguments(operation), Guid.Parse("11111111-1111-1111-1111-111111111111"));
         Assert.Equal(operation, result.Operation);
         Assert.Equal("test", result.Provenance.GetType().GetProperty("Source")?.GetValue(result.Provenance));
+    }
+
+    [Fact]
+    public void Registry_ExposesCapabilitySpecificParameterSchemas()
+    {
+        Assert.Equal(["confidenceLevel"], PropertyNames("calculate-expected-shortfall"));
+        Assert.Equal("HistoricalExpectedShortfallArguments", Capability("calculate-expected-shortfall").ArgumentSchema);
+        Assert.Equal(["riskFreeRate"], PropertyNames("calculate-sharpe-ratio"));
+        Assert.Equal("SharpeRatioArguments", Capability("calculate-sharpe-ratio").ArgumentSchema);
+        Assert.Equal(["confidenceLevel", "horizonDays", "lambda", "shrinkageAlpha", "simulations"], PropertyNames("run-multivariate-fhs-simulation"));
+        Assert.Equal("MultivariateFhsArguments", Capability("run-multivariate-fhs-simulation").ArgumentSchema);
+        Assert.Empty(PropertyNames("calculate-return"));
+    }
+
+    [Fact]
+    public void Executor_ExpectedShortfallRejectsUnusedShrinkageParameter()
+    {
+        var error = Assert.Throws<AgentNodeException>(() => new PortfolioRiskMathExecutor().Execute(
+            "calculate-expected-shortfall", Inputs(), new JsonObject { ["confidenceLevel"] = .95m, ["shrinkageAlpha"] = .1m }, Guid.NewGuid()));
+
+        Assert.Equal("math_parameter_unknown", error.ErrorCode);
+        Assert.Contains("shrinkageAlpha", error.Message);
+    }
+
+    [Fact]
+    public void Executor_ValidatesCapabilityParameterTypeAndRange()
+    {
+        var invalidType = Assert.Throws<AgentNodeException>(() => new PortfolioRiskMathExecutor().Execute(
+            "calculate-expected-shortfall", Inputs(), new JsonObject { ["confidenceLevel"] = "high" }, Guid.NewGuid()));
+        var outOfRange = Assert.Throws<AgentNodeException>(() => new PortfolioRiskMathExecutor().Execute(
+            "calculate-expected-shortfall", Inputs(), new JsonObject { ["confidenceLevel"] = .5m }, Guid.NewGuid()));
+
+        Assert.Equal("math_parameter_invalid_type", invalidType.ErrorCode);
+        Assert.Equal("math_parameter_out_of_range", outOfRange.ErrorCode);
+    }
+
+    [Fact]
+    public void Executor_ResultReportsOnlyParametersUsedByCapability()
+    {
+        var es = new PortfolioRiskMathExecutor().Execute("calculate-expected-shortfall", Inputs(), new JsonObject(), Guid.NewGuid());
+        var noArguments = new PortfolioRiskMathExecutor().Execute("calculate-return", Inputs(), new JsonObject(), Guid.NewGuid());
+
+        var esParameters = Assert.IsType<JsonObject>(es.Parameters);
+        Assert.Equal(["confidenceLevel"], esParameters.Select(x => x.Key).ToArray());
+        Assert.Equal(.95m, esParameters["confidenceLevel"]!.GetValue<decimal>());
+        Assert.Empty(Assert.IsType<JsonObject>(noArguments.Parameters));
+    }
+
+    [Fact]
+    public async Task ExecuteNode_BatchEnvelopeIsNotPassedToCapabilityParsers()
+    {
+        await using var db = CreateDb();
+        var board = new JsonObject
+        {
+            [AgentBlackboardKeys.MathInputs] = JsonSerializer.SerializeToNode(Inputs(), AgentNodeJson.SerializerOptions),
+            [AgentBlackboardKeys.MathResults] = new JsonArray()
+        };
+        var run = new AgentRun { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions) };
+        var node = new AgentRunNode
+        {
+            Id = Guid.NewGuid(), AgentRunId = run.Id, NodeType = PortfolioRiskMathNodeTypes.Execute,
+            NodeKey = PortfolioRiskMathNodeKeys.ExecuteCore,
+            InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-expected-shortfall", "calculate-sharpe-ratio" } })
+        };
+
+        await new ExecutePortfolioRiskMathNodeHandler(new PortfolioRiskMathExecutor()).ExecuteAsync(
+            new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        var results = JsonNode.Parse(node.OutputJson!)!.AsArray();
+        Assert.Equal(2, results.Count);
+        Assert.Equal(["confidenceLevel"], results[0]!["parameters"]!.AsObject().Select(x => x.Key).ToArray());
+        Assert.Equal(["riskFreeRate"], results[1]!["parameters"]!.AsObject().Select(x => x.Key).ToArray());
+    }
+
+    [Fact]
+    public async Task ExecuteNode_BatchEnvelopeRejectsSharedCapabilityParameters()
+    {
+        await using var db = CreateDb();
+        var board = new JsonObject { [AgentBlackboardKeys.MathInputs] = JsonSerializer.SerializeToNode(Inputs(), AgentNodeJson.SerializerOptions) };
+        var run = new AgentRun { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions) };
+        var node = new AgentRunNode
+        {
+            Id = Guid.NewGuid(), AgentRunId = run.Id, NodeType = PortfolioRiskMathNodeTypes.Execute, NodeKey = "batch",
+            InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-expected-shortfall" }, shrinkageAlpha = .1m })
+        };
+
+        var error = await Assert.ThrowsAsync<AgentNodeException>(() =>
+            new ExecutePortfolioRiskMathNodeHandler(new PortfolioRiskMathExecutor()).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
+
+        Assert.Equal("math_batch_parameter_unknown", error.ErrorCode);
     }
 
     [Fact]
@@ -141,6 +234,17 @@ public sealed class PortfolioRiskMathTests
     private static void AddPrices(EquityLensDbContext db, Guid securityId, IEnumerable<(int Day, decimal Price)> values)
     {
         foreach (var (day, price) in values) db.MarketPrices.Add(new MarketPrice { Id = Guid.NewGuid(), SecurityId = securityId, PriceTime = new DateTime(2025, 1, day, 0, 0, 0, DateTimeKind.Utc), Close = price, Interval = "1d", DataSource = "test" });
+    }
+
+    private static NodeCapability Capability(string id) => PortfolioRiskMathCapabilities.All.Single(x => x.Id == id);
+    private static string[] PropertyNames(string id) => Capability(id).ParametersSchema!["properties"]!.AsObject().Select(x => x.Key).Order().ToArray();
+    private static JsonObject FastArguments(string operation)
+    {
+        var allowed = PropertyNames(operation).ToHashSet(StringComparer.Ordinal);
+        var result = new JsonObject();
+        if (allowed.Contains("simulations")) result["simulations"] = 20;
+        if (allowed.Contains("horizonDays")) result["horizonDays"] = 2;
+        return result;
     }
 
     private static TestDb CreateDb() => new(new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);

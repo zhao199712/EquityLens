@@ -56,9 +56,9 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
             if (action.NodeType == PortfolioRiskMathNodeTypes.Execute)
             {
                 if (proposal.Actions.Count(x => x.NodeType == PortfolioRiskMathNodeTypes.Execute) > 8) throw new InvalidOperationException("A plan may contain at most eight math capabilities.");
-                string[] forbidden = ["prices", "returns", "weights", "covarianceMatrix", "holdings", "initialValues"];
-                if (action.Arguments.Any(x => forbidden.Contains(x.Key, StringComparer.OrdinalIgnoreCase))) throw new InvalidOperationException("Math source values must come from Blackboard.");
                 if (capability.InputMode is "MultiAsset" or "Matrix" && request?.PortfolioId is null && board[AgentBlackboardKeys.PortfolioId] is null) throw new InvalidOperationException($"Math capability '{action.Capability}' requires a portfolioId.");
+                try { PortfolioRiskMathCapabilities.ParseArguments(action.Capability, action.Arguments); }
+                catch (AgentNodeException exception) { throw new InvalidOperationException(exception.Message, exception); }
             }
             if (action.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence)
             {

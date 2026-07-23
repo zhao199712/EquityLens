@@ -96,20 +96,13 @@ public interface IPortfolioRiskMathExecutor
 
 public sealed class PortfolioRiskMathExecutor : IPortfolioRiskMathExecutor
 {
-    private static readonly HashSet<string> Known = PortfolioRiskMathCapabilities.All.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
-
     public PortfolioRiskMathResult Execute(string operation, PortfolioRiskMathInputs input, JsonObject arguments, Guid runId)
     {
-        if (!Known.Contains(operation)) throw new AgentNodeException("unknown_math_capability", AgentNodeErrorCategories.ValidationFailure, $"Unknown math capability '{operation}'.", retryable: false);
-        var definition = PortfolioRiskMathCapabilities.All.Single(x => x.Id == operation);
-        if (definition.InputMode is "MultiAsset" or "Matrix" && input.Mode != "Portfolio") throw new AgentNodeException("math_portfolio_required", AgentNodeErrorCategories.ValidationFailure, $"Math capability '{operation}' requires portfolio inputs.", retryable: false);
-        ValidateNoSourceData(arguments);
-        var confidence = Decimal(arguments, "confidenceLevel", .95m, .90m, .999m);
-        var horizon = Integer(arguments, "horizonDays", 10, 1, 252);
-        var simulations = Integer(arguments, "simulations", 10000, 1, 10000);
-        var lambda = Decimal(arguments, "lambda", .94m, .80m, .999m);
-        var shrinkage = Decimal(arguments, "shrinkageAlpha", .10m, 0m, .5m);
-        var riskFree = Decimal(arguments, "riskFreeRate", 0m, -1m, 1m);
+        var definition = PortfolioRiskMathCapabilities.GetDefinition(operation);
+        if (definition.Capability.InputMode is "MultiAsset" or "Matrix" && input.Mode != "Portfolio") throw new AgentNodeException("math_portfolio_required", AgentNodeErrorCategories.ValidationFailure, $"Math capability '{operation}' requires portfolio inputs.", retryable: false);
+        var parsed = definition.ParseArguments(arguments);
+        T Args<T>() where T : class, IPortfolioRiskMathArguments => parsed as T
+            ?? throw new InvalidOperationException($"Math capability '{operation}' has an invalid internal argument contract.");
         var seed = StableSeed(runId, operation);
         var a = input.Assets[0]; var isPortfolio = input.Mode == "Portfolio"; var returns = isPortfolio ? input.PortfolioSimpleReturns : a.Returns; var logReturns = isPortfolio ? input.PortfolioLogReturns : a.Returns; var matrix = input.ReturnMatrix; var weights = input.Weights;
         var latest = isPortfolio ? input.PortfolioValues[^1] : a.Prices[^1]; var start = isPortfolio ? input.PortfolioValues[0] : a.Prices[0]; var portfolioReturn = RiskMath.CalculateReturn(input.PortfolioValues[^1], input.PortfolioValues[0]);
@@ -128,13 +121,13 @@ public sealed class PortfolioRiskMathExecutor : IPortfolioRiskMathExecutor
             "calculate-variance" => RiskMath.CalculateVariance(returns),
             "calculate-volatility" => RiskMath.CalculateVolatility(returns),
             "calculate-annualized-volatility" => RiskMath.CalculateAnnualizedVolatility(RiskMath.CalculateVolatility(returns)),
-            "calculate-ewma-volatility" => RiskMath.CalculateEwmaVolatility(returns, lambda),
-            "calculate-rolling-log-returns" => RiskMath.CalculateRollingLogReturns(logReturns, horizon),
-            "calculate-sharpe-ratio" => RiskMath.CalculateSharpeRatio(isPortfolio ? annualizedReturn : portfolioReturn, riskFree, annualizedVolatility),
+            "calculate-ewma-volatility" => RiskMath.CalculateEwmaVolatility(returns, Args<EwmaVolatilityArguments>().Lambda),
+            "calculate-rolling-log-returns" => RiskMath.CalculateRollingLogReturns(logReturns, Args<RollingLogReturnsArguments>().HorizonDays),
+            "calculate-sharpe-ratio" => RiskMath.CalculateSharpeRatio(isPortfolio ? annualizedReturn : portfolioReturn, Args<SharpeRatioArguments>().RiskFreeRate, annualizedVolatility),
             "calculate-max-drawdown" => RiskMath.CalculateMaxDrawdown(input.PortfolioValues),
-            "calculate-historical-var" => RiskMath.CalculateHistoricalVaR(returns, confidence),
-            "calculate-expected-shortfall" => RiskMath.CalculateExpectedShortfall(returns, confidence),
-            "run-monte-carlo-simulation" => RunSingleSimulation(a, horizon, simulations, confidence, seed),
+            "calculate-historical-var" => RiskMath.CalculateHistoricalVaR(returns, Args<HistoricalVarArguments>().ConfidenceLevel),
+            "calculate-expected-shortfall" => RiskMath.CalculateExpectedShortfall(returns, Args<HistoricalExpectedShortfallArguments>().ConfidenceLevel),
+            "run-monte-carlo-simulation" => RunSingleSimulation(a, Args<MonteCarloArguments>(), seed),
             "calculate-correlation" => RiskMath.CalculateCorrelation(matrix[0], matrix.Count > 1 ? matrix[1] : matrix[0]),
             "calculate-covariance" => RiskMath.CalculateCovariance(matrix[0], matrix.Count > 1 ? matrix[1] : matrix[0]),
             "calculate-beta" => RiskMath.CalculateBeta(matrix[0], matrix.Count > 1 ? matrix[1] : matrix[0]),
@@ -144,46 +137,44 @@ public sealed class PortfolioRiskMathExecutor : IPortfolioRiskMathExecutor
             "estimate-gbm-parameters" => RiskMath.EstimateGbmParameters(a.Prices),
             "calculate-correlation-matrix" => RiskMath.CalculateCorrelationMatrix(matrix),
             "cholesky-decompose" => RiskMath.CholeskyDecompose(input.CovarianceMatrix),
-            "run-correlated-gbm-monte-carlo" => RunCorrelated(input, horizon, simulations, confidence, seed),
+            "run-correlated-gbm-monte-carlo" => RunCorrelated(input, Args<CorrelatedGbmArguments>(), seed),
             "determine-auto-shrinkage-alpha" => RiskMath.DetermineAutoShrinkageAlpha(input.Assets.Count, input.CommonTradingDays),
-            "run-multivariate-fhs-simulation" => RiskMath.RunMultivariateFhsSimulation(matrix, weights, input.PortfolioValues[^1], horizon, simulations, confidence, lambda, shrinkage, 252, 0m, seed),
-            "run-multivariate-fhs-confidence-levels" => RiskMath.RunMultivariateFhsSimulationForConfidenceLevels(matrix, weights, input.PortfolioValues[^1], horizon, simulations, [confidence, .99m], lambda, shrinkage, 252, 0m, seed),
-            "run-multivariate-fhs-path-simulation" => RiskMath.RunMultivariateFhsPathSimulation(matrix, weights, horizon, simulations, 10, seed, lambda, shrinkage),
-            "has-material-right-skew" => RiskMath.HasMaterialRightSkew(Decimal(arguments, "expectedMedianGap", 0m, -100m, 100m)),
-            "calculate-multivariate-ewma-covariances" => RiskMath.CalculateMultivariateEwmaCovariances(matrix, lambda),
-            "apply-diagonal-shrinkage" => RiskMath.ApplyDiagonalShrinkage(RiskMath.CalculateMultivariateEwmaCovariances(matrix, lambda), shrinkage),
-            "add-jitter" => RiskMath.AddJitter(RiskMath.CalculateMultivariateEwmaCovariances(matrix, lambda)),
-            "build-filtered-residual-vectors" => RiskMath.BuildFilteredResidualVectors(matrix, RiskMath.AddJitter(RiskMath.CalculateMultivariateEwmaCovariances(matrix, lambda))),
+            "run-multivariate-fhs-simulation" => RunFhs(matrix, weights, input.PortfolioValues[^1], Args<MultivariateFhsArguments>(), seed),
+            "run-multivariate-fhs-confidence-levels" => RunFhsConfidenceLevels(matrix, weights, input.PortfolioValues[^1], Args<MultivariateFhsConfidenceLevelsArguments>(), seed),
+            "run-multivariate-fhs-path-simulation" => RunFhsPath(matrix, weights, Args<MultivariateFhsPathArguments>(), seed),
+            "has-material-right-skew" => RiskMath.HasMaterialRightSkew(Args<RightSkewArguments>().ExpectedMedianGap),
+            "calculate-multivariate-ewma-covariances" => RiskMath.CalculateMultivariateEwmaCovariances(matrix, Args<MultivariateEwmaArguments>().Lambda),
+            "apply-diagonal-shrinkage" => RiskMath.ApplyDiagonalShrinkage(RiskMath.CalculateMultivariateEwmaCovariances(matrix, Args<DiagonalShrinkageArguments>().Lambda), Args<DiagonalShrinkageArguments>().ShrinkageAlpha),
+            "add-jitter" => RiskMath.AddJitter(RiskMath.CalculateMultivariateEwmaCovariances(matrix, Args<AddJitterArguments>().Lambda)),
+            "build-filtered-residual-vectors" => RiskMath.BuildFilteredResidualVectors(matrix, RiskMath.AddJitter(RiskMath.CalculateMultivariateEwmaCovariances(matrix, Args<FilteredResidualArguments>().Lambda))),
             _ => throw new InvalidOperationException()
         };
         var unit = operation.Contains("value", StringComparison.Ordinal) || operation.Contains("pnl", StringComparison.Ordinal) ? "currency" : operation.Contains("return", StringComparison.Ordinal) || operation.Contains("volatility", StringComparison.Ordinal) || operation.Contains("var", StringComparison.Ordinal) || operation.Contains("shortfall", StringComparison.Ordinal) || operation.Contains("drawdown", StringComparison.Ordinal) ? "ratio" : null;
-        return new(operation, value, unit, new { confidenceLevel = confidence, horizonDays = horizon, simulations, lambda, shrinkageAlpha = shrinkage, riskFreeRate = riskFree }, new { input.Mode, input.PortfolioId, input.Ticker, input.From, input.To, input.CommonTradingDays, input.Source, commonTradingDateFrom = input.CommonTradingDates.FirstOrDefault(), commonTradingDateTo = input.CommonTradingDates.LastOrDefault(), assets = input.Assets.Select(x => x.Ticker) }, input.Warnings, operation.StartsWith("run-", StringComparison.Ordinal) ? seed : null);
+        return new(operation, value, unit, parsed.ToJson(), new { input.Mode, input.PortfolioId, input.Ticker, input.From, input.To, input.CommonTradingDays, input.Source, commonTradingDateFrom = input.CommonTradingDates.FirstOrDefault(), commonTradingDateTo = input.CommonTradingDates.LastOrDefault(), assets = input.Assets.Select(x => x.Ticker) }, input.Warnings, operation.StartsWith("run-", StringComparison.Ordinal) ? seed : null);
     }
 
-    private static object RunSingleSimulation(MathAssetInput asset, int horizon, int simulations, decimal confidence, int seed)
+    private static object RunSingleSimulation(MathAssetInput asset, MonteCarloArguments arguments, int seed)
     {
         var gbm = RiskMath.EstimateGbmParameters(asset.Prices) ?? new GbmParameters(0, 0, asset.Prices.Count, asset.Returns.Count, 252);
-        return RiskMath.RunMonteCarloSimulation(asset.Prices[^1], gbm.AnnualizedDrift, gbm.AnnualizedVolatility, horizon, simulations, confidence, 252, seed);
+        return RiskMath.RunMonteCarloSimulation(asset.Prices[^1], gbm.AnnualizedDrift, gbm.AnnualizedVolatility, arguments.HorizonDays, arguments.Simulations, arguments.ConfidenceLevel, 252, seed);
     }
     private static PortfolioConcentrationMathResult CalculateConcentration(IReadOnlyList<decimal> weights)
     {
         var (hhi, largestWeight) = RiskMath.CalculateConcentration(weights);
         return new(hhi, largestWeight);
     }
-    private static object RunCorrelated(PortfolioRiskMathInputs input, int horizon, int simulations, decimal confidence, int seed)
+    private static object RunCorrelated(PortfolioRiskMathInputs input, CorrelatedGbmArguments arguments, int seed)
     {
         var gbm = input.Assets.Select(x => RiskMath.EstimateGbmParameters(x.Prices)).ToList();
-        return RiskMath.RunCorrelatedGbmMonteCarloSimulation(input.Assets.Select(x => x.Prices[^1]).ToList(), gbm.Select(x => x?.AnnualizedDrift ?? 0).ToList(), gbm.Select(x => x?.AnnualizedVolatility ?? 0).ToList(), input.Weights, RiskMath.CalculateCorrelationMatrix(input.ReturnMatrix), horizon, simulations, confidence, input.PortfolioValues[^1], input.Weights, 252, seed);
+        return RiskMath.RunCorrelatedGbmMonteCarloSimulation(input.Assets.Select(x => x.Prices[^1]).ToList(), gbm.Select(x => x?.AnnualizedDrift ?? 0).ToList(), gbm.Select(x => x?.AnnualizedVolatility ?? 0).ToList(), input.Weights, RiskMath.CalculateCorrelationMatrix(input.ReturnMatrix), arguments.HorizonDays, arguments.Simulations, arguments.ConfidenceLevel, input.PortfolioValues[^1], input.Weights, 252, seed);
     }
-    private static void ValidateNoSourceData(JsonObject arguments)
-    {
-        string[] forbidden = ["prices", "returns", "weights", "covarianceMatrix", "holdings", "initialValues"];
-        var key = arguments.Select(x => x.Key).FirstOrDefault(x => forbidden.Contains(x, StringComparer.OrdinalIgnoreCase));
-        if (key is not null) throw new AgentNodeException("math_source_injection_forbidden", AgentNodeErrorCategories.ValidationFailure, $"Math source field '{key}' must come from Blackboard.", retryable: false);
-    }
+    private static object RunFhs(IReadOnlyList<IReadOnlyList<decimal>> matrix, IReadOnlyList<decimal> weights, decimal initialValue, MultivariateFhsArguments arguments, int seed) =>
+        RiskMath.RunMultivariateFhsSimulation(matrix, weights, initialValue, arguments.HorizonDays, arguments.Simulations, arguments.ConfidenceLevel, arguments.Lambda, arguments.ShrinkageAlpha, 252, 0m, seed);
+    private static object RunFhsConfidenceLevels(IReadOnlyList<IReadOnlyList<decimal>> matrix, IReadOnlyList<decimal> weights, decimal initialValue, MultivariateFhsConfidenceLevelsArguments arguments, int seed) =>
+        RiskMath.RunMultivariateFhsSimulationForConfidenceLevels(matrix, weights, initialValue, arguments.HorizonDays, arguments.Simulations, [arguments.ConfidenceLevel, .99m], arguments.Lambda, arguments.ShrinkageAlpha, 252, 0m, seed);
+    private static object RunFhsPath(IReadOnlyList<IReadOnlyList<decimal>> matrix, IReadOnlyList<decimal> weights, MultivariateFhsPathArguments arguments, int seed) =>
+        RiskMath.RunMultivariateFhsPathSimulation(matrix, weights, arguments.HorizonDays, arguments.Simulations, 10, seed, arguments.Lambda, arguments.ShrinkageAlpha);
     private static int StableSeed(Guid runId, string operation) => BitConverter.ToInt32(SHA256.HashData(Encoding.UTF8.GetBytes($"{runId:N}:{operation}")), 0);
-    private static decimal Decimal(JsonObject args, string key, decimal fallback, decimal min, decimal max) { var value = args[key]?.GetValue<decimal>() ?? fallback; if (value < min || value > max) throw new AgentNodeException("math_parameter_out_of_range", AgentNodeErrorCategories.ValidationFailure, $"Math parameter '{key}' is out of range.", retryable: false); return value; }
-    private static int Integer(JsonObject args, string key, int fallback, int min, int max) { var value = args[key]?.GetValue<int>() ?? fallback; if (value < min || value > max) throw new AgentNodeException("math_parameter_out_of_range", AgentNodeErrorCategories.ValidationFailure, $"Math parameter '{key}' is out of range.", retryable: false); return value; }
 }
 
 public sealed class PreparePortfolioRiskMathInputsNodeHandler(IPortfolioRiskMathInputProvider provider) : IAgentNodeHandler
@@ -205,9 +196,14 @@ public sealed class ExecutePortfolioRiskMathNodeHandler(IPortfolioRiskMathExecut
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
         var input = board[AgentBlackboardKeys.MathInputs]?.Deserialize<PortfolioRiskMathInputs>(AgentNodeJson.SerializerOptions) ?? throw new AgentNodeException("math_inputs_missing", AgentNodeErrorCategories.ValidationFailure, "Math inputs are missing.");
         var args = JsonNode.Parse(string.IsNullOrWhiteSpace(context.Node.InputJson) ? "{}" : context.Node.InputJson)?.AsObject() ?? new JsonObject();
+        var isBatch = args["operations"] is JsonArray;
         var operations = args["operations"] is JsonArray array ? array.Select(x => x!.GetValue<string>()).ToList() : [context.Node.TemplateNodeKey ?? args["operation"]?.GetValue<string>() ?? args["capability"]?.GetValue<string>() ?? throw new AgentNodeException("math_operation_missing", AgentNodeErrorCategories.ValidationFailure, "Math operation is required.")];
         if (operations.Count > 8 || operations.Distinct(StringComparer.Ordinal).Count() != operations.Count) throw new AgentNodeException("math_operation_budget_exceeded", AgentNodeErrorCategories.ValidationFailure, "At most eight distinct math operations are allowed.", retryable: false);
-        var results = operations.Select(operation => executor.Execute(operation, input, args, context.Run.Id)).ToList();
+        var capabilityArguments = args.DeepClone().AsObject();
+        capabilityArguments.Remove("operations"); capabilityArguments.Remove("operation"); capabilityArguments.Remove("capability");
+        if (isBatch && capabilityArguments.Count > 0)
+            throw new AgentNodeException("math_batch_parameter_unknown", AgentNodeErrorCategories.ValidationFailure, "Batch math nodes accept only the operations control field.", retryable: false);
+        var results = operations.Select(operation => executor.Execute(operation, input, capabilityArguments, context.Run.Id)).ToList();
         var existing = board[AgentBlackboardKeys.MathResults] as JsonArray ?? new JsonArray(); foreach (var result in results) existing.Add(JsonSerializer.SerializeToNode(result, AgentNodeJson.SerializerOptions));
         board[AgentBlackboardKeys.MathResults] = existing; context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(results);
         return Task.CompletedTask;

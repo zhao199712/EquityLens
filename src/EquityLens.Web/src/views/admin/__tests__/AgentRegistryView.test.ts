@@ -80,6 +80,8 @@ describe('AgentRegistryView', () => {
 
     await wrapper.find('.detail-button').trigger('click')
     expect(wrapper.text()).toContain('RetrieveEvidencePlannerArguments')
+    expect(wrapper.text()).toContain('Capability Argument Contract')
+    expect(wrapper.text()).toContain('Capability Parameter Schema')
     expect(wrapper.text()).toContain('Required Keys')
   })
 

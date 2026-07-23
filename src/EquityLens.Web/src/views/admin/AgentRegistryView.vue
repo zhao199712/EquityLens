@@ -150,12 +150,12 @@ onMounted(load)
                 <tr v-if="expanded.has(item.id)" class="detail-row">
                   <td colspan="6">
                     <dl>
-                      <dt>Argument Schema</dt><dd><code>{{ item.argumentSchema }}</code></dd>
+                      <dt>Capability Argument Contract</dt><dd><code>{{ item.argumentSchema }}</code></dd>
                       <dt>Input Mode</dt><dd>{{ item.inputMode || 'Any' }}</dd>
                       <dt>Required Keys</dt><dd>{{ item.requiredKeys.join(', ') || '—' }}</dd>
                       <dt>Produced Keys</dt><dd>{{ item.producedKeys.join(', ') || '—' }}</dd>
                       <dt>Idempotent</dt><dd>{{ item.idempotent ? 'Yes' : 'No' }}</dd>
-                      <dt>Parameter Schema</dt><dd><pre>{{ JSON.stringify(item.parametersSchema ?? {}, null, 2) }}</pre></dd>
+                      <dt>Capability Parameter Schema</dt><dd><pre>{{ JSON.stringify(item.parametersSchema ?? {}, null, 2) }}</pre></dd>
                     </dl>
                   </td>
                 </tr>
