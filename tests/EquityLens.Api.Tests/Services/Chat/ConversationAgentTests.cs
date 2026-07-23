@@ -38,6 +38,19 @@ public sealed class ConversationAgentTests
         Assert.Equal(2, chat.CallCount);
     }
 
+    [Fact]
+    public async Task DecideAsync_RepairsSimplifiedChinese()
+    {
+        var chat = new SequenceChat(
+            """{"action":"DirectResponse","response":"请问有什么可以帮你？","standaloneQuery":null,"reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":""}""",
+            """{"action":"DirectResponse","response":"請問有什麼可以幫你？","standaloneQuery":null,"reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":""}""");
+
+        var decision = await new LlmConversationAgent(chat).DecideAsync(new("你好", new JsonObject(), []));
+
+        Assert.Equal("請問有什麼可以幫你？", decision.Response);
+        Assert.Equal(2, chat.CallCount);
+    }
+
     private sealed class FakeChat(string content) : IChatCompletionService
     {
         public string Provider => "test";
