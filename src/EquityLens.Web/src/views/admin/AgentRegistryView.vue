@@ -21,7 +21,7 @@ function matchesQuery(...values: string[]) {
 }
 
 const filteredSkills = computed(() => skills.value.filter(skill =>
-  matchesQuery(skill.id, skill.description, ...skill.capabilities),
+  matchesQuery(skill.id, skill.displayName, skill.description, skill.kind, ...(skill.supportedWorkflowTypes || []), ...skill.capabilities),
 ))
 
 const filteredCapabilities = computed(() => {
@@ -120,8 +120,15 @@ onMounted(load)
           <div v-if="filteredSkills.length" class="skill-grid">
             <article v-for="skill in filteredSkills" :key="skill.id" class="prestige-panel skill-card" :class="{ selected: selectedSkill?.id === skill.id }">
               <button class="skill-select" @click="selectSkill(skill)">
-                <code>{{ skill.id }}</code><span>{{ skill.description }}</span>
+                <div class="skill-title"><code>{{ skill.id }}</code><span class="skill-kind">{{ skill.kind }}{{ skill.routable ? ' · Routable' : '' }}</span></div>
+                <strong>{{ skill.displayName }}</strong>
+                <span>{{ skill.description }}</span>
               </button>
+              <dl class="skill-contract">
+                <dt>Workflows</dt><dd>{{ skill.supportedWorkflowTypes?.join(', ') || '—' }}</dd>
+                <dt>Prompt</dt><dd>{{ skill.promptTemplateId ? `${skill.promptTemplateId} v${skill.promptVersion}` : '—' }}</dd>
+                <dt>Required inputs</dt><dd>{{ skill.requiredInputs?.join(', ') || '—' }}</dd>
+              </dl>
               <div class="capability-tags">
                 <button v-for="capability in skill.capabilities" :key="capability" @click="selectSkill(skill)">{{ capability }}</button>
               </div>
@@ -184,8 +191,13 @@ onMounted(load)
 .skill-card { padding: 16px; transition: border-color .2s, background .2s; }
 .skill-card.selected { border-color: var(--gold); background: rgba(201,168,106,.08); }
 .skill-select { display: grid; gap: 8px; width: 100%; padding: 0; border: 0; color: var(--ivory); background: transparent; text-align: left; cursor: pointer; }
+.skill-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .skill-select code { color: var(--gold); font-size: 13px; }
+.skill-select strong { color: var(--ivory); font-family: var(--serif); font-size: 17px; font-weight: 500; }
+.skill-kind { padding: 3px 7px; border: 1px solid var(--gold-border-soft); border-radius: 999px; color: var(--gold) !important; font: 9px 'SFMono-Regular', Consolas, monospace; white-space: nowrap; }
 .skill-select span, .registry-table small { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.skill-contract { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 5px 10px; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--gold-border-soft); font-size: 11px; }
+.skill-contract dt { color: var(--muted); }.skill-contract dd { margin: 0; color: var(--ivory); overflow-wrap: anywhere; }
 .capability-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .capability-tags button, .detail-button { border: 1px solid var(--gold-border-soft); border-radius: 999px; padding: 4px 8px; color: var(--gold); background: rgba(201,168,106,.04); font: 10px 'SFMono-Regular', Consolas, monospace; cursor: pointer; }
 .capability-count { display: flex; flex-wrap: wrap; justify-content: end; gap: 14px; }

@@ -12,14 +12,43 @@ import { getAgentRegistry } from '../../../services/agentRegistryAdmin'
 const registry: AgentRegistry = {
   skills: [
     {
+      id: 'conference-call-takeaways',
+      displayName: '法說會要點蒸餾',
+      description: 'Distill conference call evidence.',
+      capabilities: ['plan-research-retrieval', 'retrieve-web-research-evidence'],
+      kind: 'Lead',
+      supportedWorkflowTypes: ['ResearchInvestigation'],
+      routable: true,
+      promptTemplateId: 'conference-call-takeaways',
+      promptVersion: 1,
+      requiredInputs: ['security', 'conference transcript or notes'],
+      systemPrompt: 'prompt',
+    },
+    {
       id: 'research-investigation',
+      displayName: '一般個股研究',
       description: 'Plan an evidence-grounded research answer.',
       capabilities: ['plan-research-retrieval', 'retrieve-web-research-evidence'],
+      kind: 'Lead',
+      supportedWorkflowTypes: ['ResearchInvestigation'],
+      routable: true,
+      promptTemplateId: null,
+      promptVersion: null,
+      requiredInputs: ['security'],
+      systemPrompt: null,
     },
     {
       id: 'quality-finalization',
+      displayName: '品質定稿',
       description: 'Finish the quality workflow.',
       capabilities: ['finalize-quality'],
+      kind: 'Supporting',
+      supportedWorkflowTypes: [],
+      routable: false,
+      promptTemplateId: null,
+      promptVersion: null,
+      requiredInputs: [],
+      systemPrompt: null,
     },
   ],
   capabilities: [
@@ -52,9 +81,10 @@ describe('AgentRegistryView', () => {
     await flushPromises()
 
     expect(getAgentRegistry).toHaveBeenCalledOnce()
-    expect(wrapper.text()).toContain('2Skills')
+    expect(wrapper.text()).toContain('3Skills')
     expect(wrapper.text()).toContain('3Capabilities')
     expect(wrapper.text()).toContain('research-investigation')
+    expect(wrapper.text()).toContain('conference-call-takeaways v1')
     expect(wrapper.text()).toContain('finalize-quality')
   })
 
@@ -63,7 +93,7 @@ describe('AgentRegistryView', () => {
     await flushPromises()
 
     await wrapper.find('.skill-select').trigger('click')
-    expect(wrapper.text()).toContain('Skill: research-investigation')
+    expect(wrapper.text()).toContain('Skill: conference-call-takeaways')
     expect(wrapper.findAll('.registry-table tbody')).toHaveLength(2)
 
     await wrapper.find('.filters button').trigger('click')

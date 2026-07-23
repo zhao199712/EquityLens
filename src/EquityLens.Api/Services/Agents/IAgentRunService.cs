@@ -5,7 +5,11 @@ namespace EquityLens.Api.Services.Agents;
 
 public interface IAgentRunService
 {
-    Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, CancellationToken cancellationToken = default);
+    Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(
+        Guid userId,
+        ResearchAskRequest request,
+        InvestmentResearchRoutingContext? routingContext = null,
+        CancellationToken cancellationToken = default);
     Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
         Guid userId,
         Guid researchRunId,
@@ -36,6 +40,7 @@ public interface IAgentRunService
         Guid portfolioId,
         DateOnly? from,
         DateOnly? to,
+        InvestmentResearchRoutingContext? routingContext = null,
         CancellationToken cancellationToken = default);
 
     Task<SubmitAgentFeedbackResponse> SubmitFeedbackAsync(

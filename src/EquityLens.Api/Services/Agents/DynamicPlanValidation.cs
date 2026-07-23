@@ -16,10 +16,23 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         if (proposal.GoalStatus is not (DynamicGoalStatuses.Continue or DynamicGoalStatuses.Complete)) throw new InvalidOperationException("Dynamic plan goalStatus is invalid.");
         if ((proposal.Trigger is DynamicPlanningTriggers.ResearchContextReady or DynamicPlanningTriggers.FeedbackContextReady) && proposal.GoalStatus != DynamicGoalStatuses.Continue)
             throw new InvalidOperationException("Initial planning must continue with an executable branch.");
-        var allowedSkills = new WorkflowSkillCatalog().Skills.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
+        var skillCatalog = new WorkflowSkillCatalog();
+        var allowedSkills = skillCatalog.Skills.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
         if (proposal.SelectedSkills.Any(x => !allowedSkills.Contains(x))) throw new InvalidOperationException("Dynamic plan selected an unknown skill.");
         if (proposal.GoalStatus == DynamicGoalStatuses.Complete && proposal.Actions.Count > 0) throw new InvalidOperationException("A completed plan cannot contain actions.");
         var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); var review = board[AgentBlackboardKeys.CriticReview] as JsonObject;
+        if (proposal.Trigger == DynamicPlanningTriggers.ResearchContextReady
+            && board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>() is { Length: > 0 } leadSkillId)
+        {
+            var leadSkill = skillCatalog.Skills.SingleOrDefault(x => x.Id == leadSkillId && x.Routable)
+                ?? throw new InvalidOperationException($"Routed lead skill '{leadSkillId}' is not registered.");
+            if (proposal.SelectedSkills.Count != 1 || proposal.SelectedSkills[0] != leadSkillId)
+                throw new InvalidOperationException("Initial plan must select exactly the routed lead skill.");
+            var leadCapabilities = leadSkill.Capabilities.ToHashSet(StringComparer.Ordinal);
+            var unauthorized = proposal.Actions.FirstOrDefault(x => !leadCapabilities.Contains(x.Capability));
+            if (unauthorized is not null)
+                throw new InvalidOperationException($"Capability '{unauthorized.Capability}' is not authorized by lead skill '{leadSkillId}'.");
+        }
         var finalizationCompleted = run.Nodes.Any(x => x.Status == AgentNodeStatuses.Succeeded && x.NodeType is (DraftRevisionNodeTypes.FinalizeRevision or EvidenceRemediationNodeTypes.Finalize or EvidenceReanalysisNodeTypes.Finalize));
         if (proposal.GoalStatus == DynamicGoalStatuses.Complete && !finalizationCompleted && (review?[CriticReviewFields.RequiresRevision]?.GetValue<bool>() == true || review?[CriticReviewFields.RequiresMoreEvidence]?.GetValue<bool>() == true)) throw new InvalidOperationException("Dynamic plan cannot complete while Critic requirements remain unresolved.");
         if (proposal.GoalStatus == DynamicGoalStatuses.Continue && proposal.Actions.Count == 0) throw new InvalidOperationException("A continuing plan must contain actions.");

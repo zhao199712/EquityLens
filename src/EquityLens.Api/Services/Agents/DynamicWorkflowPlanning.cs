@@ -17,13 +17,54 @@ public static class DynamicPlanningTriggers
     public const string FeedbackContextReady = "FeedbackContextReady";
 }
 
-public sealed record WorkflowSkill(string Id, string Description, IReadOnlyList<string> Capabilities);
+public static class WorkflowSkillKinds
+{
+    public const string Lead = "Lead";
+    public const string Supporting = "Supporting";
+}
+
+public sealed record WorkflowSkill(string Id, string Description, IReadOnlyList<string> Capabilities)
+{
+    public string DisplayName { get; init; } = Id;
+    public string Kind { get; init; } = WorkflowSkillKinds.Supporting;
+    public IReadOnlyList<string> SupportedWorkflowTypes { get; init; } = [];
+    public bool Routable { get; init; }
+    public string? PromptTemplateId { get; init; }
+    public int? PromptVersion { get; init; }
+    public IReadOnlyList<string> RequiredInputs { get; init; } = [];
+    public string? SystemPrompt { get; init; }
+}
 public interface IWorkflowSkillCatalog { IReadOnlyList<WorkflowSkill> Skills { get; } }
 public sealed class WorkflowSkillCatalog : IWorkflowSkillCatalog
 {
     public IReadOnlyList<WorkflowSkill> Skills { get; } =
     [
-        new("research-investigation", "Plan an evidence-grounded research answer from the validated request.", ["plan-research-retrieval", "retrieve-local-research-evidence", "evaluate-initial-evidence", "retrieve-web-research-evidence", "rank-research-evidence", "draft-research-answer", "build-initial-evidence-packet", "check-initial-evidence", "critique-initial-answer", "finalize-initial-critic"]),
+        new("conference-call-takeaways", "Distill conference-call evidence into guidance changes, management tone shifts and thesis implications.", ["plan-research-retrieval", "retrieve-local-research-evidence", "evaluate-initial-evidence", "retrieve-web-research-evidence", "rank-research-evidence", "draft-research-answer", "build-initial-evidence-packet", "check-initial-evidence", "critique-initial-answer", "finalize-initial-critic"])
+        {
+            DisplayName = "法說會要點蒸餾",
+            Kind = WorkflowSkillKinds.Lead,
+            SupportedWorkflowTypes = [AgentWorkflowTypes.ResearchInvestigation],
+            Routable = true,
+            PromptTemplateId = "conference-call-takeaways",
+            PromptVersion = 1,
+            RequiredInputs = ["security", "conference transcript or notes", "reporting period or event date", "depth"],
+            SystemPrompt = InvestmentResearchSkillPrompts.ConferenceCallTakeaways
+        },
+        new("research-investigation", "Plan an evidence-grounded research answer from the validated request.", ["plan-research-retrieval", "retrieve-local-research-evidence", "evaluate-initial-evidence", "retrieve-web-research-evidence", "rank-research-evidence", "prepare-portfolio-risk-math-inputs", ..PortfolioRiskMathCapabilities.All.Select(x => x.Id), "draft-research-answer", "build-initial-evidence-packet", "check-initial-evidence", "critique-initial-answer", "finalize-initial-critic"])
+        {
+            DisplayName = "一般個股研究",
+            Kind = WorkflowSkillKinds.Lead,
+            SupportedWorkflowTypes = [AgentWorkflowTypes.ResearchInvestigation],
+            Routable = true
+        },
+        new("portfolio-risk-summary", "Summarize portfolio concentration, drawdown, volatility, VaR, attribution and portfolio health.", ["prepare-portfolio-risk-math-inputs", ..PortfolioRiskMathCapabilities.All.Select(x => x.Id)])
+        {
+            DisplayName = "組合風險摘要",
+            Kind = WorkflowSkillKinds.Lead,
+            SupportedWorkflowTypes = [AgentWorkflowTypes.PortfolioDiagnosis],
+            Routable = true,
+            RequiredInputs = ["portfolio"]
+        },
         new("current-market-event-investigation", "Investigate date-sensitive price moves, news and current market events with Web evidence.", ["plan-research-retrieval", "retrieve-local-research-evidence", "evaluate-initial-evidence", "retrieve-web-research-evidence", "rank-research-evidence", "draft-research-answer", "build-initial-evidence-packet", "check-initial-evidence", "critique-initial-answer", "finalize-initial-critic"]),
         new("evidence-remediation", "Close citation and evidence gaps with bounded local or Web retrieval, validation, and revision.", ["extract-claims", "retrieve-primary-financial-evidence", "retrieve-web-evidence", "assess-claim-evidence", "validate-evidence", "build-evidence-packet", "revise-with-evidence", "finalize-quality"]),
         new("financial-guidance-verification", "Verify financial guidance with primary or supporting evidence.", ["retrieve-primary-financial-evidence", "assess-claim-evidence", "validate-evidence"]),
@@ -143,7 +184,7 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
             x.TryGetProperty("iteration", out var i) ? i.GetInt32() : 0)).ToList() : [];
         return new(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, goal, reason, skills, actions, mode, response.Model, response.PromptTokens, response.CompletionTokens);
     }
-    private static object Summarize(JsonObject board) => new { question = board[AgentBlackboardKeys.Question], researchRequest = board[AgentBlackboardKeys.ResearchRequest], researchIntent = board[AgentBlackboardKeys.ResearchIntent], initialEvidencePolicy = board[AgentBlackboardKeys.InitialEvidencePolicy], revisionContext = board[AgentBlackboardKeys.RevisionContext], feedbackIntent = board[AgentBlackboardKeys.FeedbackIntent], plannerValidationError = board["plannerValidationError"], criticReview = board[AgentBlackboardKeys.CriticReview], unresolvedClaims = board[AgentBlackboardKeys.UnresolvedClaims], requiredResearchDimensions = board[AgentBlackboardKeys.RequiredResearchDimensions], missingResearchDimensions = board[AgentBlackboardKeys.MissingResearchDimensions], routeDecision = board[AgentBlackboardKeys.RouteDecision], requiresReanalysis = board[AgentBlackboardKeys.RequiresReanalysis], reanalysisReasons = board[AgentBlackboardKeys.ReanalysisReasons] };
+    private static object Summarize(JsonObject board) => new { question = board[AgentBlackboardKeys.Question], researchRequest = board[AgentBlackboardKeys.ResearchRequest], researchIntent = board[AgentBlackboardKeys.ResearchIntent], leadSkill = board[AgentBlackboardKeys.LeadSkill], routingContext = board[AgentBlackboardKeys.RoutingContext], initialEvidencePolicy = board[AgentBlackboardKeys.InitialEvidencePolicy], revisionContext = board[AgentBlackboardKeys.RevisionContext], feedbackIntent = board[AgentBlackboardKeys.FeedbackIntent], plannerValidationError = board["plannerValidationError"], criticReview = board[AgentBlackboardKeys.CriticReview], unresolvedClaims = board[AgentBlackboardKeys.UnresolvedClaims], requiredResearchDimensions = board[AgentBlackboardKeys.RequiredResearchDimensions], missingResearchDimensions = board[AgentBlackboardKeys.MissingResearchDimensions], routeDecision = board[AgentBlackboardKeys.RouteDecision], requiresReanalysis = board[AgentBlackboardKeys.RequiresReanalysis], reanalysisReasons = board[AgentBlackboardKeys.ReanalysisReasons] };
     private static IEnumerable<NodeCapability> VisibleCapabilities(WorkflowPlanningContext context)
     {
         var request = context.Blackboard[AgentBlackboardKeys.ResearchRequest]?.Deserialize<ResearchAskRequest>(AgentNodeJson.SerializerOptions);
@@ -193,8 +234,12 @@ public static class DeterministicDynamicWorkflowPlanner
                 A("finalizeCriticReport:1", "finalize-initial-critic", ResearchQualityReviewNodeTypes.FinalizeCriticReport)
             ]);
             actions = Chain(planned, ResearchInvestigationNodeKeys.DetectIntent);
-            skills = includeWeb ? ["research-investigation", "current-market-event-investigation"] : ["research-investigation"];
-            if (planned.Any(x => x.NodeType == PortfolioRiskMathNodeTypes.Execute)) skills = [..skills, "portfolio-risk-mathematics"];
+            var routedLeadSkill = board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>();
+            skills = !string.IsNullOrWhiteSpace(routedLeadSkill)
+                ? [routedLeadSkill]
+                : includeWeb ? ["research-investigation", "current-market-event-investigation"] : ["research-investigation"];
+            if (string.IsNullOrWhiteSpace(routedLeadSkill) && planned.Any(x => x.NodeType == PortfolioRiskMathNodeTypes.Execute))
+                skills = [..skills, "portfolio-risk-mathematics"];
             goal = DynamicGoalStatuses.Continue;
             reason = includeWeb ? "The research request requires a Web-capable initial evidence branch." : "The research request can begin with local evidence.";
         }

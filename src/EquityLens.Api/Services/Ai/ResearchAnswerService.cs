@@ -213,7 +213,7 @@ public sealed class ResearchAnswerService : IResearchAnswerService
                 contextSelection.RetrievalNote,
                 temperature,
                 selectedChunks.Count,
-                cancellationToken);
+                cancellationToken: cancellationToken);
             generationStopwatch.Stop();
 
             var hasCitationIssue = answerResult.CitationValidationFailed || answerResult.RetryCount > 0;

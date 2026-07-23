@@ -59,7 +59,11 @@ public sealed class AgentRunService : IAgentRunService
         return MapSummary(run);
     }
 
-    public async Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, CancellationToken cancellationToken = default)
+    public async Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(
+        Guid userId,
+        ResearchAskRequest request,
+        InvestmentResearchRoutingContext? routingContext = null,
+        CancellationToken cancellationToken = default)
     {
         if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.ResearchInvestigation, cancellationToken);
         var researchRun = new ResearchRun
@@ -71,10 +75,11 @@ public sealed class AgentRunService : IAgentRunService
         };
         var provider = GetWorkflowProvider(AgentWorkflowTypes.ResearchInvestigation) as ResearchInvestigationWorkflowDefinitionProvider
             ?? throw new InvalidOperationException("ResearchInvestigation provider is not registered.");
-        var run = provider.CreateRun(userId, researchRun.Id, request);
+        var run = provider.CreateRun(userId, researchRun.Id, request, routingContext);
         await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.ResearchRuns.Add(researchRun); _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchInvestigation run created.", new { researchRunId = researchRun.Id });
+        AddRoutingEvent(run, routingContext);
         await _dbContext.SaveChangesAsync(cancellationToken); await EnqueueAsync(run, userId, cancellationToken);
         return (MapSummary(run), researchRun.Id);
     }
@@ -148,7 +153,12 @@ public sealed class AgentRunService : IAgentRunService
     }
 
     public async Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(
-        Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
+        Guid userId,
+        Guid portfolioId,
+        DateOnly? from,
+        DateOnly? to,
+        InvestmentResearchRoutingContext? routingContext = null,
+        CancellationToken cancellationToken = default)
     {
         if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.PortfolioDiagnosis, cancellationToken);
         var isOwner = await _dbContext.Portfolios.AnyAsync(
@@ -159,10 +169,11 @@ public sealed class AgentRunService : IAgentRunService
         var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var start = from ?? end.AddMonths(-1);
         if (start >= end) throw new InvalidOperationException("Diagnosis start date must be before end date.");
-        var run = provider.CreateRun(userId, portfolioId, start, end);
+        var run = provider.CreateRun(userId, portfolioId, start, end, routingContext);
         await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "PortfolioDiagnosis run created.", new { portfolioId, from = start, to = end });
+        AddRoutingEvent(run, routingContext);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await EnqueueAsync(run, userId, cancellationToken);
         return MapSummary(run);
@@ -355,14 +366,19 @@ public sealed class AgentRunService : IAgentRunService
         {
             var investigationProvider = provider as ResearchInvestigationWorkflowDefinitionProvider
                 ?? throw new InvalidOperationException("ResearchInvestigation provider is not registered.");
-            var request = JsonSerializer.Deserialize<ResearchAskRequest>(run.InputJson, SerializerOptions)
-                ?? throw new InvalidOperationException("ResearchInvestigation input is invalid.");
+            var input = ResearchInvestigationWorkflowDefinitionProvider.ParseInput(run.InputJson);
             var researchRunId = run.ResearchRunId
                 ?? throw new InvalidOperationException("ResearchInvestigation run is missing its ResearchRun link.");
-            run.BlackboardJson = investigationProvider.CreateInitialBlackboardJson(researchRunId, request);
+            run.BlackboardJson = investigationProvider.CreateInitialBlackboardJson(researchRunId, input.Request, input.RoutingContext);
             var researchRun = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == researchRunId, cancellationToken);
             researchRun.Status = "Pending";
             researchRun.ErrorMessage = null;
+        }
+        else if (run.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
+        {
+            var input = PortfolioDiagnosisWorkflowDefinitionProvider.ParseInput(run.InputJson);
+            run.BlackboardJson = PortfolioDiagnosisWorkflowDefinitionProvider.CreateInitialBlackboardJson(
+                input.PortfolioId, input.From, input.To, input.RoutingContext);
         }
         else
         {
@@ -509,6 +525,30 @@ public sealed class AgentRunService : IAgentRunService
             Message = message,
             PayloadJson = payload is null ? null : Serialize(payload),
             CreatedAtUtc = DateTime.UtcNow
+        });
+    }
+
+    private void AddRoutingEvent(AgentRun run, InvestmentResearchRoutingContext? routing)
+    {
+        if (routing is null) return;
+        AddEvent(run, null, AgentEventTypes.QuestionRouted, "Question routed to a lead investment-research skill.", new
+        {
+            routing.LeadSkill,
+            routing.LeadSkillDisplayName,
+            routing.Objective,
+            routing.ContextEnvelope,
+            routing.InferredFields,
+            routing.DownstreamIntents,
+            routing.ClarifyingQuestions,
+            routing.RoutingReason,
+            routing.Confidence,
+            routing.RoutingProvider,
+            routing.RoutingModel,
+            routing.PromptTemplateId,
+            routing.PromptVersion,
+            routing.PromptTokens,
+            routing.CompletionTokens,
+            routing.DurationMs
         });
     }
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
@@ -12,6 +13,30 @@ namespace EquityLens.Api.Tests.Services.Agents;
 
 public sealed class ResearchInvestigationWorkflowTests
 {
+    [Fact]
+    public async Task CreateResearchInvestigation_WithRoutingContext_PersistsInputBlackboardAndRouteEvent()
+    {
+        await using var db = CreateDbContext();
+        var provider = new ResearchInvestigationWorkflowDefinitionProvider();
+        var queue = new RecordingQueue();
+        var service = new AgentRunService(db, [provider], new AgentRunStateMachine(), new AgentNodeStateMachine(), queue);
+        var routing = RoutingContext();
+
+        var created = await service.CreateResearchInvestigationAsync(
+            Guid.NewGuid(),
+            new ResearchAskRequest("2454", "聯發科法說會相較上季改變了什麼？"),
+            routing);
+
+        var run = await db.AgentRuns.SingleAsync(x => x.Id == created.AgentRun.Id);
+        var input = ResearchInvestigationWorkflowDefinitionProvider.ParseInput(run.InputJson);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var routeEvent = await db.AgentRunEvents.SingleAsync(x => x.AgentRunId == run.Id && x.EventType == AgentEventTypes.QuestionRouted);
+        Assert.Equal("conference-call-takeaways", input.RoutingContext?.LeadSkill);
+        Assert.Equal("conference-call-takeaways", board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>());
+        Assert.Equal("TW", board[AgentBlackboardKeys.RoutingContext]?["contextEnvelope"]?["market"]?.GetValue<string>());
+        Assert.Contains("conference-call-takeaways", routeEvent.PayloadJson);
+    }
+
     [Fact]
     public void CreateRun_BuildsBootstrapGraphAndLinksArtifact()
     {
@@ -137,6 +162,24 @@ public sealed class ResearchInvestigationWorkflowTests
 
     private static EquityLensDbContext CreateDbContext() => new TestDbContext(
         new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+
+    private static InvestmentResearchRoutingContext RoutingContext() => new(
+        "conference-call-takeaways",
+        "法說會要點蒸餾",
+        "比較聯發科本次與前次法說內容",
+        new("TW", "equity", "standard", null, "TWD", "zh-TW"),
+        [],
+        [],
+        [],
+        "問題要求分析法說會變化",
+        "high",
+        "router-test",
+        "test",
+        InvestmentResearchRouter.PromptTemplateId,
+        InvestmentResearchRouter.PromptVersion,
+        10,
+        5,
+        42);
 
     private sealed class TestDbContext(DbContextOptions<EquityLensDbContext> options) : EquityLensDbContext(options)
     {

@@ -58,6 +58,23 @@ interface PortfolioDiagnosisOutput {
   evidenceStatus: string
 }
 
+interface RoutingContext {
+  leadSkill: string
+  leadSkillDisplayName: string
+  objective: string
+  routingReason: string
+  confidence: string
+  routingModel: string
+  contextEnvelope: {
+    market: string
+    asset: string
+    depth: string
+    horizon?: string | null
+    currency?: string | null
+    language: string
+  }
+}
+
 const route = useRoute()
 const router = useRouter()
 const actionLoading = ref(false)
@@ -195,6 +212,11 @@ const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null =>
   return (run.value.outputJson as unknown as PortfolioDiagnosisOutput) ?? null
 })
 
+const routingContext = computed((): RoutingContext | null => {
+  if (!run.value) return null
+  return (run.value.blackboardJson.routingContext as unknown as RoutingContext) ?? null
+})
+
 const nextActionLabel = computed(() => {
   const action = criticOutput.value?.recommendedNextAction
   if (!action) return null
@@ -258,6 +280,21 @@ const nextActionLabel = computed(() => {
               <span class="live-dot live-dot-small" />
               自動重新整理中
             </div>
+          </div>
+
+          <div v-if="routingContext" class="prestige-panel prestige-panel-pad routing-stage" data-testid="routing-stage">
+            <div>
+              <span class="prestige-label">STAGE 0 · 問題路由</span>
+              <h3>{{ routingContext.leadSkillDisplayName }}</h3>
+              <code>{{ routingContext.leadSkill }}</code>
+            </div>
+            <dl>
+              <div><dt>目標</dt><dd>{{ routingContext.objective }}</dd></div>
+              <div><dt>理由</dt><dd>{{ routingContext.routingReason }}</dd></div>
+              <div><dt>市場／資產</dt><dd>{{ routingContext.contextEnvelope.market }} / {{ routingContext.contextEnvelope.asset }}</dd></div>
+              <div><dt>深度／信心度</dt><dd>{{ routingContext.contextEnvelope.depth }} / {{ routingContext.confidence }}</dd></div>
+              <div><dt>模型</dt><dd>{{ routingContext.routingModel }}</dd></div>
+            </dl>
           </div>
 
           <AgentRunProgress
@@ -886,5 +923,30 @@ const nextActionLabel = computed(() => {
 
 .inner-empty {
   margin: 16px 20px;
+}
+
+.routing-stage {
+  display: grid;
+  grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr);
+  gap: 24px;
+  margin-top: 16px;
+  border-color: var(--gold-border);
+}
+
+.routing-stage h3 {
+  margin: 8px 0 5px;
+  color: var(--ivory);
+  font-family: var(--serif);
+  font-size: 22px;
+}
+
+.routing-stage code { color: var(--gold); overflow-wrap: anywhere; }
+.routing-stage dl { display: grid; gap: 7px; margin: 0; }
+.routing-stage dl div { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; }
+.routing-stage dt { color: var(--muted); }.routing-stage dd { margin: 0; color: var(--ivory); }
+
+@media (max-width: 700px) {
+  .routing-stage { grid-template-columns: 1fr; }
+  .routing-stage dl div { grid-template-columns: 1fr; gap: 2px; }
 }
 </style>

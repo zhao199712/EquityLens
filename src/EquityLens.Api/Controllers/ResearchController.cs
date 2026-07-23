@@ -122,7 +122,7 @@ public sealed class ResearchController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Question)) return BadRequest(new ApiError("question_required", "請輸入問題。"));
         if (string.IsNullOrWhiteSpace(request.Ticker)) return BadRequest(new ApiError("ticker_required", "請指定股票代號。"));
         if (!IsValidDocumentType(request.DocumentType, allowAuto: true)) return BadRequest(new ApiError("invalid_document_type", "documentType 僅支援 AnnualReport 或 EarningsPresentation。"));
-        var created = await _agentRunService.CreateResearchInvestigationAsync(_currentUser.UserId, request, cancellationToken);
+        var created = await _agentRunService.CreateResearchInvestigationAsync(_currentUser.UserId, request, cancellationToken: cancellationToken);
         return Accepted(new ResearchInvestigationCreatedResponse(created.AgentRun.Id, created.ResearchRunId, created.AgentRun.WorkflowType, created.AgentRun.Status));
     }
 

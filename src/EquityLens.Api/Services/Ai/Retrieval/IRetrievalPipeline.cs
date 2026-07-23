@@ -84,8 +84,15 @@ public interface IAnswerGenerator
         string? retrievalNote,
         double temperature,
         int maxValidCitationIndex,
+        AnswerGenerationInstructions? instructions = null,
         CancellationToken cancellationToken = default);
 }
+
+public sealed record AnswerGenerationInstructions(
+    string LeadSkill,
+    string PromptTemplateId,
+    int PromptVersion,
+    string SystemPrompt);
 
 public interface ICitationValidator
 {

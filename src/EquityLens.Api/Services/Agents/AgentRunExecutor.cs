@@ -353,7 +353,19 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         }
         var dynamicNodeCount = run.Nodes.Count(x => !string.IsNullOrWhiteSpace(x.TemplateNodeKey)
             && (run.WorkflowType is not (AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) || x.Iteration > 0));
-        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, AgentNodeJson.ParseBlackboard(run.BlackboardJson), run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), skills.Skills, capabilities.Capabilities, run.Nodes.Where(x => (x.NodeType is EvidenceRemediationNodeTypes.RetrieveEvidence or EvidenceRemediationNodeTypes.RetrieveWebEvidence) && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), dynamicNodeCount, last?.NodeKey);
+        var planningBoard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        IReadOnlyList<WorkflowSkill> visibleSkills = skills.Skills;
+        IReadOnlyList<NodeCapability> visibleCapabilities = capabilities.Capabilities;
+        if (trigger == DynamicPlanningTriggers.ResearchContextReady
+            && planningBoard[AgentBlackboardKeys.LeadSkill]?.GetValue<string>() is { Length: > 0 } leadSkillId)
+        {
+            var leadSkill = skills.Skills.SingleOrDefault(x => x.Id == leadSkillId && x.Routable)
+                ?? throw new InvalidOperationException($"Routed lead skill '{leadSkillId}' is not registered.");
+            visibleSkills = [leadSkill];
+            var allowed = leadSkill.Capabilities.ToHashSet(StringComparer.Ordinal);
+            visibleCapabilities = capabilities.Capabilities.Where(x => allowed.Contains(x.Id)).ToList();
+        }
+        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, planningBoard, run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), visibleSkills, visibleCapabilities, run.Nodes.Where(x => (x.NodeType is EvidenceRemediationNodeTypes.RetrieveEvidence or EvidenceRemediationNodeTypes.RetrieveWebEvidence) && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), dynamicNodeCount, last?.NodeKey);
         var started = DateTime.UtcNow;
         AddEvent(run, last, AgentEventTypes.SupervisorPlanningStarted, $"Supervisor planning started for {trigger}.", new { trigger, context.OrchestrationVersion });
         var planningTimeoutSeconds = LlmAgentWorkflowPlanner.TimeoutSeconds;

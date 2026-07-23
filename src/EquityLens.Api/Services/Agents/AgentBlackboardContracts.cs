@@ -73,6 +73,8 @@ public static class AgentBlackboardKeys
     public const string FeedbackIntent = "feedbackIntent";
     public const string RevisionContext = "revisionContext";
     public const string OriginalAnswer = "originalAnswer";
+    public const string LeadSkill = "leadSkill";
+    public const string RoutingContext = "routingContext";
 }
 
 public static class EvidenceCheckFields

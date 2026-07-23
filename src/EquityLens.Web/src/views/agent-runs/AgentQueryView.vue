@@ -41,7 +41,7 @@ function openRun() {
       <div class="query-heading">
         <span class="prestige-label">Ask Agent</span>
         <h1>描述你想了解的問題</h1>
-        <p>LLM 會判斷問題應交給投組診斷或研究調查，並啟動對應 workflow。</p>
+        <p>LLM 會先選擇 workflow 與 lead skill，建立研究脈絡後啟動對應 DAG。</p>
       </div>
 
       <div class="prestige-panel composer">
@@ -57,7 +57,7 @@ function openRun() {
         <div class="composer-footer">
           <span>{{ question.length }} / 2000</span>
           <button class="prestige-btn prestige-btn-solid" :disabled="!canSubmit" @click="submit">
-            {{ loading ? '正在選擇 workflow…' : '送出問題' }}
+            {{ loading ? '正在路由問題與選擇 skill…' : '送出問題' }}
           </button>
         </div>
       </div>
@@ -65,6 +65,7 @@ function openRun() {
       <div class="examples" aria-label="問題範例">
         <button @click="question = '我的投資組合最近一年的波動、最大回撤與集中風險如何？'">投組風險範例</button>
         <button @click="question = '台積電最近一季的營運表現與主要風險是什麼？'">公司研究範例</button>
+        <button @click="question = '聯發科法說會相較上季的指引與管理層語氣改變了什麼？'">法說會要點範例</button>
       </div>
 
       <div v-if="error" class="prestige-error" role="alert">{{ error }}</div>
@@ -73,11 +74,14 @@ function openRun() {
         <div>
           <span class="prestige-label">Selected Workflow</span>
           <h2>{{ result.workflowType }}</h2>
+          <strong>{{ result.leadSkillDisplayName }} · {{ result.leadSkill }}</strong>
           <p>{{ result.routingReason }}</p>
         </div>
         <dl>
           <div><dt>狀態</dt><dd>{{ result.status }}</dd></div>
           <div><dt>模型</dt><dd>{{ result.routingModel }}</dd></div>
+          <div><dt>信心度</dt><dd>{{ result.routingConfidence }}</dd></div>
+          <div><dt>市場／資產</dt><dd>{{ result.contextEnvelope.market }} / {{ result.contextEnvelope.asset }}</dd></div>
           <div><dt>Run ID</dt><dd class="prestige-mono">{{ result.agentRunId }}</dd></div>
         </dl>
         <button class="prestige-btn prestige-btn-solid" @click="openRun">查看執行進度</button>

@@ -29,7 +29,7 @@ public sealed class AgentRunsController : ControllerBase
         Guid portfolioId, CreatePortfolioDiagnosisRequest request, CancellationToken cancellationToken)
     {
         var response = await _agentRunService.CreatePortfolioDiagnosisAsync(
-            _currentUser.UserId, portfolioId, request.From, request.To, cancellationToken);
+            _currentUser.UserId, portfolioId, request.From, request.To, cancellationToken: cancellationToken);
         return Accepted(response);
     }
 

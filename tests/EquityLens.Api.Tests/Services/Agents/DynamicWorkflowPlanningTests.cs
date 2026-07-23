@@ -10,6 +10,65 @@ namespace EquityLens.Api.Tests.Services.Agents;
 
 public sealed class DynamicWorkflowPlanningTests
 {
+    [Fact]
+    public void RoutedConferenceCallSkill_ConstrainsInitialPlannerAndValidatorToLeadCapabilities()
+    {
+        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            new("2454", "聯發科法說會相較上季改變了什麼？"));
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.ResearchIntent] = new JsonObject();
+        board[AgentBlackboardKeys.LeadSkill] = "conference-call-takeaways";
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var catalog = new WorkflowSkillCatalog();
+        var lead = catalog.Skills.Single(x => x.Id == "conference-call-takeaways");
+        var capabilities = new NodeCapabilityRegistry();
+        var allowed = lead.Capabilities.ToHashSet(StringComparer.Ordinal);
+        var context = new WorkflowPlanningContext(
+            run.Id,
+            run.OrchestrationVersion,
+            DynamicPlanningTriggers.ResearchContextReady,
+            board,
+            [ResearchInvestigationNodeTypes.Validate, ResearchInvestigationNodeTypes.DetectIntent],
+            [lead],
+            capabilities.Capabilities.Where(x => allowed.Contains(x.Id)).ToList(),
+            0,
+            0);
+
+        var proposal = DeterministicDynamicWorkflowPlanner.Create(context);
+        var validated = new DynamicPlanValidator(capabilities, new AgentWorkflowCatalog(), new WorkflowGraphTopologyService()).Validate(run, proposal);
+
+        Assert.Equal(["conference-call-takeaways"], proposal.SelectedSkills);
+        Assert.All(validated.Actions, action => Assert.Contains(action.Capability, lead.Capabilities));
+        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, validated.Actions[^1].NodeType);
+    }
+
+    [Fact]
+    public void RoutedGenericResearchSkill_AllowsSingleAssetMathCapability()
+    {
+        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(
+            Guid.NewGuid(), Guid.NewGuid(), new("2454", "計算聯發科夏普值"));
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.ResearchIntent] = new JsonObject();
+        board[AgentBlackboardKeys.LeadSkill] = "research-investigation";
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var catalog = new WorkflowSkillCatalog();
+        var lead = catalog.Skills.Single(x => x.Id == "research-investigation");
+        var capabilities = new NodeCapabilityRegistry();
+        var allowed = lead.Capabilities.ToHashSet(StringComparer.Ordinal);
+        var context = new WorkflowPlanningContext(
+            run.Id, run.OrchestrationVersion, DynamicPlanningTriggers.ResearchContextReady, board,
+            [ResearchInvestigationNodeTypes.Validate, ResearchInvestigationNodeTypes.DetectIntent],
+            [lead], capabilities.Capabilities.Where(x => allowed.Contains(x.Id)).ToList(), 0, 0);
+
+        var proposal = DeterministicDynamicWorkflowPlanner.Create(context);
+        var validated = new DynamicPlanValidator(capabilities, new AgentWorkflowCatalog(), new WorkflowGraphTopologyService()).Validate(run, proposal);
+
+        Assert.Contains(validated.Actions, x => x.Capability == "prepare-portfolio-risk-math-inputs");
+        Assert.Contains(validated.Actions, x => x.Capability == "calculate-sharpe-ratio");
+    }
+
     [Theory]
     [InlineData("為甚麼台積電7/17跌這麼多")]
     [InlineData("台積電今天為什麼跌")]

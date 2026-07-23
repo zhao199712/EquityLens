@@ -2,8 +2,16 @@ import { http } from './http'
 
 export interface WorkflowSkill {
   id: string
+  displayName: string
   description: string
   capabilities: string[]
+  kind: 'Lead' | 'Supporting'
+  supportedWorkflowTypes: string[]
+  routable: boolean
+  promptTemplateId?: string | null
+  promptVersion?: number | null
+  requiredInputs: string[]
+  systemPrompt?: string | null
 }
 
 export interface NodeCapability {

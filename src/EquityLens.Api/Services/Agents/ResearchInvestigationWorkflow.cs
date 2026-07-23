@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
@@ -12,6 +13,10 @@ using Microsoft.Extensions.Options;
 using System.Text.RegularExpressions;
 
 namespace EquityLens.Api.Services.Agents;
+
+public sealed record ResearchInvestigationInput(
+    ResearchAskRequest Request,
+    InvestmentResearchRoutingContext? RoutingContext);
 
 public static partial class ResearchInvestigationPlanning
 {
@@ -38,20 +43,41 @@ public sealed class ResearchInvestigationWorkflowDefinitionProvider : IAgentWork
     public AgentRun CreateRun(Guid userId, Guid researchRunId) =>
         CreateRun(userId, researchRunId, new ResearchAskRequest(string.Empty, string.Empty));
 
-    public AgentRun CreateRun(Guid userId, Guid researchRunId, ResearchAskRequest request) => new()
+    public AgentRun CreateRun(
+        Guid userId,
+        Guid researchRunId,
+        ResearchAskRequest request,
+        InvestmentResearchRoutingContext? routingContext = null) => new()
     {
         Id = Guid.NewGuid(), UserId = userId, ResearchRunId = researchRunId,
         WorkflowType = WorkflowType, AgentType = AgentTypes.Research, Status = AgentRunStatuses.Pending,
-        InputJson = AgentNodeJson.Serialize(request), BlackboardJson = Initial(researchRunId, request),
+        InputJson = AgentNodeJson.Serialize(new ResearchInvestigationInput(request, routingContext)),
+        BlackboardJson = Initial(researchRunId, request, routingContext),
         WorkflowDefinitionJson = Definition(), CreatedAtUtc = DateTime.UtcNow, EnableBlackboardSnapshots = true,
         Nodes = BootstrapSteps.Select(x => new AgentRunNode { Id = Guid.NewGuid(), NodeKey = x.Key, NodeType = x.Type, Status = AgentNodeStatuses.Pending }).ToList()
     };
 
     public string CreateInitialBlackboardJson(Guid researchRunId) => Initial(researchRunId, new ResearchAskRequest(string.Empty, string.Empty));
 
-    public string CreateInitialBlackboardJson(Guid researchRunId, ResearchAskRequest request) => Initial(researchRunId, request);
+    public string CreateInitialBlackboardJson(
+        Guid researchRunId,
+        ResearchAskRequest request,
+        InvestmentResearchRoutingContext? routingContext = null) =>
+        Initial(researchRunId, request, routingContext);
 
-    private static string Initial(Guid researchRunId, ResearchAskRequest request) => new JsonObject
+    public static ResearchInvestigationInput ParseInput(string inputJson)
+    {
+        var envelope = JsonSerializer.Deserialize<ResearchInvestigationInput>(inputJson, AgentNodeJson.SerializerOptions);
+        if (envelope?.Request is not null) return envelope;
+        var legacy = JsonSerializer.Deserialize<ResearchAskRequest>(inputJson, AgentNodeJson.SerializerOptions)
+            ?? throw new InvalidOperationException("ResearchInvestigation input is invalid.");
+        return new(legacy, null);
+    }
+
+    private static string Initial(
+        Guid researchRunId,
+        ResearchAskRequest request,
+        InvestmentResearchRoutingContext? routingContext = null) => new JsonObject
     {
         ["blackboardVersion"] = 0,
         [AgentBlackboardKeys.ResearchRunId] = researchRunId,
@@ -64,6 +90,8 @@ public sealed class ResearchInvestigationWorkflowDefinitionProvider : IAgentWork
         [AgentBlackboardKeys.Steps] = new JsonArray()
         ,[AgentBlackboardKeys.MathInputs] = null
         ,[AgentBlackboardKeys.MathResults] = new JsonArray()
+        ,[AgentBlackboardKeys.LeadSkill] = routingContext?.LeadSkill
+        ,[AgentBlackboardKeys.RoutingContext] = JsonSerializer.SerializeToNode(routingContext, AgentNodeJson.SerializerOptions)
     }.ToJsonString(AgentNodeJson.SerializerOptions);
 
     private static string Definition()
@@ -232,7 +260,12 @@ public sealed class RankAndSelectResearchEvidenceNodeHandler(IResultReranker rer
     }
 }
 
-public sealed class DraftResearchAnswerNodeHandler(IContextSelector selector, IContextFormatter formatter, IAnswerGenerator generator, EquityLensDbContext db) : IAgentNodeHandler
+public sealed class DraftResearchAnswerNodeHandler(
+    IContextSelector selector,
+    IContextFormatter formatter,
+    IAnswerGenerator generator,
+    EquityLensDbContext db,
+    IWorkflowSkillCatalog skillCatalog) : IAgentNodeHandler
 {
     public string NodeType => ResearchInvestigationNodeTypes.DraftAnswer;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
@@ -248,7 +281,14 @@ public sealed class DraftResearchAnswerNodeHandler(IContextSelector selector, IC
             + (mathResults is { Count: > 0 } ? $"\n\n[Deterministic portfolio/risk mathematics]\n{mathResults.ToJsonString(AgentNodeJson.SerializerOptions)}" : string.Empty)
             + revisionContext;
         var hasEvidence = selected.Chunks.Count > 0 || mathResults is { Count: > 0 };
-        var answer = !hasEvidence ? new AnswerGenerationResult("目前提供的資料不足以回答此問題。", generator.Model, 0, 0, 0, false, []) : await generator.GenerateAsync(request.Question, formattedContext, selected.RetrievalNote, Math.Clamp(request.Temperature, 0, 1), selected.Chunks.Count, cancellationToken);
+        var leadSkillId = board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>();
+        var leadSkill = string.IsNullOrWhiteSpace(leadSkillId)
+            ? null
+            : skillCatalog.Skills.SingleOrDefault(x => x.Id == leadSkillId);
+        var instructions = leadSkill is { SystemPrompt: not null, PromptTemplateId: not null, PromptVersion: not null }
+            ? new AnswerGenerationInstructions(leadSkill.Id, leadSkill.PromptTemplateId, leadSkill.PromptVersion.Value, leadSkill.SystemPrompt)
+            : null;
+        var answer = !hasEvidence ? new AnswerGenerationResult("目前提供的資料不足以回答此問題。", generator.Model, 0, 0, 0, false, []) : await generator.GenerateAsync(request.Question, formattedContext, selected.RetrievalNote, Math.Clamp(request.Temperature, 0, 1), selected.Chunks.Count, instructions, cancellationToken);
         var citations = selected.Chunks.Select(x => new ResearchCitation(x.Index, x.Chunk.SourceType, x.Chunk.SourceType == CitationSourceType.LocalDocument ? x.Chunk.Result.DocumentChunkId : null, x.Chunk.Result.DocumentId, x.Chunk.Result.DocumentTitle, x.Chunk.Result.DocumentType, x.Chunk.SourceRole, x.Chunk.Result.PageNumber, x.Chunk.Url, x.Chunk.PublishedAt, x.Chunk.RetrievedAt, Trim(x.Chunk.Result.Content), x.Chunk.Result.RelevanceScore)).ToList();
         var status = !hasEvidence ? "InsufficientEvidence" : answer.CitationValidationFailed ? "CitationValidationFailed" : "Answered";
         var citationNodes = JsonSerializer.SerializeToNode(citations.Select(c => new

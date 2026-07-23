@@ -32,9 +32,10 @@ public sealed class AnswerGenerator : IAnswerGenerator
         string? retrievalNote,
         double temperature,
         int maxValidCitationIndex,
+        AnswerGenerationInstructions? instructions = null,
         CancellationToken cancellationToken = default)
     {
-        var systemPrompt = BuildSystemPrompt(retrievalNote);
+        var systemPrompt = BuildSystemPrompt(retrievalNote, instructions);
         var userPrompt = BuildUserPrompt(question, context, retrievalNote);
 
         using var llmActivity = EquityLensTelemetry.ActivitySource.StartActivity("llm.complete");
@@ -141,7 +142,7 @@ public sealed class AnswerGenerator : IAnswerGenerator
         EquityLensTelemetry.LlmTokens.Add(tokens, tags);
     }
 
-    private static string BuildSystemPrompt(string? retrievalNote)
+    private static string BuildSystemPrompt(string? retrievalNote, AnswerGenerationInstructions? instructions)
     {
         var retrievalInstruction = string.IsNullOrWhiteSpace(retrievalNote)
             ? ""
@@ -151,6 +152,15 @@ Critical retrieval status:
 - {retrievalNote}
 - You must explicitly mention this retrieval status in the answer before using Supporting-source disclosures.
 - Do not say that conference materials were not searched. Say that conference materials were searched but no explicit risk-discussion excerpt was selected.
+""";
+
+        var skillInstruction = instructions is null
+            ? ""
+            : $"""
+
+Specialized lead skill instructions ({instructions.LeadSkill}; {instructions.PromptTemplateId} v{instructions.PromptVersion}):
+The global evidence, citation, attribution, language and non-fabrication rules above have higher priority than these specialized instructions.
+{instructions.SystemPrompt}
 """;
 
         return $"""
@@ -170,6 +180,7 @@ Rules:
 11. If multiple documents provide related information, synthesize them while preserving source attribution.
 12. For risk questions, never describe Supporting annual-report disclosures as risks mentioned by conference materials.
 {retrievalInstruction}
+{skillInstruction}
 """;
     }
 

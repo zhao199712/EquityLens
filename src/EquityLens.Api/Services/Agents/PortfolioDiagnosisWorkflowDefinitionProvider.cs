@@ -1,7 +1,14 @@
 using System.Text.Json.Nodes;
+using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Data.Entities;
 
 namespace EquityLens.Api.Services.Agents;
+
+public sealed record PortfolioDiagnosisInput(
+    Guid PortfolioId,
+    DateOnly From,
+    DateOnly To,
+    InvestmentResearchRoutingContext? RoutingContext);
 
 public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflowDefinitionProvider
 {
@@ -13,12 +20,17 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
     public string CreateInitialBlackboardJson(Guid portfolioId) =>
         AgentBlackboardContracts.CreateInitialPortfolioDiagnosisBlackboard(portfolioId, DateOnly.FromDateTime(DateTime.UtcNow).AddYears(-1), DateOnly.FromDateTime(DateTime.UtcNow)).ToJsonString(AgentNodeJson.SerializerOptions);
 
-    public AgentRun CreateRun(Guid userId, Guid portfolioId, DateOnly from, DateOnly to) => new()
+    public AgentRun CreateRun(
+        Guid userId,
+        Guid portfolioId,
+        DateOnly from,
+        DateOnly to,
+        InvestmentResearchRoutingContext? routingContext = null) => new()
     {
         Id = Guid.NewGuid(), UserId = userId, WorkflowType = AgentWorkflowTypes.PortfolioDiagnosis,
         AgentType = AgentTypes.Portfolio, Status = AgentRunStatuses.Pending,
-        InputJson = AgentNodeJson.Serialize(new { portfolioId, from, to }),
-        BlackboardJson = AgentBlackboardContracts.CreateInitialPortfolioDiagnosisBlackboard(portfolioId, from, to).ToJsonString(AgentNodeJson.SerializerOptions),
+        InputJson = AgentNodeJson.Serialize(new PortfolioDiagnosisInput(portfolioId, from, to, routingContext)),
+        BlackboardJson = CreateInitialBlackboardJson(portfolioId, from, to, routingContext),
         WorkflowDefinitionJson = Definition().ToJsonString(AgentNodeJson.SerializerOptions),
         CreatedAtUtc = DateTime.UtcNow,
         Nodes = [
@@ -32,6 +44,22 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
             Node(PortfolioDiagnosisNodeKeys.DraftDiagnosis, PortfolioDiagnosisNodeTypes.DraftDiagnosis),
             Node(PortfolioDiagnosisNodeKeys.FinalizeDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeDiagnosis)]
     };
+
+    public static PortfolioDiagnosisInput ParseInput(string inputJson) =>
+        System.Text.Json.JsonSerializer.Deserialize<PortfolioDiagnosisInput>(inputJson, AgentNodeJson.SerializerOptions)
+        ?? throw new InvalidOperationException("PortfolioDiagnosis input is invalid.");
+
+    public static string CreateInitialBlackboardJson(
+        Guid portfolioId,
+        DateOnly from,
+        DateOnly to,
+        InvestmentResearchRoutingContext? routingContext)
+    {
+        var board = AgentBlackboardContracts.CreateInitialPortfolioDiagnosisBlackboard(portfolioId, from, to);
+        board[AgentBlackboardKeys.LeadSkill] = routingContext?.LeadSkill;
+        board[AgentBlackboardKeys.RoutingContext] = System.Text.Json.JsonSerializer.SerializeToNode(routingContext, AgentNodeJson.SerializerOptions);
+        return board.ToJsonString(AgentNodeJson.SerializerOptions);
+    }
 
     private static AgentRunNode Node(string key, string type) => new() { Id = Guid.NewGuid(), NodeKey = key, NodeType = type, Status = AgentNodeStatuses.Pending };
 

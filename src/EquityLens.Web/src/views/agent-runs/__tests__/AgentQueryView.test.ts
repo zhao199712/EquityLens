@@ -4,6 +4,15 @@ import AgentQueryView from '../AgentQueryView.vue'
 import { createAgentWorkflowQuery } from '../../../services/agentQueries'
 
 const push = vi.fn()
+const routeMetadata = {
+  leadSkill: 'research-investigation',
+  leadSkillDisplayName: '一般個股研究',
+  routingConfidence: 'high',
+  objective: '回答投研問題',
+  contextEnvelope: { market: 'TW', asset: 'equity', depth: 'standard', horizon: null, currency: 'TWD', language: 'zh-TW' },
+  inferredFields: [],
+  clarifyingQuestions: [],
+}
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 vi.mock('../../../services/agentQueries', () => ({ createAgentWorkflowQuery: vi.fn() }))
 
@@ -20,6 +29,7 @@ describe('AgentQueryView', () => {
     vi.mocked(createAgentWorkflowQuery).mockResolvedValue({
       agentRunId: 'run-1', researchRunId: null, workflowType: 'PortfolioDiagnosis', status: 'Pending',
       routingReason: '問題涉及投組風險。', routingModel: 'router-model',
+      ...routeMetadata, leadSkill: 'portfolio-risk-summary', leadSkillDisplayName: '組合風險摘要',
     })
     const wrapper = mount(AgentQueryView)
     await wrapper.get('textarea').setValue('我的投資組合風險如何？')
@@ -34,6 +44,7 @@ describe('AgentQueryView', () => {
     vi.mocked(createAgentWorkflowQuery).mockResolvedValue({
       agentRunId: 'agent-1', researchRunId: 'research-1', workflowType: 'ResearchInvestigation', status: 'Pending',
       routingReason: '問題涉及公司研究。', routingModel: 'router-model',
+      ...routeMetadata,
     })
     const wrapper = mount(AgentQueryView)
     await wrapper.get('textarea').setValue('聯發科最近營運如何？')
