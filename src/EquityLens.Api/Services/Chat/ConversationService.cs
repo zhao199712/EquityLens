@@ -92,27 +92,41 @@ public sealed class ConversationService(
             turn.CompletionTokens = decision.CompletionTokens;
 
             AgentWorkflowQueryCreatedResponse? created = null;
-            if (decision.Action == ConversationActions.RouteWorkflow)
+            string? routingFailure = null;
+            try
             {
-                created = await workflowQueries.CreateAsync(userId, new(decision.StandaloneQuery!), cancellationToken);
-                turn.AgentRunId = created.AgentRunId;
-                turn.ResearchRunId = created.ResearchRunId;
+                if (decision.Action == ConversationActions.RouteWorkflow)
+                {
+                    created = await workflowQueries.CreateAsync(userId, new(decision.StandaloneQuery!), cancellationToken);
+                    turn.AgentRunId = created.AgentRunId;
+                    turn.ResearchRunId = created.ResearchRunId;
+                }
+                else if (decision.Action == ConversationActions.RevisePreviousRun)
+                {
+                    var parentId = ReadGuid(context, "lastAgentRunId")
+                        ?? throw new ConversationException("previous_run_required", "找不到可修正的上一份研究結果。");
+                    var parent = await db.AgentRuns.AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.Id == parentId && x.UserId == userId, cancellationToken);
+                    if (parent is null || parent.Status != AgentRunStatuses.Succeeded || parent.ResearchRunId is null)
+                        throw new ConversationException("previous_run_not_ready", "上一份研究尚未完成或不支援修正。");
+                    var feedback = await agentRuns.SubmitFeedbackAsync(parentId, userId,
+                        new(Guid.NewGuid(), "NeedsCorrection", decision.StandaloneQuery), cancellationToken);
+                    if (feedback.FollowUpAgentRun is null)
+                        throw new ConversationException("revision_not_created", "無法建立修正 Run。");
+                    turn.AgentRunId = feedback.FollowUpAgentRun.Id;
+                    turn.ResearchRunId = feedback.FollowUpResearchRunId;
+                }
             }
-            else if (decision.Action == ConversationActions.RevisePreviousRun)
+            catch (AgentWorkflowQueryException exception)
             {
-                var parentId = ReadGuid(context, "lastAgentRunId")
-                    ?? throw new ConversationException("previous_run_required", "找不到可修正的上一份研究結果。");
-                var parent = await db.AgentRuns.AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.Id == parentId && x.UserId == userId, cancellationToken);
-                if (parent is null || parent.Status != AgentRunStatuses.Succeeded || parent.ResearchRunId is null)
-                    throw new ConversationException("previous_run_not_ready", "上一份研究尚未完成或不支援修正。");
-                var feedback = await agentRuns.SubmitFeedbackAsync(parentId, userId,
-                    new(Guid.NewGuid(), "NeedsCorrection", decision.StandaloneQuery), cancellationToken);
-                if (feedback.FollowUpAgentRun is null)
-                    throw new ConversationException("revision_not_created", "無法建立修正 Run。");
-                turn.AgentRunId = feedback.FollowUpAgentRun.Id;
-                turn.ResearchRunId = feedback.FollowUpResearchRunId;
+                routingFailure = exception.Code == "portfolio_required"
+                    ? $"{exception.Message}請先到「投資組合」頁面建立投資組合後再詢問。"
+                    : exception.Message;
             }
+
+            var action = routingFailure is null ? decision.Action : ConversationActions.AskClarification;
+            var response = routingFailure ?? decision.Response;
+            turn.Action = action;
 
             var nextContext = decision.Action == ConversationActions.ResetContext
                 ? new JsonObject()
@@ -130,7 +144,7 @@ public sealed class ConversationService(
             var assistant = new ChatMessage
             {
                 Id = Guid.NewGuid(), ChatSessionId = sessionId, ConversationTurnId = turn.Id,
-                AgentRunId = turn.AgentRunId, Role = "assistant", Content = decision.Response,
+                AgentRunId = turn.AgentRunId, Role = "assistant", Content = response,
                 MessageType = turn.AgentRunId.HasValue ? "AgentRun" : "Text", SequenceNumber = nextSequence + 1
             };
             db.ChatMessages.Add(assistant);
@@ -140,7 +154,7 @@ public sealed class ConversationService(
             turn.DurationMs = stopwatch.ElapsedMilliseconds;
             await db.SaveChangesAsync(cancellationToken);
             var card = turn.AgentRunId is { } id ? await GetRunCardAsync(userId, sessionId, id, cancellationToken) : null;
-            return new(turn.Id, assistant.Id, decision.Action, decision.Response, card,
+            return new(turn.Id, assistant.Id, action, response, card,
                 decision.Model, decision.PromptTokens, decision.CompletionTokens);
         }
         catch (Exception exception)

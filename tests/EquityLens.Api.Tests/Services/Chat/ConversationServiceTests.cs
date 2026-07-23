@@ -109,6 +109,55 @@ public sealed class ConversationServiceTests
         Assert.Equal("正式研究答案", card?.FinalAnswer);
     }
 
+    [Fact]
+    public async Task RouteWorkflow_PortfolioRequired_BecomesClarification()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = userId };
+        db.ChatSessions.Add(session);
+        await db.SaveChangesAsync();
+        var workflows = new FakeWorkflowQueries(
+            failure: new AgentWorkflowQueryException("portfolio_required", "目前沒有可供診斷的投資組合。"));
+        var service = new ConversationService(db,
+            Agent(ConversationActions.RouteWorkflow, "幫你診斷投組。", "我的投資組合最近一年的風險如何？", new JsonObject()),
+            workflows, new FakeAgentRuns(), new AgentWorkflowCatalog());
+
+        var result = await service.ProcessAsync(userId, session.Id, new("我的投資組合最近一年的風險如何？", Guid.NewGuid()));
+
+        Assert.Equal(ConversationActions.AskClarification, result.Action);
+        Assert.Contains("目前沒有可供診斷的投資組合", result.Content);
+        Assert.Contains("投資組合」頁面", result.Content);
+        Assert.Null(result.RunCard);
+        var turn = await db.ConversationTurns.SingleAsync();
+        Assert.Equal("Succeeded", turn.Status);
+        Assert.Null(turn.AgentRunId);
+        var message = await db.ChatMessages.SingleAsync(x => x.Role == "assistant");
+        Assert.Equal("Text", message.MessageType);
+    }
+
+    [Fact]
+    public async Task RouteWorkflow_SecurityNotFound_BecomesClarificationWithoutHint()
+    {
+        await using var db = CreateDb();
+        var userId = Guid.NewGuid();
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = userId };
+        db.ChatSessions.Add(session);
+        await db.SaveChangesAsync();
+        var workflows = new FakeWorkflowQueries(
+            failure: new AgentWorkflowQueryException("security_not_found", "找不到「某某公司」對應的證券，請改用股票代號或完整公司名稱。"));
+        var service = new ConversationService(db,
+            Agent(ConversationActions.RouteWorkflow, "幫你研究。", "分析某某公司", new JsonObject()),
+            workflows, new FakeAgentRuns(), new AgentWorkflowCatalog());
+
+        var result = await service.ProcessAsync(userId, session.Id, new("分析某某公司", Guid.NewGuid()));
+
+        Assert.Equal(ConversationActions.AskClarification, result.Action);
+        Assert.Contains("找不到「某某公司」", result.Content);
+        Assert.DoesNotContain("投資組合」頁面", result.Content);
+        Assert.Equal("Succeeded", (await db.ConversationTurns.SingleAsync()).Status);
+    }
+
     private static IConversationAgent Agent(string action, string response, string? query, JsonObject patch) =>
         new FakeConversationAgent(new(action, response, query, action, "high", patch, string.Empty,
             "test", "test", 1, 1, 1));
@@ -131,13 +180,14 @@ public sealed class ConversationServiceTests
             Task.FromResult(decision);
     }
 
-    private sealed class FakeWorkflowQueries(Guid? runId = null) : IAgentWorkflowQueryService
+    private sealed class FakeWorkflowQueries(Guid? runId = null, AgentWorkflowQueryException? failure = null) : IAgentWorkflowQueryService
     {
         public int Calls { get; private set; }
         public string? Question { get; private set; }
         public Task<AgentWorkflowQueryCreatedResponse> CreateAsync(Guid userId, CreateAgentWorkflowQueryRequest request, CancellationToken cancellationToken = default)
         {
             Calls++; Question = request.Question;
+            if (failure is not null) throw failure;
             return Task.FromResult(new AgentWorkflowQueryCreatedResponse(runId ?? Guid.NewGuid(), Guid.NewGuid(),
                 AgentWorkflowTypes.ResearchInvestigation, AgentRunStatuses.Pending, "test", "test",
                 "research-investigation", "一般個股研究", "high", request.Question,

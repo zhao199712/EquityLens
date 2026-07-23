@@ -321,7 +321,6 @@ builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 
 // Agentic RAG Chat 服務
-builder.Services.AddScoped<IFinancialDataService, FinancialDataService>();
 builder.Services.AddHttpClient<IJinaSearchService, JinaSearchService>();
 builder.Services.AddHttpClient<IBraveSearchService, BraveSearchService>();
 builder.Services.AddHttpClient<ICohereRerankService, CohereRerankService>((sp, client) =>
