@@ -36,3 +36,23 @@ RiskPython__ShadowEnabled=false
 
 Stopping the worker or disabling the feature does not change the C# result or
 the existing risk API response contracts.
+
+## Research-only adjusted-close pipeline
+
+The adjustment pipeline is intentionally separate from the production
+`market_price` table. It consumes an exported
+`security_id,ticker,price_date,close` CSV and produces reviewed artifacts:
+
+```bash
+PYTHONPATH=python/risk_worker/src \
+python/risk_worker/research/backfill_adjusted_close.py \
+  --raw-csv /path/to/raw_prices.csv \
+  --output-dir /path/to/output \
+  --write-source-snapshot /path/to/reviewed-source-snapshot.json
+```
+
+Apply `research/adjusted_close_schema.sql` only to a research database, review
+all `manual_review` reconciliation rows, and then explicitly load the emitted
+CSVs. Zero/absent prices are labeled gaps; they are never interpolated.
+For reproducible validation, rerun with `--source-snapshot` pointing to the
+reviewed snapshot instead of querying mutable external APIs.
