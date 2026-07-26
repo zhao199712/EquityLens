@@ -185,6 +185,7 @@ public sealed class RiskCalculationRunService : IRiskCalculationRunService
             run.InputSnapshotJson, JsonOptions);
         var from = snapshot?.From ?? DateOnly.FromDateTime(DateTime.UtcNow).AddYears(-3);
         var to = snapshot?.To ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var simulations = snapshot?.Simulations ?? 10000;
         var prepared = await _inputProvider.PreparePortfolioRiskBacktestInputAsync(
             run.PortfolioId, from, to, run.RequestedByUserId, cancellationToken);
         if (!prepared.IsSuccess)
@@ -197,7 +198,8 @@ public sealed class RiskCalculationRunService : IRiskCalculationRunService
         else
         {
             await CompleteFallbackAsync(
-                run, prepared.Value!, "python_worker_failed", cancellationToken);
+                run, prepared.Value! with { Simulations = simulations },
+                "python_worker_failed", cancellationToken);
         }
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -318,5 +320,5 @@ public sealed class RiskCalculationRunService : IRiskCalculationRunService
     }
 
     private sealed record CalculationSnapshot(
-        DateOnly From, DateOnly To, JsonElement? Parameters = null);
+        DateOnly From, DateOnly To, int Simulations = 10000, JsonElement? Parameters = null);
 }

@@ -209,6 +209,26 @@ export interface RiskCalculationRun {
   createdAtUtc:string; startedAtUtc:string|null; completedAtUtc:string|null
   errorCode:string|null; errorMessage:string|null; result:unknown|null
 }
+
+export interface VtGarchConfidenceLevel { confidenceLevel:number; var:number; expectedShortfall:number }
+export interface VtGarchHorizon {
+  horizonDays:number; confidenceLevels:VtGarchConfidenceLevel[]
+  p1:number; p5:number; p50:number; p95:number; p99:number; expectedReturn:number
+}
+export interface FitHealth {
+  healthy:boolean; warningCount:number; nearUnitRate:number
+  maxPersistence:number; minNu:number; optimizerAttempts:number
+}
+export interface VtGarchRiskResult {
+  portfolioId:string; dataAsOfDate:string; operation:string
+  requestedModel:string; selectedModel:string; algorithmVersion:string; fallbackDepth:number
+  simulations:number; lookbackDays:number
+  horizons:VtGarchHorizon[]; samplePaths:number[][]; fitHealth:FitHealth
+}
+
+export interface NormalizedHorizon {
+  horizonDays:number; var95:number; es95:number; var99:number|null; es99:number|null; expectedReturn:number|null
+}
 export async function createRiskCalculation(
   portfolioId:string,
   operation:RiskCalculationOperation,

@@ -6,6 +6,9 @@ import Footer from '../../components/kimi/Footer.vue'
 import {
   getPortfolio,
   getPortfolioRisk,
+  createRiskCalculation,
+  getRiskCalculation,
+  listRiskCalculations,
   createPortfolioRiskBacktestRun,
   getPortfolioRiskBacktestRun,
   getPortfolioRiskBacktestRuns,
@@ -24,6 +27,10 @@ import {
   type PortfolioRiskBacktestResponse,
   type PortfolioRiskBacktestRun,
   type PortfolioRiskResponse,
+  type RiskCalculationRun,
+  type VtGarchRiskResult,
+  type FitHealth,
+  type NormalizedHorizon,
 } from '../../services/risk.ts'
 
 const router = useRouter()
@@ -33,6 +40,7 @@ const portfolioId = computed(() => String(route.params.id))
 const portfolioName = ref('投資組合風險分析')
 const risk = ref<PortfolioRiskResponse | null>(null)
 const loading = ref(false)
+const calculationRun = ref<RiskCalculationRun | null>(null)
 const risk99 = ref<PortfolioRiskResponse | null>(null)
 const riskEwma = ref<PortfolioRiskResponse | null>(null)
 const riskEwma99 = ref<PortfolioRiskResponse | null>(null)
@@ -59,6 +67,55 @@ const backtestModels = computed(() => {
 })
 const backtestConfidences: Array<0.95 | 0.99> = [0.95, 0.99]
 const error = ref('')
+
+const isVtGarch = computed(() => calculationRun.value?.selectedModel === 'VT-GARCH-t + Joint-Vector FHS')
+const isFallback = computed(() => (calculationRun.value?.fallbackDepth ?? 0) > 0)
+const vtGarchResult = computed<VtGarchRiskResult | null>(() => {
+  if (!isVtGarch.value || !calculationRun.value?.result) return null
+  return calculationRun.value.result as VtGarchRiskResult
+})
+const fallbackResult = computed<PortfolioRiskResponse | null>(() => {
+  if (isVtGarch.value || !calculationRun.value?.result) return null
+  return calculationRun.value.result as PortfolioRiskResponse
+})
+const fitHealth = computed<FitHealth | null>(() => vtGarchResult.value?.fitHealth ?? null)
+const calculationDataAsOf = computed(() =>
+  vtGarchResult.value?.dataAsOfDate ?? fallbackResult.value?.dataAsOfDate ?? null)
+const calculationSimulations = computed(() =>
+  vtGarchResult.value?.simulations ?? fallbackResult.value?.simulations ?? null)
+const calculationLookback = computed(() =>
+  vtGarchResult.value?.lookbackDays ?? fallbackResult.value?.alignedReturnCount ?? null)
+
+const normalizedHorizons = computed<NormalizedHorizon[]>(() => {
+  const vt = vtGarchResult.value
+  if (vt) {
+    return vt.horizons.map(h => ({
+      horizonDays: h.horizonDays,
+      var95: h.confidenceLevels.find(c => c.confidenceLevel === 0.95)?.var ?? 0,
+      es95: h.confidenceLevels.find(c => c.confidenceLevel === 0.95)?.expectedShortfall ?? 0,
+      var99: h.confidenceLevels.find(c => c.confidenceLevel === 0.99)?.var ?? null,
+      es99: h.confidenceLevels.find(c => c.confidenceLevel === 0.99)?.expectedShortfall ?? null,
+      expectedReturn: h.expectedReturn,
+    }))
+  }
+  const fb = fallbackResult.value
+  if (fb) {
+    return fb.horizons.map(h => ({
+      horizonDays: h.horizonDays,
+      var95: h.monteCarloVaR,
+      es95: h.monteCarloES,
+      var99: null,
+      es99: null,
+      expectedReturn: null,
+    }))
+  }
+  return []
+})
+const hasHoldingsData = computed(() => !!fallbackResult.value?.holdings?.length)
+const holdingsRisk = computed(() => fallbackResult.value?.holdings ?? [])
+const industriesRisk = computed(() => fallbackResult.value?.industries ?? [])
+const dailyLogReturns = computed(() => fallbackResult.value?.dailyLogReturns ?? [])
+
 type DeferredLoadState = 'idle' | 'loading' | 'ready' | 'error'
 const modelComparisonState = ref<DeferredLoadState>('idle')
 const stressTestState = ref<DeferredLoadState>('idle')
@@ -75,6 +132,7 @@ const monteCarloSentinel = ref<HTMLElement | null>(null)
 let sectionObserver: IntersectionObserver | null = null
 let viewIsActive = true
 let backtestPollTimer: ReturnType<typeof setTimeout> | null = null
+let calculationPollTimer: ReturnType<typeof setTimeout> | null = null
 const governanceAlerts = computed(() => (governance.value?.alerts ?? []).filter(alert => alert.status !== 'normal').sort((a, b) => (a.status === 'critical' ? -1 : 1) - (b.status === 'critical' ? -1 : 1)))
 const governanceLabel = (code: string) => ({
   'concentration.largest_holding': '最大單一持倉',
@@ -87,16 +145,16 @@ const governanceDataStatus = (status: string) => ({ ready: '資料正常', warni
 const targetWeightTotal = computed(() => Object.values(targetWeights.value).reduce((sum, weight) => sum + (Number(weight) || 0), 0))
 const targetCashWeight = computed(() => 1 - targetWeightTotal.value / 100)
 function resetTargetWeights() {
-  if (!risk.value) return
-  targetWeights.value = Object.fromEntries(risk.value.holdings.map(holding => [holding.securityId, Number((holding.weight * 100).toFixed(2))]))
+  if (!holdingsRisk.value.length) return
+  targetWeights.value = Object.fromEntries(holdingsRisk.value.map(holding => [holding.securityId, Number((holding.weight * 100).toFixed(2))]))
   scenarioResult.value = null
   scenarioMessage.value = ''
 }
 async function runTargetWeightScenario() {
-  if (!risk.value) return
+  if (!holdingsRisk.value.length) return
   scenarioLoading.value = true; scenarioMessage.value = ''
   try {
-    scenarioResult.value = await calculatePortfolioRiskScenario(portfolioId.value, risk.value.holdings.map(h => ({ securityId: h.securityId, targetWeight: (Number(targetWeights.value[h.securityId]) || 0) / 100 })))
+    scenarioResult.value = await calculatePortfolioRiskScenario(portfolioId.value, holdingsRisk.value.map(h => ({ securityId: h.securityId, targetWeight: (Number(targetWeights.value[h.securityId]) || 0) / 100 })))
   } catch (e) { scenarioMessage.value = riskErrorMessage(e) } finally { scenarioLoading.value = false }
 }
 const reportStatusLabel = (status: string) => ({ ready: '資料正常', warning: '資料需注意', critical: '資料嚴重不足' }[status] ?? status)
@@ -161,98 +219,105 @@ const backtestStats = computed(() => {
 })
 
 const runInfo = computed(() => {
-  const r = risk.value
-  const modelName =
-    r?.covarianceMethod === 'MultivariateEWMA'
-      ? 'MVEWMA-FHS'
-      : 'Historical VaR + Monte Carlo'
+  const run = calculationRun.value
   return {
-    id: `RR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-001`,
+    id: run ? run.id.slice(0, 8).toUpperCase() : '—',
     portfolio: portfolioName.value,
-    model: modelName,
-    confidence: r ? `${(r.confidenceLevel * 100).toFixed(0)}%` : '95%',
-    // 價格日數扣除第一日後，才是可用於計算的日報酬筆數。
-    lookback: r ? `${r.alignedReturnCount} 個日報酬` : '—',
-    date: new Date().toISOString().split('T')[0],
-    duration: '—',
+    model: run?.selectedModel ?? run?.requestedModel ?? 'VT-GARCH-t + Joint-Vector FHS',
+    confidence: '95% / 99%',
+    lookback: calculationLookback.value != null ? `${calculationLookback.value} 個日報酬` : '—',
+    date: calculationDataAsOf.value ?? new Date().toISOString().split('T')[0],
+    duration: run?.completedAtUtc && run.startedAtUtc
+      ? `${((new Date(run.completedAtUtc).getTime() - new Date(run.startedAtUtc).getTime()) / 1000).toFixed(1)}s`
+      : '—',
   }
 })
 
 const metrics = computed(() => {
-  const r = risk.value
-  if (!r) return []
-  const h1 = r.horizons.find((h) => h.horizonDays === 1)
-  return [
+  const h1 = normalizedHorizons.value.find(h => h.horizonDays === 1)
+  const fb = fallbackResult.value
+  const items = [
     {
       label: 'VaR 95% (1日)',
-      value: h1 ? `${(h1.historicalVaR * 100).toFixed(2)}%` : '—',
-      sub: 'Historical Simulation',
+      value: h1 ? `${(h1.var95 * 100).toFixed(2)}%` : '—',
+      sub: runInfo.value.model,
     },
     {
       label: 'ES 95% (1日)',
-      value: h1 ? `${(h1.historicalES * 100).toFixed(2)}%` : '—',
+      value: h1 ? `${(h1.es95 * 100).toFixed(2)}%` : '—',
       sub: 'Expected Shortfall',
     },
-    {
-      label: '年化波動率',
-      value: `${(r.historicalAnnualizedVolatility * 100).toFixed(2)}%`,
-      sub: r.volatilityMethod,
-    },
-    {
-      label: '最大回撤',
-      value: `${(r.maxDrawdown * 100).toFixed(2)}%`,
-      sub: 'Historical',
-    },
   ]
+  if (fb) {
+    items.push(
+      { label: '年化波動率', value: `${(fb.historicalAnnualizedVolatility * 100).toFixed(2)}%`, sub: fb.volatilityMethod },
+      { label: '最大回撤', value: `${(fb.maxDrawdown * 100).toFixed(2)}%`, sub: 'Historical' },
+    )
+  }
+  return items
 })
 
 const riskKPIData = computed(() => {
-  const r = risk.value
-  const h1 = r?.horizons.find((h) => h.horizonDays === 1)
-  const total = r?.totalMarketValue ?? 0
-  const varAmount = h1 ? total * Number(h1.historicalVaR) : 0
-  const esAmount = h1 ? total * Number(h1.historicalES) : 0
-  return [
+  const h1 = normalizedHorizons.value.find(h => h.horizonDays === 1)
+  const fb = fallbackResult.value
+  const total = fb?.totalMarketValue ?? 0
+  const varAmount = h1 && total ? total * h1.var95 : 0
+  const esAmount = h1 && total ? total * h1.es95 : 0
+  const items = [
     {
       label: 'DAILY VaR (95%)',
-      value: h1 ? `${(h1.historicalVaR * 100).toFixed(2)}%` : '—',
-      sub: varAmount ? `${formatMoney(varAmount)} ${r?.baseCurrency ?? ''}` : '—',
+      value: h1 ? `${(h1.var95 * 100).toFixed(2)}%` : '—',
+      sub: varAmount ? `${formatMoney(varAmount)} ${fb?.baseCurrency ?? ''}` : '—',
       color: '#b05c5c',
     },
     {
       label: 'DAILY ES (95%)',
-      value: h1 ? `${(h1.historicalES * 100).toFixed(2)}%` : '—',
+      value: h1 ? `${(h1.es95 * 100).toFixed(2)}%` : '—',
       sub: esAmount ? `預期損失 ${formatMoney(esAmount)}` : '—',
       color: '#b05c5c',
     },
-    {
-      label: 'MAX DRAWDOWN',
-      value: r ? `${(r.maxDrawdown * 100).toFixed(2)}%` : '—',
-      sub: '歷史最大回撤',
-      color: '#b05c5c',
-    },
-    {
-      label: 'SHARPE RATIO',
-      value: r ? r.sharpeRatio.toFixed(2) : '—',
-      sub: '風險調整後報酬',
-      color: '#7fa387',
-    },
-    {
-      label: 'CONCENTRATION HHI',
-      value: r ? r.concentrationHhi.toFixed(4) : '—',
-      sub: '持倉集中度',
-      color: '#c9a86a',
-    },
-    {
-      label: 'LARGEST HOLDING',
-      value: r ? `${(r.largestHoldingWeight * 100).toFixed(2)}%` : '—',
-      sub: '最大單一持倉',
-      color: '#c9a86a',
-    },
   ]
+  if (h1?.var99 != null) {
+    items.push({
+      label: 'DAILY VaR (99%)',
+      value: `${(h1.var99 * 100).toFixed(2)}%`,
+      sub: 'VT-GARCH-t',
+      color: '#b05c5c',
+    })
+  }
+  if (fb) {
+    items.push(
+      { label: 'MAX DRAWDOWN', value: `${(fb.maxDrawdown * 100).toFixed(2)}%`, sub: '歷史最大回撤', color: '#b05c5c' },
+      { label: 'SHARPE RATIO', value: fb.sharpeRatio.toFixed(2), sub: '風險調整後報酬', color: '#7fa387' },
+      { label: 'CONCENTRATION HHI', value: fb.concentrationHhi.toFixed(4), sub: '持倉集中度', color: '#c9a86a' },
+      { label: 'LARGEST HOLDING', value: `${(fb.largestHoldingWeight * 100).toFixed(2)}%`, sub: '最大單一持倉', color: '#c9a86a' },
+    )
+  }
+  return items
 })
 
-const varTableRows = computed(() => {
+const varTableRows = computed(() =>
+  normalizedHorizons.value
+    .filter(h => [1, 7, 30].includes(h.horizonDays))
+    .map(h => ({
+      method: `${h.horizonDays} 日`,
+      var95: h.var95,
+      var99: h.var99 ?? 0,
+      note: h.horizonDays === 1 ? runInfo.value.model : '',
+    })),
+)
+
+const esTableRows = computed(() =>
+  normalizedHorizons.value
+    .filter(h => [1, 7, 30].includes(h.horizonDays))
+    .map(h => ({
+      method: `${h.horizonDays} 日`,
+      es95: h.es95,
+      es99: h.es99 ?? 0,
+    })),
+)
+
+const diagnosticVarTableRows = computed(() => {
   const h95 = risk.value?.horizons.find((h) => h.horizonDays === 1)
   const h99 = risk99.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
@@ -263,8 +328,7 @@ const varTableRows = computed(() => {
     { method: 'EWMA 常態蒙地卡羅', var95: ewma95?.monteCarloVaR ?? 0, var99: ewma99?.monteCarloVaR ?? 0, note: 'λ=0.94' },
   ]
 })
-
-const esTableRows = computed(() => {
+const diagnosticEsTableRows = computed(() => {
   const h95 = risk.value?.horizons.find((h) => h.horizonDays === 1)
   const h99 = risk99.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
@@ -277,11 +341,13 @@ const esTableRows = computed(() => {
 })
 
 const officialHistogram = computed(() => {
-  const returns = (risk.value?.dailyLogReturns ?? []).map(value => (Math.exp(value) - 1) * 100)
+  const returns = dailyLogReturns.value.map(value => (Math.exp(value) - 1) * 100)
+  if (!returns.length) return []
   const bounds = [-Infinity, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, Infinity]
   const labels = ['<-6%', '-6~-5%', '-5~-4%', '-4~-3%', '-3~-2%', '-2~-1%', '-1~0%', '0~1%', '1~2%', '2~3%', '3~4%', '4~5%', '5~6%', '>6%']
-  const var95 = (risk.value?.horizons.find(h => h.horizonDays === 1)?.historicalVaR ?? 0) * 100
-  const var99 = (risk99.value?.horizons.find(h => h.horizonDays === 1)?.historicalVaR ?? 0) * 100
+  const h1 = normalizedHorizons.value.find(h => h.horizonDays === 1)
+  const var95 = (h1?.var95 ?? 0) * 100
+  const var99 = (h1?.var99 ?? 0) * 100
   return labels.map((bin, index) => ({ bin, count: returns.filter(value => value >= bounds[index] && value < bounds[index + 1]).length, isTail95: bounds[index + 1] <= var95, isTail99: bounds[index + 1] <= var99 }))
 })
 const histogramChart = computed(() => {
@@ -382,12 +448,14 @@ async function loadDeferred(state: typeof modelComparisonState, message: typeof 
   catch (e) { if (viewIsActive) { message.value = riskErrorMessage(e); state.value = 'error' } }
 }
 const loadModelComparison = () => loadDeferred(modelComparisonState, modelComparisonError, async () => {
-  const [at99, ewma95, ewma99, ...curve] = await Promise.all([
+  const [syncRisk, at99, ewma95, ewma99, ...curve] = await Promise.all([
+    getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .95, simulations: 10000, model: 'mvewma_fhs' }),
     getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .99, simulations: 10000, model: 'mvewma_fhs' }),
     getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .95, simulations: 10000, model: 'gbm_ewma_normal' }),
     getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: .99, simulations: 10000, model: 'gbm_ewma_normal' }),
     ...[.90, .95, .975, .99, .995].map(confidenceLevel => getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 1, confidenceLevel, simulations: 5000, model: 'mvewma_fhs' })),
   ])
+  risk.value = syncRisk
   risk99.value = at99; riskEwma.value = ewma95; riskEwma99.value = ewma99; riskCurve.value = curve
 })
 const loadStressTest = () => loadDeferred(stressTestState, stressTestError, async () => { stressTest.value = await getPortfolioStressTest(portfolioId.value) })
@@ -420,18 +488,55 @@ function observeDeferredSections() {
   targets.forEach(([element]) => { if (element) sectionObserver?.observe(element) })
 }
 
+async function waitForCalculationRun(initialRun: RiskCalculationRun) {
+  let run = initialRun
+  while (viewIsActive) {
+    if (run.status === 'Completed' || run.status === 'Failed') {
+      calculationRun.value = run
+      if (run.status === 'Failed') throw new Error(run.errorMessage || '風險計算失敗，請重新執行。')
+      return
+    }
+    await new Promise<void>(resolve => { calculationPollTimer = setTimeout(resolve, 2000) })
+    if (!viewIsActive) return
+    run = await getRiskCalculation(portfolioId.value, run.id)
+    calculationRun.value = run
+  }
+}
+
 onMounted(async () => {
   loading.value = true
   try {
-    const [portfolio, riskData, governanceData] = await Promise.all([
+    const [portfolio, calculations, governanceData] = await Promise.all([
       getPortfolio(portfolioId.value),
-      getPortfolioRisk(portfolioId.value, { from: fromDate.value, to: toDate.value, horizonDays: 30, confidenceLevel: 0.95, simulations: 10000, model: 'mvewma_fhs' }),
+      listRiskCalculations(portfolioId.value),
       getPortfolioRiskGovernance(portfolioId.value),
     ])
     portfolioName.value = portfolio.name
-    risk.value = riskData
     governance.value = governanceData
-    targetWeights.value = Object.fromEntries(riskData.holdings.map(holding => [holding.securityId, Number((holding.weight * 100).toFixed(2))]))
+
+    const existing = calculations.find(run => run.operation === 'risk' && run.status !== 'Failed')
+    const run = existing ?? await createRiskCalculation(portfolioId.value, 'risk', {
+      simulations: 10000,
+      from: fromDate.value,
+      to: toDate.value,
+    })
+    calculationRun.value = run
+
+    if (run.status === 'Completed') {
+      // Already done, no polling needed
+    } else if (run.status === 'Failed') {
+      error.value = run.errorMessage || '風險計算失敗，請重新執行。'
+    } else {
+      await waitForCalculationRun(run)
+    }
+
+    if (calculationRun.value?.status === 'Completed' && !isVtGarch.value) {
+      risk.value = calculationRun.value.result as PortfolioRiskResponse
+      if (risk.value) {
+        targetWeights.value = Object.fromEntries(risk.value.holdings.map(holding => [holding.securityId, Number((holding.weight * 100).toFixed(2))]))
+      }
+    }
+
     try {
       reportSnapshots.value = await getPortfolioRiskReportSnapshots(portfolioId.value)
     } catch {
@@ -442,11 +547,11 @@ onMounted(async () => {
   } finally {
     loading.value = false
     await nextTick()
-    if (viewIsActive && risk.value) observeDeferredSections()
+    if (viewIsActive && calculationRun.value?.status === 'Completed') observeDeferredSections()
   }
 })
 
-onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeout(backtestPollTimer); sectionObserver?.disconnect() })
+onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeout(backtestPollTimer); if (calculationPollTimer) clearTimeout(calculationPollTimer); sectionObserver?.disconnect() })
 </script>
 
 <template>
@@ -461,7 +566,13 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
           <span class="prestige-label">Risk Analysis Run — <span class="prestige-mono">{{ runInfo.id }}</span></span>
           <h1 class="page-title">{{ runInfo.portfolio }}</h1>
         </div>
-        <span class="prestige-tag tag-completed"><span class="dot" />COMPLETED</span>
+        <span
+          class="prestige-tag"
+          :class="calculationRun?.status === 'Completed' ? 'tag-completed' : calculationRun?.status === 'Failed' ? 'tag-critical' : 'tag-warning'"
+        >
+          <span class="dot" :class="{ pulse: calculationRun?.status === 'Running' || calculationRun?.status === 'FallbackRunning' || calculationRun?.status === 'Queued' }" />
+          {{ calculationRun?.status === 'Completed' ? 'COMPLETED' : calculationRun?.status === 'Failed' ? 'FAILED' : calculationRun?.status === 'FallbackRunning' ? 'FALLBACK' : calculationRun?.status === 'Running' ? `RUNNING ${calculationRun.progressPercent}%` : 'QUEUED' }}
+        </span>
       </div>
 
       <!-- Loading / Error -->
@@ -475,7 +586,15 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
         <div class="prestige-error" style="text-align: center">{{ error }}</div>
       </ScrollReveal>
 
-      <template v-if="!loading && risk">
+      <template v-if="!loading && calculationRun?.status === 'Completed'">
+        <!-- Fallback banner -->
+        <ScrollReveal v-if="isFallback" style="margin-bottom: 24px">
+          <div class="warn-box">
+            正式模型 VT-GARCH-t + Joint-Vector FHS 不可用，已回退至 {{ calculationRun.selectedModel }}。
+            原因：{{ calculationRun.fallbackReason }}（fallbackDepth={{ calculationRun.fallbackDepth }}）
+          </div>
+        </ScrollReveal>
+
         <!-- Risk Governance -->
         <ScrollReveal v-if="governance" style="margin-bottom: 24px">
           <div class="prestige-panel prestige-panel-pad">
@@ -529,11 +648,11 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
             </div>
 
             <!-- What-if scenario -->
-            <div class="sub-block">
+            <div v-if="hasHoldingsData" class="sub-block">
               <h3 class="sub-title">調整試算</h3>
               <p class="muted-text">僅試算，不會修改真實投組；現金為負時代表融資，不含融資利率、保證金與追繳規則。</p>
               <div class="weight-grid">
-                <label v-for="holding in risk.holdings" :key="holding.securityId" class="weight-row">
+                <label v-for="holding in holdingsRisk" :key="holding.securityId" class="weight-row">
                   <span class="weight-label">{{ holding.ticker }} · 目前 <span class="prestige-mono">{{ (holding.weight * 100).toFixed(1) }}%</span></span>
                   <input
                     v-model.number="targetWeights[holding.securityId]"
@@ -603,15 +722,15 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
         </ScrollReveal>
 
         <!-- Holdings Risk Contribution -->
-        <ScrollReveal class="mt-20">
+        <ScrollReveal v-if="hasHoldingsData" class="mt-20">
           <div class="prestige-panel" style="margin-bottom: 40px">
             <div class="section-head">
               <h2 class="panel-title">持倉風險摘要</h2>
-              <span class="prestige-label">Holding Risk Summary — 後端資料</span>
+              <span class="prestige-label">Holding Risk Summary — C# MVEWMA-FHS 回退資料</span>
             </div>
             <div class="section-body table-wrap">
               <div class="holdings-headline">
-                風險來源模型年化波動率：<span class="prestige-mono hl">{{ (risk.riskSourceAnnualizedVolatility * 100).toFixed(2) }}%</span>
+                風險來源模型年化波動率：<span class="prestige-mono hl">{{ ((fallbackResult?.riskSourceAnnualizedVolatility ?? 0) * 100).toFixed(2) }}%</span>
               </div>
               <table class="prestige-table">
                 <thead>
@@ -629,7 +748,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="h in risk.holdings" :key="h.securityId">
+                  <tr v-for="h in holdingsRisk" :key="h.securityId">
                     <td>{{ h.ticker }}</td>
                     <td>{{ h.securityName }}</td>
                     <td class="td-muted">{{ h.industry }}</td>
@@ -650,7 +769,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
           </div>
         </ScrollReveal>
 
-        <ScrollReveal class="mt-20" v-if="risk.industries?.length">
+        <ScrollReveal class="mt-20" v-if="industriesRisk.length">
           <div class="prestige-panel" style="margin-bottom: 40px">
             <div class="section-head">
               <h2 class="panel-title">產業風險來源</h2>
@@ -670,7 +789,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="industry in risk.industries" :key="industry.industry">
+                  <tr v-for="industry in industriesRisk" :key="industry.industry">
                     <td>{{ industry.industry }}</td>
                     <td class="prestige-mono td-num">{{ industry.holdingCount }}</td>
                     <td class="prestige-mono td-num">{{ (industry.weight * 100).toFixed(2) }}%</td>
@@ -694,7 +813,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                   { label: 'MODEL', value: runInfo.model },
                   { label: 'CONFIDENCE', value: runInfo.confidence },
                   { label: 'LOOKBACK', value: runInfo.lookback },
-                  { label: 'DATE RANGE', value: `${fromDate} ~ ${toDate}` },
+                  { label: 'DATA AS OF', value: runInfo.date },
                 ]"
                 :key="i"
                 class="info-cell"
@@ -713,10 +832,40 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
             <div class="info-grid info-grid-4">
               <div
                 v-for="(item, i) in [
-                  { label: 'COVARIANCE METHOD', value: risk.covarianceMethod ?? '—' },
-                  { label: 'RESIDUAL SAMPLING', value: risk.residualSampling ?? '—' },
-                  { label: 'COMMON TRADING DAYS', value: risk.commonTradingDays ? `${risk.commonTradingDays} 天` : '—' },
-                  { label: 'SHRINKAGE ALPHA', value: risk.shrinkageAlpha != null ? `${(risk.shrinkageAlpha * 100).toFixed(2)}%` : '—' },
+                  { label: 'ALGORITHM VERSION', value: calculationRun?.algorithmVersion ?? '—' },
+                  { label: 'DATA FACTOR', value: calculationRun?.dataFactorVersion ?? '—' },
+                  { label: 'SIMULATIONS', value: calculationSimulations != null ? calculationSimulations.toLocaleString() : '—' },
+                  { label: 'INPUT HASH', value: calculationRun?.inputHash ? calculationRun.inputHash.slice(0, 12) + '…' : '—' },
+                ]"
+                :key="i"
+                class="info-cell"
+              >
+                <span class="prestige-label cell-label">{{ item.label }}</span>
+                <span class="info-value prestige-mono">{{ item.value }}</span>
+              </div>
+            </div>
+            <div v-if="fitHealth" class="info-grid info-grid-4" style="margin-top: 1px">
+              <div
+                v-for="(item, i) in [
+                  { label: 'FIT HEALTH', value: fitHealth.healthy ? 'Healthy' : 'Degraded' },
+                  { label: 'MAX PERSISTENCE', value: fitHealth.maxPersistence.toFixed(4) },
+                  { label: 'MIN STUDENT-ν', value: fitHealth.minNu.toFixed(2) },
+                  { label: 'NEAR-UNIT RATE', value: (fitHealth.nearUnitRate * 100).toFixed(1) + '%' },
+                ]"
+                :key="i"
+                class="info-cell"
+              >
+                <span class="prestige-label cell-label">{{ item.label }}</span>
+                <span class="info-value prestige-mono" :style="{ color: item.label === 'FIT HEALTH' ? (fitHealth.healthy ? '#7fa387' : '#b05c5c') : undefined }">{{ item.value }}</span>
+              </div>
+            </div>
+            <div v-else-if="fallbackResult" class="info-grid info-grid-4" style="margin-top: 1px">
+              <div
+                v-for="(item, i) in [
+                  { label: 'COVARIANCE METHOD', value: fallbackResult.covarianceMethod ?? '—' },
+                  { label: 'RESIDUAL SAMPLING', value: fallbackResult.residualSampling ?? '—' },
+                  { label: 'COMMON TRADING DAYS', value: fallbackResult.commonTradingDays ? `${fallbackResult.commonTradingDays} 天` : '—' },
+                  { label: 'SHRINKAGE ALPHA', value: fallbackResult.shrinkageAlpha != null ? `${(fallbackResult.shrinkageAlpha * 100).toFixed(2)}%` : '—' },
                 ]"
                 :key="i"
                 class="info-cell"
@@ -762,7 +911,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
           <div class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">Value at Risk 分析</h2>
-              <span class="prestige-label">Value at Risk — 95% & 99% 信賴區間</span>
+              <span class="prestige-label">{{ runInfo.model }} — 多期限 95% & 99%</span>
             </div>
             <div class="section-body">
               <div class="stack">
@@ -770,7 +919,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                   <table class="prestige-table">
                     <thead>
                       <tr>
-                        <th style="text-align: left">計算方法</th>
+                        <th style="text-align: left">持有期間</th>
                         <th style="text-align: right">VaR 95%</th>
                         <th style="text-align: right">VaR 99%</th>
                         <th style="text-align: left; padding-left: 16px">備註</th>
@@ -780,18 +929,18 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                       <tr v-for="(v, i) in varTableRows" :key="i">
                         <td>{{ v.method }}</td>
                         <td class="prestige-mono td-num" :class="{ 'td-warn': v.var95 < -0.048 }">{{ (v.var95 * 100).toFixed(2) }}%</td>
-                        <td class="prestige-mono td-num td-danger">{{ (v.var99 * 100).toFixed(2) }}%</td>
+                        <td class="prestige-mono td-num td-danger">{{ v.var99 ? `${(v.var99 * 100).toFixed(2)}%` : '—' }}</td>
                         <td class="td-muted" style="padding-left: 16px">{{ v.note }}</td>
                       </tr>
                     </tbody>
                   </table>
                   <p class="table-note">
-                    所有方法皆使用正式 API 資料。
+                    正式結果取自非同步計算引擎（{{ calculationSimulations?.toLocaleString() ?? '—' }} 次模擬）。
                   </p>
                 </div>
 
-                <div>
-                  <h3 class="chart-title">日報酬分布直方圖（共同日資料）</h3>
+                <div v-if="officialHistogram.length">
+                  <h3 class="chart-title">日報酬分布直方圖（歷史 EWMA 波動率診斷，非正式風險引擎）</h3>
                   <svg width="100%" height="270" viewBox="0 0 400 270" style="display: block; width: min(100%, 760px)">
                     <line v-for="value in histogramChart.ticks" :key="'g-' + value" x1="50" :y1="histogramChart.y(value)" x2="380" :y2="histogramChart.y(value)" stroke="rgba(201,168,106,0.12)" stroke-width="1" stroke-dasharray="4 4" />
                     <text v-for="value in histogramChart.ticks" :key="'gy-' + value" x="45" :y="histogramChart.y(value) + 4" text-anchor="end" fill="#9a917c" font-size="10">{{ Math.round(value) }}</text>
@@ -828,7 +977,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
           <div class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">Expected Shortfall (ES) 分析</h2>
-              <span class="prestige-label">Conditional VaR — 尾部損失期望值</span>
+              <span class="prestige-label">{{ runInfo.model }} — 多期限尾部損失期望值</span>
             </div>
             <div class="section-body">
               <div class="stack">
@@ -837,7 +986,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                     <table class="prestige-table">
                       <thead>
                         <tr>
-                          <th style="text-align: left">計算方法</th>
+                          <th style="text-align: left">持有期間</th>
                           <th style="text-align: right">ES 95%</th>
                           <th style="text-align: right">ES 99%</th>
                         </tr>
@@ -846,7 +995,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                         <tr v-for="(e, i) in esTableRows" :key="i">
                           <td>{{ e.method }}</td>
                           <td class="prestige-mono td-num td-warn">{{ (e.es95 * 100).toFixed(2) }}%</td>
-                          <td class="prestige-mono td-num td-danger">{{ (e.es99 * 100).toFixed(2) }}%</td>
+                          <td class="prestige-mono td-num td-danger">{{ e.es99 ? `${(e.es99 * 100).toFixed(2)}%` : '—' }}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -861,7 +1010,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                 </div>
 
                 <div>
-                  <h3 class="chart-title">VaR vs ES 比較（MVEWMA-FHS）</h3>
+                  <h3 class="chart-title">VaR vs ES 比較（歷史 EWMA 診斷，非正式風險引擎）</h3>
                   <svg width="100%" height="340" viewBox="0 0 400 340" style="display: block; width: min(100%, 760px); overflow: hidden">
                     <line v-for="value in varEsChart.ticks" :key="'g-' + value" x1="80" :y1="varEsChart.y(value)" x2="380" :y2="varEsChart.y(value)" stroke="rgba(201,168,106,0.12)" stroke-width="1" stroke-dasharray="4 4" />
                     <text v-for="value in varEsChart.ticks" :key="'y-' + value" x="75" :y="varEsChart.y(value) + 4" text-anchor="end" fill="#9a917c" font-size="10">{{ value.toFixed(0) }}%</text>
@@ -880,6 +1029,59 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                     </g>
                   </svg>
                 </div>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <!-- EWMA Diagnostic (deferred, not the official risk engine) -->
+        <ScrollReveal class="mt-20" v-if="modelComparisonState === 'ready'">
+          <div class="prestige-panel">
+            <div class="section-head">
+              <h2 class="panel-title">歷史 EWMA 波動率診斷</h2>
+              <span class="prestige-label">非正式風險引擎 — 僅供交叉比對</span>
+            </div>
+            <div class="section-body">
+              <div class="stack">
+                <div class="table-wrap">
+                  <table class="prestige-table">
+                    <thead>
+                      <tr>
+                        <th style="text-align: left">診斷方法</th>
+                        <th style="text-align: right">VaR 95%</th>
+                        <th style="text-align: right">VaR 99%</th>
+                        <th style="text-align: left; padding-left: 16px">備註</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(v, i) in diagnosticVarTableRows" :key="i">
+                        <td>{{ v.method }}</td>
+                        <td class="prestige-mono td-num">{{ (v.var95 * 100).toFixed(2) }}%</td>
+                        <td class="prestige-mono td-num">{{ (v.var99 * 100).toFixed(2) }}%</td>
+                        <td class="td-muted" style="padding-left: 16px">{{ v.note }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="table-wrap">
+                  <table class="prestige-table">
+                    <thead>
+                      <tr>
+                        <th style="text-align: left">診斷方法</th>
+                        <th style="text-align: right">ES 95%</th>
+                        <th style="text-align: right">ES 99%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(e, i) in diagnosticEsTableRows" :key="i">
+                        <td>{{ e.method }}</td>
+                        <td class="prestige-mono td-num">{{ (e.es95 * 100).toFixed(2) }}%</td>
+                        <td class="prestige-mono td-num">{{ (e.es99 * 100).toFixed(2) }}%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p class="table-note">以上為同步 EWMA 端點的歷史診斷資料，不作為正式風險決策依據。正式模型為 {{ calculationRun?.selectedModel ?? '—' }}。</p>
               </div>
             </div>
           </div>
