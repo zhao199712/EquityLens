@@ -312,8 +312,19 @@ def calculate_current_risk(
     started = time.perf_counter()
     asset_returns = np.asarray(input_data.asset_returns, dtype=np.float64)
     weights = np.asarray(input_data.weights, dtype=np.float64)
+    portfolio_returns = np.asarray(input_data.portfolio_returns, dtype=np.float64)
     matrix = asset_returns[:, -input_data.lookback_days:]
     fit = fit_vt_garch(matrix)
+    if portfolio_returns.size >= 2:
+        historical_annualized_volatility = float(
+            np.std(portfolio_returns, ddof=1) * math.sqrt(252)
+        )
+        wealth = np.concatenate(([1.0], np.exp(np.cumsum(portfolio_returns))))
+        peak = np.maximum.accumulate(wealth)
+        max_drawdown = float(np.min((wealth - peak) / peak))
+    else:
+        historical_annualized_volatility = 0.0
+        max_drawdown = 0.0
     horizon_days = 252 if operation == "monte-carlo" else 30
     simulations = max(input_data.simulations, 10_000)
     paths = simulate_paths(
@@ -354,6 +365,8 @@ def calculate_current_risk(
             "fallbackDepth": 0,
             "simulations": simulations,
             "lookbackDays": input_data.lookback_days,
+            "historicalAnnualizedVolatility": historical_annualized_volatility,
+            "maxDrawdown": max_drawdown,
             "horizons": horizons,
             "samplePaths": paths.sample_paths.tolist() if operation == "monte-carlo" else [],
             "fitHealth": {

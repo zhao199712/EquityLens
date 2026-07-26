@@ -19,6 +19,7 @@ import {
   getPortfolioRiskReportSnapshot,
   getPortfolioRiskReportSnapshots,
   getPortfolioStressTest,
+  getPortfolioValuation,
   type PortfolioRiskGovernanceResponse,
   type PortfolioRiskScenarioResponse,
   type PortfolioRiskReportSnapshotDetail,
@@ -41,6 +42,8 @@ const portfolioName = ref('投資組合風險分析')
 const risk = ref<PortfolioRiskResponse | null>(null)
 const loading = ref(false)
 const calculationRun = ref<RiskCalculationRun | null>(null)
+const portfolioTotalValue = ref<number | null>(null)
+const portfolioCurrency = ref('TWD')
 const risk99 = ref<PortfolioRiskResponse | null>(null)
 const riskEwma = ref<PortfolioRiskResponse | null>(null)
 const riskEwma99 = ref<PortfolioRiskResponse | null>(null)
@@ -111,6 +114,13 @@ const normalizedHorizons = computed<NormalizedHorizon[]>(() => {
   }
   return []
 })
+const annualizedVol = computed(() =>
+  vtGarchResult.value?.historicalAnnualizedVolatility ?? fallbackResult.value?.historicalAnnualizedVolatility ?? null)
+const maxDrawdown = computed(() =>
+  vtGarchResult.value?.maxDrawdown ?? fallbackResult.value?.maxDrawdown ?? null)
+const totalMarketValue = computed(() =>
+  portfolioTotalValue.value ?? fallbackResult.value?.totalMarketValue ?? 0)
+const baseCurrency = computed(() => fallbackResult.value?.baseCurrency ?? portfolioCurrency.value)
 const hasHoldingsData = computed(() => !!fallbackResult.value?.holdings?.length)
 const holdingsRisk = computed(() => fallbackResult.value?.holdings ?? [])
 const industriesRisk = computed(() => fallbackResult.value?.industries ?? [])
@@ -235,7 +245,6 @@ const runInfo = computed(() => {
 
 const metrics = computed(() => {
   const h1 = normalizedHorizons.value.find(h => h.horizonDays === 1)
-  const fb = fallbackResult.value
   const items = [
     {
       label: 'VaR 95% (1日)',
@@ -247,27 +256,31 @@ const metrics = computed(() => {
       value: h1 ? `${(h1.es95 * 100).toFixed(2)}%` : '—',
       sub: 'Expected Shortfall',
     },
+    {
+      label: '年化波動率',
+      value: annualizedVol.value != null ? `${(annualizedVol.value * 100).toFixed(2)}%` : '—',
+      sub: 'Historical',
+    },
+    {
+      label: '最大回撤',
+      value: maxDrawdown.value != null ? `${(maxDrawdown.value * 100).toFixed(2)}%` : '—',
+      sub: 'Historical',
+    },
   ]
-  if (fb) {
-    items.push(
-      { label: '年化波動率', value: `${(fb.historicalAnnualizedVolatility * 100).toFixed(2)}%`, sub: fb.volatilityMethod },
-      { label: '最大回撤', value: `${(fb.maxDrawdown * 100).toFixed(2)}%`, sub: 'Historical' },
-    )
-  }
   return items
 })
 
 const riskKPIData = computed(() => {
   const h1 = normalizedHorizons.value.find(h => h.horizonDays === 1)
   const fb = fallbackResult.value
-  const total = fb?.totalMarketValue ?? 0
+  const total = totalMarketValue.value
   const varAmount = h1 && total ? total * h1.var95 : 0
   const esAmount = h1 && total ? total * h1.es95 : 0
   const items = [
     {
       label: 'DAILY VaR (95%)',
       value: h1 ? `${(h1.var95 * 100).toFixed(2)}%` : '—',
-      sub: varAmount ? `${formatMoney(varAmount)} ${fb?.baseCurrency ?? ''}` : '—',
+      sub: varAmount ? `${formatMoney(varAmount)} ${baseCurrency.value}` : '—',
       color: '#b05c5c',
     },
     {
@@ -281,13 +294,18 @@ const riskKPIData = computed(() => {
     items.push({
       label: 'DAILY VaR (99%)',
       value: `${(h1.var99 * 100).toFixed(2)}%`,
-      sub: 'VT-GARCH-t',
+      sub: h1.es99 != null ? `ES ${(h1.es99 * 100).toFixed(2)}%` : 'VT-GARCH-t',
       color: '#b05c5c',
     })
   }
+  items.push({
+    label: 'MAX DRAWDOWN',
+    value: maxDrawdown.value != null ? `${(maxDrawdown.value * 100).toFixed(2)}%` : '—',
+    sub: '歷史最大回撤',
+    color: '#b05c5c',
+  })
   if (fb) {
     items.push(
-      { label: 'MAX DRAWDOWN', value: `${(fb.maxDrawdown * 100).toFixed(2)}%`, sub: '歷史最大回撤', color: '#b05c5c' },
       { label: 'SHARPE RATIO', value: fb.sharpeRatio.toFixed(2), sub: '風險調整後報酬', color: '#7fa387' },
       { label: 'CONCENTRATION HHI', value: fb.concentrationHhi.toFixed(4), sub: '持倉集中度', color: '#c9a86a' },
       { label: 'LARGEST HOLDING', value: `${(fb.largestHoldingWeight * 100).toFixed(2)}%`, sub: '最大單一持倉', color: '#c9a86a' },
@@ -513,6 +531,13 @@ onMounted(async () => {
     ])
     portfolioName.value = portfolio.name
     governance.value = governanceData
+    try {
+      const valuation = await getPortfolioValuation(portfolioId.value)
+      portfolioTotalValue.value = valuation.totalMarketValue
+      portfolioCurrency.value = valuation.currency
+    } catch {
+      portfolioTotalValue.value = null
+    }
 
     const existing = calculations.find(run => run.operation === 'risk' && run.status !== 'Failed')
     const run = existing ?? await createRiskCalculation(portfolioId.value, 'risk', {

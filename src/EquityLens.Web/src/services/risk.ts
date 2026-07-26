@@ -223,6 +223,7 @@ export interface VtGarchRiskResult {
   portfolioId:string; dataAsOfDate:string; operation:string
   requestedModel:string; selectedModel:string; algorithmVersion:string; fallbackDepth:number
   simulations:number; lookbackDays:number
+  historicalAnnualizedVolatility?:number; maxDrawdown?:number
   horizons:VtGarchHorizon[]; samplePaths:number[][]; fitHealth:FitHealth
 }
 
