@@ -1,0 +1,246 @@
+{
+  "market:0.95": {
+    "seed": 13689336251565900567,
+    "blockLength": 21,
+    "repetitions": 10000,
+    "firstProbability": {
+      "MVEWMA": 0.2193,
+      "VT-GARCH": 0.006,
+      "VT-GJR": 0.5768,
+      "Ensemble": 0.1979
+    },
+    "topTwoProbability": {
+      "MVEWMA": 0.2971,
+      "VT-GARCH": 0.0415,
+      "VT-GJR": 0.8299,
+      "Ensemble": 0.8315
+    },
+    "meanRank": {
+      "MVEWMA": 2.9322,
+      "VT-GARCH": 3.4607,
+      "VT-GJR": 1.6362,
+      "Ensemble": 1.9709
+    },
+    "garchBeatsMvewmaProbability": 0.4556,
+    "garchMinusMvewma": {
+      "mean": 3.165934832338642e-06,
+      "median": 3.73747383510144e-06,
+      "ci90": [
+        -5.325682052622119e-05,
+        5.806889891814811e-05
+      ],
+      "ci95": [
+        -6.392220972647677e-05,
+        6.764895673189435e-05
+      ]
+    },
+    "gjrMinusGarchMean": -2.92544748281387e-05,
+    "ensembleMinusBestParentMean": 6.094998881406191e-06,
+    "fullRankingCounts": {
+      "MVEWMA>VT-GARCH>VT-GJR>Ensemble": 2,
+      "MVEWMA>VT-GARCH>Ensemble>VT-GJR": 37,
+      "MVEWMA>VT-GJR>VT-GARCH>Ensemble": 1,
+      "MVEWMA>Ensemble>VT-GARCH>VT-GJR": 254,
+      "MVEWMA>VT-GJR>Ensemble>VT-GARCH": 1091,
+      "MVEWMA>Ensemble>VT-GJR>VT-GARCH": 808,
+      "VT-GARCH>MVEWMA>Ensemble>VT-GJR": 2,
+      "Ensemble>MVEWMA>VT-GARCH>VT-GJR": 68,
+      "VT-GJR>MVEWMA>Ensemble>VT-GARCH": 536,
+      "Ensemble>MVEWMA>VT-GJR>VT-GARCH": 172,
+      "VT-GARCH>Ensemble>MVEWMA>VT-GJR": 13,
+      "Ensemble>VT-GARCH>MVEWMA>VT-GJR": 55,
+      "VT-GJR>Ensemble>MVEWMA>VT-GARCH": 2039,
+      "Ensemble>VT-GJR>MVEWMA>VT-GARCH": 436,
+      "VT-GARCH>VT-GJR>Ensemble>MVEWMA": 5,
+      "VT-GARCH>Ensemble>VT-GJR>MVEWMA": 40,
+      "VT-GJR>VT-GARCH>Ensemble>MVEWMA": 11,
+      "Ensemble>VT-GARCH>VT-GJR>MVEWMA": 250,
+      "VT-GJR>Ensemble>VT-GARCH>MVEWMA": 3182,
+      "Ensemble>VT-GJR>VT-GARCH>MVEWMA": 998
+    }
+  },
+  "market:0.99": {
+    "seed": 6347910816581704875,
+    "blockLength": 21,
+    "repetitions": 10000,
+    "firstProbability": {
+      "MVEWMA": 0.3224,
+      "VT-GARCH": 0.0921,
+      "VT-GJR": 0.3597,
+      "Ensemble": 0.2258
+    },
+    "topTwoProbability": {
+      "MVEWMA": 0.3799,
+      "VT-GARCH": 0.3376,
+      "VT-GJR": 0.5045,
+      "Ensemble": 0.778
+    },
+    "meanRank": {
+      "MVEWMA": 2.8178,
+      "VT-GARCH": 2.7075,
+      "VT-GJR": 2.4579,
+      "Ensemble": 2.0168
+    },
+    "garchBeatsMvewmaProbability": 0.5931,
+    "garchMinusMvewma": {
+      "mean": -5.743146823548237e-06,
+      "median": -5.420214770405791e-06,
+      "ci90": [
+        -4.3859672982169335e-05,
+        3.0092693533316177e-05
+      ],
+      "ci95": [
+        -5.09036762496646e-05,
+        3.669052408937939e-05
+      ]
+    },
+    "gjrMinusGarchMean": -6.001564274961784e-07,
+    "ensembleMinusBestParentMean": 2.099183253241936e-06,
+    "fullRankingCounts": {
+      "MVEWMA>VT-GARCH>VT-GJR>Ensemble": 60,
+      "MVEWMA>VT-GARCH>Ensemble>VT-GJR": 950,
+      "MVEWMA>VT-GJR>VT-GARCH>Ensemble": 96,
+      "MVEWMA>Ensemble>VT-GARCH>VT-GJR": 1383,
+      "MVEWMA>VT-GJR>Ensemble>VT-GARCH": 389,
+      "MVEWMA>Ensemble>VT-GJR>VT-GARCH": 346,
+      "VT-GARCH>MVEWMA>VT-GJR>Ensemble": 15,
+      "VT-GARCH>MVEWMA>Ensemble>VT-GJR": 89,
+      "VT-GJR>MVEWMA>VT-GARCH>Ensemble": 16,
+      "Ensemble>MVEWMA>VT-GARCH>VT-GJR": 192,
+      "VT-GJR>MVEWMA>Ensemble>VT-GARCH": 183,
+      "Ensemble>MVEWMA>VT-GJR>VT-GARCH": 80,
+      "VT-GARCH>VT-GJR>MVEWMA>Ensemble": 6,
+      "VT-GARCH>Ensemble>MVEWMA>VT-GJR": 260,
+      "VT-GJR>VT-GARCH>MVEWMA>Ensemble": 13,
+      "Ensemble>VT-GARCH>MVEWMA>VT-GJR": 347,
+      "VT-GJR>Ensemble>MVEWMA>VT-GARCH": 302,
+      "Ensemble>VT-GJR>MVEWMA>VT-GARCH": 72,
+      "VT-GARCH>VT-GJR>Ensemble>MVEWMA": 127,
+      "VT-GARCH>Ensemble>VT-GJR>MVEWMA": 424,
+      "VT-GJR>VT-GARCH>Ensemble>MVEWMA": 276,
+      "Ensemble>VT-GARCH>VT-GJR>MVEWMA": 809,
+      "VT-GJR>Ensemble>VT-GARCH>MVEWMA": 2807,
+      "Ensemble>VT-GJR>VT-GARCH>MVEWMA": 758
+    }
+  },
+  "equal:0.95": {
+    "seed": 2925021004200079501,
+    "blockLength": 21,
+    "repetitions": 10000,
+    "firstProbability": {
+      "MVEWMA": 0.0094,
+      "VT-GARCH": 0.0295,
+      "VT-GJR": 0.9446,
+      "Ensemble": 0.0165
+    },
+    "topTwoProbability": {
+      "MVEWMA": 0.0165,
+      "VT-GARCH": 0.0938,
+      "VT-GJR": 0.9886,
+      "Ensemble": 0.9011
+    },
+    "meanRank": {
+      "MVEWMA": 3.9411,
+      "VT-GARCH": 2.9086,
+      "VT-GJR": 1.0669,
+      "Ensemble": 2.0834
+    },
+    "garchBeatsMvewmaProbability": 0.9672,
+    "garchMinusMvewma": {
+      "mean": -7.03315531168925e-05,
+      "median": -6.931145293542654e-05,
+      "ci90": [
+        -0.00013761366510736003,
+        -7.152175031194363e-06
+      ],
+      "ci95": [
+        -0.00014997588240275045,
+        3.689936556610719e-06
+      ]
+    },
+    "gjrMinusGarchMean": -1.952012680651002e-05,
+    "ensembleMinusBestParentMean": 7.624700890186811e-06,
+    "fullRankingCounts": {
+      "MVEWMA>VT-GARCH>VT-GJR>Ensemble": 1,
+      "MVEWMA>VT-GARCH>Ensemble>VT-GJR": 1,
+      "MVEWMA>VT-GJR>VT-GARCH>Ensemble": 5,
+      "MVEWMA>VT-GJR>Ensemble>VT-GARCH": 87,
+      "VT-GJR>MVEWMA>VT-GARCH>Ensemble": 2,
+      "VT-GJR>MVEWMA>Ensemble>VT-GARCH": 69,
+      "VT-GARCH>VT-GJR>MVEWMA>Ensemble": 1,
+      "VT-GJR>VT-GARCH>MVEWMA>Ensemble": 1,
+      "VT-GJR>Ensemble>MVEWMA>VT-GARCH": 163,
+      "VT-GARCH>VT-GJR>Ensemble>MVEWMA": 199,
+      "VT-GARCH>Ensemble>VT-GJR>MVEWMA": 95,
+      "VT-GJR>VT-GARCH>Ensemble>MVEWMA": 623,
+      "Ensemble>VT-GARCH>VT-GJR>MVEWMA": 17,
+      "VT-GJR>Ensemble>VT-GARCH>MVEWMA": 8588,
+      "Ensemble>VT-GJR>VT-GARCH>MVEWMA": 148
+    }
+  },
+  "equal:0.99": {
+    "seed": 13642263901913526425,
+    "blockLength": 21,
+    "repetitions": 10000,
+    "firstProbability": {
+      "MVEWMA": 0.1457,
+      "VT-GARCH": 0.4041,
+      "VT-GJR": 0.2036,
+      "Ensemble": 0.2466
+    },
+    "topTwoProbability": {
+      "MVEWMA": 0.1673,
+      "VT-GARCH": 0.7094,
+      "VT-GJR": 0.4327,
+      "Ensemble": 0.6906
+    },
+    "meanRank": {
+      "MVEWMA": 3.4944,
+      "VT-GARCH": 1.959,
+      "VT-GJR": 2.4358,
+      "Ensemble": 2.1108
+    },
+    "garchBeatsMvewmaProbability": 0.8338,
+    "garchMinusMvewma": {
+      "mean": -3.0831507775728294e-05,
+      "median": -2.9721506381341395e-05,
+      "ci90": [
+        -8.500425094588769e-05,
+        1.880674159782918e-05
+      ],
+      "ci95": [
+        -9.746874341099715e-05,
+        2.758558101643751e-05
+      ]
+    },
+    "gjrMinusGarchMean": 2.6358067351423073e-06,
+    "ensembleMinusBestParentMean": 1.980895962754818e-06,
+    "fullRankingCounts": {
+      "MVEWMA>VT-GARCH>VT-GJR>Ensemble": 157,
+      "MVEWMA>VT-GARCH>Ensemble>VT-GJR": 253,
+      "MVEWMA>VT-GJR>VT-GARCH>Ensemble": 234,
+      "MVEWMA>Ensemble>VT-GARCH>VT-GJR": 232,
+      "MVEWMA>VT-GJR>Ensemble>VT-GARCH": 456,
+      "MVEWMA>Ensemble>VT-GJR>VT-GARCH": 125,
+      "VT-GARCH>MVEWMA>VT-GJR>Ensemble": 22,
+      "VT-GARCH>MVEWMA>Ensemble>VT-GJR": 45,
+      "VT-GJR>MVEWMA>VT-GARCH>Ensemble": 29,
+      "Ensemble>MVEWMA>VT-GARCH>VT-GJR": 32,
+      "VT-GJR>MVEWMA>Ensemble>VT-GARCH": 73,
+      "Ensemble>MVEWMA>VT-GJR>VT-GARCH": 15,
+      "VT-GARCH>VT-GJR>MVEWMA>Ensemble": 17,
+      "VT-GARCH>Ensemble>MVEWMA>VT-GJR": 88,
+      "VT-GJR>VT-GARCH>MVEWMA>Ensemble": 21,
+      "Ensemble>VT-GARCH>MVEWMA>VT-GJR": 71,
+      "VT-GJR>Ensemble>MVEWMA>VT-GARCH": 39,
+      "Ensemble>VT-GJR>MVEWMA>VT-GARCH": 17,
+      "VT-GARCH>VT-GJR>Ensemble>MVEWMA": 987,
+      "VT-GARCH>Ensemble>VT-GJR>MVEWMA": 2882,
+      "VT-GJR>VT-GARCH>Ensemble>MVEWMA": 800,
+      "Ensemble>VT-GARCH>VT-GJR>MVEWMA": 1751,
+      "VT-GJR>Ensemble>VT-GARCH>MVEWMA": 1074,
+      "Ensemble>VT-GJR>VT-GARCH>MVEWMA": 580
+    }
+  },
+  "deterministicOutputHash": "1e88259eebdb010ba5395da9156fdf714a8ef3fd6aa5dab432231b08c74a37bd"
+}
