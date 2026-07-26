@@ -521,6 +521,13 @@ async function waitForCalculationRun(initialRun: RiskCalculationRun) {
   }
 }
 
+function isReusableRun(run: RiskCalculationRun): boolean {
+  if (run.status !== 'Completed') return true
+  if (run.selectedModel !== 'VT-GARCH-t + Joint-Vector FHS') return true
+  const result = run.result as Record<string, unknown> | null
+  return !!result && 'historicalAnnualizedVolatility' in result
+}
+
 onMounted(async () => {
   loading.value = true
   try {
@@ -539,7 +546,7 @@ onMounted(async () => {
       portfolioTotalValue.value = null
     }
 
-    const existing = calculations.find(run => run.operation === 'risk' && run.status !== 'Failed')
+    const existing = calculations.find(run => run.operation === 'risk' && run.status !== 'Failed' && isReusableRun(run))
     const run = existing ?? await createRiskCalculation(portfolioId.value, 'risk', {
       simulations: 10000,
       from: backtestFromDate.value,
