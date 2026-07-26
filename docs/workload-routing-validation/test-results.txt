@@ -1,0 +1,16 @@
+2026-07-27
+
+Command:
+PYTHONPATH=python/risk_worker/src /private/tmp/equitylens-garch-fhs-venv/bin/python -m pytest python/risk_worker/tests -q
+
+Result:
+18 passed in 0.97s
+
+Additional validations:
+- routing manifest SHA-256 verified after all evaluations
+- 1,929 workload weight vectors: nonnegative, maximum sum error 4.44e-16
+- 3,858 result rows: finite
+- breadths 20/15/10/7/5/3/2/1 present
+- convergence failures: 0
+- warnings: 0
+- near-unit rate: 1.0638%

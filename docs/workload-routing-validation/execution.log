@@ -1,0 +1,46 @@
+2026-07-26–2026-07-27 Asia/Taipei
+
+Immutable input:
+  /private/tmp/equitylens-adjusted-close/phase5-five-year-input.json
+Factor version:
+  tw0050-total-return-v1-20260726
+
+Pre-evaluation manifest:
+  docs/workload-routing-validation/routing_rule_manifest.json
+SHA-256:
+  90b328d5d9b07aaa2bb7a61c836f2db0605ed155f5fdc30649f5f2a4d9f0cf6f
+
+Formal breadth run:
+  PYTHONPATH=python/risk_worker/src /private/tmp/equitylens-garch-fhs-venv/bin/python -m risk_worker.research.workload_routing_validation --input /private/tmp/equitylens-adjusted-close/phase5-five-year-input.json --output docs/workload-routing-validation
+  runtime: 3001.3181046659593 seconds
+  universes: 643
+  workloads: 1929
+  result rows: 3858
+  fit count: 940
+  convergence failures: 0
+  warnings: 0
+
+Driver and routing analysis:
+  PYTHONPATH=python/risk_worker/src /private/tmp/equitylens-garch-fhs-venv/bin/python -m risk_worker.research.workload_routing_analysis --results docs/workload-routing-validation/breadth_validation_results.csv --output docs/workload-routing-validation
+
+Threshold and fallback validation:
+  PYTHONPATH=python/risk_worker/src /private/tmp/equitylens-garch-fhs-venv/bin/python -m risk_worker.research.routing_safety_validation --input /private/tmp/equitylens-adjusted-close/phase5-five-year-input.json --output docs/workload-routing-validation
+
+Optimized future-run command:
+  PYTHONPATH=python/risk_worker/src /private/tmp/equitylens-garch-fhs-venv/bin/python -m risk_worker.research.workload_routing_validation --input /private/tmp/equitylens-adjusted-close/phase5-five-year-input.json --output docs/workload-routing-validation --workers 8 --resume
+
+Optimization:
+  deterministic SHA-256 workload sharding
+  ProcessPoolExecutor worker processes
+  durable per-shard CSV/JSON checkpoints
+  --resume skips complete shards
+  deterministic sorted merge
+  model formulas, simulations, seeds, dates, and manifest unchanged
+
+Tests:
+  18 passed in 0.97s
+
+Database:
+  not used by this task
+  final remote state: exited
+  FinishedAt: 2026-07-26T13:48:32.856653306Z

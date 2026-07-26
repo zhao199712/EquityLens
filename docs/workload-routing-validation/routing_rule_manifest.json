@@ -1,0 +1,93 @@
+{
+  "manifestVersion": "workload-routing-v1-20260726",
+  "createdBeforeEvaluation": true,
+  "immutableAfterEvaluationStarts": true,
+  "hypothesisDataIsNotIndependentHoldout": true,
+  "modelSettings": {
+    "lookbackTradingDays": 252,
+    "refitTradingDays": 21,
+    "simulationsPerDay": 5000,
+    "confidenceLevels": [0.95, 0.99],
+    "ewmaLambda": 0.94,
+    "shrinkageAlpha": 0.10,
+    "bootstrapBlockLength": 21,
+    "bootstrapRepetitions": 10000,
+    "seedDerivation": "SHA256(asset-return-matrix-float64-bytes || full-20-slot-weight-vector-float64-bytes), then existing stable_seed with prediction offset",
+    "models": ["MVEWMA-FHS", "VT-GARCH-t + joint-vector FHS"]
+  },
+  "breadth": [20, 15, 10, 7, 5, 3, 2, 1],
+  "universeSampling": {
+    "seed": 20260726,
+    "randomUniqueCombinationsPerBreadth": 100,
+    "useAllWhenLegalCombinationCountBelow100": true,
+    "specialFixtures": [
+      "top_market_weight",
+      "sector_diverse_deterministic",
+      "highest_average_pairwise_correlation_greedy",
+      "lowest_average_pairwise_correlation_greedy"
+    ],
+    "resultBasedSelectionProhibited": true
+  },
+  "weightMethods": [
+    "equal",
+    "market_renormalized",
+    "inverse_volatility"
+  ],
+  "strategies": {
+    "A_global_mvewma": {"selectedModel": "MVEWMA"},
+    "B_global_garch": {"selectedModel": "VT-GARCH"},
+    "C_hhi": {
+      "if": {"hhiLt": 0.10},
+      "then": "VT-GARCH",
+      "otherwise": "MVEWMA"
+    },
+    "D_hhi_neff": {
+      "if": {"hhiLt": 0.10, "effectiveAssetsGte": 10.0},
+      "then": "VT-GARCH",
+      "otherwise": "MVEWMA"
+    },
+    "E_hhi_first_pc": {
+      "eligibility": "Task 2 must show stable incremental explanatory power for first-PC after concentration controls",
+      "if": {"hhiLt": 0.10, "firstPcExplainedLt": 0.60},
+      "then": "VT-GARCH",
+      "otherwise": "MVEWMA"
+    }
+  },
+  "thresholdStability": {
+    "hhiBoundaryOffsets": [-0.01, -0.005, 0.005, 0.01],
+    "effectiveAssetsBoundaryOffsets": [-0.5, 0.5],
+    "naturalWeightDriftUsesObservedDailyAssetReturns": true,
+    "governanceCandidates": {
+      "no_hysteresis": {"garchWhenHhiLt": 0.10},
+      "dual_threshold_hysteresis": {
+        "switchToGarchWhenHhiLt": 0.08,
+        "switchToMvewmaWhenHhiGt": 0.12
+      },
+      "minimum_dwell": {
+        "garchWhenHhiLt": 0.10,
+        "minimumTradingDays": 21
+      },
+      "monthly_evaluation": {
+        "garchWhenHhiLt": 0.10,
+        "evaluationEveryTradingDays": 21
+      }
+    }
+  },
+  "fitHealth": {
+    "nearUnitPersistenceThreshold": 0.995,
+    "nearUnitRateMaximum": 0.05,
+    "finiteParametersRequired": true,
+    "convergenceRequired": true
+  },
+  "fallbackChain": [
+    "VT-GARCH current healthy fit",
+    "previous stable VT-GARCH parameters",
+    "MVEWMA-FHS",
+    "fail closed with explicit insufficient-data error"
+  ],
+  "promotionReview": {
+    "initialNewCommonTradingDays": 250,
+    "formalNewCommonTradingDays": 500,
+    "alternativeStressEvents": 2
+  }
+}

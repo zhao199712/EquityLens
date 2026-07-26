@@ -1,0 +1,12 @@
+{
+  "universeCount": 643,
+  "workloadCount": 1929,
+  "resultRows": 3858,
+  "fitCount": 940,
+  "nearUnitCount": 10,
+  "nearUnitRate": 0.010638297872340425,
+  "convergenceFailures": 0,
+  "warnings": 0,
+  "runtimeSeconds": 3001.3181046659593,
+  "outOfSampleDays": 968
+}

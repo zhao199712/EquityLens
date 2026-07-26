@@ -1,0 +1,114 @@
+[
+  {
+    "fixture": "one_asset",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": true,
+    "previousStableParametersAvailable": false,
+    "mvewmaInputLegal": true,
+    "reasonCode": "NONE"
+  },
+  {
+    "fixture": "two_assets",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": true,
+    "previousStableParametersAvailable": false,
+    "mvewmaInputLegal": true,
+    "reasonCode": "NONE"
+  },
+  {
+    "fixture": "new_listing_insufficient_history",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": false,
+    "mvewmaInputLegal": false,
+    "reasonCode": "INSUFFICIENT_HISTORY"
+  },
+  {
+    "fixture": "heavy_missing_values",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": false,
+    "mvewmaInputLegal": false,
+    "reasonCode": "MISSING_DATA"
+  },
+  {
+    "fixture": "asynchronous_dates",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": false,
+    "mvewmaInputLegal": false,
+    "reasonCode": "ASYNCHRONOUS_DATES"
+  },
+  {
+    "fixture": "zero_variance",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": false,
+    "mvewmaInputLegal": false,
+    "reasonCode": "ZERO_VARIANCE"
+  },
+  {
+    "fixture": "extreme_outlier",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": true,
+    "previousStableParametersAvailable": false,
+    "mvewmaInputLegal": true,
+    "reasonCode": "NONE"
+  },
+  {
+    "fixture": "persistence_unhealthy",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": true,
+    "mvewmaInputLegal": true,
+    "reasonCode": "PERSISTENCE_UNHEALTHY"
+  },
+  {
+    "fixture": "optimizer_nonconvergence",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": true,
+    "mvewmaInputLegal": true,
+    "reasonCode": "OPTIMIZER_NONCONVERGENCE"
+  },
+  {
+    "fixture": "nonfinite_parameter",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": true,
+    "mvewmaInputLegal": true,
+    "reasonCode": "NONFINITE_PARAMETER"
+  },
+  {
+    "fixture": "nonfinite_predictive_distribution",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": true,
+    "mvewmaInputLegal": true,
+    "reasonCode": "NONFINITE_DISTRIBUTION"
+  },
+  {
+    "fixture": "worker_timeout",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": true,
+    "mvewmaInputLegal": true,
+    "reasonCode": "WORKER_TIMEOUT"
+  },
+  {
+    "fixture": "database_unavailable",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": false,
+    "mvewmaInputLegal": false,
+    "reasonCode": "DATABASE_UNAVAILABLE"
+  },
+  {
+    "fixture": "incomplete_adjusted_close",
+    "requestedModel": "VT-GARCH",
+    "currentGarchHealthy": false,
+    "previousStableParametersAvailable": false,
+    "mvewmaInputLegal": false,
+    "reasonCode": "INCOMPLETE_ADJUSTED_CLOSE"
+  }
+]
