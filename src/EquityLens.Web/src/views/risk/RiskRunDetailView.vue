@@ -517,7 +517,7 @@ onMounted(async () => {
     const existing = calculations.find(run => run.operation === 'risk' && run.status !== 'Failed')
     const run = existing ?? await createRiskCalculation(portfolioId.value, 'risk', {
       simulations: 10000,
-      from: fromDate.value,
+      from: backtestFromDate.value,
       to: toDate.value,
     })
     calculationRun.value = run
