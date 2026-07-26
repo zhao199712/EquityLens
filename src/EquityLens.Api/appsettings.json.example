@@ -23,6 +23,18 @@
     "CacheKeyPrefix": "equitylens:cache",
     "DefaultCacheMinutes": 15
   },
+  "RiskPython": {
+    "ShadowEnabled": false,
+    "JobsStreamKey": "equitylens:risk-python:jobs",
+    "JobsConsumerGroup": "risk-python-workers",
+    "ResultsStreamKey": "equitylens:risk-python:results",
+    "ResultsConsumerGroup": "risk-shadow-result-consumers",
+    "DeadLetterStreamKey": "equitylens:risk-python:dead-letter",
+    "PayloadKeyPrefix": "equitylens:risk-python",
+    "CandidateAlgorithmVersion": "mvewma-fhs-python-v1",
+    "PayloadTtlHours": 24,
+    "ResultPollSeconds": 1
+  },
   "AgentRunQueue": {
     "StreamKey": "equitylens:agent-runs:stream",
     "ConsumerGroupName": "agent-run-workers",

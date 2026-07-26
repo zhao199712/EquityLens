@@ -50,7 +50,10 @@ public static class PortfolioPerformanceCalculator
         }
 
         if (portfolioReturns.Count < 2) return null;
-        return Covariance(portfolioReturns, benchmarkReturns) / Variance(benchmarkReturns);
+        var benchmarkVariance = Variance(benchmarkReturns);
+        return benchmarkVariance == 0
+            ? null
+            : Covariance(portfolioReturns, benchmarkReturns) / benchmarkVariance;
     }
 
     public static decimal? CalculateJensenAlpha(decimal portfolioReturn, decimal benchmarkReturn, decimal beta, decimal annualRiskFreeRate, int days)

@@ -30,6 +30,12 @@ coverage/
 .npm/
 .pnpm-store/
 
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
 # Vite / Vue
 .vite/
 

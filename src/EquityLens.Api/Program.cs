@@ -123,11 +123,14 @@ builder.Services.Configure<AgentRunQueueOptions>(builder.Configuration.GetSectio
 
 // Redis 設定與服務註冊
 builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection("Redis"));
+builder.Services.Configure<RiskPythonOptions>(builder.Configuration.GetSection(RiskPythonOptions.SectionName));
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     ConnectionMultiplexer.Connect(sp.GetRequiredService<IOptions<RedisOptions>>().Value.ConnectionString));
 builder.Services.AddScoped<IRedisCacheService, RedisCacheService>();
 builder.Services.AddScoped<IBackgroundJobQueue, RedisBackgroundJobQueue>();
 builder.Services.AddScoped<IAgentRunQueue, RedisAgentRunQueue>();
+builder.Services.AddScoped<IRiskPythonShadowQueue, RedisRiskPythonShadowQueue>();
+builder.Services.AddScoped<IRiskShadowComparisonService, RiskShadowComparisonService>();
 
 // S3 相容物件儲存設定與服務註冊
 builder.Services.Configure<ObjectStorageOptions>(builder.Configuration.GetSection("ObjectStorage"));
@@ -170,7 +173,10 @@ builder.Services.AddScoped<IUploadedFileService, UploadedFileService>();
 builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IPortfolioFundingService, PortfolioFundingService>();
-builder.Services.AddScoped<IRiskAnalysisService, RiskAnalysisService>();
+builder.Services.AddSingleton<IRiskBacktestEngine, CSharpRiskBacktestEngine>();
+builder.Services.AddScoped<RiskAnalysisService>();
+builder.Services.AddScoped<IRiskAnalysisService>(sp => sp.GetRequiredService<RiskAnalysisService>());
+builder.Services.AddScoped<IRiskBacktestInputProvider>(sp => sp.GetRequiredService<RiskAnalysisService>());
 builder.Services.AddScoped<IRiskBacktestRunService, RiskBacktestRunService>();
 builder.Services.AddScoped<IConferenceImportService, ConferenceImportService>();
 builder.Services.AddScoped<IPdfTextExtractionService, PdfPigTextExtractionService>();
@@ -271,6 +277,7 @@ builder.Services.AddScoped<IAgentRunService, AgentRunService>();
     builder.Services.AddHostedService<BackgroundJobWorker>();
     builder.Services.AddHostedService<AgentRunWorker>();
     builder.Services.AddHostedService<AgentRunWakeOutboxDispatcher>();
+    builder.Services.AddHostedService<RiskPythonShadowResultWorker>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務

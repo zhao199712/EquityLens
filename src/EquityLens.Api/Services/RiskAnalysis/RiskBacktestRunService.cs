@@ -5,6 +5,8 @@ using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Redis;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Diagnostics;
 
 namespace EquityLens.Api.Services.RiskAnalysis;
 
@@ -12,20 +14,35 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
 {
     private const int LookbackDays = 252;
     private const int Simulations = 5000;
-    private const string AlgorithmVersion = "mvewma-fhs-backtest-v2";
+    private const string AlgorithmVersion = CSharpRiskBacktestEngine.CurrentAlgorithmVersion;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly EquityLensDbContext _dbContext;
     private readonly IBackgroundJobQueue _queue;
-    private readonly IRiskAnalysisService _riskAnalysisService;
+    private readonly IRiskBacktestInputProvider _inputProvider;
+    private readonly IRiskBacktestEngine _riskBacktestEngine;
+    private readonly IRiskPythonShadowQueue _shadowQueue;
+    private readonly IRiskShadowComparisonService _comparisonService;
+    private readonly RiskPythonOptions _pythonOptions;
     private readonly ILogger<RiskBacktestRunService> _logger;
 
-    public RiskBacktestRunService(EquityLensDbContext dbContext, IBackgroundJobQueue queue,
-        IRiskAnalysisService riskAnalysisService, ILogger<RiskBacktestRunService> logger)
+    public RiskBacktestRunService(
+        EquityLensDbContext dbContext,
+        IBackgroundJobQueue queue,
+        IRiskBacktestInputProvider inputProvider,
+        IRiskBacktestEngine riskBacktestEngine,
+        IRiskPythonShadowQueue shadowQueue,
+        IRiskShadowComparisonService comparisonService,
+        IOptions<RiskPythonOptions> pythonOptions,
+        ILogger<RiskBacktestRunService> logger)
     {
         _dbContext = dbContext;
         _queue = queue;
-        _riskAnalysisService = riskAnalysisService;
+        _inputProvider = inputProvider;
+        _riskBacktestEngine = riskBacktestEngine;
+        _shadowQueue = shadowQueue;
+        _comparisonService = comparisonService;
+        _pythonOptions = pythonOptions.Value;
         _logger = logger;
     }
 
@@ -109,7 +126,59 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
 
         try
         {
-            var result = await _riskAnalysisService.GetPortfolioRiskBacktestAsync(run.PortfolioId, run.FromDate, run.ToDate, run.RequestedByUserId, cancellationToken);
+            var prepared = await _inputProvider.PreparePortfolioRiskBacktestInputAsync(
+                run.PortfolioId, run.FromDate, run.ToDate, run.RequestedByUserId, cancellationToken);
+            if (!prepared.IsSuccess)
+            {
+                run.Status = "Failed";
+                run.ErrorCode = prepared.ErrorCode;
+                run.ErrorMessage = prepared.ErrorMessage;
+                return false;
+            }
+
+            RiskEngineComparison? comparison = null;
+            if (_pythonOptions.ShadowEnabled)
+            {
+                comparison = new RiskEngineComparison
+                {
+                    Id = Guid.NewGuid(),
+                    RiskBacktestRunId = run.Id,
+                    PrimaryEngine = _riskBacktestEngine.EngineName,
+                    PrimaryAlgorithmVersion = _riskBacktestEngine.AlgorithmVersion,
+                    CandidateEngine = "python",
+                    CandidateAlgorithmVersion = _pythonOptions.CandidateAlgorithmVersion,
+                    InputHash = "pending",
+                    Status = "Queueing",
+                    CreatedAtUtc = DateTime.UtcNow,
+                };
+                _dbContext.RiskEngineComparisons.Add(comparison);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                try
+                {
+                    var enqueued = await _shadowQueue.EnqueueAsync(
+                        comparison.Id, run.Id, prepared.Value!, cancellationToken);
+                    comparison.InputHash = enqueued.Job.InputHash;
+                    comparison.Status = "Queued";
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    comparison.Status = "CandidateFailed";
+                    comparison.ErrorMessage = $"Could not enqueue Python shadow calculation: {exception.Message}";
+                    comparison.CompletedAtUtc = DateTime.UtcNow;
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    _logger.LogWarning(exception,
+                        "Python shadow enqueue failed for backtest run {BacktestRunId}; C# primary will continue.",
+                        run.Id);
+                }
+            }
+
+            var stopwatch = Stopwatch.StartNew();
+            var engineResult = _riskBacktestEngine.Calculate(prepared.Value!, cancellationToken);
+            stopwatch.Stop();
+            if (comparison is not null)
+                comparison.PrimaryDurationMs = stopwatch.ElapsedMilliseconds;
+            var result = engineResult.ToResult();
             if (result.IsSuccess)
             {
                 run.ResultJson = JsonSerializer.Serialize(result.Value, JsonOptions);
@@ -123,6 +192,12 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
                 run.Status = "Failed";
                 run.ErrorCode = result.ErrorCode;
                 run.ErrorMessage = result.ErrorMessage;
+            }
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            if (comparison is not null)
+            {
+                await _dbContext.Entry(comparison).ReloadAsync(cancellationToken);
+                await _comparisonService.TryFinalizeAsync(comparison.Id, cancellationToken);
             }
         }
         catch (Exception exception)
