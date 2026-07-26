@@ -639,7 +639,7 @@ function isReusableRun(run: RiskCalculationRun): boolean {
   if (run.selectedModel !== 'VT-GARCH-t + Joint-Vector FHS') return true
   const result = run.result as Record<string, unknown> | null
   if (!result) return false
-  return run.operation === 'monte-carlo' ? 'bands' in result : 'historicalAnnualizedVolatility' in result
+  return run.operation === 'monte-carlo' ? 'bands' in result : 'confidenceCurve' in result
 }
 
 onMounted(async () => {
