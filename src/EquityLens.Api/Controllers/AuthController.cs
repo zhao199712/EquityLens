@@ -23,6 +23,7 @@ public class AuthController : ControllerBase
     private readonly IUserRepository _userRepository;
     private readonly ITokenService _tokenService;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
+    private readonly IGoogleTokenValidator _googleTokenValidator;
     private readonly IConfiguration _configuration;
 
     /// <summary>
@@ -33,12 +34,14 @@ public class AuthController : ControllerBase
         IUserRepository userRepository,
         ITokenService tokenService,
         IPasswordHasher<AppUser> passwordHasher,
+        IGoogleTokenValidator googleTokenValidator,
         IConfiguration configuration)
     {
         _dbContext = dbContext;
         _userRepository = userRepository;
         _tokenService = tokenService;
         _passwordHasher = passwordHasher;
+        _googleTokenValidator = googleTokenValidator;
         _configuration = configuration;
     }
 
@@ -114,9 +117,88 @@ public class AuthController : ControllerBase
         if (!user.IsActive)
             return Unauthorized(new ApiError("auth.account_disabled", "Account has been disabled."));
 
+        // Google 登入建立的使用者沒有密碼，視為無效憑證
+        if (user.PasswordHash == null)
+            return Unauthorized(new ApiError("auth.invalid_credentials", "Invalid email or password."));
+
         var verificationResult = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
         if (verificationResult == PasswordVerificationResult.Failed)
             return Unauthorized(new ApiError("auth.invalid_credentials", "Invalid email or password."));
+
+        // 產生 tokens
+        var accessToken = _tokenService.GenerateAccessToken(user);
+        var refreshToken = await CreateRefreshTokenAsync(user.Id, cancellationToken);
+
+        return Ok(new AuthResponse(
+            AccessToken: accessToken,
+            RefreshToken: refreshToken,
+            TokenType: "Bearer",
+            ExpiresIn: int.Parse(_configuration["Jwt:ExpireMinutes"]!),
+            User: ToUserInfo(user)));
+    }
+
+    /// <summary>
+    /// 使用 Google ID Token 登入；若帳號不存在則自動建立，已存在的 Email 帳號會綁定 Google 身分。
+    /// </summary>
+    /// <param name="request">Google 登入請求資料，包含前端取得的 ID Token。</param>
+    /// <param name="cancellationToken">取消權杖。</param>
+    /// <returns>登入成功時返回 JWT token 與使用者資訊。</returns>
+    [HttpPost("google")]
+    public async Task<ActionResult<AuthResponse>> GoogleLogin(
+        GoogleLoginRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_configuration["Google:ClientId"]))
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new ApiError("auth.google_not_configured", "Google login is not configured."));
+
+        if (string.IsNullOrWhiteSpace(request.IdToken))
+            return BadRequest(new ApiError("auth.google_token_required", "Google ID token is required."));
+
+        var payload = await _googleTokenValidator.ValidateAsync(request.IdToken, cancellationToken);
+        if (payload == null)
+            return Unauthorized(new ApiError("auth.google_invalid_token", "Invalid Google ID token."));
+
+        if (!payload.EmailVerified)
+            return Unauthorized(new ApiError("auth.google_email_not_verified", "Google account email is not verified."));
+
+        // 先以 Google Subject 尋找，再以 Email 尋找並綁定，最後建立新使用者
+        var user = await _userRepository.GetByGoogleSubjectAsync(payload.Subject, cancellationToken);
+        if (user == null)
+        {
+            user = await _userRepository.GetByEmailAsync(payload.Email, cancellationToken);
+            if (user != null)
+            {
+                user.GoogleSubject = payload.Subject;
+                user.UpdatedAtUtc = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        if (user == null)
+        {
+            var now = DateTime.UtcNow;
+            user = new AppUser
+            {
+                Id = Guid.NewGuid(),
+                Email = payload.Email,
+                DisplayName = !string.IsNullOrWhiteSpace(payload.Name)
+                    ? payload.Name
+                    : payload.Email.Split('@')[0],
+                PasswordHash = null,
+                GoogleSubject = payload.Subject,
+                Role = "User",
+                IsActive = true,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now
+            };
+
+            _userRepository.Add(user);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        if (!user.IsActive)
+            return Unauthorized(new ApiError("auth.account_disabled", "Account has been disabled."));
 
         // 產生 tokens
         var accessToken = _tokenService.GenerateAccessToken(user);

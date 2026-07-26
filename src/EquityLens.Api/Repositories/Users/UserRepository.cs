@@ -23,6 +23,11 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users.FirstOrDefaultAsync(x => x.Email == email, cancellationToken);
     }
 
+    public Task<AppUser?> GetByGoogleSubjectAsync(string subject, CancellationToken cancellationToken)
+    {
+        return _dbContext.Users.FirstOrDefaultAsync(x => x.GoogleSubject == subject, cancellationToken);
+    }
+
     public void Add(AppUser user)
     {
         _dbContext.Users.Add(user);

@@ -15,6 +15,15 @@ vi.mock('../../../services/http', () => ({
   },
 }))
 
+vi.mock('vue3-google-login', () => ({
+  GoogleLogin: {
+    name: 'GoogleLogin',
+    props: ['clientId', 'callback'],
+    template:
+      '<button type="button" class="google-login-mock" @click="callback({ credential: \'google-id-token\' })">Google</button>',
+  },
+}))
+
 import { http } from '../../../services/http'
 const mockedHttp = vi.mocked(http)
 
@@ -55,6 +64,7 @@ function mountLogin() {
 describe('LoginView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
     sessionStorage.clear()
   })
 
@@ -205,6 +215,97 @@ describe('LoginView', () => {
     })
     await vi.waitFor(() => {
       expect(wrapper.find('.auth-spinner').exists()).toBe(false)
+    })
+  })
+
+  describe('Google login section', () => {
+    it('hides Google section when no client id is configured', () => {
+      vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '')
+
+      const wrapper = mountLogin()
+
+      expect(wrapper.find('.auth-google-section').exists()).toBe(false)
+      expect(wrapper.find('.google-login-mock').exists()).toBe(false)
+    })
+
+    it('shows Google section when client id is configured', () => {
+      vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id')
+
+      const wrapper = mountLogin()
+
+      expect(wrapper.find('.auth-google-section').exists()).toBe(true)
+      expect(wrapper.find('.auth-divider').text()).toBe('or')
+      const googleLogin = wrapper.findComponent({ name: 'GoogleLogin' })
+      expect(googleLogin.exists()).toBe(true)
+      expect(googleLogin.props('clientId')).toBe('test-client-id')
+    })
+
+    it('calls loginWithGoogle and redirects to dashboard on Google callback', async () => {
+      vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id')
+      mockedHttp.post.mockResolvedValueOnce({
+        data: {
+          accessToken: 'token',
+          refreshToken: 'refresh',
+          user: { id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' },
+        },
+      })
+
+      const router = createTestRouter()
+      const pushSpy = vi.spyOn(router, 'push')
+      const pinia = createPinia()
+      setActivePinia(pinia)
+
+      const wrapper = mount(LoginView, {
+        global: { plugins: [pinia, router, createTestI18n()], stubs: { RouterLink: true } },
+      })
+
+      await wrapper.find('.google-login-mock').trigger('click')
+
+      await vi.waitFor(() => {
+        expect(mockedHttp.post).toHaveBeenCalledWith('/auth/google', {
+          idToken: 'google-id-token',
+        })
+        expect(pushSpy).toHaveBeenCalledWith({ name: 'dashboard' })
+      })
+    })
+
+    it('redirects admins to admin area on Google callback', async () => {
+      vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id')
+      mockedHttp.post.mockResolvedValueOnce({
+        data: {
+          accessToken: 'token',
+          refreshToken: 'refresh',
+          user: { id: 'u1', email: 'admin@test.com', displayName: 'Admin', role: 'Admin' },
+        },
+      })
+
+      const router = createTestRouter()
+      const pushSpy = vi.spyOn(router, 'push')
+      const pinia = createPinia()
+      setActivePinia(pinia)
+
+      const wrapper = mount(LoginView, {
+        global: { plugins: [pinia, router, createTestI18n()], stubs: { RouterLink: true } },
+      })
+
+      await wrapper.find('.google-login-mock').trigger('click')
+
+      await vi.waitFor(() => {
+        expect(pushSpy).toHaveBeenCalledWith({ name: 'admin-agent-runs' })
+      })
+    })
+
+    it('shows error message when Google login fails', async () => {
+      vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id')
+      mockedHttp.post.mockRejectedValueOnce(new Error('Invalid Google token'))
+
+      const wrapper = mountLogin()
+
+      await wrapper.find('.google-login-mock').trigger('click')
+
+      await vi.waitFor(() => {
+        expect(wrapper.find('.prestige-error').text()).toBe('Google sign-in failed. Please try again.')
+      })
     })
   })
 })

@@ -127,6 +127,41 @@ describe('auth store', () => {
     })
   })
 
+  describe('loginWithGoogle()', () => {
+    it('Google 登入成功後設定 token 與使用者', async () => {
+      mockedHttp.post.mockResolvedValueOnce(mockAuthResponse())
+
+      const store = useAuthStore()
+      await store.loginWithGoogle('google-id-token')
+
+      expect(mockedHttp.post).toHaveBeenCalledWith('/auth/google', {
+        idToken: 'google-id-token',
+      })
+      expect(store.token).toBe('access-123')
+      expect(store.refreshTokenValue).toBe('refresh-123')
+      expect(store.user).toEqual({ id: 'u1', email: 'test@test.com', displayName: 'Test', role: 'User' })
+      expect(store.isAuthenticated).toBe(true)
+      expect(sessionStorage.getItem('auth_token')).toBe('access-123')
+      expect(sessionStorage.getItem('refresh_token')).toBe('refresh-123')
+      expect(http.defaults.headers.common['Authorization']).toBe('Bearer access-123')
+    })
+
+    it('Google 登入失敗時拋出錯誤且不儲存 token', async () => {
+      const error = { response: { status: 401, data: { message: 'Invalid Google token' } } }
+      mockedHttp.post.mockRejectedValueOnce(error)
+
+      const store = useAuthStore()
+      await expect(store.loginWithGoogle('bad-token')).rejects.toThrow()
+      expect(store.token).toBeNull()
+      expect(store.refreshTokenValue).toBeNull()
+      expect(store.user).toBeNull()
+      expect(store.isAuthenticated).toBe(false)
+      expect(sessionStorage.getItem('auth_token')).toBeNull()
+      expect(sessionStorage.getItem('refresh_token')).toBeNull()
+      expect(http.defaults.headers.common['Authorization']).toBeUndefined()
+    })
+  })
+
   describe('logout()', () => {
     it('清除所有狀態並呼叫 API', async () => {
       mockedHttp.post.mockResolvedValueOnce(mockAuthResponse())

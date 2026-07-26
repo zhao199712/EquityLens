@@ -2,16 +2,24 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { GoogleLogin } from 'vue3-google-login'
+import type { CallbackTypes } from 'vue3-google-login'
 import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const { t } = useI18n()
 
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+
 const email = ref('')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
+
+function redirectAfterLogin() {
+  router.push({ name: authStore.user?.role === 'Admin' ? 'admin-agent-runs' : 'dashboard' })
+}
 
 async function handleLogin() {
   if (!email.value || !password.value) {
@@ -24,9 +32,25 @@ async function handleLogin() {
 
   try {
     await authStore.login(email.value, password.value)
-    router.push({ name: authStore.user?.role === 'Admin' ? 'admin-agent-runs' : 'dashboard' })
+    redirectAfterLogin()
   } catch (e: any) {
     error.value = e?.response?.data?.message || t('auth.login.errorLoginFailed')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleGoogleCallback(response: CallbackTypes.CredentialPopupResponse) {
+  if (!response.credential) return
+
+  loading.value = true
+  error.value = ''
+
+  try {
+    await authStore.loginWithGoogle(response.credential)
+    redirectAfterLogin()
+  } catch {
+    error.value = t('auth.login.googleFailed')
   } finally {
     loading.value = false
   }
@@ -115,6 +139,15 @@ async function handleLogin() {
               <span v-else>{{ t('auth.login.loginBtn') }}</span>
             </button>
           </form>
+
+          <div v-if="googleClientId" class="auth-google-section">
+            <div class="auth-divider">
+              <span>{{ t('auth.login.orDivider') }}</span>
+            </div>
+            <div class="auth-google-button">
+              <GoogleLogin :client-id="googleClientId" :callback="handleGoogleCallback" />
+            </div>
+          </div>
 
           <div class="auth-form-footer">
             <p>{{ t('auth.login.noAccount') }} <RouterLink to="/register">{{ t('auth.login.register') }}</RouterLink></p>
@@ -303,6 +336,33 @@ async function handleLogin() {
 
 @keyframes auth-spin {
   to { transform: rotate(360deg); }
+}
+
+.auth-google-section {
+  margin-top: 24px;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--gold-border-soft);
+}
+
+.auth-google-button {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
 }
 
 .auth-form-footer {

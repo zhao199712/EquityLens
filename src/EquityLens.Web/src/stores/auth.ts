@@ -65,6 +65,20 @@ export const useAuthStore = defineStore('auth', {
       http.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
     },
 
+    async loginWithGoogle(idToken: string) {
+      const response = await http.post<AuthResponse>('/auth/google', {
+        idToken,
+      })
+
+      const { user, accessToken, refreshToken } = response.data
+      this.user = user
+      this.token = accessToken
+      this.refreshTokenValue = refreshToken
+      sessionStorage.setItem('auth_token', accessToken)
+      sessionStorage.setItem('refresh_token', refreshToken)
+      http.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+    },
+
     async logout() {
       try {
         if (this.token) {
