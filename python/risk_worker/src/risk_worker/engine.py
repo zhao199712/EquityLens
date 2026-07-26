@@ -34,41 +34,39 @@ def expected_shortfall(values: np.ndarray, confidence: float) -> float:
     return float(tail.mean()) if tail.size else threshold
 
 
-def ewma_covariances(return_matrix: np.ndarray, decay: float) -> list[np.ndarray]:
+def ewma_covariances(return_matrix: np.ndarray, decay: float) -> np.ndarray:
     initial = np.cov(return_matrix, ddof=1)
     if return_matrix.shape[0] == 1:
         initial = np.array([[float(initial)]], dtype=np.float64)
     current = np.asarray(initial, dtype=np.float64)
-    result: list[np.ndarray] = []
-    for observation in return_matrix.T:
-        current = decay * current + (1.0 - decay) * np.outer(observation, observation)
-        result.append(current.copy())
+    observations = return_matrix.T
+    shocks = np.einsum("ti,tj->tij", observations, observations)
+    result = np.empty_like(shocks)
+    for index in range(observations.shape[0]):
+        current = decay * current + (1.0 - decay) * shocks[index]
+        result[index] = current
     return result
 
 
 def stabilize_covariances(
-    covariances: list[np.ndarray], shrinkage_alpha: float
-) -> list[np.ndarray]:
-    result: list[np.ndarray] = []
-    for covariance in covariances:
-        diagonal = np.diag(np.diag(covariance))
-        shrunk = diagonal + (1.0 - shrinkage_alpha) * (covariance - diagonal)
-        epsilon = max(1e-8 * float(np.trace(shrunk)) / max(shrunk.shape[0], 1), 1e-10)
-        result.append(shrunk + np.eye(shrunk.shape[0]) * epsilon)
-    return result
+    covariances: np.ndarray, shrinkage_alpha: float
+) -> np.ndarray:
+    asset_count = covariances.shape[1]
+    identity = np.eye(asset_count, dtype=np.float64)
+    diagonal = covariances * identity
+    shrunk = diagonal + (1.0 - shrinkage_alpha) * (covariances - diagonal)
+    epsilon = np.maximum(
+        1e-8 * np.trace(shrunk, axis1=1, axis2=2) / max(asset_count, 1),
+        1e-10,
+    )
+    return shrunk + epsilon[:, None, None] * identity
 
 
 def filtered_residuals(
-    return_matrix: np.ndarray, covariances: list[np.ndarray]
+    return_matrix: np.ndarray, lower_triangular: np.ndarray
 ) -> np.ndarray:
-    residuals: list[np.ndarray] = []
-    for index, covariance in enumerate(covariances):
-        try:
-            lower = np.linalg.cholesky(covariance)
-            residuals.append(np.linalg.solve(lower, return_matrix[:, index]))
-        except np.linalg.LinAlgError:
-            continue
-    return np.asarray(residuals, dtype=np.float64)
+    observations = return_matrix.T[..., None]
+    return np.linalg.solve(lower_triangular, observations).squeeze(-1)
 
 
 def simulate_fhs(
@@ -84,8 +82,9 @@ def simulate_fhs(
     covariances = stabilize_covariances(
         ewma_covariances(return_matrix, decay), shrinkage_alpha
     )
-    latest_lower = np.linalg.cholesky(covariances[-1])
-    residuals = filtered_residuals(return_matrix, covariances)
+    lower_triangular = np.linalg.cholesky(covariances)
+    latest_lower = lower_triangular[-1]
+    residuals = filtered_residuals(return_matrix, lower_triangular)
     if residuals.shape[0] < 10:
         raise ValueError("fewer than ten filtered residuals")
 
