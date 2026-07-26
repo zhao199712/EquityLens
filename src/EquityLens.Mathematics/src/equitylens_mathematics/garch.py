@@ -51,6 +51,16 @@ class VtGarchFit:
 class PathDistribution:
     horizons: dict[int, np.ndarray]
     sample_paths: np.ndarray
+    day_quantiles: np.ndarray
+
+
+def _quantiles_nearest(values: np.ndarray, probs: list[float]) -> np.ndarray:
+    ordered = np.sort(values)
+    count = ordered.size
+    if count == 0:
+        return np.zeros(len(probs), dtype=np.float64)
+    indices = np.clip(np.ceil(np.asarray(probs) * count).astype(int) - 1, 0, count - 1)
+    return ordered[indices]
 
 
 def deterministic_seed(
@@ -226,6 +236,7 @@ def simulate_paths(
     cumulative = np.ones(simulations, dtype=np.float64)
     sample_count = min(retained_paths, simulations)
     samples = np.empty((sample_count, horizon_days), dtype=np.float64)
+    day_quantiles = np.empty((horizon_days, 5), dtype=np.float64)
     horizons: dict[int, np.ndarray] = {}
     requested = {day for day in (1, 7, 30, 252) if day <= horizon_days}
 
@@ -242,10 +253,14 @@ def simulate_paths(
             + np.exp(percent_return / 100.0) @ weights_array
         )
         cumulative *= portfolio_multiplier
-        samples[:, day - 1] = cumulative[:sample_count] - 1.0
+        day_values = cumulative - 1.0
+        samples[:, day - 1] = day_values[:sample_count]
+        day_quantiles[day - 1] = _quantiles_nearest(
+            day_values, [0.01, 0.05, 0.50, 0.95, 0.99]
+        )
         if day in requested or day == horizon_days:
-            horizons[day] = cumulative.copy() - 1.0
+            horizons[day] = day_values.copy()
         variances = omega + alpha * percent_return**2 + beta * variances
         if np.any(~np.isfinite(variances)) or np.any(variances <= 0):
             raise GarchFitError("path simulation produced invalid variance")
-    return PathDistribution(horizons, samples)
+    return PathDistribution(horizons, samples, day_quantiles)

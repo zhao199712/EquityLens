@@ -51,6 +51,7 @@ const riskCurve = ref<PortfolioRiskResponse[]>([])
 const backtest = ref<PortfolioRiskBacktestResponse | null>(null)
 const activeBacktestRun = ref<PortfolioRiskBacktestRun | null>(null)
 const monteCarloBase = ref<PortfolioMonteCarloResponse | null>(null)
+const monteCarloRun = ref<RiskCalculationRun | null>(null)
 const governance = ref<PortfolioRiskGovernanceResponse | null>(null)
 const targetWeights = ref<Record<string, number>>({})
 const scenarioResult = ref<PortfolioRiskScenarioResponse | null>(null)
@@ -60,7 +61,35 @@ const reportSnapshots = ref<PortfolioRiskReportSnapshotListItem[]>([])
 const selectedReportSnapshot = ref<PortfolioRiskReportSnapshotDetail | null>(null)
 const reportActionMessage = ref('')
 const reportCreating = ref(false)
-const monteCarlo = computed(() => monteCarloBase.value)
+const monteCarlo = computed<PortfolioMonteCarloResponse | null>(() => {
+  if (isVtGarch.value) {
+    const run = monteCarloRun.value
+    const vt = run?.result as VtGarchRiskResult | null
+    if (!run || run.status !== 'Completed' || !vt?.bands?.length) return null
+    return {
+      portfolioId: run.portfolioId,
+      status: 'ready',
+      message: null,
+      dataAsOfDate: vt.dataAsOfDate ?? null,
+      commonTradingDays: vt.lookbackDays ?? 0,
+      horizonDays: 252,
+      simulations: vt.simulations,
+      model: run.selectedModel ?? vt.selectedModel,
+      ewmaLambda: 0,
+      shrinkageAlpha: 0,
+      residualCapQuantile: 0,
+      cappedDrawRate: 0,
+      bands: vt.bands,
+      samplePaths: (vt.samplePaths ?? []).map((path, index) => ({ pathIndex: index + 1, cumulativeReturns: path })),
+      positiveReturnProbability: vt.summary?.positiveReturnProbability ?? 0,
+      expectedReturn: vt.summary?.expectedReturn ?? 0,
+      p5FinalReturn: vt.summary?.p5FinalReturn ?? 0,
+      p1FinalReturn: vt.summary?.p1FinalReturn ?? 0,
+      diagnostics: null as unknown as PortfolioMonteCarloResponse['diagnostics'],
+    }
+  }
+  return monteCarloBase.value
+})
 const stressTest = ref<Awaited<ReturnType<typeof getPortfolioStressTest>> | null>(null)
 const selectedBacktestModel = ref('Historical')
 const selectedBacktestConfidence = ref<0.95 | 0.99>(0.95)
@@ -103,14 +132,18 @@ const normalizedHorizons = computed<NormalizedHorizon[]>(() => {
   }
   const fb = fallbackResult.value
   if (fb) {
-    return fb.horizons.map(h => ({
-      horizonDays: h.horizonDays,
-      var95: h.monteCarloVaR,
-      es95: h.monteCarloES,
-      var99: null,
-      es99: null,
-      expectedReturn: null,
-    }))
+    const at99 = risk99.value?.horizons ?? []
+    return fb.horizons.map(h => {
+      const match99 = at99.find(x => x.horizonDays === h.horizonDays)
+      return {
+        horizonDays: h.horizonDays,
+        var95: h.monteCarloVaR,
+        es95: h.monteCarloES,
+        var99: match99?.monteCarloVaR ?? null,
+        es99: match99?.monteCarloES ?? null,
+        expectedReturn: null,
+      }
+    })
   }
   return []
 })
@@ -124,7 +157,16 @@ const baseCurrency = computed(() => fallbackResult.value?.baseCurrency ?? portfo
 const hasHoldingsData = computed(() => !!fallbackResult.value?.holdings?.length)
 const holdingsRisk = computed(() => fallbackResult.value?.holdings ?? [])
 const industriesRisk = computed(() => fallbackResult.value?.industries ?? [])
-const dailyLogReturns = computed(() => fallbackResult.value?.dailyLogReturns ?? [])
+const dailyLogReturns = computed(() => vtGarchResult.value?.dailyLogReturns ?? fallbackResult.value?.dailyLogReturns ?? [])
+const garchOneDayComparison = computed(() => {
+  const hist = vtGarchResult.value?.historical
+  const g1 = normalizedHorizons.value.find(h => h.horizonDays === 1)
+  if (!hist || !g1) return []
+  return [
+    { method: '歷史模擬法', var95: hist.var95, var99: hist.var99, es95: hist.es95, es99: hist.es99 },
+    { method: 'VT-GARCH-t + Joint-Vector FHS', var95: g1.var95, var99: g1.var99 ?? 0, es95: g1.es95, es99: g1.es99 ?? 0 },
+  ]
+})
 
 type DeferredLoadState = 'idle' | 'loading' | 'ready' | 'error'
 const modelComparisonState = ref<DeferredLoadState>('idle')
@@ -143,6 +185,7 @@ let sectionObserver: IntersectionObserver | null = null
 let viewIsActive = true
 let backtestPollTimer: ReturnType<typeof setTimeout> | null = null
 let calculationPollTimer: ReturnType<typeof setTimeout> | null = null
+let monteCarloPollTimer: ReturnType<typeof setTimeout> | null = null
 const governanceAlerts = computed(() => (governance.value?.alerts ?? []).filter(alert => alert.status !== 'normal').sort((a, b) => (a.status === 'critical' ? -1 : 1) - (b.status === 'critical' ? -1 : 1)))
 const governanceLabel = (code: string) => ({
   'concentration.largest_holding': '最大單一持倉',
@@ -374,10 +417,19 @@ const histogramChart = computed(() => {
   const y = (value: number) => 30 + (1 - value / max) * 180
   return { ticks, y, height: (value: number) => value / max * 180 }
 })
-const officialVarEsComparison = computed(() => riskCurve.value.map(item => {
-  const horizon = item.horizons.find(h => h.horizonDays === 1)
-  return { confidence: `${(item.confidenceLevel * 100).toFixed(item.confidenceLevel % 0.01 === 0 ? 0 : 1)}%`, var: (horizon?.monteCarloVaR ?? 0) * 100, es: (horizon?.monteCarloES ?? 0) * 100 }
-}))
+const officialVarEsComparison = computed(() => {
+  if (isVtGarch.value) {
+    return (vtGarchResult.value?.confidenceCurve ?? []).map(point => ({
+      confidence: `${(point.confidenceLevel * 100).toFixed(point.confidenceLevel % 0.01 === 0 ? 0 : 1)}%`,
+      var: point.var * 100,
+      es: point.es * 100,
+    }))
+  }
+  return riskCurve.value.map(item => {
+    const horizon = item.horizons.find(h => h.horizonDays === 1)
+    return { confidence: `${(item.confidenceLevel * 100).toFixed(item.confidenceLevel % 0.01 === 0 ? 0 : 1)}%`, var: (horizon?.monteCarloVaR ?? 0) * 100, es: (horizon?.monteCarloES ?? 0) * 100 }
+  })
+})
 const varEsChart = computed(() => {
   const maximumLoss = Math.max(...officialVarEsComparison.value.flatMap(point => [-point.var, -point.es]), 1)
   // Leave one extra tick below the largest loss so the 99%+ ES bar never
@@ -427,9 +479,24 @@ const monteCarloStats = computed(() => {
   ]
 })
 const monteCarloDiagnostics = computed(() => {
-  const diagnostics = monteCarlo.value?.diagnostics
-  if (!diagnostics) return []
   const percent = (value: number) => `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%`
+  if (isVtGarch.value) {
+    const vt = monteCarloRun.value?.result as VtGarchRiskResult | null
+    const fh = vt?.fitHealth
+    if (!fh) return []
+    const lastBand = (monteCarlo.value?.bands ?? []).at(-1)
+    return [
+      { label: 'GARCH 拟合健康', value: fh.healthy ? 'Healthy' : 'Degraded' },
+      { label: '最大 persistence', value: fh.maxPersistence.toFixed(4) },
+      { label: '最小 Student-ν', value: fh.minNu.toFixed(2) },
+      { label: 'near-unit 比率', value: `${(fh.nearUnitRate * 100).toFixed(1)}%` },
+      { label: '年化投組波動率', value: percent(vt?.historicalAnnualizedVolatility ?? 0) },
+      { label: '期末 p95', value: lastBand ? percent(lastBand.p95) : '—' },
+      { label: '期末 p99', value: lastBand ? percent(lastBand.p99) : '—' },
+    ]
+  }
+  const diagnostics = monteCarloBase.value?.diagnostics
+  if (!diagnostics) return []
   return [
     { label: '年化投組波動率', value: percent(diagnostics.annualizedPortfolioVolatility) },
     { label: '期末 p95', value: percent(diagnostics.p95FinalReturn) },
@@ -438,6 +505,20 @@ const monteCarloDiagnostics = computed(() => {
     { label: '殘差向量最大值', value: diagnostics.maxResidualNorm.toFixed(2) },
     { label: '期望－中位數', value: percent(diagnostics.expectedMedianGap) },
   ]
+})
+const monteCarloRightSkew = computed(() => {
+  if (isVtGarch.value) {
+    const vt = monteCarloRun.value?.result as VtGarchRiskResult | null
+    const median = (monteCarlo.value?.bands ?? []).at(-1)?.p50 ?? 0
+    const gap = (vt?.summary?.expectedReturn ?? 0) - median
+    return gap >= 0.25
+      ? { warn: true, msg: `期望值與中位數差距 ${(gap * 100).toFixed(1)} 個百分點，分布右偏；下行情境請一併參考。` }
+      : { warn: false, msg: '' }
+  }
+  const diagnostics = monteCarloBase.value?.diagnostics
+  return diagnostics?.rightSkewWarning
+    ? { warn: true, msg: diagnostics.rightSkewMessage ?? '' }
+    : { warn: false, msg: '' }
 })
 function formatMoney(n: number) {
   if (n === 0) return '0'
@@ -497,7 +578,24 @@ async function waitForBacktestRun(initialRun: PortfolioRiskBacktestRun) {
     run = await getPortfolioRiskBacktestRun(portfolioId.value, run.id)
   }
 }
-const loadMonteCarlo = () => loadDeferred(monteCarloState, monteCarloError, async () => { monteCarloBase.value = await getPortfolioMonteCarlo(portfolioId.value) })
+const loadMonteCarlo = () => loadDeferred(monteCarloState, monteCarloError, async () => {
+  if (isVtGarch.value) {
+    const runs = await listRiskCalculations(portfolioId.value)
+    const existing = runs.find(run => run.operation === 'monte-carlo' && run.status !== 'Failed' && isReusableRun(run))
+    const run = existing ?? await createRiskCalculation(portfolioId.value, 'monte-carlo', {
+      simulations: 10000,
+      from: backtestFromDate.value,
+      to: toDate.value,
+    })
+    monteCarloRun.value = run
+    if (run.status !== 'Completed' && run.status !== 'Failed') {
+      const finalRun = await waitForMonteCarloRun(run)
+      if (finalRun.status === 'Failed') throw new Error(finalRun.errorMessage || '蒙地卡羅計算失敗，請重新執行。')
+    }
+  } else {
+    monteCarloBase.value = await getPortfolioMonteCarlo(portfolioId.value)
+  }
+})
 
 function observeDeferredSections() {
   const targets: Array<[HTMLElement | null, () => Promise<void>]> = [[modelComparisonSentinel.value, loadModelComparison], [stressTestSentinel.value, loadStressTest], [backtestSentinel.value, loadBacktest], [monteCarloSentinel.value, loadMonteCarlo]]
@@ -521,11 +619,27 @@ async function waitForCalculationRun(initialRun: RiskCalculationRun) {
   }
 }
 
+async function waitForMonteCarloRun(initialRun: RiskCalculationRun): Promise<RiskCalculationRun> {
+  let run = initialRun
+  while (viewIsActive) {
+    if (run.status === 'Completed' || run.status === 'Failed') {
+      monteCarloRun.value = run
+      return run
+    }
+    await new Promise<void>(resolve => { monteCarloPollTimer = setTimeout(resolve, 2000) })
+    if (!viewIsActive) return run
+    run = await getRiskCalculation(portfolioId.value, run.id)
+    monteCarloRun.value = run
+  }
+  return run
+}
+
 function isReusableRun(run: RiskCalculationRun): boolean {
   if (run.status !== 'Completed') return true
   if (run.selectedModel !== 'VT-GARCH-t + Joint-Vector FHS') return true
   const result = run.result as Record<string, unknown> | null
-  return !!result && 'historicalAnnualizedVolatility' in result
+  if (!result) return false
+  return run.operation === 'monte-carlo' ? 'bands' in result : 'historicalAnnualizedVolatility' in result
 }
 
 onMounted(async () => {
@@ -583,7 +697,7 @@ onMounted(async () => {
   }
 })
 
-onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeout(backtestPollTimer); if (calculationPollTimer) clearTimeout(calculationPollTimer); sectionObserver?.disconnect() })
+onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeout(backtestPollTimer); if (calculationPollTimer) clearTimeout(calculationPollTimer); if (monteCarloPollTimer) clearTimeout(monteCarloPollTimer); sectionObserver?.disconnect() })
 </script>
 
 <template>
@@ -972,7 +1086,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                 </div>
 
                 <div v-if="officialHistogram.length">
-                  <h3 class="chart-title">日報酬分布直方圖（歷史 EWMA 波動率診斷，非正式風險引擎）</h3>
+                  <h3 class="chart-title">歷史日報酬分布（輸入參考）</h3>
                   <svg width="100%" height="270" viewBox="0 0 400 270" style="display: block; width: min(100%, 760px)">
                     <line v-for="value in histogramChart.ticks" :key="'g-' + value" x1="50" :y1="histogramChart.y(value)" x2="380" :y2="histogramChart.y(value)" stroke="rgba(201,168,106,0.12)" stroke-width="1" stroke-dasharray="4 4" />
                     <text v-for="value in histogramChart.ticks" :key="'gy-' + value" x="45" :y="histogramChart.y(value) + 4" text-anchor="end" fill="#9a917c" font-size="10">{{ Math.round(value) }}</text>
@@ -1042,7 +1156,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                 </div>
 
                 <div>
-                  <h3 class="chart-title">VaR vs ES 比較（歷史 EWMA 診斷，非正式風險引擎）</h3>
+                  <h3 class="chart-title">{{ isVtGarch ? 'VaR vs ES 信心水準曲線（VT-GARCH-t 1 日）' : 'VaR vs ES 比較（歷史 EWMA 診斷，非正式風險引擎）' }}</h3>
                   <svg width="100%" height="340" viewBox="0 0 400 340" style="display: block; width: min(100%, 760px); overflow: hidden">
                     <line v-for="value in varEsChart.ticks" :key="'g-' + value" x1="80" :y1="varEsChart.y(value)" x2="380" :y2="varEsChart.y(value)" stroke="rgba(201,168,106,0.12)" stroke-width="1" stroke-dasharray="4 4" />
                     <text v-for="value in varEsChart.ticks" :key="'y-' + value" x="75" :y="varEsChart.y(value) + 4" text-anchor="end" fill="#9a917c" font-size="10">{{ value.toFixed(0) }}%</text>
@@ -1067,7 +1181,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
         </ScrollReveal>
 
         <!-- EWMA Diagnostic (deferred, not the official risk engine) -->
-        <ScrollReveal class="mt-20" v-if="modelComparisonState === 'ready'">
+        <ScrollReveal class="mt-20" v-if="!isVtGarch && modelComparisonState === 'ready'">
           <div class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">歷史 EWMA 波動率診斷</h2>
@@ -1115,6 +1229,41 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                 </div>
                 <p class="table-note">以上為同步 EWMA 端點的歷史診斷資料，不作為正式風險決策依據。正式模型為 {{ calculationRun?.selectedModel ?? '—' }}。</p>
               </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        <!-- GARCH vs Historical 1-day comparison -->
+        <ScrollReveal class="mt-20" v-if="isVtGarch && garchOneDayComparison.length">
+          <div class="prestige-panel">
+            <div class="section-head">
+              <h2 class="panel-title">1 日風險模型對照</h2>
+              <span class="prestige-label">純歷史排序 vs VT-GARCH-t — 95% & 99%</span>
+            </div>
+            <div class="section-body">
+              <div class="table-wrap">
+                <table class="prestige-table">
+                  <thead>
+                    <tr>
+                      <th style="text-align: left">計算方法</th>
+                      <th style="text-align: right">VaR 95%</th>
+                      <th style="text-align: right">VaR 99%</th>
+                      <th style="text-align: right">ES 95%</th>
+                      <th style="text-align: right">ES 99%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, i) in garchOneDayComparison" :key="i">
+                      <td>{{ row.method }}</td>
+                      <td class="prestige-mono td-num td-warn">{{ (row.var95 * 100).toFixed(2) }}%</td>
+                      <td class="prestige-mono td-num td-danger">{{ (row.var99 * 100).toFixed(2) }}%</td>
+                      <td class="prestige-mono td-num td-warn">{{ (row.es95 * 100).toFixed(2) }}%</td>
+                      <td class="prestige-mono td-num td-danger">{{ (row.es99 * 100).toFixed(2) }}%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="table-note">歷史模擬法為純歷史排序、不含模型假設；VT-GARCH-t 為正式風險引擎。兩者差異反映波動率聚集與厚尾修正的影響。</p>
             </div>
           </div>
         </ScrollReveal>
@@ -1326,8 +1475,8 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                     <span class="mini-title" style="margin: 0">模型診斷</span>
                     <span class="prestige-label">Model Diagnostics</span>
                   </div>
-                  <div v-if="monteCarlo.diagnostics.rightSkewWarning" class="warn-box">
-                    {{ monteCarlo.diagnostics.rightSkewMessage }}
+                  <div v-if="monteCarloRightSkew.warn" class="warn-box">
+                    {{ monteCarloRightSkew.msg }}
                   </div>
                   <p v-else class="muted-text" style="margin-bottom: 14px">期望值與中位數差距未達 25 個百分點右偏警示門檻；仍請一併參考下行情境。</p>
                   <div class="diag-grid">

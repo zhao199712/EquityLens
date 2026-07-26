@@ -353,6 +353,44 @@ def calculate_current_risk(
             "p99": nearest_rank(distribution, .99),
             "expectedReturn": float(np.mean(distribution)),
         })
+    one_day = paths.horizons.get(1)
+    confidence_curve = []
+    if one_day is not None:
+        for confidence in (0.90, 0.95, 0.975, 0.99, 0.995):
+            confidence_curve.append({
+                "confidenceLevel": confidence,
+                "var": historical_var(one_day, confidence),
+                "es": expected_shortfall(one_day, confidence),
+            })
+    historical_one_day = None
+    if one_day is not None:
+        historical_one_day = {
+            "var95": historical_var(one_day, 0.95),
+            "var99": historical_var(one_day, 0.99),
+            "es95": expected_shortfall(one_day, 0.95),
+            "es99": expected_shortfall(one_day, 0.99),
+        }
+    bands = []
+    summary = None
+    if operation == "monte-carlo":
+        for day_index, quantiles in enumerate(paths.day_quantiles):
+            bands.append({
+                "day": day_index + 1,
+                "p1": float(quantiles[0]),
+                "p5": float(quantiles[1]),
+                "p50": float(quantiles[2]),
+                "p95": float(quantiles[3]),
+                "p99": float(quantiles[4]),
+            })
+        final_distribution = paths.horizons.get(horizon_days)
+        if final_distribution is not None:
+            summary = {
+                "positiveReturnProbability": float(np.mean(final_distribution > 0)),
+                "expectedReturn": float(np.mean(final_distribution)),
+                "p50FinalReturn": nearest_rank(final_distribution, 0.50),
+                "p5FinalReturn": nearest_rank(final_distribution, 0.05),
+                "p1FinalReturn": nearest_rank(final_distribution, 0.01),
+            }
     return {
         "outcome": "Success",
         "value": {
@@ -368,6 +406,11 @@ def calculate_current_risk(
             "historicalAnnualizedVolatility": historical_annualized_volatility,
             "maxDrawdown": max_drawdown,
             "horizons": horizons,
+            "confidenceCurve": confidence_curve,
+            "historical": historical_one_day,
+            "dailyLogReturns": portfolio_returns.tolist(),
+            "bands": bands,
+            "summary": summary,
             "samplePaths": paths.sample_paths.tolist() if operation == "monte-carlo" else [],
             "fitHealth": {
                 "healthy": True,

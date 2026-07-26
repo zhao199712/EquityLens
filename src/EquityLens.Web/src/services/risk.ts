@@ -219,12 +219,22 @@ export interface FitHealth {
   healthy:boolean; warningCount:number; nearUnitRate:number
   maxPersistence:number; minNu:number; optimizerAttempts:number
 }
+export interface VtGarchBand { day:number; p1:number; p5:number; p50:number; p95:number; p99:number }
+export interface VtGarchConfidencePoint { confidenceLevel:number; var:number; es:number }
+export interface VtGarchHistoricalOneDay { var95:number; var99:number; es95:number; es99:number }
+export interface VtGarchMonteCarloSummary {
+  positiveReturnProbability:number; expectedReturn:number
+  p50FinalReturn:number; p5FinalReturn:number; p1FinalReturn:number
+}
 export interface VtGarchRiskResult {
   portfolioId:string; dataAsOfDate:string; operation:string
   requestedModel:string; selectedModel:string; algorithmVersion:string; fallbackDepth:number
   simulations:number; lookbackDays:number
   historicalAnnualizedVolatility?:number; maxDrawdown?:number
   horizons:VtGarchHorizon[]; samplePaths:number[][]; fitHealth:FitHealth
+  bands?:VtGarchBand[]; summary?:VtGarchMonteCarloSummary|null
+  confidenceCurve?:VtGarchConfidencePoint[]; historical?:VtGarchHistoricalOneDay|null
+  dailyLogReturns?:number[]
 }
 
 export interface NormalizedHorizon {
