@@ -21,6 +21,7 @@ public sealed record RiskPythonShadowResultItem(
     string StreamId,
     Guid JobId,
     Guid ComparisonId,
+    Guid? CalculationRunId,
     string Status,
     string? ResultKey,
     long? DurationMs,
@@ -31,6 +32,11 @@ public interface IRiskPythonShadowQueue
     Task<(RiskPythonShadowJob Job, string StreamId)> EnqueueAsync(
         Guid comparisonId,
         Guid backtestRunId,
+        RiskBacktestEngineInput input,
+        CancellationToken cancellationToken = default);
+    Task<(Guid JobId, string InputHash, string StreamId)> EnqueueCalculationAsync(
+        Guid calculationRunId,
+        string operation,
         RiskBacktestEngineInput input,
         CancellationToken cancellationToken = default);
     Task<RiskPythonShadowResultItem?> ReadResultAsync(
@@ -75,7 +81,9 @@ public sealed class RedisRiskPythonShadowQueue : IRiskPythonShadowQueue
             new("jobId", jobId.ToString()),
             new("comparisonId", comparisonId.ToString()),
             new("backtestRunId", backtestRunId.ToString()),
-            new("operation", "mvewma-fhs-backtest"),
+            new("schemaVersion", "1"),
+            new("operation", "vt-garch-backtest"),
+            new("requestedModel", "VT-GARCH-t + Joint-Vector FHS"),
             new("modelVersion", _options.CandidateAlgorithmVersion),
             new("inputHash", inputHash),
             new("inputKey", inputKey),
@@ -86,6 +94,40 @@ public sealed class RedisRiskPythonShadowQueue : IRiskPythonShadowQueue
         return (new RiskPythonShadowJob(
             jobId, comparisonId, backtestRunId, inputHash, inputKey,
             _options.CandidateAlgorithmVersion, createdAt), streamId!);
+    }
+
+    public async Task<(Guid JobId, string InputHash, string StreamId)> EnqueueCalculationAsync(
+        Guid calculationRunId,
+        string operation,
+        RiskBacktestEngineInput input,
+        CancellationToken cancellationToken = default)
+    {
+        var db = _connection.GetDatabase();
+        var jobId = Guid.NewGuid();
+        var canonicalJson = JsonSerializer.Serialize(input, JsonOptions);
+        var inputHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson))).ToLowerInvariant();
+        var inputKey = $"{_options.PayloadKeyPrefix}:input:{jobId:N}";
+        await db.StringSetAsync(
+            inputKey, Compress(canonicalJson), TimeSpan.FromHours(_options.PayloadTtlHours))
+            .WaitAsync(cancellationToken);
+        var entries = new NameValueEntry[]
+        {
+            new("jobId", jobId.ToString()),
+            new("calculationRunId", calculationRunId.ToString()),
+            new("comparisonId", Guid.Empty.ToString()),
+            new("schemaVersion", "1"),
+            new("operation", operation),
+            new("requestedModel", "VT-GARCH-t + Joint-Vector FHS"),
+            new("modelVersion", _options.CandidateAlgorithmVersion),
+            new("inputHash", inputHash),
+            new("inputKey", inputKey),
+            new("attempt", "1"),
+            new("createdAtUtc", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)),
+        };
+        var streamId = await db.StreamAddAsync(_options.JobsStreamKey, entries)
+            .WaitAsync(cancellationToken);
+        return (jobId, inputHash, streamId!);
     }
 
     public async Task<RiskPythonShadowResultItem?> ReadResultAsync(
@@ -115,6 +157,9 @@ public sealed class RedisRiskPythonShadowQueue : IRiskPythonShadowQueue
             entry.Id!,
             jobId,
             comparisonId,
+            Guid.TryParse(values.GetValueOrDefault("calculationRunId"), out var calculationRunId)
+                ? calculationRunId
+                : null,
             values.GetValueOrDefault("status") ?? "Failed",
             values.GetValueOrDefault("resultKey"),
             long.TryParse(values.GetValueOrDefault("durationMs"), out var duration) ? duration : null,

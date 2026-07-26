@@ -22,7 +22,7 @@ from typing import Any
 import requests
 import yfinance as yf
 
-from risk_worker.research.adjusted_close import (
+from equitylens_mathematics.research.adjusted_close import (
     CorporateAction,
     PriceObservation,
     build_factor_chain,

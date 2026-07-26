@@ -1,29 +1,24 @@
 namespace EquityLens.Api.Data.Entities;
 
-/// <summary>
-/// Immutable request and result snapshot for an expensive portfolio backtest.
-/// The linked JobRun represents queue execution; this record remains available after it completes.
-/// </summary>
-public sealed class RiskBacktestRun
+/// <summary>可稽核的跨語言投資組合風險計算工作。</summary>
+public sealed class RiskCalculationRun
 {
     public Guid Id { get; set; }
     public Guid PortfolioId { get; set; }
     public Guid RequestedByUserId { get; set; }
-    public Guid JobRunId { get; set; }
-    public DateOnly FromDate { get; set; }
-    public DateOnly ToDate { get; set; }
-    public int LookbackDays { get; set; } = 252;
-    public int Simulations { get; set; } = 5000;
-    public string AlgorithmVersion { get; set; } = "mvewma-fhs-backtest-v2";
-    public string RequestedModel { get; set; } = "VT-GARCH-t + Joint-Vector FHS";
-    public string? SelectedModel { get; set; }
-    public string? InputHash { get; set; }
-    public string? FallbackReason { get; set; }
-    public int FallbackDepth { get; set; }
+    public string Operation { get; set; } = "risk";
     public string Status { get; set; } = "Queued";
     public int ProgressPercent { get; set; }
+    public string RequestedModel { get; set; } = "VT-GARCH-t + Joint-Vector FHS";
+    public string? SelectedModel { get; set; }
+    public string AlgorithmVersion { get; set; } = "vt-garch-t-joint-fhs-v1";
+    public string? InputHash { get; set; }
     public string InputSnapshotJson { get; set; } = "{}";
     public string? ResultJson { get; set; }
+    public string? FitHealthJson { get; set; }
+    public string? DataFactorVersion { get; set; }
+    public string? FallbackReason { get; set; }
+    public int FallbackDepth { get; set; }
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTime CreatedAtUtc { get; set; }

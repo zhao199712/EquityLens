@@ -9,4 +9,8 @@ public interface IRiskBacktestRunService
     Task<Result<PortfolioRiskBacktestRunResponse>> GetAsync(Guid portfolioId, Guid runId, Guid userId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PortfolioRiskBacktestRunResponse>> ListAsync(Guid portfolioId, Guid userId, CancellationToken cancellationToken = default);
     Task<bool> ExecuteAsync(Guid runId, CancellationToken cancellationToken = default);
+    Task CompletePythonResultAsync(
+        RiskPythonShadowResultItem item,
+        string? resultJson,
+        CancellationToken cancellationToken = default);
 }

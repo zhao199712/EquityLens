@@ -19,20 +19,20 @@ from pathlib import Path
 
 import numpy as np
 
-from risk_worker.engine import (
+from equitylens_mathematics.engine import (
     ewma_covariances,
     filtered_residuals,
     stable_seed,
     stabilize_covariances,
 )
-from risk_worker.research.additional_validation import (
+from equitylens_mathematics.research.additional_validation import (
     christoffersen,
     fz0_loss,
     kupiec,
     paired_test,
     qloss,
 )
-from risk_worker.research.robustness_experiments import (
+from equitylens_mathematics.research.robustness_experiments import (
     CONFIDENCES,
     EQUAL,
     MARKET,

@@ -38,6 +38,7 @@ const riskEwma = ref<PortfolioRiskResponse | null>(null)
 const riskEwma99 = ref<PortfolioRiskResponse | null>(null)
 const riskCurve = ref<PortfolioRiskResponse[]>([])
 const backtest = ref<PortfolioRiskBacktestResponse | null>(null)
+const activeBacktestRun = ref<PortfolioRiskBacktestRun | null>(null)
 const monteCarloBase = ref<PortfolioMonteCarloResponse | null>(null)
 const governance = ref<PortfolioRiskGovernanceResponse | null>(null)
 const targetWeights = ref<Record<string, number>>({})
@@ -50,9 +51,12 @@ const reportActionMessage = ref('')
 const reportCreating = ref(false)
 const monteCarlo = computed(() => monteCarloBase.value)
 const stressTest = ref<Awaited<ReturnType<typeof getPortfolioStressTest>> | null>(null)
-const selectedBacktestModel = ref<'Historical' | 'MVEWMA-FHS'>('Historical')
+const selectedBacktestModel = ref('Historical')
 const selectedBacktestConfidence = ref<0.95 | 0.99>(0.95)
-const backtestModels: Array<'Historical' | 'MVEWMA-FHS'> = ['Historical', 'MVEWMA-FHS']
+const backtestModels = computed(() => {
+  const names = backtest.value?.models.map(model => model.model) ?? ['Historical', 'VT-GARCH-t + Joint-Vector FHS']
+  return [...new Set(names.filter(name => !name.includes('保守')))]
+})
 const backtestConfidences: Array<0.95 | 0.99> = [0.95, 0.99]
 const error = ref('')
 type DeferredLoadState = 'idle' | 'loading' | 'ready' | 'error'
@@ -398,6 +402,7 @@ async function waitForBacktestRun(initialRun: PortfolioRiskBacktestRun) {
     if (run.status === 'Completed') {
       if (!run.result) throw new Error('回測已完成，但找不到結果快照。')
       backtest.value = run.result
+      activeBacktestRun.value = run
       return
     }
     if (run.status === 'Failed') throw new Error(run.errorMessage || '回測失敗，請重新執行。')
@@ -1018,7 +1023,8 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                   </div>
 
                   <p class="muted-text">
-                    使用目前持倉權重回放近三年共同日價格；圖表顯示最近 60 個有效回測日。可切換正式 Historical 與 MVEWMA-FHS 的 95%／99% 回測結果。
+                    使用目前持倉權重回放近三年共同日價格；正式模型為 VT-GARCH-t + Joint-Vector FHS。若 Python 不可用，系統會明確標示並回退 C# MVEWMA-FHS。
+                    <template v-if="activeBacktestRun?.fallbackReason">目前結果已回退：{{ activeBacktestRun.selectedModel }}（{{ activeBacktestRun.fallbackReason }}）</template>
                   </p>
                 </div>
               </div>
@@ -1032,7 +1038,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
           <div class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">蒙地卡羅模擬</h2>
-              <span class="prestige-label">{{ monteCarlo?.model ?? 'MVEWMA-FHS' }} — {{ monteCarlo?.simulations?.toLocaleString() ?? '10,000' }} 次、{{ monteCarlo?.horizonDays ?? 252 }} 個交易日路徑模擬</span>
+              <span class="prestige-label">{{ monteCarlo?.model ?? 'VT-GARCH-t + Joint-Vector FHS' }} — {{ monteCarlo?.simulations?.toLocaleString() ?? '10,000' }} 次、{{ monteCarlo?.horizonDays ?? 252 }} 個交易日路徑模擬</span>
             </div>
             <div class="section-body">
               <template v-if="monteCarlo?.status === 'ready'">

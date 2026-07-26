@@ -18,13 +18,13 @@ from arch import arch_model
 from scipy.optimize import minimize
 from scipy.special import gammaln
 
-from risk_worker.engine import (
+from equitylens_mathematics.engine import (
     ewma_covariances,
     filtered_residuals,
     stable_seed,
     stabilize_covariances,
 )
-from risk_worker.research.additional_validation import paired_test, qloss
+from equitylens_mathematics.research.additional_validation import paired_test, qloss
 
 TICKERS = [
     "2330", "2454", "2308", "2317", "3711", "2303", "2383", "2891",

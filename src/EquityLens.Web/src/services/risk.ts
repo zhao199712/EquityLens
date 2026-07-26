@@ -192,10 +192,41 @@ export async function getPortfolioRiskBacktest(portfolioId: string, from: string
 }
 export interface PortfolioRiskBacktestRun {
   id: string; portfolioId: string; jobId: string
-  status: 'Queued' | 'Running' | 'Completed' | 'Failed'; progressPercent: number
+  status: 'Queued' | 'Running' | 'FallbackRunning' | 'Completed' | 'Failed'; progressPercent: number
   from: string; to: string; lookbackDays: number; simulations: number; algorithmVersion: string
+  requestedModel: string; selectedModel: string | null; inputHash: string | null
+  fallbackReason: string | null; fallbackDepth: number
   createdAtUtc: string; startedAtUtc: string | null; completedAtUtc: string | null
   errorCode: string | null; errorMessage: string | null; result: PortfolioRiskBacktestResponse | null
+}
+
+export type RiskCalculationOperation = 'risk' | 'monte-carlo' | 'backtest' | 'scenario' | 'governance' | 'report'
+export interface RiskCalculationRun {
+  id:string; portfolioId:string; operation:RiskCalculationOperation
+  status:'Queued'|'Running'|'FallbackRunning'|'Completed'|'Failed'; progressPercent:number
+  requestedModel:string; selectedModel:string|null; algorithmVersion:string; inputHash:string|null
+  dataFactorVersion:string|null; fallbackReason:string|null; fallbackDepth:number
+  createdAtUtc:string; startedAtUtc:string|null; completedAtUtc:string|null
+  errorCode:string|null; errorMessage:string|null; result:unknown|null
+}
+export async function createRiskCalculation(
+  portfolioId:string,
+  operation:RiskCalculationOperation,
+  options:Record<string, unknown> = {},
+): Promise<RiskCalculationRun> {
+  const response = await http.post<RiskCalculationRun>(
+    `/portfolios/${portfolioId}/risk/calculations`,
+    { operation, ...options },
+  )
+  return response.data
+}
+export async function getRiskCalculation(portfolioId:string, runId:string): Promise<RiskCalculationRun> {
+  const response = await http.get<RiskCalculationRun>(`/portfolios/${portfolioId}/risk/calculations/${runId}`)
+  return response.data
+}
+export async function listRiskCalculations(portfolioId:string): Promise<RiskCalculationRun[]> {
+  const response = await http.get<RiskCalculationRun[]>(`/portfolios/${portfolioId}/risk/calculations`)
+  return response.data
 }
 export async function createPortfolioRiskBacktestRun(portfolioId: string, from: string, to: string): Promise<PortfolioRiskBacktestRun> {
   const response = await http.post<PortfolioRiskBacktestRun>(`/portfolios/${portfolioId}/risk/backtests`, undefined, { params: { from, to } })

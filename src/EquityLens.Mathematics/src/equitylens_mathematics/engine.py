@@ -7,6 +7,15 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .garch import (
+    ALGORITHM_VERSION,
+    MODEL_NAME,
+    VtGarchFit,
+    deterministic_seed,
+    fit_vt_garch,
+    one_day_distribution,
+    simulate_paths,
+)
 from .models import RiskBacktestInput
 
 
@@ -207,6 +216,7 @@ def calculate_backtest(input_data: RiskBacktestInput, input_hash: str) -> dict:
     portfolio_returns = np.asarray(input_data.portfolio_returns, dtype=np.float64)
     weights = np.asarray(input_data.weights, dtype=np.float64)
     windows: list[dict] = []
+    active_fit: VtGarchFit | None = None
 
     for offset, index in enumerate(
         range(input_data.lookback_days, portfolio_returns.size)
@@ -223,25 +233,17 @@ def calculate_backtest(input_data: RiskBacktestInput, input_hash: str) -> dict:
                 for confidence in input_data.confidence_levels
             ],
         )
-        regular = simulate_fhs(
-            matrix,
+        if active_fit is None or offset % 21 == 0:
+            active_fit = fit_vt_garch(matrix)
+        distribution = one_day_distribution(
+            active_fit,
             weights,
             input_data.simulations,
-            input_data.confidence_levels,
-            input_data.ewma_lambda,
-            input_data.shrinkage_alpha,
-            0.0,
-            stable_seed(input_hash, offset, False),
+            deterministic_seed(input_hash, "backtest", offset),
         )
-        conservative = simulate_fhs(
-            matrix,
-            weights,
-            input_data.simulations,
-            input_data.confidence_levels,
-            input_data.ewma_lambda,
-            input_data.shrinkage_alpha,
-            input_data.conservative_residual_cap_quantile,
-            stable_seed(input_hash, offset, True),
+        regular = SimulationResult(
+            [historical_var(distribution, level) for level in input_data.confidence_levels],
+            [expected_shortfall(distribution, level) for level in input_data.confidence_levels],
         )
         windows.append(
             {
@@ -249,17 +251,24 @@ def calculate_backtest(input_data: RiskBacktestInput, input_hash: str) -> dict:
                 "actual": float(portfolio_returns[index]),
                 "historical": historical,
                 "regular": regular,
-                "conservative": conservative,
             }
+        )
+        current = asset_returns[:, index] * 100.0
+        parameters = active_fit.parameters
+        standardized = current / np.sqrt(active_fit.next_variances)
+        residuals = np.vstack((active_fit.residuals[1:], standardized))
+        next_variances = np.asarray([
+            item.omega + item.alpha * current[asset] ** 2
+            + item.beta * active_fit.next_variances[asset]
+            for asset, item in enumerate(parameters)
+        ])
+        active_fit = VtGarchFit(
+            parameters, residuals, next_variances, active_fit.warning_count
         )
 
     models: list[dict] = []
     for confidence_index, confidence in enumerate(input_data.confidence_levels):
-        for name, key in (
-            ("Historical", "historical"),
-            ("MVEWMA-FHS", "regular"),
-            ("MVEWMA-FHS（保守 p99）", "conservative"),
-        ):
+        for name, key in (("Historical", "historical"), (MODEL_NAME, "regular")):
             points = []
             for window in windows:
                 simulation = window[key]
@@ -285,6 +294,76 @@ def calculate_backtest(input_data: RiskBacktestInput, input_hash: str) -> dict:
             "lookbackDays": input_data.lookback_days,
             "observationCount": len(windows),
             "models": models,
+            "requestedModel": MODEL_NAME,
+            "selectedModel": MODEL_NAME,
+            "algorithmVersion": ALGORITHM_VERSION,
+            "fallbackDepth": 0,
+        },
+        "errorCode": None,
+        "errorMessage": None,
+        "_durationMs": round((time.perf_counter() - started) * 1000),
+    }
+
+
+def calculate_current_risk(
+    input_data: RiskBacktestInput, input_hash: str, operation: str
+) -> dict:
+    """Calculate the current multi-horizon VT-GARCH distribution."""
+    started = time.perf_counter()
+    asset_returns = np.asarray(input_data.asset_returns, dtype=np.float64)
+    weights = np.asarray(input_data.weights, dtype=np.float64)
+    matrix = asset_returns[:, -input_data.lookback_days:]
+    fit = fit_vt_garch(matrix)
+    horizon_days = 252 if operation == "monte-carlo" else 30
+    simulations = max(input_data.simulations, 10_000)
+    paths = simulate_paths(
+        fit,
+        weights,
+        simulations,
+        horizon_days,
+        deterministic_seed(input_hash, operation, 0),
+    )
+    horizons = []
+    for day, distribution in sorted(paths.horizons.items()):
+        levels = []
+        for confidence in input_data.confidence_levels:
+            levels.append({
+                "confidenceLevel": confidence,
+                "var": historical_var(distribution, confidence),
+                "expectedShortfall": expected_shortfall(distribution, confidence),
+            })
+        horizons.append({
+            "horizonDays": day,
+            "confidenceLevels": levels,
+            "p1": nearest_rank(distribution, .01),
+            "p5": nearest_rank(distribution, .05),
+            "p50": nearest_rank(distribution, .50),
+            "p95": nearest_rank(distribution, .95),
+            "p99": nearest_rank(distribution, .99),
+            "expectedReturn": float(np.mean(distribution)),
+        })
+    return {
+        "outcome": "Success",
+        "value": {
+            "portfolioId": input_data.portfolio_id,
+            "dataAsOfDate": input_data.return_dates[-1].isoformat(),
+            "operation": operation,
+            "requestedModel": MODEL_NAME,
+            "selectedModel": MODEL_NAME,
+            "algorithmVersion": ALGORITHM_VERSION,
+            "fallbackDepth": 0,
+            "simulations": simulations,
+            "lookbackDays": input_data.lookback_days,
+            "horizons": horizons,
+            "samplePaths": paths.sample_paths.tolist() if operation == "monte-carlo" else [],
+            "fitHealth": {
+                "healthy": True,
+                "warningCount": fit.warning_count,
+                "nearUnitRate": fit.near_unit_rate,
+                "maxPersistence": max(item.persistence for item in fit.parameters),
+                "minNu": min(item.nu for item in fit.parameters),
+                "optimizerAttempts": sum(item.optimizer_attempts for item in fit.parameters),
+            },
         },
         "errorCode": None,
         "errorMessage": None,

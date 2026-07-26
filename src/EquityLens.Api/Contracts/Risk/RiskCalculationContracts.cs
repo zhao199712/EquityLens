@@ -1,19 +1,25 @@
+using System.Text.Json;
+
 namespace EquityLens.Api.Contracts.Risk;
 
-public sealed record PortfolioRiskBacktestRunResponse(
+public sealed record CreateRiskCalculationRequest(
+    string Operation,
+    DateOnly? From = null,
+    DateOnly? To = null,
+    int Simulations = 10000,
+    JsonElement? Parameters = null);
+
+public sealed record RiskCalculationRunResponse(
     Guid Id,
     Guid PortfolioId,
-    Guid JobId,
+    string Operation,
     string Status,
     int ProgressPercent,
-    DateOnly From,
-    DateOnly To,
-    int LookbackDays,
-    int Simulations,
-    string AlgorithmVersion,
     string RequestedModel,
     string? SelectedModel,
+    string AlgorithmVersion,
     string? InputHash,
+    string? DataFactorVersion,
     string? FallbackReason,
     int FallbackDepth,
     DateTime CreatedAtUtc,
@@ -21,4 +27,4 @@ public sealed record PortfolioRiskBacktestRunResponse(
     DateTime? CompletedAtUtc,
     string? ErrorCode,
     string? ErrorMessage,
-    PortfolioRiskBacktestResponse? Result);
+    JsonElement? Result);

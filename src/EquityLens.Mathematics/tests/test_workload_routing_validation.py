@@ -4,11 +4,11 @@ from pathlib import Path
 
 import numpy as np
 
-from risk_worker.research.routing_safety_validation import (
+from equitylens_mathematics.research.routing_safety_validation import (
     select,
     weights_for_hhi,
 )
-from risk_worker.research.workload_routing_validation import (
+from equitylens_mathematics.research.workload_routing_validation import (
     _merge_csv,
     _shard_for,
 )

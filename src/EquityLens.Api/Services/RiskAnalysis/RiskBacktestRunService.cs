@@ -14,7 +14,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
 {
     private const int LookbackDays = 252;
     private const int Simulations = 5000;
-    private const string AlgorithmVersion = CSharpRiskBacktestEngine.CurrentAlgorithmVersion;
+    private const string RequestedModel = "VT-GARCH-t + Joint-Vector FHS";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly EquityLensDbContext _dbContext;
@@ -58,7 +58,10 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
         var now = DateTime.UtcNow;
         var runId = Guid.NewGuid();
         var jobId = Guid.NewGuid();
-        var inputSnapshot = JsonSerializer.Serialize(new { from, to, lookbackDays = LookbackDays, simulations = Simulations, algorithmVersion = AlgorithmVersion }, JsonOptions);
+        var algorithmVersion = _pythonOptions.PrimaryEnabled
+            ? _pythonOptions.CandidateAlgorithmVersion
+            : CSharpRiskBacktestEngine.CurrentAlgorithmVersion;
+        var inputSnapshot = JsonSerializer.Serialize(new { from, to, lookbackDays = LookbackDays, simulations = Simulations, algorithmVersion }, JsonOptions);
         var payload = JsonSerializer.Serialize(new { backtestRunId = runId }, JsonOptions);
         var job = new JobRun
         {
@@ -79,7 +82,8 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
             ToDate = to,
             LookbackDays = LookbackDays,
             Simulations = Simulations,
-            AlgorithmVersion = AlgorithmVersion,
+            AlgorithmVersion = algorithmVersion,
+            RequestedModel = _pythonOptions.PrimaryEnabled ? RequestedModel : "C# MVEWMA-FHS",
             Status = "Queued",
             InputSnapshotJson = inputSnapshot,
             CreatedAtUtc = now,
@@ -137,7 +141,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
             }
 
             RiskEngineComparison? comparison = null;
-            if (_pythonOptions.ShadowEnabled)
+            if (_pythonOptions.ShadowEnabled || _pythonOptions.PrimaryEnabled)
             {
                 comparison = new RiskEngineComparison
                 {
@@ -159,7 +163,14 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
                         comparison.Id, run.Id, prepared.Value!, cancellationToken);
                     comparison.InputHash = enqueued.Job.InputHash;
                     comparison.Status = "Queued";
+                    run.InputHash = enqueued.Job.InputHash;
                     await _dbContext.SaveChangesAsync(cancellationToken);
+                    if (_pythonOptions.PrimaryEnabled)
+                    {
+                        run.ProgressPercent = 40;
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                        return true;
+                    }
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
@@ -167,8 +178,10 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
                     comparison.ErrorMessage = $"Could not enqueue Python shadow calculation: {exception.Message}";
                     comparison.CompletedAtUtc = DateTime.UtcNow;
                     await _dbContext.SaveChangesAsync(cancellationToken);
+                    run.FallbackReason = "python_enqueue_failed";
+                    run.FallbackDepth = 1;
                     _logger.LogWarning(exception,
-                        "Python shadow enqueue failed for backtest run {BacktestRunId}; C# primary will continue.",
+                        "Python enqueue failed for backtest run {BacktestRunId}; C# fallback will continue.",
                         run.Id);
                 }
             }
@@ -186,6 +199,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
                 run.ProgressPercent = 100;
                 run.ErrorCode = null;
                 run.ErrorMessage = null;
+                run.SelectedModel = "C# MVEWMA-FHS";
             }
             else
             {
@@ -209,10 +223,88 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
         }
         finally
         {
-            run.CompletedAtUtc = DateTime.UtcNow;
+            if (run.Status is "Completed" or "Failed")
+                run.CompletedAtUtc = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync(CancellationToken.None);
         }
-        return run.Status == "Completed";
+        return run.Status is "Completed" or "Running";
+    }
+
+    public async Task CompletePythonResultAsync(
+        RiskPythonShadowResultItem item,
+        string? resultJson,
+        CancellationToken cancellationToken = default)
+    {
+        var comparison = await _dbContext.RiskEngineComparisons
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == item.ComparisonId, cancellationToken);
+        if (comparison is null) return;
+        var run = await _dbContext.RiskBacktestRuns
+            .FirstOrDefaultAsync(x => x.Id == comparison.RiskBacktestRunId, cancellationToken);
+        if (run is null || run.Status is "Completed" or "Failed") return;
+
+        if (string.Equals(item.Status, "Completed", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(resultJson))
+        {
+            try
+            {
+                var candidate = JsonSerializer.Deserialize<RiskBacktestEngineResult>(resultJson, JsonOptions);
+                if (candidate?.Outcome == RiskEngineOutcomes.Success && candidate.Value is not null)
+                {
+                    run.ResultJson = JsonSerializer.Serialize(candidate.Value, JsonOptions);
+                    run.SelectedModel = RequestedModel;
+                    run.AlgorithmVersion = _pythonOptions.CandidateAlgorithmVersion;
+                    run.Status = "Completed";
+                    run.ProgressPercent = 100;
+                    run.ErrorCode = null;
+                    run.ErrorMessage = null;
+                    run.CompletedAtUtc = DateTime.UtcNow;
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    return;
+                }
+            }
+            catch (JsonException)
+            {
+                // Invalid candidate output follows the explicit fallback path below.
+            }
+        }
+
+        run.Status = "FallbackRunning";
+        run.ProgressPercent = 70;
+        run.FallbackDepth = 1;
+        run.FallbackReason = string.IsNullOrWhiteSpace(item.ErrorMessage)
+            ? "python_candidate_invalid"
+            : "python_worker_failed";
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var prepared = await _inputProvider.PreparePortfolioRiskBacktestInputAsync(
+            run.PortfolioId, run.FromDate, run.ToDate, run.RequestedByUserId, cancellationToken);
+        if (!prepared.IsSuccess)
+        {
+            run.Status = "Failed";
+            run.ErrorCode = prepared.ErrorCode;
+            run.ErrorMessage = prepared.ErrorMessage;
+        }
+        else
+        {
+            var fallback = _riskBacktestEngine.Calculate(prepared.Value!, cancellationToken);
+            if (fallback.Value is not null)
+            {
+                run.ResultJson = JsonSerializer.Serialize(fallback.Value, JsonOptions);
+                run.SelectedModel = "C# MVEWMA-FHS";
+                run.AlgorithmVersion = _riskBacktestEngine.AlgorithmVersion;
+                run.Status = "Completed";
+                run.ProgressPercent = 100;
+            }
+            else
+            {
+                run.Status = "Failed";
+                run.ErrorCode = fallback.ErrorCode;
+                run.ErrorMessage = fallback.ErrorMessage;
+            }
+        }
+        run.CompletedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<RiskBacktestRun?> FindOwnedAsync(Guid portfolioId, Guid runId, Guid userId, CancellationToken cancellationToken) =>
@@ -222,6 +314,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
     private static PortfolioRiskBacktestRunResponse ToResponse(RiskBacktestRun run) => new(
         run.Id, run.PortfolioId, run.JobRunId, run.Status, run.ProgressPercent,
         run.FromDate, run.ToDate, run.LookbackDays, run.Simulations, run.AlgorithmVersion,
+        run.RequestedModel, run.SelectedModel, run.InputHash, run.FallbackReason, run.FallbackDepth,
         run.CreatedAtUtc, run.StartedAtUtc, run.CompletedAtUtc, run.ErrorCode, run.ErrorMessage,
         string.IsNullOrWhiteSpace(run.ResultJson) ? null : JsonSerializer.Deserialize<PortfolioRiskBacktestResponse>(run.ResultJson, JsonOptions));
 }

@@ -1,6 +1,6 @@
 import numpy as np
 
-from risk_worker.research.additional_validation import (
+from equitylens_mathematics.research.additional_validation import (
     circular_indices,
     fz0_loss,
     mcs,

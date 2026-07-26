@@ -178,6 +178,7 @@ builder.Services.AddScoped<RiskAnalysisService>();
 builder.Services.AddScoped<IRiskAnalysisService>(sp => sp.GetRequiredService<RiskAnalysisService>());
 builder.Services.AddScoped<IRiskBacktestInputProvider>(sp => sp.GetRequiredService<RiskAnalysisService>());
 builder.Services.AddScoped<IRiskBacktestRunService, RiskBacktestRunService>();
+builder.Services.AddScoped<IRiskCalculationRunService, RiskCalculationRunService>();
 builder.Services.AddScoped<IConferenceImportService, ConferenceImportService>();
 builder.Services.AddScoped<IPdfTextExtractionService, PdfPigTextExtractionService>();
 builder.Services.AddScoped<IConferenceChunkingService, ConferenceChunkingService>();
@@ -278,6 +279,7 @@ builder.Services.AddScoped<IAgentRunService, AgentRunService>();
     builder.Services.AddHostedService<AgentRunWorker>();
     builder.Services.AddHostedService<AgentRunWakeOutboxDispatcher>();
     builder.Services.AddHostedService<RiskPythonShadowResultWorker>();
+    builder.Services.AddHostedService<RiskPythonTimeoutWorker>();
 builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
 
 // AI / LLM 服務

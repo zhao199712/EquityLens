@@ -30,10 +30,10 @@ services:
       timeout: 3s
       retries: 10
 
-  risk-worker:
+  mathematics:
     build:
-      context: ./python/risk_worker
-    container_name: equitylens-python-shadow-risk-worker
+      context: ./src/EquityLens.Mathematics
+    container_name: equitylens-python-shadow-mathematics
     environment:
       REDIS_URL: redis://redis-shadow:6379/0
       RISK_JOBS_STREAM: equitylens:risk-python:jobs
@@ -43,6 +43,7 @@ services:
       RISK_PAYLOAD_PREFIX: equitylens:risk-python
       RISK_MAX_ATTEMPTS: "3"
       RISK_PENDING_MIN_IDLE_MS: "300000"
+      MATHEMATICS_WORKERS: ${MATHEMATICS_WORKERS:-8}
     depends_on:
       redis-shadow:
         condition: service_healthy

@@ -1,22 +1,22 @@
-# EquityLens Python risk shadow worker
+# EquityLens.Mathematics
 
-The worker is a candidate implementation of the MVEWMA-FHS backtest engine.
-It never reads PostgreSQL and never supplies a user-facing result. The ASP.NET
-API creates the canonical input, remains the primary engine, and persists the
-comparison.
+Production VT-GARCH-t + joint-vector FHS calculations for EquityLens. The
+ASP.NET API owns input preparation and persistence; this service consumes
+versioned jobs through Redis Streams and never reads PostgreSQL directly.
 
 ## Local tests
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -e 'python/risk_worker[test]'
-PYTHONPATH=python/risk_worker/src .venv/bin/pytest python/risk_worker/tests
+.venv/bin/pip install -e 'src/EquityLens.Mathematics[test]'
+PYTHONPATH=src/EquityLens.Mathematics/src \
+  .venv/bin/pytest src/EquityLens.Mathematics/tests
 ```
 
 ## Isolated shadow environment
 
 ```bash
-docker compose -f docker-compose.risk-shadow.yml up -d postgres-shadow redis-shadow risk-worker
+docker compose -f docker-compose.risk-shadow.yml up -d postgres-shadow redis-shadow mathematics
 
 ConnectionStrings__PostgreSQL='Host=localhost;Port=55432;Database=equitylens;Username=equitylens;Password=equitylens_dev_password' \
 Redis__ConnectionString='localhost:56379' \
@@ -28,14 +28,20 @@ Apply EF migrations to the shadow database before starting the API. The
 existing `equitylens:jobs` stream is not used by Python; the worker only joins
 the `risk-python-workers` group on `equitylens:risk-python:jobs`.
 
-Disable the candidate immediately with:
+Enable the production primary after migrations and smoke tests:
 
 ```bash
-RiskPython__ShadowEnabled=false
+RiskPython__PrimaryEnabled=true
 ```
 
-Stopping the worker or disabling the feature does not change the C# result or
-the existing risk API response contracts.
+Disable the Python primary immediately with:
+
+```bash
+RiskPython__PrimaryEnabled=false
+```
+
+New calculations then use the explicit C# MVEWMA-FHS fallback. Completed runs
+retain their selected model and fallback reason.
 
 ## Research-only adjusted-close pipeline
 
@@ -44,8 +50,8 @@ The adjustment pipeline is intentionally separate from the production
 `security_id,ticker,price_date,close` CSV and produces reviewed artifacts:
 
 ```bash
-PYTHONPATH=python/risk_worker/src \
-python/risk_worker/research/backfill_adjusted_close.py \
+PYTHONPATH=src/EquityLens.Mathematics/src \
+src/EquityLens.Mathematics/research/backfill_adjusted_close.py \
   --raw-csv /path/to/raw_prices.csv \
   --output-dir /path/to/output \
   --write-source-snapshot /path/to/reviewed-source-snapshot.json

@@ -11,7 +11,8 @@ from typing import Any
 
 import redis
 
-from .engine import calculate_backtest
+from .engine import calculate_backtest, calculate_current_risk
+from .garch import GarchFitError
 from .models import RiskBacktestInput
 
 
@@ -19,7 +20,7 @@ logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
-LOGGER = logging.getLogger("equitylens.risk_worker")
+LOGGER = logging.getLogger("equitylens.equitylens_mathematics")
 RUNNING = True
 
 
@@ -70,6 +71,7 @@ def publish_result(
 ) -> None:
     job_id = text(fields, "jobId")
     comparison_id = text(fields, "comparisonId")
+    calculation_run_id = text(fields, "calculationRunId")
     duration = int(result.get("_durationMs", 0)) if result else 0
     result_key = ""
     if result is not None:
@@ -84,6 +86,7 @@ def publish_result(
         {
             "jobId": job_id,
             "comparisonId": comparison_id,
+            "calculationRunId": calculation_run_id,
             "status": status,
             "resultKey": result_key,
             "durationMs": str(duration),
@@ -106,7 +109,12 @@ def process(client: redis.Redis, message_id: bytes, fields: dict[bytes, bytes]) 
         if actual_hash != expected_hash:
             raise ValueError("canonical input hash mismatch")
         input_data = RiskBacktestInput.model_validate_json(raw)
-        result = calculate_backtest(input_data, actual_hash)
+        operation = text(fields, "operation", "vt-garch-backtest")
+        result = (
+            calculate_backtest(input_data, actual_hash)
+            if operation in {"vt-garch-backtest", "backtest"}
+            else calculate_current_risk(input_data, actual_hash, operation)
+        )
         result["_durationMs"] = round((time.perf_counter() - started) * 1000)
         publish_result(client, fields, "Completed", result)
         client.xack(JOBS_STREAM, JOBS_GROUP, message_id)
@@ -115,7 +123,8 @@ def process(client: redis.Redis, message_id: bytes, fields: dict[bytes, bytes]) 
         attempt = int(text(fields, "attempt", "1"))
         LOGGER.exception("failed job_id=%s attempt=%s", text(fields, "jobId"), attempt)
         client.xack(JOBS_STREAM, JOBS_GROUP, message_id)
-        if attempt < MAX_ATTEMPTS:
+        deterministic_failure = isinstance(exception, (GarchFitError, ValueError))
+        if attempt < MAX_ATTEMPTS and not deterministic_failure:
             retried = {
                 key.decode(): value.decode()
                 for key, value in fields.items()
@@ -126,6 +135,10 @@ def process(client: redis.Redis, message_id: bytes, fields: dict[bytes, bytes]) 
         else:
             dead = {key.decode(): value.decode() for key, value in fields.items()}
             dead["error"] = str(exception)
+            dead["reasonCode"] = (
+                "model_health_failed" if deterministic_failure
+                else "transport_retry_exhausted"
+            )
             client.xadd(DEAD_LETTER_STREAM, dead)
             publish_result(client, fields, "Failed", None, str(exception))
 

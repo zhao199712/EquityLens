@@ -12,4 +12,4 @@ RUN pip install --no-cache-dir .
 RUN useradd --create-home --uid 10001 riskworker
 USER riskworker
 
-CMD ["python", "-m", "risk_worker.worker"]
+CMD ["python", "-m", "equitylens_mathematics.launcher"]

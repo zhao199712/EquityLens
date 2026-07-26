@@ -16,6 +16,7 @@ public sealed class PortfolioRiskController : ApiControllerBase
 {
     private readonly IRiskAnalysisService _riskAnalysisService;
     private readonly IRiskBacktestRunService _riskBacktestRunService;
+    private readonly IRiskCalculationRunService _riskCalculationRunService;
     private readonly ICurrentUserContext _currentUser;
 
     /// <summary>
@@ -26,12 +27,47 @@ public sealed class PortfolioRiskController : ApiControllerBase
     public PortfolioRiskController(
         IRiskAnalysisService riskAnalysisService,
         IRiskBacktestRunService riskBacktestRunService,
+        IRiskCalculationRunService riskCalculationRunService,
         ICurrentUserContext currentUser)
     {
         _riskAnalysisService = riskAnalysisService;
         _riskBacktestRunService = riskBacktestRunService;
+        _riskCalculationRunService = riskCalculationRunService;
         _currentUser = currentUser;
     }
+
+    /// <summary>建立由 Redis 交付至 EquityLens.Mathematics 的正式非同步風險計算。</summary>
+    [HttpPost("calculations")]
+    public async Task<ActionResult<RiskCalculationRunResponse>> CreateRiskCalculation(
+        Guid portfolioId,
+        [FromBody] CreateRiskCalculationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _riskCalculationRunService.CreateAsync(
+            portfolioId, request, _currentUser.UserId, cancellationToken);
+        if (!result.IsSuccess) return ToActionResult(result);
+        return AcceptedAtAction(
+            nameof(GetRiskCalculation),
+            new { portfolioId, runId = result.Value!.Id },
+            result.Value);
+    }
+
+    /// <summary>取得正式非同步風險計算狀態與結果。</summary>
+    [HttpGet("calculations/{runId:guid}")]
+    public async Task<ActionResult<RiskCalculationRunResponse>> GetRiskCalculation(
+        Guid portfolioId, Guid runId, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskCalculationRunService.GetAsync(
+            portfolioId, runId, _currentUser.UserId, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>列出目前使用者的近期正式風險計算。</summary>
+    [HttpGet("calculations")]
+    public async Task<ActionResult<IReadOnlyList<RiskCalculationRunResponse>>> ListRiskCalculations(
+        Guid portfolioId, CancellationToken cancellationToken = default) =>
+        Ok(await _riskCalculationRunService.ListAsync(
+            portfolioId, _currentUser.UserId, cancellationToken));
 
     /// <summary>
     /// 計算指定投資組合的歷史與 Monte Carlo 風險指標，包含 VaR、ES、波動率、夏普比率與最大回撤。

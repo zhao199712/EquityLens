@@ -23,7 +23,7 @@ public sealed class RiskPythonShadowResultWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.ShadowEnabled)
+        if (!_options.ShadowEnabled && !_options.PrimaryEnabled)
         {
             _logger.LogInformation("Python risk shadow result worker is disabled.");
             return;
@@ -53,6 +53,8 @@ public sealed class RiskPythonShadowResultWorker : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var queue = scope.ServiceProvider.GetRequiredService<IRiskPythonShadowQueue>();
         var comparisonService = scope.ServiceProvider.GetRequiredService<IRiskShadowComparisonService>();
+        var backtestService = scope.ServiceProvider.GetRequiredService<IRiskBacktestRunService>();
+        var calculationService = scope.ServiceProvider.GetRequiredService<IRiskCalculationRunService>();
         var item = await queue.ReadResultAsync(_consumerName, cancellationToken);
         if (item is null) return false;
 
@@ -60,6 +62,11 @@ public sealed class RiskPythonShadowResultWorker : BackgroundService
         if (!string.IsNullOrWhiteSpace(item.ResultKey))
             resultJson = await queue.GetResultJsonAsync(item.ResultKey, cancellationToken);
         await comparisonService.RecordCandidateAsync(item, resultJson, cancellationToken);
+        if (_options.PrimaryEnabled)
+        {
+            await backtestService.CompletePythonResultAsync(item, resultJson, cancellationToken);
+            await calculationService.CompletePythonResultAsync(item, resultJson, cancellationToken);
+        }
         await queue.AcknowledgeResultAsync(item.StreamId, cancellationToken);
         return true;
     }

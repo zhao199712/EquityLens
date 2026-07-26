@@ -573,9 +573,19 @@ public sealed class RiskAnalysisService : IRiskAnalysisService, IRiskBacktestInp
         if (commonDates.Count < lookbackDays + minimumObservations)
             return Result<RiskBacktestEngineInput>.Failure("risk.insufficient_prices", $"At least {lookbackDays + minimumObservations} common trading days are required for backtesting (got {commonDates.Count}).");
 
-        var aligned = pricesById.ToDictionary(pair => pair.Key, pair => pair.Value
-            .Where(p => commonDates.Contains(DateOnly.FromDateTime(p.PriceTime))).OrderBy(p => p.PriceTime)
-            .Select(p => p.AdjustedClose ?? p.Close).ToList());
+        var alignedRows = pricesById.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value
+                .Where(p => commonDates.Contains(DateOnly.FromDateTime(p.PriceTime)))
+                .OrderBy(p => p.PriceTime)
+                .ToList());
+        if (alignedRows.Values.Any(rows => rows.Any(p => p.AdjustedClose is null)))
+            return Result<RiskBacktestEngineInput>.Failure(
+                "risk.incomplete_adjusted_close",
+                "Complete adjusted-close coverage is required; raw close is never used as a silent substitute.");
+        var aligned = alignedRows.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Select(p => p.AdjustedClose!.Value).ToList());
         if (aligned.Values.Any(ps => ps.Any(p => p <= 0))) return Result<RiskBacktestEngineInput>.Failure("risk.non_positive_price", "Historical prices contain non-positive values.");
 
         var returns = new List<decimal>(commonDates.Count - 1);
