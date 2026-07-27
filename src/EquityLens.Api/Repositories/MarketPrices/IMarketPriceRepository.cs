@@ -19,4 +19,9 @@ public interface IMarketPriceRepository
     Task<UpsertMarketPricesResult> UpsertDailyPricesAsync(
         IReadOnlyList<MarketPrice> prices,
         CancellationToken cancellationToken);
+
+    Task<int> UpdateAdjustedCloseAsync(
+        Guid securityId,
+        IReadOnlyDictionary<DateOnly, decimal> adjustedCloseByDate,
+        CancellationToken cancellationToken);
 }

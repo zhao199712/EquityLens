@@ -274,7 +274,8 @@ public sealed class YahooFinanceMarketDataProvider : IMarketDataProvider
 
         return exchange.ToUpperInvariant() switch
         {
-            "NASDAQ" or "NYSE" or "AMEX" or "US" => normalized,
+            "TWSE" => $"{normalized}.TW",
+            "TPEX" => $"{normalized}.TWO",
             _ => normalized
         };
     }

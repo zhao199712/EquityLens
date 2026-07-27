@@ -21,6 +21,7 @@ public sealed class MarketPriceService : IMarketPriceService
     private readonly ISecurityRepository _securityRepository;
     private readonly IMarketPriceRepository _marketPriceRepository;
     private readonly IEnumerable<IMarketDataProvider> _marketDataProviders;
+    private readonly ILogger<MarketPriceService> _logger;
 
     /// <summary>
     /// 初始化市場價格服務。
@@ -29,16 +30,19 @@ public sealed class MarketPriceService : IMarketPriceService
     /// <param name="securityRepository">證券儲存庫。</param>
     /// <param name="marketPriceRepository">市場價格儲存庫。</param>
     /// <param name="marketDataProviders">市場資料提供者集合。</param>
+    /// <param name="logger">日誌記錄器。</param>
     public MarketPriceService(
         EquityLensDbContext dbContext,
         ISecurityRepository securityRepository,
         IMarketPriceRepository marketPriceRepository,
-        IEnumerable<IMarketDataProvider> marketDataProviders)
+        IEnumerable<IMarketDataProvider> marketDataProviders,
+        ILogger<MarketPriceService> logger)
     {
         _dbContext = dbContext;
         _securityRepository = securityRepository;
         _marketPriceRepository = marketPriceRepository;
         _marketDataProviders = marketDataProviders;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -316,6 +320,8 @@ public sealed class MarketPriceService : IMarketPriceService
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 
+            await TryBackfillAdjustedCloseAsync(security, from, to, cancellationToken);
+
             return Result<ImportMarketPricesResponse>.Success(new ImportMarketPricesResponse(
                 security.Id,
                 provider.SourceName,
@@ -328,6 +334,48 @@ public sealed class MarketPriceService : IMarketPriceService
         return Result<ImportMarketPricesResponse>.Failure(
             "market_price.provider_error",
             $"No price data returned from any provider. Details: {errorDetail}");
+    }
+
+    /// <summary>
+    /// 台股（TWSE/TPEX）匯入價格後，透過 Yahoo Finance 回補缺失的調整後收盤價。
+    /// 失敗僅記錄 log，不影響匯入結果。
+    /// </summary>
+    private async Task TryBackfillAdjustedCloseAsync(
+        Security security,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken)
+    {
+        if (security.Exchange is not ("TWSE" or "TPEX"))
+        {
+            return;
+        }
+
+        var yahoo = _marketDataProviders.FirstOrDefault(x => x.SourceName == "YahooFinance");
+        if (yahoo is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var yahooPrices = await yahoo.GetDailyPricesAsync(security, from, to, cancellationToken);
+            var adjustedCloseByDate = yahooPrices
+                .Where(x => x.AdjustedClose.HasValue)
+                .GroupBy(x => x.Date)
+                .ToDictionary(x => x.Key, x => x.First().AdjustedClose!.Value);
+            if (adjustedCloseByDate.Count == 0)
+            {
+                return;
+            }
+
+            await _marketPriceRepository.UpdateAdjustedCloseAsync(
+                security.Id, adjustedCloseByDate, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Adjusted-close backfill failed for {Ticker} ({Exchange}).", security.Ticker, security.Exchange);
+        }
     }
 
     private IReadOnlyList<IMarketDataProvider> GetOrderedPriceProviders(string exchange)

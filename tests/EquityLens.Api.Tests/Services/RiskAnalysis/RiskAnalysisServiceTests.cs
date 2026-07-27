@@ -525,6 +525,10 @@ public sealed class RiskAnalysisServiceTests
         public Task<UpsertMarketPricesResult> UpsertDailyPricesAsync(
             IReadOnlyList<Data.Entities.MarketPrice> prices, CancellationToken ct) =>
             Task.FromResult(new UpsertMarketPricesResult(0, 0));
+
+        public Task<int> UpdateAdjustedCloseAsync(
+            Guid securityId, IReadOnlyDictionary<DateOnly, decimal> adjustedCloseByDate, CancellationToken ct) =>
+            Task.FromResult(0);
     }
 
     private sealed class TestMultiMarketPriceRepository : IMarketPriceRepository
@@ -560,5 +564,9 @@ public sealed class RiskAnalysisServiceTests
         public Task<UpsertMarketPricesResult> UpsertDailyPricesAsync(
             IReadOnlyList<Data.Entities.MarketPrice> prices, CancellationToken ct) =>
             Task.FromResult(new UpsertMarketPricesResult(0, 0));
+
+        public Task<int> UpdateAdjustedCloseAsync(
+            Guid securityId, IReadOnlyDictionary<DateOnly, decimal> adjustedCloseByDate, CancellationToken ct) =>
+            Task.FromResult(0);
     }
 }

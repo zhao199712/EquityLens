@@ -341,5 +341,8 @@ public sealed class PortfolioValuationServiceTests
 
         public Task<UpsertMarketPricesResult> UpsertDailyPricesAsync(IReadOnlyList<MarketPrice> prices, CancellationToken cancellationToken)
             => _inner.UpsertDailyPricesAsync(prices, cancellationToken);
+
+        public Task<int> UpdateAdjustedCloseAsync(Guid securityId, IReadOnlyDictionary<DateOnly, decimal> adjustedCloseByDate, CancellationToken cancellationToken)
+            => _inner.UpdateAdjustedCloseAsync(securityId, adjustedCloseByDate, cancellationToken);
     }
 }

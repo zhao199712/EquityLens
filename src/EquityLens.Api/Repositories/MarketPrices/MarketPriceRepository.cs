@@ -123,6 +123,46 @@ public sealed class MarketPriceRepository : IMarketPriceRepository
         return new UpsertMarketPricesResult(inserted, updated);
     }
 
+    public async Task<int> UpdateAdjustedCloseAsync(
+        Guid securityId,
+        IReadOnlyDictionary<DateOnly, decimal> adjustedCloseByDate,
+        CancellationToken cancellationToken)
+    {
+        if (adjustedCloseByDate.Count == 0)
+        {
+            return 0;
+        }
+
+        var dates = adjustedCloseByDate.Keys
+            .Select(ToUtcDateTime)
+            .ToList();
+        var rows = await _dbContext.MarketPrices
+            .Where(x => x.SecurityId == securityId && x.Interval == "1d" && dates.Contains(x.PriceTime))
+            .ToListAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+        var updated = 0;
+        foreach (var row in rows)
+        {
+            var date = DateOnly.FromDateTime(row.PriceTime);
+            if (!adjustedCloseByDate.TryGetValue(date, out var adjustedClose))
+            {
+                continue;
+            }
+
+            row.AdjustedClose = adjustedClose;
+            row.UpdatedAtUtc = now;
+            updated++;
+        }
+
+        if (updated > 0)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return updated;
+    }
+
     private static DateTime ToUtcDateTime(DateOnly date)
     {
         return date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);

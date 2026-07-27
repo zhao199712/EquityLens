@@ -124,6 +124,7 @@ public sealed class RiskObservabilityTests
         public Task<MarketPriceResponse?> GetLatestBySecurityAsync(Guid securityId, string interval, CancellationToken cancellationToken) => Task.FromResult<MarketPriceResponse?>(null);
         public Task<IReadOnlyList<MarketPriceResponse>> GetLatestAsync(int take, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<MarketPriceResponse>>(Array.Empty<MarketPriceResponse>());
         public Task<UpsertMarketPricesResult> UpsertDailyPricesAsync(IReadOnlyList<EquityLens.Api.Data.Entities.MarketPrice> prices, CancellationToken cancellationToken) => Task.FromResult(new UpsertMarketPricesResult(0, 0));
+        public Task<int> UpdateAdjustedCloseAsync(Guid securityId, IReadOnlyDictionary<DateOnly, decimal> adjustedCloseByDate, CancellationToken cancellationToken) => Task.FromResult(0);
     }
 
     private sealed class TestExchangeRateService : IExchangeRateService
