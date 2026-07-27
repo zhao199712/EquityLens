@@ -1,57 +1,44 @@
 # EquityLens
 
-> 一個整合投資組合帳務、績效分析、量化風險模型、財報處理與 AI 研究工作流的全端投資研究平台。
+> 整合投資組合帳務、績效分析、量化風險模型、財報處理與可控 AI 研究工作流的全端投資研究平台。
 
-EquityLens 的目標不是只呈現持股與即時損益，而是將投資人的完整研究流程串在一起：
+EquityLens 的目標不是只顯示持股和即時損益，而是把投資人的資料、計算與研究流程串成一條可追蹤的工程管線：
 
 ```text
 交易與現金流
     ↓
 投資組合估值與績效
     ↓
-量化風險分析
+量化風險計算
     ↓
 財報與研究資料
     ↓
 AI 證據檢查、批判與答案修訂
 ```
 
-> [!NOTE]
-> 本專案仍在持續開發中，主要用於金融科技、量化風險分析與 Agentic Workflow 的工程實作與研究；部分進階功能仍在演進，不宣稱為 production-ready 交易系統。
+> [!IMPORTANT]
+> 本專案仍在持續開發，主要用於金融科技、量化風險與 Agentic Workflow 的工程實作。它不是券商交易系統，也不應被視為 production-ready 的投資建議服務。
 
 ---
 
-## 專案動機
+## 核心能力
 
-一般投資工具常將能力拆散在不同平台：
+### 投資組合帳務與績效
 
-- 券商提供持倉與損益，但通常缺乏完整績效與模型分析。
-- 財報網站提供公司資料，但不會與個人投資組合連動。
-- 量化工具能計算風險，卻通常沒有交易帳務與研究脈絡。
-- LLM 能產生研究內容，但若缺乏證據檢查、執行狀態與可觀測性，很難追蹤答案如何產生。
-
-EquityLens 嘗試把這些能力放進同一條資料與研究流程中，並將「計算正確性、狀態管理、失敗恢復與可觀測性」視為核心工程問題，而不只是製作投資 Dashboard。
-
----
-
-## 核心功能
-
-### 1. 投資組合帳務與績效
-
-以交易與現金流事件建立投資組合，而不是只儲存目前持股。
+以交易與現金流事件作為事實來源，而不是只儲存目前持倉。
 
 - 買入、賣出與持倉彙總
 - 入金、出金與現金餘額
-- 股息與投資組合估值
-- 成本、損益與資產權重
+- 股息、成本、市值與未實現損益
+- 資產權重與投資組合估值
 - TWR（Time-Weighted Return）
 - XIRR（Money-Weighted Return）
 
-這個模型明確區分「外部資金流」與「投資組合內部資產轉換」，避免買入股票被錯誤視為新的投資報酬來源。
+這個模型明確區分外部資金流與投資組合內部資產轉換，避免把買入股票誤判為新增報酬。
 
-### 2. 量化風險分析
+### 量化風險分析
 
-目前包含或持續整合的風險與統計能力：
+目前包含或持續整合的模型與統計能力：
 
 - Volatility
 - Value at Risk（VaR）
@@ -63,115 +50,48 @@ EquityLens 嘗試把這些能力放進同一條資料與研究流程中，並將
 - Portfolio Variance
 - GBM Monte Carlo Simulation
 - EWMA-based risk estimation
-- MVEWMA-FHS（Multivariate EWMA Filtered Historical Simulation）
+- MVEWMA-FHS
 - Covariance shrinkage
 
-核心金融數學盡量抽離為可測試的純計算模組，降低「程式能執行，但金融口徑錯誤」的風險。
+金融數學由獨立 Python worker 執行，透過 Redis Streams 與 API 協作。核心計算盡量維持為可測試的純函式，避免「程式成功執行，但金融口徑錯誤」。
 
-### 3. 財報資料管線
+### 財報資料管線
 
-已完成台灣上市櫃財報資料取得的 PoC 與後續處理基礎：
-
-- TWSE 財報查詢頁解析
-- 財報 PDF 下載
-- PDF 中文文字提取
+- 台灣上市櫃財報查詢頁解析
+- 財報 PDF 下載與保存
+- 中文 PDF 文字提取
 - S3-compatible object storage
 - 財報與研究資料持久化
-- 後續檢索與 AI 研究流程的資料基礎
+- 向量檢索與 AI 研究流程的資料基礎
 
-### 4. AI Research Workflow
+### AI Research Workflow
 
-研究流程不是單次 LLM completion，而是將研究品質檢查拆成可追蹤節點。
-
-目前的 `ResearchQualityReview` 概念流程：
+研究流程不是單次 LLM completion，而是由受限制、可驗證、可觀察的節點組成。
 
 ```text
-Load Research Run
-        ↓
-Build Evidence Packet
-        ↓
-Check Evidence
-        ↓
-Critique Answer
-        ↓
-Finalize Critic Report
-        ↓
-Draft Revised Answer
-        ↓
-Finalize Revision
+Router
+  ↓
+Lead Skill
+  ↓
+Planner 建立受限 DAG
+  ↓
+Graph / Contract Validator
+  ↓
+Worker 執行 Nodes
+  ↓
+Evidence Check → Critique → Revision → Final Output
 ```
 
-系統採用 constrained agentic workflow：
+設計原則：
 
-- 流程與安全邊界由程式控制
-- LLM 負責需要語義理解的判斷
-- 可形式化的驗證盡量由 deterministic code 處理
-- 每個節點具有明確的輸入、輸出與狀態
+- 程式負責流程、安全邊界與 deterministic validation
+- LLM 負責語義理解、規劃、批判與文字生成
+- Capability 必須位於 Skill 授權範圍內
+- Node 宣告輸入、輸出、參數與 Blackboard contract
+- Run、Node、tool call、成本與事件皆可追蹤
+- 已完成的 Run 視為不可變執行紀錄；feedback 會建立新的 Run
 
-這不是完全自由的 autonomous agent；設計目標是可測試、可追蹤與可限制。
-
----
-
-## Agent Runtime 設計
-
-### Blackboard
-
-Workflow 使用 Blackboard 保存共享的結構化執行狀態，例如：
-
-- question
-- answer
-- citations
-- evidence packet
-- evidence checks
-- critic findings
-- revised answer
-- final output
-
-每個 node 宣告需要與產生的資料，避免共享狀態退化成無約束的全域變數。
-
-### Workflow Graph
-
-Workflow definition 以節點與依賴關係描述。執行前由 planner 與 graph validator 驗證執行順序與依賴關係。
-
-目前主要採 deterministic workflow graph；未來若加入「證據不足 → 重新檢索」等迴圈，會以 bounded loop 或明確的 state transition 控制，而不是讓 Agent 無限制自行循環。
-
-### State Machine
-
-Agent Run 與 Node 都具有明確狀態，例如：
-
-```text
-Pending → Running → Succeeded
-                  ↘ Failed
-```
-
-狀態轉換集中管理，避免不同 service 任意修改狀態造成不一致。
-
-### Asynchronous Execution
-
-Agent workflow 已從同步 HTTP request lifecycle 拆離：
-
-```text
-Client
-  │
-  ▼
-ASP.NET Core API
-  │  Create Run + Enqueue
-  ▼
-Redis-backed Queue
-  │
-  ▼
-Background Worker
-  │
-  ▼
-AgentRunExecutor
-  ├── Workflow Planner
-  ├── Graph Validator
-  ├── State Machines
-  ├── Node Handlers
-  └── Telemetry / Events
-```
-
-這個設計將 request lifecycle 與 job lifecycle 解耦，為長時間 LLM / tool execution、retry 與後續 worker 擴充提供基礎。
+這不是完全自由的 autonomous agent，而是 constrained agentic workflow。
 
 ---
 
@@ -184,31 +104,50 @@ AgentRunExecutor
 └──────────────┬───────────────┘
                │ HTTP API
                ▼
-┌──────────────────────────────┐
-│      ASP.NET Core Web API    │
-│                              │
-│ Portfolio & Transactions     │
-│ Performance & Risk           │
-│ Financial Filings            │
-│ Research & Agent Runs        │
-└───────┬────────┬────────┬────┘
-        │        │        │
-        ▼        ▼        ▼
- PostgreSQL    Redis    Object Storage
- / ParadeDB    Queue       Garage
-        │
+┌──────────────────────────────────────────┐
+│           ASP.NET Core Web API           │
+│ Portfolio · Transactions · Filings      │
+│ Research Runs · Planner · Orchestration  │
+└───────┬─────────────┬──────────────┬─────┘
+        │             │              │
+        ▼             ▼              ▼
+ PostgreSQL       Redis Streams     Garage
+ / ParadeDB       Queue / State     Object Storage
+        │             │
+        │             ├───────────────┐
+        │             ▼               ▼
+        │      Agent Workers   Python Mathematics
+        │                      NumPy / SciPy / ARCH
         ▼
  Durable application state
 
-Agent Run API
-     │
-     ▼
-Redis Queue → Worker → Workflow Executor
-                         │
-                         ├── Node Events
-                         ├── State Transitions
-                         └── OpenTelemetry
+All services → OpenTelemetry → Aspire Dashboard
 ```
+
+### 執行模型
+
+```text
+Client
+  │
+  ▼
+API 建立 Run 與資料庫狀態
+  │
+  ▼
+Reliable enqueue / Redis Streams
+  │
+  ▼
+Worker claim job
+  │
+  ▼
+Planner → Validator → Node Handlers
+  │
+  ├── 更新 Blackboard
+  ├── 寫入 node / tool call 狀態
+  ├── 發送 telemetry / events
+  └── 完成 immutable Run output
+```
+
+背景工作不假設 exactly-once delivery。系統以 `runId`、冪等處理、合法狀態轉換與持久化狀態抵抗重複投遞。
 
 ---
 
@@ -219,153 +158,235 @@ Redis Queue → Worker → Workflow Executor
 - .NET 10
 - ASP.NET Core Web API
 - Entity Framework Core
-- PostgreSQL / ParadeDB
+- PostgreSQL 18 / ParadeDB
 - pgvector
 - StackExchange.Redis
-- JWT Authentication
+- JWT 與 Google authentication integration
 - S3-compatible object storage
+
+### Mathematics
+
+- Python 3.12–3.13
+- NumPy
+- SciPy
+- ARCH
+- Pydantic
+- redis-py
+- pytest
 
 ### Frontend
 
 - Vue 3
 - Vite
 - TypeScript / JavaScript ecosystem
-- Component-based investment, risk and research UI
 
-### AI / Agent
+### AI / Agent Runtime
 
 - Microsoft Agents AI
-- Google GenAI integration
-- Structured workflow execution
-- Blackboard-based shared state
-- Workflow planner and graph validation
-- Run / node state machines
-- Redis-backed background execution
+- Google GenAI
+- Skill / Capability Registry
+- Workflow Planner
+- DAG validation
+- Blackboard shared state
+- Run / Node state machines
+- Redis-backed asynchronous execution
 
-### Data & Documents
+### Infrastructure & Observability
 
-- TWSE financial filing ingestion
-- PdfPig-based PDF text extraction
-- Garage object storage
-- Vector-ready document pipeline
-
-### Observability & Infrastructure
-
-- OpenTelemetry
-- Aspire Dashboard
 - Docker Compose
 - Redis 7
-- PostgreSQL / ParadeDB
-- Garage
+- ParadeDB / PostgreSQL
+- Garage object storage
+- OpenTelemetry
+- Aspire Dashboard
 
 ---
 
-## 代表性的工程問題
+## Repository 結構
 
-### 金融計算正確性
-
-金融系統最危險的錯誤不一定會造成 exception；錯誤的數字往往仍然「看起來合理」。因此專案特別重視：
-
-- 報酬率與現金流口徑
-- simple return / log return 的使用情境
-- VaR / ES 的信賴水準與持有期間
-- 年化方式
-- 投資組合權重與共變異數
-- 邊界條件與資料不足時的處理
-
-### Queue 與冪等性
-
-背景工作不假設 exactly-once delivery。設計方向是以唯一 `runId`、資料庫狀態與合法 state transition 防止重複執行。
-
-若未來部署多個 worker，仍需要進一步加入 atomic claim、optimistic concurrency 或其他並行控制機制。
-
-### LLM 可靠性
-
-LLM Critic 不是正確性的形式化證明。系統的方向是：
-
-- deterministic checks 處理可形式化規則
-- LLM 處理語義判斷
-- evidence packet 限制研究上下文
-- structured output 降低格式不確定性
-- event / telemetry 保留執行軌跡
-
----
-
-## TWSE 財報爬蟲 PoC
-
-早期 PoC 已驗證：
-
-| 項目 | 狀態 | 說明 |
-|---|---|---|
-| 成分股資料取得 | ✅ | 取得股票清單資料 |
-| TWSE 財報頁面解析 | ✅ | 解析財報查詢結果 |
-| PDF 下載 | ✅ | 取得並保存財報 PDF |
-| 中文文字提取 | ✅ | 使用 PdfPig 處理中文財報 |
-
-財報抓取 API 範例：
-
-```http
-POST /api/financial-filings/crawl
-Authorization: Bearer {token}
-Content-Type: application/json
+```text
+EquityLens/
+├── src/
+│   ├── EquityLens.Api/          # ASP.NET Core API、資料存取與 Agent runtime
+│   └── EquityLens.Mathematics/  # Python 量化風險 worker
+├── infra/
+│   └── garage/                  # Garage object storage 設定
+├── docker-compose.yml           # 本機基礎服務與 mathematics worker
+└── README.md
 ```
 
-```json
-{
-  "stockCodes": ["2330", "2498"],
-  "startYear": 112,
-  "endYear": 115
-}
-```
+實際目錄會隨功能演進；README 只列出主要執行邊界。
 
 ---
 
-## 本機基礎設施
+## 快速開始
 
-Docker Compose 提供主要基礎服務：
+### 需求
+
+- Docker Engine 與 Docker Compose
+- .NET 10 SDK
+- Python 3.12 或 3.13
+- Node.js（啟動前端時需要）
+
+### 1. 啟動基礎設施與 Mathematics worker
+
+在 repository 根目錄執行：
 
 ```bash
 docker compose up -d
 ```
 
-預設包含：
+預設服務：
 
-- PostgreSQL / ParadeDB
-- Redis
-- Garage object storage
-- Garage Web UI
-- Aspire Dashboard / OTLP endpoint
+| Service | 預設連接埠 | 用途 |
+|---|---:|---|
+| ParadeDB / PostgreSQL | `5432` | 應用程式資料與向量資料 |
+| Redis | `6379` | Queue、Streams 與執行狀態 |
+| Garage S3 API | `9000` | 財報與文件物件儲存 |
+| Garage Web UI | `3909` | 物件儲存管理介面 |
+| Aspire Dashboard | `18888` | Logs、traces 與 metrics |
+| OTLP gRPC | `4317` | OpenTelemetry ingestion |
 
-> 實際啟動完整 API 與前端前，仍需依本機環境設定資料庫連線、JWT、外部市場資料來源與 AI provider credentials。
+檢查服務狀態：
+
+```bash
+docker compose ps
+docker compose logs -f mathematics
+```
+
+只啟動 Redis 與 Mathematics：
+
+```bash
+docker compose up -d redis mathematics
+```
+
+### 2. 本機直接啟動 Mathematics worker
+
+```bash
+cd src/EquityLens.Mathematics
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+export REDIS_URL=redis://localhost:6379/0
+export MATHEMATICS_WORKERS=8
+python -m equitylens_mathematics.launcher
+```
+
+Windows PowerShell 請將虛擬環境啟用命令改為：
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+### 3. 啟動 API
+
+```bash
+cd src/EquityLens.Api
+dotnet restore
+dotnet run
+```
+
+API 還需要依本機環境提供資料庫、Redis、JWT、Google OAuth、S3 與 AI provider 設定。請勿將真實密鑰提交至 Git。
+
+### 4. 停止服務
+
+```bash
+docker compose down
+```
+
+同時刪除本機 volumes：
+
+```bash
+docker compose down -v
+```
+
+> [!WARNING]
+> `down -v` 會刪除 PostgreSQL、Redis 與 Garage 的本機持久化資料。
 
 ---
 
-## 測試策略
+## 主要資料與工作流概念
 
-專案的測試方向包含：
+### Blackboard
 
-- 金融數學與投資組合計算的 unit tests
-- Workflow graph validation
-- State transition tests
-- Agent node contract / handler tests
-- Queue、Worker 與 persistence 的 integration testing
-- LLM structured output 與研究品質評估
+Blackboard 保存 workflow 節點共享的結構化狀態，例如：
 
-對 LLM 輸出不以完整字串相等作為唯一判斷，而應驗證 schema、必要事實、citation grounding 與品質指標。
+- question
+- evidence packet
+- citations
+- calculation inputs / results
+- critic findings
+- revised answer
+- final output
+
+它不是無約束的全域字典。Capability 應宣告所需與產生的 keys，Validator 在執行前檢查 contract。
+
+### Skill、Capability 與 Node
+
+```text
+Skill
+  └── 授權一組 Capabilities
+        └── Capability 對應 Node Type
+              └── Planner 建立一或多個 Node Instances
+```
+
+Planner 只能從當前 Skill 的允許清單建立 DAG；執行中的 Node 不應任意越權增加未授權能力。
+
+### Run 不可變性
+
+一次 Run 代表一次完整、可稽核的執行紀錄，包括：
+
+- planner proposal 與 DAG
+- Blackboard 版本
+- Node 與 tool call
+- token、成本與耗時
+- citations 與最終答案
+- 完成狀態與時間
+
+使用者 feedback 不會重新打開已完成 Run，而是在同一 Research Thread / Case 下建立新的 Run。
+
+---
+
+## 測試
+
+### .NET
+
+```bash
+dotnet test
+```
+
+### Python Mathematics
+
+```bash
+cd src/EquityLens.Mathematics
+source .venv/bin/activate
+pip install -e ".[test]"
+pytest
+```
+
+測試重點：
+
+- 金融數學與投資組合計算
+- Workflow graph 與 capability contract validation
+- Run / Node state transitions
+- Queue、Worker、Outbox 與 persistence
+- LLM structured output schema
+- Citation grounding 與研究品質評估
+
+LLM 測試不應只比較完整字串，而應驗證 schema、必要事實、evidence mapping 與品質指標。
 
 ---
 
 ## 已知限制
 
-目前仍在持續演進的部分包括：
-
-- Agent runtime 尚未宣稱具備完整 distributed exactly-once semantics
-- Multi-worker concurrency control 仍可進一步強化
-- Workflow version replay / migration 尚需完善
-- VaR backtesting 與模型檢定仍在持續整合
-- 部分壓力測試與模擬功能可能仍屬研究或示範階段
-- AI 研究品質仍需要 golden dataset 與更系統化 evaluation
-- README 的 UI screenshots 與正式架構圖仍待補充
+- 尚未宣稱具備完整 distributed exactly-once semantics
+- 多 worker claim、lease、retry 與 concurrency control 仍持續強化
+- Workflow version replay / migration 尚未完整
+- VaR backtesting 與模型檢定仍在整合
+- 部分壓力測試與 Monte Carlo 功能仍屬研究階段
+- AI 研究品質仍需要更完整的 golden dataset 與 evaluation framework
+- 開發環境預設值只適用於本機，不應直接沿用至公開部署
 
 ---
 
@@ -373,54 +394,51 @@ docker compose up -d
 
 ### Portfolio & Risk
 
-- [ ] 完整 VaR rolling backtest
-- [ ] Breach / exception sequence
+- [ ] 完整 rolling VaR backtest
+- [ ] Breach / exception sequence analysis
 - [ ] Kupiec unconditional coverage test
 - [ ] Christoffersen independence test
-- [ ] 更完整的 stress testing
+- [ ] 更完整的 stress testing 與模型比較
 
 ### Research
 
 - [ ] 強化財報 chunking 與 retrieval
 - [ ] Citation-to-claim validation
-- [ ] Research evaluation dataset
 - [ ] Evidence quality scoring
+- [ ] Research evaluation dataset
 
 ### Agent Runtime
 
-- [ ] Atomic job claim / stronger concurrency control
-- [ ] Dead-letter handling
-- [ ] Node-level retry policy
-- [ ] Workflow versioning and replay strategy
-- [ ] Cost / token / latency evaluation dashboard
+- [ ] 更完整的 atomic claim、lease 與 retry policy
+- [ ] Dead-letter 管理與重放工具
+- [ ] Workflow versioning / replay strategy
+- [ ] Cost、token 與 latency evaluation dashboard
+- [ ] Human approval gates 與副作用治理
 
 ### Project Presentation
 
 - [ ] UI screenshots
-- [ ] Formal architecture diagram
-- [ ] Reproducible development setup
-- [ ] Demo dataset and walkthrough
+- [ ] 正式架構圖
+- [ ] 可重現 demo dataset
+- [ ] End-to-end walkthrough
 
 ---
 
 ## 設計原則
 
-EquityLens 的核心工程原則：
-
 1. **交易帳務是事實來源，持倉是推導結果。**
-2. **金融模型必須說明假設、資料口徑與限制。**
+2. **金融模型必須揭露假設、資料口徑與限制。**
 3. **可由程式驗證的規則，不交給 LLM 猜。**
-4. **讓 LLM 處理語義判斷，讓程式控制流程與安全邊界。**
+4. **讓 LLM 處理語義判斷，讓程式控制流程與權限邊界。**
 5. **長時間工作與 HTTP request lifecycle 解耦。**
-6. **Agent 的中間狀態、失敗與決策必須可觀察。**
-7. **不把 prototype 包裝成 production-ready system。**
+6. **Agent 的中間狀態、失敗、成本與決策必須可觀察。**
+7. **Run 是不可變的稽核紀錄，而不是持續變形的對話容器。**
+8. **不把 prototype 包裝成 production-ready system。**
 
 ---
 
 ## 專案定位
 
-EquityLens 目前最準確的定位是：
-
 > **Portfolio Analytics + Quantitative Risk + Financial Research + Constrained Agentic Workflow**
 
-它不是券商交易系統，也不是完全自主的投資 Agent；它是一個用來探索金融資料、量化風險、研究流程與可靠 AI orchestration 如何整合的全端工程專案。
+EquityLens 是一個探索金融資料、量化風險、可靠工作流與 AI orchestration 如何整合的全端工程專案，而不是自動交易機器人或完全自主的投資 Agent。
