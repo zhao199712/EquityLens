@@ -72,6 +72,34 @@ public sealed class AgentWorkflowQueryServiceTests
     public void ParseHorizonMonths_MapsUnitsToMonths(string? horizon, int? expected) =>
         Assert.Equal(expected, AgentWorkflowQueryService.ParseHorizonMonths(horizon));
 
+    [Theory]
+    [InlineData("我的投資組合最近一年的波動如何？", 12)]
+    [InlineData("最近半年的表現如何？", 6)]
+    [InlineData("近三個月波動為何？", 3)]
+    [InlineData("過去2年的回撤？", 24)]
+    [InlineData("最近一季的集中風險？", 3)]
+    [InlineData("最近30天的波動？", 1)]
+    [InlineData("台積電2026年第一季法說會說了什麼？", null)]
+    [InlineData("我的投組風險如何？", null)]
+    public void ParseQuestionHorizonMonths_FallsBackToQuestionText(string? question, int? expected) =>
+        Assert.Equal(expected, AgentWorkflowQueryService.ParseQuestionHorizonMonths(question));
+
+    [Fact]
+    public async Task PortfolioQuestion_WhenRouterOmitsHorizon_UsesQuestionTextWindow()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid();
+        db.Portfolios.Add(new Portfolio { Id = Guid.NewGuid(), OwnerUserId = userId, Name = "P" });
+        await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns();
+        var service = new AgentWorkflowQueryService(db, Router(PortfolioRoute()), runs);
+
+        await service.CreateAsync(userId, new("我的投資組合最近一年的波動、最大回撤與集中風險如何？"));
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        Assert.Equal(today, runs.To);
+        Assert.Equal(today.AddMonths(-12), runs.From);
+    }
+
     [Fact]
     public async Task ResearchQuestion_ResolvesCompanyNameThroughSecurityRegistry()
     {
