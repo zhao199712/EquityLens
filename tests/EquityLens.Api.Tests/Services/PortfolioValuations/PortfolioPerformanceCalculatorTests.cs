@@ -78,6 +78,21 @@ public sealed class PortfolioPerformanceCalculatorTests
     }
 
     [Fact]
+    public void CalculateBeta_ZeroVarianceBenchmark_ReturnsNull()
+    {
+        var dates = new[]
+        {
+            new DateOnly(2026, 1, 1),
+            new DateOnly(2026, 1, 2),
+            new DateOnly(2026, 1, 3),
+        };
+        var points = new[] { Point(dates[0], 100m), Point(dates[1], 101m), Point(dates[2], 102m) };
+        var benchmark = dates.Select(date => new BenchmarkPoint(date, 10000m, 100m)).ToArray();
+
+        Assert.Null(PortfolioPerformanceCalculator.CalculateBeta(points, benchmark));
+    }
+
+    [Fact]
     public void CalculateJensenAlpha_BetaOneAndMatchingMarket_ReturnsZero()
     {
         var alpha = PortfolioPerformanceCalculator.CalculateJensenAlpha(0.10m, 0.10m, 1m, 0.02m, 365);

@@ -17,6 +17,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  mathematics:
+    name: Mathematics tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: src/EquityLens.Mathematics/pyproject.toml
+      - name: Install Mathematics
+        run: pip install -e 'src/EquityLens.Mathematics[test,research]'
+      - name: Run Mathematics tests
+        run: pytest src/EquityLens.Mathematics/tests -q
+
   backend:
     name: Backend build and test
     runs-on: ubuntu-latest

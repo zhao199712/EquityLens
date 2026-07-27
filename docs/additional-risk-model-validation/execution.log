@@ -1,0 +1,28 @@
+2026-07-26 Asia/Taipei
+
+Input (read-only):
+  /private/tmp/equitylens-adjusted-close/phase5-five-year-input.json
+  /private/tmp/equitylens-adjusted-close/phase5-market.json
+  /private/tmp/equitylens-adjusted-close/phase5-equal.json
+
+Commands:
+  PYTHONPATH=python/risk_worker/src /private/tmp/equitylens-garch-fhs-venv/bin/python -m pytest python/risk_worker/tests/test_additional_validation.py -q
+
+  PYTHONPATH=python/risk_worker/src RISK_WEIGHTING={market,equal} RISK_VARIANCE_TARGETING=1 RISK_ENSEMBLE=1 RISK_ADJUSTED_CLOSE=1 RISK_INCLUDE_POINTS=1 /private/tmp/equitylens-garch-fhs-venv/bin/python -c '<load immutable Phase-5 runner; set CONFIDENCES=[.90,.95,.975,.99,.995]; run once per weighting>' < /private/tmp/equitylens-adjusted-close/phase5-five-year-input.json
+
+  PYTHONPATH=python/risk_worker/src /private/tmp/equitylens-garch-fhs-venv/bin/python -m risk_worker.research.additional_validation --market /private/tmp/equitylens-adjusted-close/phase5-market.json --equal /private/tmp/equitylens-adjusted-close/phase5-equal.json --multi-market /private/tmp/equitylens-adjusted-close/additional-multi-market.json --multi-equal /private/tmp/equitylens-adjusted-close/additional-multi-equal.json --output docs/additional-risk-model-validation
+
+  PYTHONPATH=python/risk_worker/src /private/tmp/equitylens-garch-fhs-venv/bin/python -m risk_worker.research.robustness_experiments --input /private/tmp/equitylens-adjusted-close/phase5-five-year-input.json --output docs/additional-risk-model-validation --task sensitivity
+
+  PYTHONPATH=python/risk_worker/src /private/tmp/equitylens-garch-fhs-venv/bin/python -m risk_worker.research.robustness_experiments --input /private/tmp/equitylens-adjusted-close/phase5-five-year-input.json --output docs/additional-risk-model-validation --task concentration
+
+Observed runs:
+  Five-confidence market: 27.3 s
+  Five-confidence equal: 27.0 s
+  Sensitivity matrix: approximately 130 s total; per-setting exact runtime is in refit_lookback_sensitivity.csv
+  Concentration matrix: approximately 178 s total
+  Convergence failures: 0
+  Unhandled warnings: 0
+  Unit tests: 4 passed
+  Remote PostgreSQL final state: exited (FinishedAt 2026-07-26T13:48:32.856653306Z)
+

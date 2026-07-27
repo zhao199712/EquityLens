@@ -1,0 +1,195 @@
+{
+  "market:0.95": [
+    {
+      "confidence": 0.9,
+      "members": [
+        "MVEWMA",
+        "VT-GARCH",
+        "VT-GJR",
+        "Ensemble"
+      ],
+      "rounds": [
+        {
+          "membersBefore": [
+            "MVEWMA",
+            "VT-GARCH",
+            "VT-GJR",
+            "Ensemble"
+          ],
+          "testStatistic": 1.1193732493526276,
+          "bootstrapPValue": 0.43015698430156984,
+          "eliminated": null
+        }
+      ]
+    },
+    {
+      "confidence": 0.95,
+      "members": [
+        "MVEWMA",
+        "VT-GARCH",
+        "VT-GJR",
+        "Ensemble"
+      ],
+      "rounds": [
+        {
+          "membersBefore": [
+            "MVEWMA",
+            "VT-GARCH",
+            "VT-GJR",
+            "Ensemble"
+          ],
+          "testStatistic": 1.1249963388741142,
+          "bootstrapPValue": 0.42555744425557446,
+          "eliminated": null
+        }
+      ]
+    }
+  ],
+  "market:0.99": [
+    {
+      "confidence": 0.9,
+      "members": [
+        "MVEWMA",
+        "VT-GARCH",
+        "VT-GJR",
+        "Ensemble"
+      ],
+      "rounds": [
+        {
+          "membersBefore": [
+            "MVEWMA",
+            "VT-GARCH",
+            "VT-GJR",
+            "Ensemble"
+          ],
+          "testStatistic": 0.27929286608915505,
+          "bootstrapPValue": 0.9528047195280472,
+          "eliminated": null
+        }
+      ]
+    },
+    {
+      "confidence": 0.95,
+      "members": [
+        "MVEWMA",
+        "VT-GARCH",
+        "VT-GJR",
+        "Ensemble"
+      ],
+      "rounds": [
+        {
+          "membersBefore": [
+            "MVEWMA",
+            "VT-GARCH",
+            "VT-GJR",
+            "Ensemble"
+          ],
+          "testStatistic": 0.2816873225616441,
+          "bootstrapPValue": 0.9571042895710429,
+          "eliminated": null
+        }
+      ]
+    }
+  ],
+  "equal:0.95": [
+    {
+      "confidence": 0.9,
+      "members": [
+        "VT-GARCH",
+        "VT-GJR",
+        "Ensemble"
+      ],
+      "rounds": [
+        {
+          "membersBefore": [
+            "VT-GARCH",
+            "VT-GJR",
+            "Ensemble",
+            "MVEWMA"
+          ],
+          "testStatistic": 1.9964902672150378,
+          "bootstrapPValue": 0.0613938606139386,
+          "eliminated": "MVEWMA"
+        },
+        {
+          "membersBefore": [
+            "VT-GARCH",
+            "VT-GJR",
+            "Ensemble"
+          ],
+          "testStatistic": 1.4261149753109739,
+          "bootstrapPValue": 0.18798120187981202,
+          "eliminated": null
+        }
+      ]
+    },
+    {
+      "confidence": 0.95,
+      "members": [
+        "MVEWMA",
+        "VT-GARCH",
+        "VT-GJR",
+        "Ensemble"
+      ],
+      "rounds": [
+        {
+          "membersBefore": [
+            "MVEWMA",
+            "VT-GARCH",
+            "VT-GJR",
+            "Ensemble"
+          ],
+          "testStatistic": 1.9849166185732905,
+          "bootstrapPValue": 0.0660933906609339,
+          "eliminated": null
+        }
+      ]
+    }
+  ],
+  "equal:0.99": [
+    {
+      "confidence": 0.9,
+      "members": [
+        "MVEWMA",
+        "VT-GARCH",
+        "VT-GJR",
+        "Ensemble"
+      ],
+      "rounds": [
+        {
+          "membersBefore": [
+            "MVEWMA",
+            "VT-GARCH",
+            "VT-GJR",
+            "Ensemble"
+          ],
+          "testStatistic": 0.9607058737710349,
+          "bootstrapPValue": 0.42515748425157485,
+          "eliminated": null
+        }
+      ]
+    },
+    {
+      "confidence": 0.95,
+      "members": [
+        "MVEWMA",
+        "VT-GARCH",
+        "VT-GJR",
+        "Ensemble"
+      ],
+      "rounds": [
+        {
+          "membersBefore": [
+            "MVEWMA",
+            "VT-GARCH",
+            "VT-GJR",
+            "Ensemble"
+          ],
+          "testStatistic": 0.961745954699557,
+          "bootstrapPValue": 0.4360563943605639,
+          "eliminated": null
+        }
+      ]
+    }
+  ]
+}

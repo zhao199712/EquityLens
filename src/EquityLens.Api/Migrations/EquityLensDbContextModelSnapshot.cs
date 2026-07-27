@@ -2481,9 +2481,25 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("error_message");
 
+                    b.Property<int>("FallbackDepth")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("fallback_depth");
+
+                    b.Property<string>("FallbackReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("fallback_reason");
+
                     b.Property<DateOnly>("FromDate")
                         .HasColumnType("date")
                         .HasColumnName("from_date");
+
+                    b.Property<string>("InputHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("input_hash");
 
                     b.Property<string>("InputSnapshotJson")
                         .IsRequired()
@@ -2512,9 +2528,20 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("requested_by_user_id");
 
+                    b.Property<string>("RequestedModel")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("requested_model");
+
                     b.Property<string>("ResultJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("result_json");
+
+                    b.Property<string>("SelectedModel")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("selected_model");
 
                     b.Property<int>("Simulations")
                         .HasColumnType("integer")
@@ -2542,6 +2569,207 @@ namespace EquityLens.Api.Migrations
                     b.HasIndex("PortfolioId", "CreatedAtUtc");
 
                     b.ToTable("risk_backtest_run", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskCalculationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AlgorithmVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("algorithm_version");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DataFactorVersion")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("data_factor_version");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("error_code");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<int>("FallbackDepth")
+                        .HasColumnType("integer")
+                        .HasColumnName("fallback_depth");
+
+                    b.Property<string>("FallbackReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("fallback_reason");
+
+                    b.Property<string>("FitHealthJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("fit_health_json");
+
+                    b.Property<string>("InputHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("input_hash");
+
+                    b.Property<string>("InputSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("input_snapshot_json");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("operation");
+
+                    b.Property<Guid>("PortfolioId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("portfolio_id");
+
+                    b.Property<int>("ProgressPercent")
+                        .HasColumnType("integer")
+                        .HasColumnName("progress_percent");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<string>("RequestedModel")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("requested_model");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result_json");
+
+                    b.Property<string>("SelectedModel")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("selected_model");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InputHash");
+
+                    b.HasIndex("PortfolioId", "CreatedAtUtc");
+
+                    b.ToTable("risk_calculation_run", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskEngineComparison", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("CandidateAlgorithmVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("candidate_algorithm_version");
+
+                    b.Property<long?>("CandidateDurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("candidate_duration_ms");
+
+                    b.Property<string>("CandidateEngine")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("candidate_engine");
+
+                    b.Property<string>("CandidateResultJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("candidate_result_json");
+
+                    b.Property<string>("ComparisonJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("comparison_json");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("input_hash");
+
+                    b.Property<bool?>("PassedTolerance")
+                        .HasColumnType("boolean")
+                        .HasColumnName("passed_tolerance");
+
+                    b.Property<string>("PrimaryAlgorithmVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("primary_algorithm_version");
+
+                    b.Property<long?>("PrimaryDurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("primary_duration_ms");
+
+                    b.Property<string>("PrimaryEngine")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("primary_engine");
+
+                    b.Property<Guid>("RiskBacktestRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("risk_backtest_run_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RiskBacktestRunId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "CreatedAtUtc");
+
+                    b.ToTable("risk_engine_comparison", (string)null);
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskMetric", b =>
@@ -3566,6 +3794,28 @@ namespace EquityLens.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Portfolio");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskCalculationRun", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.Portfolio", "Portfolio")
+                        .WithMany()
+                        .HasForeignKey("PortfolioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Portfolio");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskEngineComparison", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.RiskBacktestRun", "RiskBacktestRun")
+                        .WithMany()
+                        .HasForeignKey("RiskBacktestRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RiskBacktestRun");
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RiskMetric", b =>

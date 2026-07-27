@@ -19,6 +19,11 @@ public sealed class RiskBacktestRunConfiguration : IEntityTypeConfiguration<Risk
         builder.Property(x => x.LookbackDays).HasColumnName("lookback_days").IsRequired();
         builder.Property(x => x.Simulations).HasColumnName("simulations").IsRequired();
         builder.Property(x => x.AlgorithmVersion).HasColumnName("algorithm_version").HasMaxLength(64).IsRequired();
+        builder.Property(x => x.RequestedModel).HasColumnName("requested_model").HasMaxLength(128).IsRequired();
+        builder.Property(x => x.SelectedModel).HasColumnName("selected_model").HasMaxLength(128);
+        builder.Property(x => x.InputHash).HasColumnName("input_hash").HasMaxLength(64);
+        builder.Property(x => x.FallbackReason).HasColumnName("fallback_reason").HasMaxLength(256);
+        builder.Property(x => x.FallbackDepth).HasColumnName("fallback_depth").HasDefaultValue(0);
         builder.Property(x => x.Status).HasColumnName("status").HasMaxLength(16).IsRequired();
         builder.Property(x => x.ProgressPercent).HasColumnName("progress_percent").HasDefaultValue(0);
         builder.Property(x => x.InputSnapshotJson).HasColumnName("input_snapshot_json").HasColumnType("jsonb").IsRequired();

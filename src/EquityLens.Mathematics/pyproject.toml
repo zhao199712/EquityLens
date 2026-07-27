@@ -1,0 +1,33 @@
+[project]
+name = "equitylens-mathematics"
+version = "0.1.0"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "numpy==2.5.1",
+  "scipy==1.17.0",
+  "arch==8.0.0",
+  "pydantic==2.13.4",
+  "redis==6.4.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest==8.4.2"]
+research = [
+  "pandas==3.0.5",
+  "requests==2.34.2",
+  "yfinance==0.2.65",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -15,6 +15,11 @@ public sealed class RiskBacktestRun
     public int LookbackDays { get; set; } = 252;
     public int Simulations { get; set; } = 5000;
     public string AlgorithmVersion { get; set; } = "mvewma-fhs-backtest-v2";
+    public string RequestedModel { get; set; } = "VT-GARCH-t + Joint-Vector FHS";
+    public string? SelectedModel { get; set; }
+    public string? InputHash { get; set; }
+    public string? FallbackReason { get; set; }
+    public int FallbackDepth { get; set; }
     public string Status { get; set; } = "Queued";
     public int ProgressPercent { get; set; }
     public string InputSnapshotJson { get; set; } = "{}";

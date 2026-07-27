@@ -192,10 +192,72 @@ export async function getPortfolioRiskBacktest(portfolioId: string, from: string
 }
 export interface PortfolioRiskBacktestRun {
   id: string; portfolioId: string; jobId: string
-  status: 'Queued' | 'Running' | 'Completed' | 'Failed'; progressPercent: number
+  status: 'Queued' | 'Running' | 'FallbackRunning' | 'Completed' | 'Failed'; progressPercent: number
   from: string; to: string; lookbackDays: number; simulations: number; algorithmVersion: string
+  requestedModel: string; selectedModel: string | null; inputHash: string | null
+  fallbackReason: string | null; fallbackDepth: number
   createdAtUtc: string; startedAtUtc: string | null; completedAtUtc: string | null
   errorCode: string | null; errorMessage: string | null; result: PortfolioRiskBacktestResponse | null
+}
+
+export type RiskCalculationOperation = 'risk' | 'monte-carlo' | 'backtest' | 'scenario' | 'governance' | 'report'
+export interface RiskCalculationRun {
+  id:string; portfolioId:string; operation:RiskCalculationOperation
+  status:'Queued'|'Running'|'FallbackRunning'|'Completed'|'Failed'; progressPercent:number
+  requestedModel:string; selectedModel:string|null; algorithmVersion:string; inputHash:string|null
+  dataFactorVersion:string|null; fallbackReason:string|null; fallbackDepth:number
+  createdAtUtc:string; startedAtUtc:string|null; completedAtUtc:string|null
+  errorCode:string|null; errorMessage:string|null; result:unknown|null
+}
+
+export interface VtGarchConfidenceLevel { confidenceLevel:number; var:number; expectedShortfall:number }
+export interface VtGarchHorizon {
+  horizonDays:number; confidenceLevels:VtGarchConfidenceLevel[]
+  p1:number; p5:number; p50:number; p95:number; p99:number; expectedReturn:number
+}
+export interface FitHealth {
+  healthy:boolean; warningCount:number; nearUnitRate:number
+  maxPersistence:number; minNu:number; optimizerAttempts:number
+}
+export interface VtGarchBand { day:number; p1:number; p5:number; p50:number; p95:number; p99:number }
+export interface VtGarchConfidencePoint { confidenceLevel:number; var:number; es:number }
+export interface VtGarchHistoricalOneDay { var95:number; var99:number; es95:number; es99:number }
+export interface VtGarchMonteCarloSummary {
+  positiveReturnProbability:number; expectedReturn:number
+  p50FinalReturn:number; p5FinalReturn:number; p1FinalReturn:number
+}
+export interface VtGarchRiskResult {
+  portfolioId:string; dataAsOfDate:string; operation:string
+  requestedModel:string; selectedModel:string; algorithmVersion:string; fallbackDepth:number
+  simulations:number; lookbackDays:number
+  historicalAnnualizedVolatility?:number; maxDrawdown?:number
+  horizons:VtGarchHorizon[]; samplePaths:number[][]; fitHealth:FitHealth
+  bands?:VtGarchBand[]; summary?:VtGarchMonteCarloSummary|null
+  confidenceCurve?:VtGarchConfidencePoint[]; historical?:VtGarchHistoricalOneDay|null
+  dailyLogReturns?:number[]
+}
+
+export interface NormalizedHorizon {
+  horizonDays:number; var95:number; es95:number; var99:number|null; es99:number|null; expectedReturn:number|null
+}
+export async function createRiskCalculation(
+  portfolioId:string,
+  operation:RiskCalculationOperation,
+  options:Record<string, unknown> = {},
+): Promise<RiskCalculationRun> {
+  const response = await http.post<RiskCalculationRun>(
+    `/portfolios/${portfolioId}/risk/calculations`,
+    { operation, ...options },
+  )
+  return response.data
+}
+export async function getRiskCalculation(portfolioId:string, runId:string): Promise<RiskCalculationRun> {
+  const response = await http.get<RiskCalculationRun>(`/portfolios/${portfolioId}/risk/calculations/${runId}`)
+  return response.data
+}
+export async function listRiskCalculations(portfolioId:string): Promise<RiskCalculationRun[]> {
+  const response = await http.get<RiskCalculationRun[]>(`/portfolios/${portfolioId}/risk/calculations`)
+  return response.data
 }
 export async function createPortfolioRiskBacktestRun(portfolioId: string, from: string, to: string): Promise<PortfolioRiskBacktestRun> {
   const response = await http.post<PortfolioRiskBacktestRun>(`/portfolios/${portfolioId}/risk/backtests`, undefined, { params: { from, to } })

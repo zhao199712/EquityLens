@@ -1,0 +1,5 @@
+comparison_track,status,reason
+point_in_time_0050,Blocked,"missing historical effective-date constituents, weights, rebalance dates, and knowledge-time adjustment factors"
+fixed_2026_universe_terminal_weights,Pass_in_sample_only,"completed in breadth validation; terminal snapshot cannot represent historical point-in-time"
+fixed_universe_equal_weights,Pass_in_sample_only,"completed in breadth validation; fixed universe contains survivorship and terminal-selection information"
+

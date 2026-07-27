@@ -18,7 +18,7 @@ namespace EquityLens.Api.Services.RiskAnalysis;
 /// <summary>
 /// 風險分析服務實作，提供個股與投資組合的風險指標計算。
 /// </summary>
-public sealed class RiskAnalysisService : IRiskAnalysisService
+public sealed class RiskAnalysisService : IRiskAnalysisService, IRiskBacktestInputProvider
 {
     private const string DailyInterval = "1d";
     // 最低共同交易日門檻(約一個月),讓 1M 以上區間可估算風險;所有持倉必須在相同日期具有有效價格。
@@ -41,6 +41,7 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
     private readonly IExchangeRateService _exchangeRateService;
     private readonly EquityLensDbContext? _dbContext;
     private readonly ILogger<RiskAnalysisService>? _logger;
+    private readonly IRiskBacktestEngine _riskBacktestEngine;
 
     /// <summary>
     /// 初始化風險分析服務。
@@ -55,7 +56,8 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         IPortfolioRepository portfolioRepository,
         IExchangeRateService exchangeRateService,
         EquityLensDbContext? dbContext = null,
-        ILogger<RiskAnalysisService>? logger = null)
+        ILogger<RiskAnalysisService>? logger = null,
+        IRiskBacktestEngine? riskBacktestEngine = null)
     {
         _securityRepository = securityRepository;
         _marketPriceRepository = marketPriceRepository;
@@ -63,6 +65,7 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         _exchangeRateService = exchangeRateService;
         _dbContext = dbContext;
         _logger = logger;
+        _riskBacktestEngine = riskBacktestEngine ?? new CSharpRiskBacktestEngine();
     }
 
     private async Task<Result<T>> ExecuteRiskOperationAsync<T>(
@@ -526,24 +529,32 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         Guid portfolioId, DateOnly from, DateOnly to, Guid providerUserId, CancellationToken cancellationToken) =>
         await ExecuteRiskOperationAsync(
             "risk.portfolio.backtest", "mvewma_fhs", null, 5000,
-            () => GetPortfolioRiskBacktestCoreAsync(portfolioId, from, to, providerUserId, cancellationToken));
+            async () =>
+            {
+                var prepared = await PreparePortfolioRiskBacktestInputAsync(
+                    portfolioId, from, to, providerUserId, cancellationToken);
+                if (!prepared.IsSuccess)
+                    return Result<PortfolioRiskBacktestResponse>.Failure(
+                        prepared.ErrorCode!, prepared.ErrorMessage!);
+                return _riskBacktestEngine.Calculate(prepared.Value!, cancellationToken).ToResult();
+            });
 
-    private async Task<Result<PortfolioRiskBacktestResponse>> GetPortfolioRiskBacktestCoreAsync(
+    public async Task<Result<RiskBacktestEngineInput>> PreparePortfolioRiskBacktestInputAsync(
         Guid portfolioId, DateOnly from, DateOnly to, Guid providerUserId, CancellationToken cancellationToken)
     {
         const int lookbackDays = 252;
         const int minimumObservations = 100;
         const int simulations = 5000;
-        if (from >= to) return Result<PortfolioRiskBacktestResponse>.Failure("risk.invalid_date_range", "'from' must be earlier than 'to'.");
+        if (from >= to) return Result<RiskBacktestEngineInput>.Failure("risk.invalid_date_range", "'from' must be earlier than 'to'.");
 
         var portfolio = await _portfolioRepository.GetDetailAsync(portfolioId, providerUserId, cancellationToken);
-        if (portfolio is null) return Result<PortfolioRiskBacktestResponse>.Failure("portfolio.not_found", "Portfolio was not found.");
-        if (portfolio.Holdings.Count == 0) return Result<PortfolioRiskBacktestResponse>.Failure("portfolio.no_holdings", "Portfolio has no holdings.");
+        if (portfolio is null) return Result<RiskBacktestEngineInput>.Failure("portfolio.not_found", "Portfolio was not found.");
+        if (portfolio.Holdings.Count == 0) return Result<RiskBacktestEngineInput>.Failure("portfolio.no_holdings", "Portfolio has no holdings.");
 
         var ids = portfolio.Holdings.Select(h => h.SecurityId).Distinct().ToList();
         var latest = await _marketPriceRepository.GetLatestPricesAsync(ids, DailyInterval, cancellationToken);
         var holdings = portfolio.Holdings.Where(h => latest.ContainsKey(h.SecurityId)).ToList();
-        if (holdings.Count == 0) return Result<PortfolioRiskBacktestResponse>.Failure("risk.insufficient_prices", "No latest prices available for portfolio holdings.");
+        if (holdings.Count == 0) return Result<RiskBacktestEngineInput>.Failure("risk.insufficient_prices", "No latest prices available for portfolio holdings.");
 
         var values = await Task.WhenAll(holdings.Select(async h =>
         {
@@ -551,7 +562,7 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             return (h.SecurityId, Value: await _exchangeRateService.ConvertAsync(localValue, h.CostCurrency, portfolio.BaseCurrency, cancellationToken));
         }));
         var total = values.Sum(v => v.Value);
-        if (total <= 0) return Result<PortfolioRiskBacktestResponse>.Failure("risk.invalid_market_value", "Total market value is zero or negative.");
+        if (total <= 0) return Result<RiskBacktestEngineInput>.Failure("risk.invalid_market_value", "Total market value is zero or negative.");
         var weights = values.ToDictionary(v => v.SecurityId, v => v.Value / total);
 
         var pricesById = new Dictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>>();
@@ -560,12 +571,22 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
         var dateSets = pricesById.Values.Select(ps => ps.Select(p => DateOnly.FromDateTime(p.PriceTime)).ToHashSet()).ToList();
         var commonDates = dateSets.Skip(1).Aggregate(dateSets[0], (set, next) => { set.IntersectWith(next); return set; }).OrderBy(d => d).ToList();
         if (commonDates.Count < lookbackDays + minimumObservations)
-            return Result<PortfolioRiskBacktestResponse>.Failure("risk.insufficient_prices", $"At least {lookbackDays + minimumObservations} common trading days are required for backtesting (got {commonDates.Count}).");
+            return Result<RiskBacktestEngineInput>.Failure("risk.insufficient_prices", $"At least {lookbackDays + minimumObservations} common trading days are required for backtesting (got {commonDates.Count}).");
 
-        var aligned = pricesById.ToDictionary(pair => pair.Key, pair => pair.Value
-            .Where(p => commonDates.Contains(DateOnly.FromDateTime(p.PriceTime))).OrderBy(p => p.PriceTime)
-            .Select(p => p.AdjustedClose ?? p.Close).ToList());
-        if (aligned.Values.Any(ps => ps.Any(p => p <= 0))) return Result<PortfolioRiskBacktestResponse>.Failure("risk.non_positive_price", "Historical prices contain non-positive values.");
+        var alignedRows = pricesById.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value
+                .Where(p => commonDates.Contains(DateOnly.FromDateTime(p.PriceTime)))
+                .OrderBy(p => p.PriceTime)
+                .ToList());
+        if (alignedRows.Values.Any(rows => rows.Any(p => p.AdjustedClose is null)))
+            return Result<RiskBacktestEngineInput>.Failure(
+                "risk.incomplete_adjusted_close",
+                "Complete adjusted-close coverage is required; raw close is never used as a silent substitute.");
+        var aligned = alignedRows.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Select(p => p.AdjustedClose!.Value).ToList());
+        if (aligned.Values.Any(ps => ps.Any(p => p <= 0))) return Result<RiskBacktestEngineInput>.Failure("risk.non_positive_price", "Historical prices contain non-positive values.");
 
         var returns = new List<decimal>(commonDates.Count - 1);
         for (var index = 1; index < commonDates.Count; index++)
@@ -585,130 +606,20 @@ public sealed class RiskAnalysisService : IRiskAnalysisService
             return result;
         }).ToArray();
 
-        // Every rolling window is independent.  Limit the CPU use to four cores so a
-        // background backtest does not starve the API, Redis worker, or database host.
-        var windowCount = returns.Count - lookbackDays;
-        var windowResults = new BacktestWindowResult[windowCount];
-        var parallelOptions = new ParallelOptions
-        {
-            CancellationToken = cancellationToken,
-            MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount - 2, 1, 4),
-        };
-
-        Parallel.For(0, windowCount, parallelOptions, windowOffset =>
-        {
-            var index = lookbackDays + windowOffset;
-            var returnMatrix = new IReadOnlyList<decimal>[assetReturns.Length];
-            for (var assetIndex = 0; assetIndex < assetReturns.Length; assetIndex++)
-                returnMatrix[assetIndex] = new ArraySegment<decimal>(assetReturns[assetIndex], index - lookbackDays, lookbackDays);
-
-            var window = new ArraySegment<decimal>(portfolioReturns, index - lookbackDays, lookbackDays);
-            var historicalVaR = new decimal[confidenceLevels.Length];
-            var historicalEs = new decimal[confidenceLevels.Length];
-            for (var confidenceIndex = 0; confidenceIndex < confidenceLevels.Length; confidenceIndex++)
-            {
-                historicalVaR[confidenceIndex] = RiskMath.CalculateHistoricalVaR(window, confidenceLevels[confidenceIndex]);
-                historicalEs[confidenceIndex] = RiskMath.CalculateExpectedShortfall(window, confidenceLevels[confidenceIndex]);
-            }
-
-            var fhsResults = RiskMath.RunMultivariateFhsSimulationForConfidenceLevels(
-                returnMatrix, weightList, 100m, 1, simulations, confidenceLevels,
-                EwmaLambda, shrinkageAlpha);
-            var conservativeResults = RiskMath.RunMultivariateFhsSimulationForConfidenceLevels(
-                returnMatrix, weightList, 100m, 1, simulations, confidenceLevels,
-                EwmaLambda, shrinkageAlpha, residualCapQuantile: ConservativeResidualCapQuantile);
-            windowResults[windowOffset] = new BacktestWindowResult(
-                commonDates[index + 1], returns[index], historicalVaR, historicalEs,
-                fhsResults.Select(result => result.SimulatedVaR).ToArray(),
-                fhsResults.Select(result => result.SimulatedES).ToArray(),
-                conservativeResults.Select(result => result.SimulatedVaR).ToArray(),
-                conservativeResults.Select(result => result.SimulatedES).ToArray());
-        });
-
-        var models = new List<PortfolioRiskBacktestModelResponse>();
-        for (var confidenceIndex = 0; confidenceIndex < confidenceLevels.Length; confidenceIndex++)
-        {
-            var confidence = confidenceLevels[confidenceIndex];
-            var historical = new List<PortfolioRiskBacktestPoint>();
-            var monteCarlo = new List<PortfolioRiskBacktestPoint>();
-            var conservativeMonteCarlo = new List<PortfolioRiskBacktestPoint>();
-            foreach (var window in windowResults)
-            {
-                historical.Add(new(window.Date, window.ActualReturn, window.HistoricalVaR[confidenceIndex], window.HistoricalEs[confidenceIndex], window.ActualReturn < window.HistoricalVaR[confidenceIndex]));
-                monteCarlo.Add(new(window.Date, window.ActualReturn, window.MonteCarloVaR[confidenceIndex], window.MonteCarloEs[confidenceIndex], window.ActualReturn < window.MonteCarloVaR[confidenceIndex]));
-                conservativeMonteCarlo.Add(new(window.Date, window.ActualReturn, window.ConservativeVaR[confidenceIndex], window.ConservativeEs[confidenceIndex], window.ActualReturn < window.ConservativeVaR[confidenceIndex]));
-            }
-            models.Add(BuildBacktestModel("Historical", confidence, historical));
-            models.Add(BuildBacktestModel("MVEWMA-FHS", confidence, monteCarlo));
-            models.Add(BuildBacktestModel("MVEWMA-FHS（保守 p99）", confidence, conservativeMonteCarlo));
-        }
-        return Result<PortfolioRiskBacktestResponse>.Success(new(portfolioId, from, to, lookbackDays, returns.Count - lookbackDays, models));
-    }
-
-    private sealed record BacktestWindowResult(
-        DateOnly Date,
-        decimal ActualReturn,
-        decimal[] HistoricalVaR,
-        decimal[] HistoricalEs,
-        decimal[] MonteCarloVaR,
-        decimal[] MonteCarloEs,
-        decimal[] ConservativeVaR,
-        decimal[] ConservativeEs);
-
-    private static PortfolioRiskBacktestModelResponse BuildBacktestModel(string model, decimal confidence, IReadOnlyList<PortfolioRiskBacktestPoint> points)
-    {
-        var breaches = points.Count(point => point.Breached);
-        var rate = points.Count == 0 ? 0 : (decimal)breaches / points.Count;
-        var expected = 1 - confidence;
-        decimal? kupiec = points.Count < 100 ? null : KupiecPValue(points.Count, breaches, expected);
-        var christoffersen = points.Count < 100 ? null : ChristoffersenPValue(points);
-        var tailPoints = points.Where(point => point.Breached).ToList();
-        decimal? actualTailLossAverage = tailPoints.Count == 0 ? null : tailPoints.Average(point => point.ActualReturn);
-        decimal? predictedEsAverage = tailPoints.Count == 0 ? null : tailPoints.Average(point => point.PredictedES);
-        decimal? tailLossRatio = actualTailLossAverage is null || predictedEsAverage is null || predictedEsAverage == 0
-            ? null : actualTailLossAverage / predictedEsAverage;
-        var esStatus = tailLossRatio is null ? "insufficient_tail_observations"
-            : tailLossRatio > 1.10m ? "underestimated" : tailLossRatio < 0.90m ? "conservative" : "aligned";
-        return new(model, confidence, points.Count, breaches, rate, expected, kupiec, christoffersen,
-            tailPoints.Count, actualTailLossAverage, predictedEsAverage, tailLossRatio, esStatus,
-            points.Count < 100 ? "insufficient_observations" : "ready", points);
-    }
-
-    private static decimal KupiecPValue(int count, int breaches, decimal expected)
-    {
-        var observed = (decimal)breaches / count;
-        Func<decimal, int, double> logLikelihood = (p, x) => x == 0 ? count * Math.Log((double)(1 - p)) : x * Math.Log((double)p) + (count - x) * Math.Log((double)(1 - p));
-        var lr = -2d * (logLikelihood(expected, breaches) - logLikelihood(Math.Clamp(observed, 0.000001m, 0.999999m), breaches));
-        return ChiSquareOneDegreeSurvival(lr);
-    }
-
-    private static decimal? ChristoffersenPValue(IReadOnlyList<PortfolioRiskBacktestPoint> points)
-    {
-        if (points.Count < 2) return null;
-        var transitions = new int[2, 2];
-        for (var i = 1; i < points.Count; i++) transitions[points[i - 1].Breached ? 1 : 0, points[i].Breached ? 1 : 0]++;
-        var n0 = transitions[0, 0] + transitions[0, 1]; var n1 = transitions[1, 0] + transitions[1, 1];
-        if (n0 == 0 || n1 == 0) return null;
-        var pi = (decimal)(transitions[0, 1] + transitions[1, 1]) / (n0 + n1);
-        var pi0 = (decimal)transitions[0, 1] / n0; var pi1 = (decimal)transitions[1, 1] / n1;
-        Func<decimal, int, int, double> ll = (p, a, b) => a * Math.Log((double)(1 - Math.Clamp(p, 0.000001m, 0.999999m))) + b * Math.Log((double)Math.Clamp(p, 0.000001m, 0.999999m));
-        var lr = -2d * ((ll(pi, transitions[0, 0] + transitions[1, 0], transitions[0, 1] + transitions[1, 1])) - ll(pi0, transitions[0, 0], transitions[0, 1]) - ll(pi1, transitions[1, 0], transitions[1, 1]));
-        return ChiSquareOneDegreeSurvival(lr);
-    }
-
-    // Both the unconditional-coverage and independence likelihood-ratio tests
-    // have one degree of freedom.  For χ²(1), the survival function is
-    // erfc(sqrt(x / 2)); use a stable normal-tail approximation because .NET's
-    // Math API does not expose erfc on every supported runtime.
-    private static decimal ChiSquareOneDegreeSurvival(double statistic)
-    {
-        if (statistic <= 0) return 1m;
-
-        var z = Math.Sqrt(statistic);
-        var t = 1d / (1d + 0.2316419d * z);
-        var density = 0.3989422804014327d * Math.Exp(-0.5d * z * z);
-        var upperTail = density * (0.319381530d * t - 0.356563782d * t * t + 1.781477937d * t * t * t - 1.821255978d * t * t * t * t + 1.330274429d * t * t * t * t * t);
-        return (decimal)Math.Clamp(2d * upperTail, 0d, 1d);
+        return Result<RiskBacktestEngineInput>.Success(new RiskBacktestEngineInput(
+            portfolioId,
+            from,
+            to,
+            lookbackDays,
+            simulations,
+            confidenceLevels,
+            EwmaLambda,
+            shrinkageAlpha,
+            ConservativeResidualCapQuantile,
+            commonDates.Skip(1).ToArray(),
+            portfolioReturns,
+            assetReturns,
+            weightList));
     }
 
     private MonteCarloResult RunCorrelatedMonteCarlo(

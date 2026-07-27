@@ -1,0 +1,56 @@
+services:
+  postgres-shadow:
+    image: paradedb/paradedb:0.24.1-pg18
+    container_name: equitylens-python-shadow-postgres
+    environment:
+      POSTGRES_DB: equitylens
+      POSTGRES_USER: equitylens
+      POSTGRES_PASSWORD: equitylens_dev_password
+    ports:
+      - "${SHADOW_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - postgres-shadow-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U equitylens -d equitylens"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis-shadow:
+    image: redis:7-alpine
+    container_name: equitylens-python-shadow-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${SHADOW_REDIS_PORT:-56379}:6379"
+    volumes:
+      - redis-shadow-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mathematics:
+    build:
+      context: ./src/EquityLens.Mathematics
+    container_name: equitylens-python-shadow-mathematics
+    environment:
+      REDIS_URL: redis://redis-shadow:6379/0
+      RISK_JOBS_STREAM: equitylens:risk-python:jobs
+      RISK_JOBS_GROUP: risk-python-workers
+      RISK_RESULTS_STREAM: equitylens:risk-python:results
+      RISK_DEAD_LETTER_STREAM: equitylens:risk-python:dead-letter
+      RISK_PAYLOAD_PREFIX: equitylens:risk-python
+      RISK_MAX_ATTEMPTS: "3"
+      RISK_PENDING_MIN_IDLE_MS: "300000"
+      MATHEMATICS_WORKERS: ${MATHEMATICS_WORKERS:-8}
+    depends_on:
+      redis-shadow:
+        condition: service_healthy
+    mem_limit: ${RISK_WORKER_MEMORY:-2g}
+    cpus: ${RISK_WORKER_CPUS:-2}
+    restart: unless-stopped
+
+volumes:
+  postgres-shadow-data:
+  redis-shadow-data:

@@ -343,7 +343,7 @@ public sealed class RiskAnalysisServiceTests
     [Fact]
     public void KupiecPValue_UsesOneDegreeOfFreedomTailProbability()
     {
-        var method = typeof(RiskAnalysisService).GetMethod(
+        var method = typeof(CSharpRiskBacktestEngine).GetMethod(
             "KupiecPValue", BindingFlags.NonPublic | BindingFlags.Static);
 
         Assert.NotNull(method);

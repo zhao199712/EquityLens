@@ -23,6 +23,21 @@
     "CacheKeyPrefix": "equitylens:cache",
     "DefaultCacheMinutes": 15
   },
+  "RiskPython": {
+    "PrimaryEnabled": false,
+    "ShadowEnabled": false,
+    "JobsStreamKey": "equitylens:risk-python:jobs",
+    "JobsConsumerGroup": "risk-python-workers",
+    "ResultsStreamKey": "equitylens:risk-python:results",
+    "ResultsConsumerGroup": "risk-shadow-result-consumers",
+    "DeadLetterStreamKey": "equitylens:risk-python:dead-letter",
+    "PayloadKeyPrefix": "equitylens:risk-python",
+    "CandidateAlgorithmVersion": "vt-garch-t-joint-fhs-v1",
+    "DataFactorVersion": "adjusted-close-db-v1",
+    "PayloadTtlHours": 24,
+    "ResultPollSeconds": 1,
+    "CalculationTimeoutMinutes": 10
+  },
   "AgentRunQueue": {
     "StreamKey": "equitylens:agent-runs:stream",
     "ConsumerGroupName": "agent-run-workers",
