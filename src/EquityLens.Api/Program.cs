@@ -481,6 +481,8 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+
 app.MapControllers();
 
 // 匯入法說會模式: dotnet run -- --import-conferences

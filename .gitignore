@@ -18,6 +18,7 @@ appsettings.Development.json
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 # Node / Vue
 node_modules/

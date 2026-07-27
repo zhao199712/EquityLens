@@ -1,0 +1,158 @@
+name: equitylens-prod
+
+services:
+  caddy:
+    image: caddy:2.11.4-alpine
+    container_name: equitylens-caddy
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+      - ./src/EquityLens.Web/dist:/srv:ro,Z
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - equitylens
+
+  api:
+    build:
+      context: ./src/EquityLens.Api
+    container_name: equitylens-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=${POSTGRES_DB:-equitylens};Username=${POSTGRES_USER:-equitylens};Password=${POSTGRES_PASSWORD}
+      Redis__ConnectionString: redis:6379
+      ObjectStorage__ServiceUrl: http://garage:3900
+      ObjectStorage__AccessKeyId: ${S3_ACCESS_KEY_ID}
+      ObjectStorage__SecretAccessKey: ${S3_SECRET_ACCESS_KEY}
+      ObjectStorage__BucketName: ${S3_BUCKET:-equitylens}
+      Jwt__Key: ${JWT_KEY}
+      Google__ClientId: ${GOOGLE_CLIENT_ID}
+      Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
+      DeepSeek__ApiKey: ${DEEPSEEK_API_KEY}
+      Cohere__ApiKey: ${COHERE_API_KEY}
+      Jina__ApiKey: ${JINA_API_KEY}
+      Brave__ApiKey: ${BRAVE_API_KEY}
+      MarketData__AlphaVantage__ApiKey: ${ALPHAVANTAGE_API_KEY}
+      MarketData__FinMind__Token: ${FINMIND_TOKEN}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5034/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - equitylens
+
+  postgres:
+    image: paradedb/paradedb:0.24.1-pg18
+    container_name: equitylens-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-equitylens}
+      POSTGRES_USER: ${POSTGRES_USER:-equitylens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-equitylens} -d ${POSTGRES_DB:-equitylens}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - equitylens
+
+  redis:
+    image: redis:7-alpine
+    container_name: equitylens-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - equitylens
+
+  mathematics:
+    build:
+      context: ./src/EquityLens.Mathematics
+    container_name: equitylens-mathematics
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RISK_JOBS_STREAM: equitylens:risk-python:jobs
+      RISK_JOBS_GROUP: risk-python-workers
+      RISK_RESULTS_STREAM: equitylens:risk-python:results
+      RISK_DEAD_LETTER_STREAM: equitylens:risk-python:dead-letter
+      RISK_PAYLOAD_PREFIX: equitylens:risk-python
+      RISK_MAX_ATTEMPTS: "3"
+      RISK_PENDING_MIN_IDLE_MS: "300000"
+      MATHEMATICS_WORKERS: ${MATHEMATICS_WORKERS:-4}
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: ${MATHEMATICS_MEMORY:-4g}
+    cpus: ${MATHEMATICS_CPUS:-4}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - equitylens
+
+  garage:
+    image: dxflrs/garage:v2.3.0
+    container_name: equitylens-garage
+    restart: unless-stopped
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_CONFIG_FILE: /etc/garage.toml
+      GARAGE_DEFAULT_ACCESS_KEY: ${S3_ACCESS_KEY_ID}
+      GARAGE_DEFAULT_SECRET_KEY: ${S3_SECRET_ACCESS_KEY}
+      GARAGE_DEFAULT_BUCKET: ${S3_BUCKET:-equitylens}
+    volumes:
+      - garage-data:/var/lib/garage
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro,Z
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - equitylens
+
+volumes:
+  caddy-data:
+  caddy-config:
+  postgres-data:
+  redis-data:
+  garage-data:
+
+networks:
+  equitylens:
+    driver: bridge
