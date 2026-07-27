@@ -48,6 +48,17 @@ interface AttributionItem {
   contribution: number
 }
 
+interface PortfolioRiskMetrics {
+  annualizedVolatility?: number | null
+  maxDrawdown?: number | null
+  historicalVaR?: number | null
+  expectedShortfall?: number | null
+  portfolioVolatility?: number | null
+  concentrationHhi?: number | null
+  largestWeight?: number | null
+  volatilityRiskShare?: number | null
+}
+
 interface PortfolioDiagnosisOutput {
   summary: string
   portfolioReturn?: number | null
@@ -57,6 +68,7 @@ interface PortfolioDiagnosisOutput {
   mainContributors: AttributionItem[]
   recommendedAnalyses: Array<{ evidenceId: string; priority: number; analysis: string; reason: string }>
   evidenceStatus: string
+  riskMetrics?: PortfolioRiskMetrics | null
 }
 
 interface RoutingContext {
@@ -139,6 +151,10 @@ function formatPercent(value: number | null | undefined) {
   return value == null ? '資料不足' : new Intl.NumberFormat('zh-TW', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
 
+function formatHhi(value: number | null | undefined) {
+  return value == null ? '資料不足' : new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(value)
+}
+
 function statusColor(status: string) {
   switch (status) {
     case 'Succeeded': return '#7fa387'
@@ -211,6 +227,13 @@ const draftOutput = computed((): DraftRevisionOutput | null => {
 const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null => {
   if (!run.value || run.value.run.workflowType !== 'PortfolioDiagnosis') return null
   return (run.value.outputJson as unknown as PortfolioDiagnosisOutput) ?? null
+})
+
+const riskMetrics = computed((): PortfolioRiskMetrics | null => {
+  const metrics = portfolioDiagnosisOutput.value?.riskMetrics
+  if (!metrics) return null
+  const hasAny = Object.values(metrics).some((value) => value != null)
+  return hasAny ? metrics : null
 })
 
 const routingContext = computed((): RoutingContext | null => {
@@ -439,6 +462,19 @@ const nextActionLabel = computed(() => {
               <div><div class="prestige-label stat-caption">證據覆蓋</div><div class="stat-value">{{ portfolioDiagnosisOutput.evidenceStatus === 'complete' ? '完整' : '部分' }}</div></div>
             </div>
             <div class="summary-block"><div class="prestige-label stat-caption">摘要</div><div class="body-text">{{ portfolioDiagnosisOutput.summary }}</div></div>
+            <div v-if="riskMetrics" class="finding-list" style="margin-top: 18px">
+              <div class="prestige-label stat-caption">風險指標</div>
+              <div class="stat-grid">
+                <div><div class="prestige-label stat-caption">年化波動率</div><div class="stat-value">{{ formatPercent(riskMetrics.annualizedVolatility) }}</div></div>
+                <div><div class="prestige-label stat-caption">最大回撤</div><div class="stat-value" :style="{ color: (riskMetrics.maxDrawdown ?? 0) < 0 ? '#b05c5c' : undefined }">{{ formatPercent(riskMetrics.maxDrawdown) }}</div></div>
+                <div><div class="prestige-label stat-caption">歷史 VaR</div><div class="stat-value">{{ formatPercent(riskMetrics.historicalVaR) }}</div></div>
+                <div><div class="prestige-label stat-caption">預期缺口 ES</div><div class="stat-value">{{ formatPercent(riskMetrics.expectedShortfall) }}</div></div>
+                <div><div class="prestige-label stat-caption">投組波動率</div><div class="stat-value">{{ formatPercent(riskMetrics.portfolioVolatility) }}</div></div>
+                <div><div class="prestige-label stat-caption">集中度 HHI</div><div class="stat-value">{{ formatHhi(riskMetrics.concentrationHhi) }}</div></div>
+                <div><div class="prestige-label stat-caption">最大持倉權重</div><div class="stat-value">{{ formatPercent(riskMetrics.largestWeight) }}</div></div>
+                <div><div class="prestige-label stat-caption">波動風險貢獻</div><div class="stat-value">{{ formatPercent(riskMetrics.volatilityRiskShare) }}</div></div>
+              </div>
+            </div>
             <div class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">主要拖累</div>
               <div v-if="portfolioDiagnosisOutput.mainDrags.length === 0" class="body-text">資料不足，無法列出拖累來源。</div>

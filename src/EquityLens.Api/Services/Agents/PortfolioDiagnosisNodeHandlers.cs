@@ -13,7 +13,52 @@ public sealed record AttributionItem(string EvidenceId, string Name, string? Ind
 public sealed record PortfolioPerformanceAttribution(decimal? PortfolioReturn, decimal? BenchmarkReturn, decimal? ActiveReturn, int PricedHoldingCount, int HoldingCount, IReadOnlyList<AttributionItem> Holdings, IReadOnlyList<AttributionItem> Industries, string CoverageStatus);
 public sealed record RiskAnalysisPriority(string EvidenceId, int Priority, string Analysis, string Reason);
 public sealed record PortfolioRiskProfileSnapshot(bool Available, string DataStatus, DateOnly? DataAsOfDate, int CommonTradingDays, int AlertCount);
-public sealed record PortfolioDiagnosisOutput(string Summary, decimal? PortfolioReturn, decimal? BenchmarkReturn, decimal? ActiveReturn, IReadOnlyList<AttributionItem> MainDrags, IReadOnlyList<AttributionItem> MainContributors, IReadOnlyList<RiskAnalysisPriority> RecommendedAnalyses, string EvidenceStatus);
+public sealed record PortfolioRiskMetrics(
+    decimal? AnnualizedVolatility,
+    decimal? MaxDrawdown,
+    decimal? HistoricalVaR,
+    decimal? ExpectedShortfall,
+    decimal? PortfolioVolatility,
+    decimal? ConcentrationHhi,
+    decimal? LargestWeight,
+    decimal? VolatilityRiskShare);
+public sealed record PortfolioDiagnosisOutput(string Summary, decimal? PortfolioReturn, decimal? BenchmarkReturn, decimal? ActiveReturn, IReadOnlyList<AttributionItem> MainDrags, IReadOnlyList<AttributionItem> MainContributors, IReadOnlyList<RiskAnalysisPriority> RecommendedAnalyses, string EvidenceStatus, PortfolioRiskMetrics RiskMetrics);
+
+internal static class PortfolioRiskMetricsReader
+{
+    public static PortfolioRiskMetrics FromMathResults(JsonNode? mathResults)
+    {
+        decimal? annualizedVolatility = null, maxDrawdown = null, historicalVaR = null, expectedShortfall = null, portfolioVolatility = null, hhi = null, largestWeight = null, riskShare = null;
+        if (mathResults is JsonArray array)
+        {
+            foreach (var node in array)
+            {
+                if (node is not JsonObject result) continue;
+                var value = result["value"];
+                switch (result["operation"]?.GetValue<string>())
+                {
+                    case "calculate-annualized-volatility": annualizedVolatility = AsDecimal(value); break;
+                    case "calculate-max-drawdown": maxDrawdown = AsDecimal(value); break;
+                    case "calculate-historical-var": historicalVaR = AsDecimal(value); break;
+                    case "calculate-expected-shortfall": expectedShortfall = AsDecimal(value); break;
+                    case "calculate-portfolio-volatility": portfolioVolatility = AsDecimal(value); break;
+                    case "calculate-concentration": hhi = Field(value, "hhi"); largestWeight = Field(value, "largestWeight"); break;
+                    case "calculate-volatility-risk-contribution": riskShare = Field(value, "componentRiskShare"); break;
+                }
+            }
+        }
+        return new(annualizedVolatility, maxDrawdown, historicalVaR, expectedShortfall, portfolioVolatility, hhi, largestWeight, riskShare);
+    }
+
+    private static decimal? Field(JsonNode? node, string name) => node is JsonObject obj ? AsDecimal(obj[name]) : null;
+
+    private static decimal? AsDecimal(JsonNode? node)
+    {
+        if (node is not JsonValue value) return null;
+        if (value.TryGetValue<decimal>(out var parsed)) return parsed;
+        return value.TryGetValue<double>(out var floating) ? (decimal)floating : null;
+    }
+}
 
 internal static class PortfolioDiagnosisBlackboard
 {
@@ -135,9 +180,20 @@ public sealed class DraftPortfolioDiagnosisNodeHandler : IAgentNodeHandler
     {
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution); var priorities = PortfolioDiagnosisBlackboard.Required<List<RiskAnalysisPriority>>(board, AgentBlackboardKeys.RiskAnalysisPriorities);
         var drags = attribution.Holdings.Take(3).ToList(); var gains = attribution.Holdings.OrderByDescending(x => x.Contribution).Take(3).ToList();
-        var summary = attribution.ActiveReturn is null ? "基準或投組報酬資料不足，無法判定相對大盤表現。" : $"本期投組相對基準報酬為 {attribution.ActiveReturn:P2}。主要拖累與貢獻依可取得價格的持倉近似計算，資料覆蓋狀態為 {attribution.CoverageStatus}。";
-        var output = new PortfolioDiagnosisOutput(summary, attribution.PortfolioReturn, attribution.BenchmarkReturn, attribution.ActiveReturn, drags, gains, priorities, attribution.CoverageStatus);
+        var metrics = PortfolioRiskMetricsReader.FromMathResults(board[AgentBlackboardKeys.MathResults]);
+        var summary = (attribution.ActiveReturn is null ? "基準或投組報酬資料不足，無法判定相對大盤表現。" : $"本期投組相對基準報酬為 {attribution.ActiveReturn:P2}。主要拖累與貢獻依可取得價格的持倉近似計算，資料覆蓋狀態為 {attribution.CoverageStatus}。") + BuildRiskSummary(metrics);
+        var output = new PortfolioDiagnosisOutput(summary, attribution.PortfolioReturn, attribution.BenchmarkReturn, attribution.ActiveReturn, drags, gains, priorities, attribution.CoverageStatus, metrics);
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioDiagnosisDraft, output); context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(output); context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Portfolio diagnosis draft written from evidence packet.", new { dragCount = drags.Count, priorityCount = priorities.Count }); return Task.CompletedTask;
+    }
+
+    private static string BuildRiskSummary(PortfolioRiskMetrics metrics)
+    {
+        var parts = new List<string>();
+        if (metrics.AnnualizedVolatility is { } volatility) parts.Add($"年化波動率 {volatility:P2}");
+        if (metrics.MaxDrawdown is { } drawdown) parts.Add($"最大回撤 {drawdown:P2}");
+        if (metrics.ConcentrationHhi is { } hhi) parts.Add($"集中度 HHI {hhi:0.###}");
+        if (metrics.HistoricalVaR is { } valueAtRisk) parts.Add($"歷史 VaR {valueAtRisk:P2}");
+        return parts.Count == 0 ? string.Empty : $"風險概況：{string.Join("、", parts)}。";
     }
 }
 

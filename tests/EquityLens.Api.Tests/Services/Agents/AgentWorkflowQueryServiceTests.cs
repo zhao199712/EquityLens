@@ -29,6 +29,50 @@ public sealed class AgentWorkflowQueryServiceTests
     }
 
     [Fact]
+    public async Task PortfolioQuestion_WithOneYearHorizon_UsesOneYearWindow()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid();
+        db.Portfolios.Add(new Portfolio { Id = Guid.NewGuid(), OwnerUserId = userId, Name = "P" });
+        await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns();
+        var service = new AgentWorkflowQueryService(db, Router(PortfolioRoute("1y")), runs);
+
+        await service.CreateAsync(userId, new("我的投資組合最近一年的波動如何？"));
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        Assert.Equal(today, runs.To);
+        Assert.Equal(today.AddMonths(-12), runs.From);
+    }
+
+    [Fact]
+    public async Task PortfolioQuestion_WithoutHorizon_LeavesWindowToServiceDefault()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid();
+        db.Portfolios.Add(new Portfolio { Id = Guid.NewGuid(), OwnerUserId = userId, Name = "P" });
+        await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns();
+        var service = new AgentWorkflowQueryService(db, Router(PortfolioRoute()), runs);
+
+        await service.CreateAsync(userId, new("我的投組風險如何？"));
+
+        Assert.True(runs.From is null);
+        Assert.True(runs.To is null);
+    }
+
+    [Theory]
+    [InlineData("1y", 12)]
+    [InlineData("6m", 6)]
+    [InlineData("2 years", 24)]
+    [InlineData("90d", 3)]
+    [InlineData("1年", 12)]
+    [InlineData("10y", 120)]
+    [InlineData("最近一年", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void ParseHorizonMonths_MapsUnitsToMonths(string? horizon, int? expected) =>
+        Assert.Equal(expected, AgentWorkflowQueryService.ParseHorizonMonths(horizon));
+
+    [Fact]
     public async Task ResearchQuestion_ResolvesCompanyNameThroughSecurityRegistry()
     {
         await using var db = CreateDb(); var userId = Guid.NewGuid();
@@ -207,8 +251,8 @@ public sealed class AgentWorkflowQueryServiceTests
         string objective = "分析使用者指定的公司研究問題") => $$"""
         {"workflowType":"ResearchInvestigation","portfolioId":null,"securityQuery":{{JsonSerializer.Serialize(securityQuery)}},"leadSkill":"{{leadSkill}}","objective":{{JsonSerializer.Serialize(objective)}},"contextEnvelope":{"market":"TW","asset":"equity","depth":"standard","horizon":null,"currency":"TWD","language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"routingReason":"需要公司研究","confidence":"high"}
         """;
-    private static string PortfolioRoute() => """
-        {"workflowType":"PortfolioDiagnosis","portfolioId":null,"securityQuery":null,"leadSkill":"portfolio-risk-summary","objective":"診斷投資組合風險","contextEnvelope":{"market":"TW","asset":"portfolio","depth":"standard","horizon":null,"currency":"TWD","language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"routingReason":"需要檢查投組風險","confidence":"high"}
+    private static string PortfolioRoute(string? horizon = null) => $$"""
+        {"workflowType":"PortfolioDiagnosis","portfolioId":null,"securityQuery":null,"leadSkill":"portfolio-risk-summary","objective":"診斷投資組合風險","contextEnvelope":{"market":"TW","asset":"portfolio","depth":"standard","horizon":{{JsonSerializer.Serialize(horizon)}},"currency":"TWD","language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"routingReason":"需要檢查投組風險","confidence":"high"}
         """;
 
     private sealed class TestDb(DbContextOptions<EquityLensDbContext> options) : EquityLensDbContext(options)
@@ -231,10 +275,12 @@ public sealed class AgentWorkflowQueryServiceTests
     private sealed class FakeAgentRuns : IAgentRunService
     {
         public Guid? PortfolioId { get; private set; }
+        public DateOnly? From { get; private set; }
+        public DateOnly? To { get; private set; }
         public ResearchAskRequest? ResearchRequest { get; private set; }
         public InvestmentResearchRoutingContext? RoutingContext { get; private set; }
         public Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default)
-        { PortfolioId = portfolioId; RoutingContext = routingContext; return Task.FromResult(Summary(AgentWorkflowTypes.PortfolioDiagnosis)); }
+        { PortfolioId = portfolioId; From = from; To = to; RoutingContext = routingContext; return Task.FromResult(Summary(AgentWorkflowTypes.PortfolioDiagnosis)); }
         public Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default)
         { ResearchRequest = request; RoutingContext = routingContext; return Task.FromResult((Summary(AgentWorkflowTypes.ResearchInvestigation), Guid.NewGuid())); }
         private static AgentRunSummaryResponse Summary(string workflow) => new(Guid.NewGuid(), workflow, "Agent", AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Research;
@@ -37,7 +38,8 @@ public sealed class AgentWorkflowQueryService(
         if (string.Equals(decision.WorkflowType, AgentWorkflowTypes.PortfolioDiagnosis, StringComparison.OrdinalIgnoreCase))
         {
             var portfolioId = ResolvePortfolio(decision.PortfolioId, portfolios);
-            var created = await agentRuns.CreatePortfolioDiagnosisAsync(userId, portfolioId, null, null, decision.RoutingContext, cancellationToken);
+            var (from, to) = ResolveDiagnosisWindow(decision.RoutingContext.ContextEnvelope.Horizon);
+            var created = await agentRuns.CreatePortfolioDiagnosisAsync(userId, portfolioId, from, to, decision.RoutingContext, cancellationToken);
             return Response(created.Id, null, created.WorkflowType, created.Status, decision.RoutingContext);
         }
 
@@ -67,6 +69,29 @@ public sealed class AgentWorkflowQueryService(
         if (portfolios.Count == 0) throw new AgentWorkflowQueryException("portfolio_required", "目前沒有可供診斷的投資組合。");
         if (selected.HasValue && portfolios.Any(x => x.Id == selected.Value)) return selected.Value;
         throw new AgentWorkflowQueryException("portfolio_required", "問題被判定為 Portfolio Diagnosis；請在問題中寫明要診斷的投資組合名稱。");
+    }
+
+    private static (DateOnly? From, DateOnly? To) ResolveDiagnosisWindow(string? horizon)
+    {
+        var months = ParseHorizonMonths(horizon);
+        if (months is null) return (null, null);
+        var end = DateOnly.FromDateTime(DateTime.UtcNow);
+        return (end.AddMonths(-months.Value), end);
+    }
+
+    public static int? ParseHorizonMonths(string? horizon)
+    {
+        if (string.IsNullOrWhiteSpace(horizon)) return null;
+        var match = Regex.Match(horizon.Trim(), @"^(\d+(?:\.\d+)?)\s*(y|year|years|m|month|months|d|day|days|年|月|天|日)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success) return null;
+        var amount = decimal.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        var months = match.Groups[2].Value.ToLowerInvariant() switch
+        {
+            "y" or "year" or "years" or "年" => (int)(amount * 12m),
+            "m" or "month" or "months" or "月" => (int)amount,
+            _ => (int)(amount / 30m)
+        };
+        return Math.Clamp(months, 1, 120);
     }
 
     private async Task<string> ResolveTickerAsync(string? securityQuery, string originalQuestion, CancellationToken cancellationToken)
