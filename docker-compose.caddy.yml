@@ -1,0 +1,32 @@
+name: equitylens-caddy
+
+services:
+  caddy:
+    image: caddy:2.11.4-alpine
+    container_name: equitylens-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+      - ./infra/caddy/site:/srv:ro,Z
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - caddy
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  caddy:
+    driver: bridge

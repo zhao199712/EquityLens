@@ -1,0 +1,13 @@
+name: equitylens-tunnel
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: equitylens-quick-tunnel
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --url
+      - http://127.0.0.1:5034
+    network_mode: host
+    restart: "no"

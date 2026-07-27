@@ -452,7 +452,8 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                   "http://localhost:5173",
                   "http://192.168.50.11:5173",
-                  "http://172.25.14.202:5173")
+                  "http://172.25.14.202:5173",
+                  "https://equitylens.pages.dev")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
