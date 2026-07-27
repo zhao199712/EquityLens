@@ -22,7 +22,7 @@ public sealed record PortfolioRiskMetrics(
     decimal? ConcentrationHhi,
     decimal? LargestWeight,
     decimal? VolatilityRiskShare);
-public sealed record PortfolioDiagnosisOutput(string Summary, decimal? PortfolioReturn, decimal? BenchmarkReturn, decimal? ActiveReturn, IReadOnlyList<AttributionItem> MainDrags, IReadOnlyList<AttributionItem> MainContributors, IReadOnlyList<RiskAnalysisPriority> RecommendedAnalyses, string EvidenceStatus, PortfolioRiskMetrics RiskMetrics);
+public sealed record PortfolioDiagnosisOutput(string Summary, decimal? PortfolioReturn, decimal? BenchmarkReturn, decimal? ActiveReturn, IReadOnlyList<AttributionItem> MainDrags, IReadOnlyList<AttributionItem> MainContributors, IReadOnlyList<RiskAnalysisPriority> RecommendedAnalyses, string EvidenceStatus, PortfolioRiskMetrics RiskMetrics, string? Interpretation);
 
 internal static class PortfolioRiskMetricsReader
 {
@@ -173,17 +173,40 @@ public sealed class BuildPortfolioEvidencePacketNodeHandler : IAgentNodeHandler
     }
 }
 
-public sealed class DraftPortfolioDiagnosisNodeHandler : IAgentNodeHandler
+public sealed class DraftPortfolioDiagnosisNodeHandler(IPortfolioDiagnosisNarrativeAgent narrative) : IAgentNodeHandler
 {
     public string NodeType => PortfolioDiagnosisNodeTypes.DraftDiagnosis;
-    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution); var priorities = PortfolioDiagnosisBlackboard.Required<List<RiskAnalysisPriority>>(board, AgentBlackboardKeys.RiskAnalysisPriorities);
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var diagnosis = PortfolioDiagnosisBlackboard.Context(board); var attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution); var priorities = PortfolioDiagnosisBlackboard.Required<List<RiskAnalysisPriority>>(board, AgentBlackboardKeys.RiskAnalysisPriorities);
         var drags = attribution.Holdings.Take(3).ToList(); var gains = attribution.Holdings.OrderByDescending(x => x.Contribution).Take(3).ToList();
         var metrics = PortfolioRiskMetricsReader.FromMathResults(board[AgentBlackboardKeys.MathResults]);
         var summary = (attribution.ActiveReturn is null ? "基準或投組報酬資料不足，無法判定相對大盤表現。" : $"本期投組相對基準報酬為 {attribution.ActiveReturn:P2}。主要拖累與貢獻依可取得價格的持倉近似計算，資料覆蓋狀態為 {attribution.CoverageStatus}。") + BuildRiskSummary(metrics);
-        var output = new PortfolioDiagnosisOutput(summary, attribution.PortfolioReturn, attribution.BenchmarkReturn, attribution.ActiveReturn, drags, gains, priorities, attribution.CoverageStatus, metrics);
-        PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioDiagnosisDraft, output); context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(output); context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Portfolio diagnosis draft written from evidence packet.", new { dragCount = drags.Count, priorityCount = priorities.Count }); return Task.CompletedTask;
+        var interpretation = await GenerateInterpretationAsync(diagnosis, attribution, metrics, priorities, board, cancellationToken);
+        var output = new PortfolioDiagnosisOutput(summary, attribution.PortfolioReturn, attribution.BenchmarkReturn, attribution.ActiveReturn, drags, gains, priorities, attribution.CoverageStatus, metrics, interpretation);
+        PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioDiagnosisDraft, output); context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(output); context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Portfolio diagnosis draft written from evidence packet.", new { dragCount = drags.Count, priorityCount = priorities.Count });
+    }
+
+    private async Task<string?> GenerateInterpretationAsync(
+        PortfolioDiagnosisContext diagnosis,
+        PortfolioPerformanceAttribution attribution,
+        PortfolioRiskMetrics metrics,
+        List<RiskAnalysisPriority> priorities,
+        JsonObject board,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var objective = board[AgentBlackboardKeys.RoutingContext]?["objective"]?.GetValue<string>();
+            var text = await narrative.GenerateAsync(
+                new PortfolioDiagnosisNarrativeInput(diagnosis.PortfolioName, diagnosis.From, diagnosis.To, objective, attribution, metrics, priorities),
+                cancellationToken);
+            return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string BuildRiskSummary(PortfolioRiskMetrics metrics)

@@ -58,9 +58,24 @@ export const useChatStore = defineStore('chat', {
   },
 
   actions: {
+    clear() {
+      this.sessions = []
+      this.currentSessionId = null
+      this.messages = []
+      this.isStreaming = false
+      this.streamingContent = ''
+      this.toolExecutions = []
+      this.error = null
+      this.conversationAction = null
+    },
+
     async loadSessions() {
       try {
         this.sessions = await listSessions()
+        if (this.currentSessionId && !this.sessions.some((s) => s.id === this.currentSessionId)) {
+          this.currentSessionId = null
+          this.messages = []
+        }
       } catch {
         this.error = 'Failed to load sessions'
       }
@@ -81,6 +96,12 @@ export const useChatStore = defineStore('chat', {
     },
 
     async startNewSession() {
+      const existing = this.sessions.find((s) => s.messageCount === 0)
+      if (existing) {
+        this.currentSessionId = existing.id
+        this.messages = []
+        return
+      }
       try {
         const session = await createSession()
         this.sessions.unshift(session)

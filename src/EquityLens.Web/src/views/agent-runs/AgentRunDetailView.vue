@@ -11,6 +11,7 @@ import {
   type AgentRunNodeDto,
 } from '../../services/agentRuns'
 import { useAgentRunPolling } from '../../composables/useAgentRunPolling'
+import { renderMarkdown } from '../../utils/markdown'
 
 interface CriticFinding {
   severity: string
@@ -69,6 +70,7 @@ interface PortfolioDiagnosisOutput {
   recommendedAnalyses: Array<{ evidenceId: string; priority: number; analysis: string; reason: string }>
   evidenceStatus: string
   riskMetrics?: PortfolioRiskMetrics | null
+  interpretation?: string | null
 }
 
 interface RoutingContext {
@@ -462,6 +464,10 @@ const nextActionLabel = computed(() => {
               <div><div class="prestige-label stat-caption">證據覆蓋</div><div class="stat-value">{{ portfolioDiagnosisOutput.evidenceStatus === 'complete' ? '完整' : '部分' }}</div></div>
             </div>
             <div class="summary-block"><div class="prestige-label stat-caption">摘要</div><div class="body-text">{{ portfolioDiagnosisOutput.summary }}</div></div>
+            <div v-if="portfolioDiagnosisOutput.interpretation" class="summary-block" style="margin-top: 18px">
+              <div class="prestige-label stat-caption">分析解讀</div>
+              <div class="body-text interpretation" v-html="renderMarkdown(portfolioDiagnosisOutput.interpretation)"></div>
+            </div>
             <div v-if="riskMetrics" class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">風險指標</div>
               <div class="stat-grid">

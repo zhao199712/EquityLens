@@ -16,7 +16,7 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         var run = CreateRun(MathResults());
         var node = DraftNode(run.Id);
 
-        await new DraftPortfolioDiagnosisNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+        await new DraftPortfolioDiagnosisNodeHandler(new FakeNarrative("解讀文字")).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
 
         var output = JsonNode.Parse(node.OutputJson!)!;
         var metrics = output["riskMetrics"]!;
@@ -40,7 +40,7 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         var run = CreateRun(new JsonArray());
         var node = DraftNode(run.Id);
 
-        await new DraftPortfolioDiagnosisNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+        await new DraftPortfolioDiagnosisNodeHandler(new FakeNarrative("解讀文字")).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
 
         var output = JsonNode.Parse(node.OutputJson!)!;
         var metrics = output["riskMetrics"]!;
@@ -48,6 +48,34 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         Assert.True(metrics["maxDrawdown"] is null);
         Assert.True(metrics["concentrationHhi"] is null);
         Assert.DoesNotContain("風險概況", output["summary"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DraftHandler_WritesNarrativeInterpretation()
+    {
+        await using var db = CreateDb();
+        var run = CreateRun(MathResults());
+        var node = DraftNode(run.Id);
+
+        await new DraftPortfolioDiagnosisNodeHandler(new FakeNarrative("**風險集中**於單一持倉。")).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        var output = JsonNode.Parse(node.OutputJson!)!;
+        Assert.Equal("**風險集中**於單一持倉。", output["interpretation"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task DraftHandler_KeepsReportWhenNarrativeAgentFails()
+    {
+        await using var db = CreateDb();
+        var run = CreateRun(MathResults());
+        var node = DraftNode(run.Id);
+
+        await new DraftPortfolioDiagnosisNodeHandler(new ThrowingNarrative()).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        var output = JsonNode.Parse(node.OutputJson!)!;
+        Assert.True(output["interpretation"] is null);
+        Assert.Contains("風險概況", output["summary"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal(0.3871m, output["riskMetrics"]!["annualizedVolatility"]!.GetValue<decimal>());
     }
 
     [Fact]
@@ -69,7 +97,10 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
 
     private static AgentRun CreateRun(JsonArray mathResults)
     {
-        var board = AgentBlackboardContracts.CreateInitialPortfolioDiagnosisBlackboard(Guid.NewGuid(), new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31));
+        var portfolioId = Guid.NewGuid();
+        var board = AgentBlackboardContracts.CreateInitialPortfolioDiagnosisBlackboard(portfolioId, new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31));
+        var context = new PortfolioDiagnosisContext(portfolioId, "測試投組", "TWD", new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31), 1);
+        board[AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(context, AgentNodeJson.SerializerOptions);
         var attribution = new PortfolioPerformanceAttribution(-0.0486m, -0.0147m, -0.0339m, 1, 1,
             [new AttributionItem("holding-1", "2330 台積電", "半導體業", 1m, -0.0084m, -0.0084m)], [], "complete");
         board[AgentBlackboardKeys.PerformanceAttribution] = JsonSerializer.SerializeToNode(attribution, AgentNodeJson.SerializerOptions);
@@ -91,6 +122,16 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         new JsonObject { ["operation"] = "calculate-concentration", ["value"] = new JsonObject { ["hhi"] = 1m, ["largestWeight"] = 1m } },
         new JsonObject { ["operation"] = "calculate-volatility-risk-contribution", ["value"] = new JsonObject { ["componentRiskShare"] = 0.999m, ["marginalVolatility"] = 0.39m, ["componentVolatility"] = 0.39m } }
     };
+
+    private sealed class FakeNarrative(string text) : IPortfolioDiagnosisNarrativeAgent
+    {
+        public Task<string> GenerateAsync(PortfolioDiagnosisNarrativeInput input, CancellationToken cancellationToken = default) => Task.FromResult(text);
+    }
+
+    private sealed class ThrowingNarrative : IPortfolioDiagnosisNarrativeAgent
+    {
+        public Task<string> GenerateAsync(PortfolioDiagnosisNarrativeInput input, CancellationToken cancellationToken = default) => throw new InvalidOperationException("LLM unavailable.");
+    }
 
     private static TestDb CreateDb() => new(new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     private sealed class TestDb(DbContextOptions<EquityLensDbContext> options) : EquityLensDbContext(options)

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '../auth'
+import { useChatStore } from '../chat'
 
 vi.mock('../../services/http', () => ({
   http: {
@@ -196,6 +197,23 @@ describe('auth store', () => {
       await store.logout()
 
       expect(mockedHttp.post).not.toHaveBeenCalledWith('/auth/logout')
+    })
+
+    it('登出時一併清空 chat store', async () => {
+      mockedHttp.post.mockResolvedValueOnce(mockAuthResponse())
+      const store = useAuthStore()
+      await store.login('test@test.com', 'password123')
+      const chat = useChatStore()
+      chat.sessions = [{ id: 's1', title: 'x', createdAtUtc: '', updatedAtUtc: '', messageCount: 2 }]
+      chat.currentSessionId = 's1'
+      chat.messages = [{ id: 'm1' }] as never[]
+
+      mockedHttp.post.mockResolvedValueOnce({})
+      await store.logout()
+
+      expect(chat.sessions).toEqual([])
+      expect(chat.currentSessionId).toBeNull()
+      expect(chat.messages).toEqual([])
     })
   })
 

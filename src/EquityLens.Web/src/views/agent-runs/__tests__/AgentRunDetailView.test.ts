@@ -51,7 +51,7 @@ vi.stubGlobal('IntersectionObserver', class {
 
 const stubs = { AgentRunProgress: true, CapabilityRequestStatus: true }
 
-function diagnosisRun(riskMetrics: Record<string, number | null> | null): MockRun {
+function diagnosisRun(riskMetrics: Record<string, number | null> | null, interpretation?: string | null): MockRun {
   return {
     run: {
       id: 'run-1', workflowType: 'PortfolioDiagnosis', agentType: 'PortfolioDiagnosisAgent',
@@ -69,6 +69,7 @@ function diagnosisRun(riskMetrics: Record<string, number | null> | null): MockRu
       portfolioReturn: -0.0486, benchmarkReturn: -0.0147, activeReturn: -0.0339,
       mainDrags: [], mainContributors: [], recommendedAnalyses: [], evidenceStatus: 'complete',
       riskMetrics,
+      interpretation,
     },
   }
 }
@@ -108,5 +109,21 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
     const wrapper = mount(AgentRunDetailView, { global: { stubs } })
     expect(wrapper.text()).not.toContain('風險指標')
     expect(wrapper.text()).toContain('AI 投組診斷報告')
+  })
+
+  it('renders the narrative interpretation as markdown when present', () => {
+    state.agentRun.value = diagnosisRun(
+      { annualizedVolatility: 0.36, maxDrawdown: -0.09, historicalVaR: null, expectedShortfall: null, portfolioVolatility: null, concentrationHhi: 0.46, largestWeight: 0.62, volatilityRiskShare: null },
+      '風險**高度集中**於聯發科。',
+    )
+    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
+    expect(wrapper.text()).toContain('分析解讀')
+    expect(wrapper.get('.interpretation').html()).toContain('<strong>高度集中</strong>')
+  })
+
+  it('hides the interpretation section when absent', () => {
+    state.agentRun.value = diagnosisRun({ annualizedVolatility: 0.36, maxDrawdown: null, historicalVaR: null, expectedShortfall: null, portfolioVolatility: null, concentrationHhi: null, largestWeight: null, volatilityRiskShare: null }, null)
+    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
+    expect(wrapper.text()).not.toContain('分析解讀')
   })
 })
