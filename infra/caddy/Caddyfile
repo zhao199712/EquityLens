@@ -1,33 +1,28 @@
 {
 	admin off
-	auto_https off
 }
 
-:80 {
+:2015 {
+	respond /healthz "ok" 200
+}
+
+equitylens.duckdns.org {
+	tls {
+		issuer acme {
+			disable_http_challenge
+		}
+	}
 	encode zstd gzip
 
 	@health path /healthz
 	respond @health "ok" 200
 
-	@api path /api/*
-	handle @api {
-		reverse_proxy api:5034
-	}
+	reverse_proxy api:5034
 
 	header {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
-	}
-
-	@static {
-		not path /api/*
-	}
-	handle @static {
-		root * /srv
-		try_files {path} /index.html
-		file_server
-		header Cache-Control "no-store"
 	}
 
 	log {

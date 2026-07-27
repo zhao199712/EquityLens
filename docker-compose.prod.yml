@@ -7,16 +7,16 @@ services:
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z
-      - ./src/EquityLens.Web/dist:/srv:ro,Z
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
       api:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/healthz"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:2015/healthz"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -57,7 +57,7 @@ services:
       garage:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5034/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5034/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
