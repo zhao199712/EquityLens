@@ -1,40 +1,41 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import LoginView from '../views/auth/LoginView.vue'
-import RegisterView from '../views/auth/RegisterView.vue'
-import DashboardView from '../views/DashboardView.vue'
-import HomeView from '../views/home/HomeView.vue'
-import StyleLabView from '../views/home-lab/StyleLabView.vue'
-import AuroraHomeView from '../views/home-lab/AuroraHomeView.vue'
-import SwissHomeView from '../views/home-lab/SwissHomeView.vue'
-import PrestigeHomeView from '../views/home-lab/PrestigeHomeView.vue'
-import AnalystHomeView from '../views/home-lab/AnalystHomeView.vue'
-import ZenHomeView from '../views/home-lab/ZenHomeView.vue'
-import PortfolioListView from '../views/portfolios/PortfolioListView.vue'
-import PortfolioDetailView from '../views/portfolios/PortfolioDetailView.vue'
-import RiskRunListView from '../views/risk/RiskRunListView.vue'
-import RiskRunDetailView from '../views/risk/RiskRunDetailView.vue'
-import FinancialReportListView from '../views/reports/FinancialReportListView.vue'
-import FinancialReportDetailView from '../views/reports/FinancialReportDetailView.vue'
-import SettingsView from '../views/settings/SettingsView.vue'
-import AdminLayout from '../views/admin/AdminLayout.vue'
-import UserManagementView from '../views/admin/UserManagementView.vue'
-import StockManagementView from '../views/admin/StockManagementView.vue'
-import JobManagementView from '../views/admin/JobManagementView.vue'
-import PriceManagementView from '../views/admin/PriceManagementView.vue'
-import ReportManagementView from '../views/admin/ReportManagementView.vue'
-import RiskModelManagementView from '../views/admin/RiskModelManagementView.vue'
-import AISettingsView from '../views/admin/AISettingsView.vue'
-import WorkflowManagementView from '../views/admin/WorkflowManagementView.vue'
-import NodeCatalogManagementView from '../views/admin/NodeCatalogManagementView.vue'
-import AgentRegistryView from '../views/admin/AgentRegistryView.vue'
-import AgentRunListView from '../views/agent-runs/AgentRunListView.vue'
-import AgentRunDetailView from '../views/agent-runs/AgentRunDetailView.vue'
-import AgentQueryView from '../views/agent-runs/AgentQueryView.vue'
-import ResearchRunListView from '../views/research/ResearchRunListView.vue'
-import ResearchRunDetailView from '../views/research/ResearchRunDetailView.vue'
-import AgentRunManagementView from '../views/admin/AgentRunManagementView.vue'
-import ResearchRunManagementView from '../views/admin/ResearchRunManagementView.vue'
+
+const LoginView = () => import('../views/auth/LoginView.vue')
+const RegisterView = () => import('../views/auth/RegisterView.vue')
+const DashboardView = () => import('../views/DashboardView.vue')
+const HomeView = () => import('../views/home/HomeView.vue')
+const StyleLabView = () => import('../views/home-lab/StyleLabView.vue')
+const AuroraHomeView = () => import('../views/home-lab/AuroraHomeView.vue')
+const SwissHomeView = () => import('../views/home-lab/SwissHomeView.vue')
+const PrestigeHomeView = () => import('../views/home-lab/PrestigeHomeView.vue')
+const AnalystHomeView = () => import('../views/home-lab/AnalystHomeView.vue')
+const ZenHomeView = () => import('../views/home-lab/ZenHomeView.vue')
+const PortfolioListView = () => import('../views/portfolios/PortfolioListView.vue')
+const PortfolioDetailView = () => import('../views/portfolios/PortfolioDetailView.vue')
+const RiskRunListView = () => import('../views/risk/RiskRunListView.vue')
+const RiskRunDetailView = () => import('../views/risk/RiskRunDetailView.vue')
+const FinancialReportListView = () => import('../views/reports/FinancialReportListView.vue')
+const FinancialReportDetailView = () => import('../views/reports/FinancialReportDetailView.vue')
+const SettingsView = () => import('../views/settings/SettingsView.vue')
+const AdminLayout = () => import('../views/admin/AdminLayout.vue')
+const UserManagementView = () => import('../views/admin/UserManagementView.vue')
+const StockManagementView = () => import('../views/admin/StockManagementView.vue')
+const JobManagementView = () => import('../views/admin/JobManagementView.vue')
+const PriceManagementView = () => import('../views/admin/PriceManagementView.vue')
+const ReportManagementView = () => import('../views/admin/ReportManagementView.vue')
+const RiskModelManagementView = () => import('../views/admin/RiskModelManagementView.vue')
+const AISettingsView = () => import('../views/admin/AISettingsView.vue')
+const WorkflowManagementView = () => import('../views/admin/WorkflowManagementView.vue')
+const NodeCatalogManagementView = () => import('../views/admin/NodeCatalogManagementView.vue')
+const AgentRegistryView = () => import('../views/admin/AgentRegistryView.vue')
+const AgentRunListView = () => import('../views/agent-runs/AgentRunListView.vue')
+const AgentRunDetailView = () => import('../views/agent-runs/AgentRunDetailView.vue')
+const AgentQueryView = () => import('../views/agent-runs/AgentQueryView.vue')
+const ResearchRunListView = () => import('../views/research/ResearchRunListView.vue')
+const ResearchRunDetailView = () => import('../views/research/ResearchRunDetailView.vue')
+const AgentRunManagementView = () => import('../views/admin/AgentRunManagementView.vue')
+const ResearchRunManagementView = () => import('../views/admin/ResearchRunManagementView.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
