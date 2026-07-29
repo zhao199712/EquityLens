@@ -9,4 +9,9 @@ public sealed record AgentNodeExecutionContext(
     EquityLensDbContext DbContext,
     AgentRun Run,
     AgentRunNode Node,
-    AgentRunEventWriter AddEvent);
+    AgentRunEventWriter AddEvent)
+{
+    public bool AwaitingApproval { get; private set; }
+
+    public void RequestApproval() => AwaitingApproval = true;
+}

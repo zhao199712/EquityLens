@@ -161,7 +161,9 @@ public static class PortfolioDiagnosisNodeKeys
     public const string PrioritizeRiskAnalyses = "prioritizeRiskAnalyses";
     public const string BuildEvidencePacket = "buildPortfolioEvidencePacket";
     public const string DraftDiagnosis = "draftPortfolioDiagnosis";
+    public const string ApproveDiagnosis = "approvePortfolioDiagnosis";
     public const string FinalizeDiagnosis = "finalizePortfolioDiagnosis";
+    public const string FinalizeRejectedDiagnosis = "finalizeRejectedPortfolioDiagnosis";
 }
 
 public static class PortfolioDiagnosisNodeTypes
@@ -173,6 +175,7 @@ public static class PortfolioDiagnosisNodeTypes
     public const string BuildEvidencePacket = "BuildPortfolioEvidencePacket";
     public const string DraftDiagnosis = "DraftPortfolioDiagnosis";
     public const string FinalizeDiagnosis = "FinalizePortfolioDiagnosis";
+    public const string FinalizeRejectedDiagnosis = "FinalizeRejectedPortfolioDiagnosis";
 }
 
 public static class PortfolioRiskMathNodeTypes
@@ -185,6 +188,35 @@ public static class PortfolioRiskMathNodeKeys
 {
     public const string PrepareInputs = "preparePortfolioRiskMathInputs";
     public const string ExecuteCore = "executePortfolioRiskCoreMetrics";
+}
+
+public static class HumanApprovalNodeTypes
+{
+    public const string WaitForHumanApproval = "WaitForHumanApproval";
+}
+
+public static class HumanApprovalNodeKeys
+{
+    public const string WaitForHumanApproval = "waitForHumanApproval";
+}
+
+public static class HumanApprovalDecisions
+{
+    public const string Approved = "Approved";
+    public const string Rejected = "Rejected";
+}
+
+public static class HumanApprovalFields
+{
+    public const string ApprovalType = "approvalType";
+    public const string Prompt = "prompt";
+    public const string Subject = "subject";
+    public const string NodeKey = "nodeKey";
+    public const string RequestedAtUtc = "requestedAtUtc";
+    public const string Decision = "decision";
+    public const string Comment = "comment";
+    public const string ReviewerId = "reviewerId";
+    public const string DecidedAtUtc = "decidedAtUtc";
 }
 
 public static class CriticReviewNodeKeys
@@ -303,6 +335,9 @@ public static class AgentEventTypes
     public const string CapabilityRequestNotNeeded = "CapabilityRequestNotNeeded";
     public const string CapabilityRequestApproved = "CapabilityRequestApproved";
     public const string CapabilityRequestRejected = "CapabilityRequestRejected";
+    public const string ApprovalRequested = "ApprovalRequested";
+    public const string ApprovalDecision = "ApprovalDecision";
+    public const string RunWaitingForFeedback = "RunWaitingForFeedback";
 }
 
 public static class AgentFeedbackTypes

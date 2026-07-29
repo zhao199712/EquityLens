@@ -450,6 +450,56 @@ public sealed class AgentRunService : IAgentRunService
         return MapSummary(run);
     }
 
+    public async Task<AgentRunSummaryResponse> DecideApprovalAsync(
+        Guid runId, Guid userId, string decision, string? comment, CancellationToken cancellationToken = default)
+    {
+        var normalizedDecision = decision?.Trim();
+        if (normalizedDecision is not (HumanApprovalDecisions.Approved or HumanApprovalDecisions.Rejected))
+            throw new AgentApprovalException("approval_decision_invalid", "decision must be Approved or Rejected.");
+        var normalizedComment = comment?.Trim();
+        if (normalizedDecision == HumanApprovalDecisions.Rejected && string.IsNullOrWhiteSpace(normalizedComment))
+            throw new AgentApprovalException("approval_comment_required", "拒絕時必須提供說明。");
+
+        var run = await _dbContext.AgentRuns
+            .Include(x => x.Nodes)
+            .FirstOrDefaultAsync(x => x.Id == runId && x.UserId == userId, cancellationToken)
+            ?? throw new AgentApprovalException("agent_run_not_found", "Agent run not found.");
+        if (run.Status != AgentRunStatuses.WaitingForFeedback)
+            throw new AgentApprovalException("agent_run_not_waiting", "Only a run waiting for approval can receive a decision.");
+        var gateNode = run.Nodes.FirstOrDefault(x => x.Status == AgentNodeStatuses.WaitingForFeedback)
+            ?? throw new AgentApprovalException("approval_node_not_found", "No node is waiting for approval.");
+
+        var blackboard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        blackboard[AgentBlackboardKeys.ApprovalDecision] = JsonSerializer.SerializeToNode(new
+        {
+            decision = normalizedDecision,
+            comment = normalizedComment,
+            reviewerId = userId,
+            decidedAtUtc = DateTime.UtcNow
+        }, SerializerOptions);
+        run.BlackboardJson = blackboard.ToJsonString(SerializerOptions);
+        run.OrchestrationVersion++;
+        AddEvent(run, gateNode, AgentEventTypes.ApprovalDecision, "Human approval decision recorded.", new { decision = normalizedDecision, reviewerId = userId });
+
+        _nodeStateMachine.Transition(gateNode, AgentNodeStatuses.Pending);
+        gateNode.StartedAtUtc = null;
+        gateNode.CompletedAtUtc = null;
+        gateNode.DurationMs = null;
+        _runStateMachine.Transition(run, AgentRunStatuses.Running);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new AgentApprovalException("approval_conflict", "This approval was already resolved by another reviewer.");
+        }
+
+        await EnqueueAsync(run, userId, cancellationToken);
+        return MapSummary(run);
+    }
+
     private Task EnqueueAsync(AgentRun run, Guid userId, CancellationToken cancellationToken) =>
         _agentRunQueue.EnqueueAsync(
             new AgentRunQueueMessage(run.Id, userId, run.WorkflowType, DateTime.UtcNow),
@@ -574,6 +624,11 @@ public sealed class AgentRunService : IAgentRunService
 }
 
 public sealed class AgentFeedbackException(string code, string message) : InvalidOperationException(message)
+{
+    public string Code { get; } = code;
+}
+
+public sealed class AgentApprovalException(string code, string message) : InvalidOperationException(message)
 {
     public string Code { get; } = code;
 }

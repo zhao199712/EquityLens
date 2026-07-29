@@ -12,6 +12,8 @@ public sealed record CreatePortfolioDiagnosisRequest(DateOnly? From = null, Date
 
 public sealed record SubmitAgentFeedbackRequest(Guid RequestId, string FeedbackType, string? Comment = null);
 
+public sealed record ApprovalDecisionRequest(string Decision, string? Comment = null);
+
 public sealed record AgentRunSummaryResponse(
     Guid Id,
     string WorkflowType,

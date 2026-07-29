@@ -64,7 +64,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             .Include(x => x.ToolCalls)
             .FirstAsync(x => x.Id == runId && x.UserId == userId, cancellationToken);
 
-        if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Failed or AgentRunStatuses.Cancelled)
+        if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Failed or AgentRunStatuses.Cancelled or AgentRunStatuses.WaitingForFeedback)
         {
             _logger.LogInformation(
                 "Skipping agent run {AgentRunId} because status is {Status}.",
@@ -142,6 +142,14 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 appended = await TryAdvanceDynamicPlanAsync(run, cancellationToken);
                 if (!appended) CompleteRun(run);
             }
+            else if (run.Nodes.Any(x => x.Status == AgentNodeStatuses.WaitingForFeedback))
+            {
+                _runStateMachine.Transition(run, AgentRunStatuses.WaitingForFeedback);
+                AddEvent(run, null, AgentEventTypes.RunWaitingForFeedback, "Run paused waiting for human approval.", new { waitingNodes = run.Nodes.Count(x => x.Status == AgentNodeStatuses.WaitingForFeedback) });
+                run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
+                await SaveOrchestrationChangesAsync(false, cancellationToken);
+                return;
+            }
             else throw new InvalidOperationException("Workflow has no ready node but is not complete.");
             run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
             await SaveOrchestrationChangesAsync(appended, cancellationToken);
@@ -198,7 +206,8 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(policy.TimeoutSeconds));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-            await handler.ExecuteAsync(new AgentNodeExecutionContext(_dbContext, run, node, AddEvent), linked.Token);
+            var context = new AgentNodeExecutionContext(_dbContext, run, node, AddEvent);
+            await handler.ExecuteAsync(context, linked.Token);
 
             stopwatch.Stop();
             var boardAfter = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
@@ -206,6 +215,14 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             node.ProducedBlackboardKeys = AgentNodeJson.DetectChangedKeys(boardBefore, boardAfter);
             AgentNodeJson.IncrementBlackboardVersion(boardAfter);
             run.BlackboardJson = boardAfter.ToJsonString(AgentNodeJson.SerializerOptions);
+            if (context.AwaitingApproval)
+            {
+                _nodeStateMachine.Transition(node, AgentNodeStatuses.WaitingForFeedback);
+                node.DurationMs = stopwatch.ElapsedMilliseconds;
+                AddEvent(run, node, AgentEventTypes.ApprovalRequested, $"Node {nodeKey} paused waiting for human approval.", null);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return;
+            }
             _nodeStateMachine.Transition(node, AgentNodeStatuses.Succeeded);
             node.CompletedAtUtc = DateTime.UtcNow;
             node.DurationMs = stopwatch.ElapsedMilliseconds;
@@ -294,7 +311,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             if (nodeDefinitions[key].TryGetProperty("condition", out var condition) && condition.ValueKind == JsonValueKind.Object)
             {
                 var path = condition.GetProperty("path").GetString()!; var expected = condition.GetProperty("equals").GetString();
-                var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); var actual = board[path]?.GetValue<string>();
+                var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); var actual = ResolveConditionValue(board, path);
                 if (!string.Equals(actual, expected, StringComparison.Ordinal))
                 {
                     node.Status = AgentNodeStatuses.Skipped; node.CompletedAtUtc = DateTime.UtcNow;
@@ -305,6 +322,17 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             return key;
         }
         return null;
+    }
+
+    private static string? ResolveConditionValue(JsonObject board, string path)
+    {
+        JsonNode? current = board;
+        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (current is not JsonObject obj) return null;
+            current = obj[segment];
+        }
+        return current?.GetValue<string>();
     }
 
     private void CompleteRun(AgentRun run)

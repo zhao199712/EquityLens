@@ -229,3 +229,26 @@ public sealed class FinalizePortfolioDiagnosisNodeHandler : IAgentNodeHandler
         context.Node.InputJson = AgentNodeJson.Serialize(new { evidenceStatus = output.EvidenceStatus, priorityCount = output.RecommendedAnalyses.Count }); context.Node.OutputJson = AgentNodeJson.Serialize(output); PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.FinalOutput, output); context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Run.OutputJson = context.Node.OutputJson; context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Final portfolio diagnosis written.", new { output.EvidenceStatus }); return Task.CompletedTask;
     }
 }
+
+public sealed class FinalizeRejectedPortfolioDiagnosisNodeHandler : IAgentNodeHandler
+{
+    public string NodeType => PortfolioDiagnosisNodeTypes.FinalizeRejectedDiagnosis;
+
+    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    {
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
+        var approval = AgentNodeJson.GetBlackboardObject(board, AgentBlackboardKeys.HumanApproval) ?? new JsonObject();
+        var decision = approval[HumanApprovalFields.Decision]?.GetValue<string>() ?? HumanApprovalDecisions.Rejected;
+        var comment = approval[HumanApprovalFields.Comment]?.GetValue<string>();
+        var reviewerId = approval[HumanApprovalFields.ReviewerId]?.GetValue<string>();
+        var output = new { rejected = true, decision, comment, reviewerId };
+        context.Node.InputJson = AgentNodeJson.Serialize(new { decision, comment });
+        context.Node.OutputJson = AgentNodeJson.Serialize(output);
+        PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.FinalOutput, output);
+        context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        context.Run.OutputJson = context.Node.OutputJson;
+        context.AddEvent(context.Run, context.Node, AgentEventTypes.RunFailed, "Portfolio diagnosis rejected by human reviewer.", new { decision, comment });
+        throw new AgentNodeException("portfolio_diagnosis_rejected", AgentNodeErrorCategories.PermanentFailure,
+            string.IsNullOrWhiteSpace(comment) ? "人工拒絕此投組診斷。" : $"人工拒絕此投組診斷：{comment}", retryable: false);
+    }
+}

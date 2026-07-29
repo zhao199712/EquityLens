@@ -245,6 +245,7 @@ builder.Services.AddScoped<IAgentNodeHandler, PrioritizeRiskAnalysesNodeHandler>
 builder.Services.AddScoped<IAgentNodeHandler, BuildPortfolioEvidencePacketNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, DraftPortfolioDiagnosisNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, FinalizePortfolioDiagnosisNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, FinalizeRejectedPortfolioDiagnosisNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, LoadEvidenceRemediationContextNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, PlanEvidenceRetrievalNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, RetrieveRemediationEvidenceNodeHandler>();
@@ -273,6 +274,7 @@ builder.Services.AddScoped<IAgentNodeHandler, RankAndSelectResearchEvidenceNodeH
 builder.Services.AddScoped<IAgentNodeHandler, DraftResearchAnswerNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, LoadFeedbackRevisionContextNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, ValidateFeedbackRevisionContextNodeHandler>();
+builder.Services.AddScoped<IAgentNodeHandler, WaitForHumanApprovalNodeHandler>();
 builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
 builder.Services.AddScoped<IAgentRunService, AgentRunService>();
     builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();

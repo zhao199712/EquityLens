@@ -10,6 +10,10 @@ public sealed class AgentStateMachineTests
     [InlineData(AgentRunStatuses.Running, AgentRunStatuses.Succeeded)]
     [InlineData(AgentRunStatuses.Running, AgentRunStatuses.Failed)]
     [InlineData(AgentRunStatuses.Running, AgentRunStatuses.Cancelled)]
+    [InlineData(AgentRunStatuses.Running, AgentRunStatuses.WaitingForFeedback)]
+    [InlineData(AgentRunStatuses.WaitingForFeedback, AgentRunStatuses.Running)]
+    [InlineData(AgentRunStatuses.WaitingForFeedback, AgentRunStatuses.Failed)]
+    [InlineData(AgentRunStatuses.WaitingForFeedback, AgentRunStatuses.Cancelled)]
     [InlineData(AgentRunStatuses.Pending, AgentRunStatuses.Cancelled)]
     [InlineData(AgentRunStatuses.Failed, AgentRunStatuses.Cancelled)]
     public void AgentRunStateMachine_Transition_AllowsValidTransitions(string current, string next)
@@ -27,6 +31,7 @@ public sealed class AgentStateMachineTests
     [InlineData(AgentRunStatuses.Succeeded, AgentRunStatuses.Running)]
     [InlineData(AgentRunStatuses.Cancelled, AgentRunStatuses.Running)]
     [InlineData(AgentRunStatuses.Failed, AgentRunStatuses.Running)]
+    [InlineData(AgentRunStatuses.WaitingForFeedback, AgentRunStatuses.Succeeded)]
     public void AgentRunStateMachine_Transition_RejectsInvalidTransitions(string current, string next)
     {
         var run = new AgentRun { Status = current };
@@ -65,6 +70,10 @@ public sealed class AgentStateMachineTests
     [InlineData(AgentNodeStatuses.Ready, AgentNodeStatuses.Running)]
     [InlineData(AgentNodeStatuses.Running, AgentNodeStatuses.Succeeded)]
     [InlineData(AgentNodeStatuses.Running, AgentNodeStatuses.Failed)]
+    [InlineData(AgentNodeStatuses.Running, AgentNodeStatuses.WaitingForFeedback)]
+    [InlineData(AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Pending)]
+    [InlineData(AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Failed)]
+    [InlineData(AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Cancelled)]
     public void AgentNodeStateMachine_Transition_AllowsValidTransitions(string current, string next)
     {
         var node = new AgentRunNode { Status = current };
@@ -80,6 +89,7 @@ public sealed class AgentStateMachineTests
     [InlineData(AgentNodeStatuses.Ready, AgentNodeStatuses.Succeeded)]
     [InlineData(AgentNodeStatuses.Succeeded, AgentNodeStatuses.Running)]
     [InlineData(AgentNodeStatuses.Failed, AgentNodeStatuses.Running)]
+    [InlineData(AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Succeeded)]
     public void AgentNodeStateMachine_Transition_RejectsInvalidTransitions(string current, string next)
     {
         var node = new AgentRunNode { Status = current };

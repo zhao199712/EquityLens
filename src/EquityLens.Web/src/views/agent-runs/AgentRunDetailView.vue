@@ -7,6 +7,7 @@ import CapabilityRequestStatus from '../../components/agents/CapabilityRequestSt
 import {
   cancelAgentRun,
   createDraftRevision,
+  decideAgentApproval,
   retryAgentRun,
   type AgentRunNodeDto,
 } from '../../services/agentRuns'
@@ -90,11 +91,20 @@ interface RoutingContext {
   }
 }
 
+interface ApprovalRequestPayload {
+  approvalType?: string
+  prompt?: string | null
+  nodeKey?: string
+  requestedAtUtc?: string
+  subject?: unknown
+}
+
 const route = useRoute()
 const router = useRouter()
 const actionLoading = ref(false)
 const activeTab = ref<'timeline' | 'nodes' | 'toolCalls' | 'feedback' | 'blackboard' | 'workflow'>('timeline')
 const debugExpanded = ref(false)
+const approvalComment = ref('')
 
 const runId = computed(() => route.params.id as string)
 const { agentRun: run, isLoading, isPolling, isTerminalStatus, error: pollError, startPolling, refresh } = useAgentRunPolling(runId)
@@ -228,7 +238,9 @@ const draftOutput = computed((): DraftRevisionOutput | null => {
 
 const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null => {
   if (!run.value || run.value.run.workflowType !== 'PortfolioDiagnosis') return null
-  return (run.value.outputJson as unknown as PortfolioDiagnosisOutput) ?? null
+  const output = run.value.outputJson as unknown as (PortfolioDiagnosisOutput & { rejected?: boolean }) | null
+  if (!output || output.rejected === true) return null
+  return output
 })
 
 const riskMetrics = computed((): PortfolioRiskMetrics | null => {
@@ -264,6 +276,38 @@ const capabilityRequests = computed(() => {
     reviewReason?: string | null
   }>) ?? []
 })
+
+const approvalRequest = computed((): ApprovalRequestPayload | null => {
+  if (!run.value || run.value.run.status !== 'WaitingForFeedback') return null
+  return (run.value.blackboardJson.approvalRequest as unknown as ApprovalRequestPayload) ?? null
+})
+
+async function submitApproval(decision: 'Approved' | 'Rejected') {
+  if (!run.value) return
+  actionLoading.value = true
+  error.value = ''
+  try {
+    await decideAgentApproval(run.value.run.id, decision, approvalComment.value)
+    approvalComment.value = ''
+    refresh()
+  } catch {
+    error.value = decision === 'Approved' ? '批准失敗。' : '拒絕失敗。'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function handleApprove() {
+  await submitApproval('Approved')
+}
+
+async function handleReject() {
+  if (!approvalComment.value.trim()) {
+    error.value = '拒絕時必須提供說明。'
+    return
+  }
+  await submitApproval('Rejected')
+}
 
 const nextActionLabel = computed(() => {
   const action = criticOutput.value?.recommendedNextAction
@@ -327,6 +371,29 @@ const nextActionLabel = computed(() => {
             <div v-if="isPolling" class="polling-row">
               <span class="live-dot live-dot-small" />
               自動重新整理中
+            </div>
+          </div>
+
+          <div v-if="approvalRequest" class="prestige-panel prestige-panel-pad approval-panel" data-testid="approval-panel">
+            <h3 class="panel-title">等待人工批准</h3>
+            <div v-if="approvalRequest.prompt" class="summary-block">
+              <div class="prestige-label stat-caption">審核內容</div>
+              <div class="body-text">{{ approvalRequest.prompt }}</div>
+            </div>
+            <div class="approval-meta prestige-mono">
+              <span v-if="approvalRequest.approvalType">類型：{{ approvalRequest.approvalType }}</span>
+              <span v-if="approvalRequest.nodeKey">節點：{{ approvalRequest.nodeKey }}</span>
+            </div>
+            <textarea
+              v-model="approvalComment"
+              class="prestige-input approval-comment"
+              placeholder="審核說明（拒絕時必填）"
+              rows="3"
+              data-testid="approval-comment"
+            />
+            <div class="action-row approval-actions">
+              <button class="prestige-btn prestige-btn-solid" :disabled="actionLoading" data-testid="approval-approve" @click="handleApprove">批准</button>
+              <button class="prestige-btn btn-danger" :disabled="actionLoading" data-testid="approval-reject" @click="handleReject">拒絕</button>
             </div>
           </div>
 
@@ -673,6 +740,30 @@ const nextActionLabel = computed(() => {
 .btn-danger:hover {
   border-color: var(--down);
   background: rgba(176, 92, 92, 0.08);
+}
+
+.approval-panel {
+  margin-bottom: 16px;
+  border-color: var(--gold-border);
+}
+
+.approval-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.approval-comment {
+  width: 100%;
+  margin-bottom: 12px;
+  resize: vertical;
+}
+
+.approval-actions {
+  margin-top: 4px;
 }
 
 .run-dates {

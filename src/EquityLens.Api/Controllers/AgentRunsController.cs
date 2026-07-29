@@ -208,4 +208,27 @@ public sealed class AgentRunsController : ControllerBase
         if (response is null) return NotFound();
         return Ok(response);
     }
+
+    /// <summary>
+    /// 對暫停等待人工批准的 Agent run 提交決策（Approved / Rejected），決策寫回 Blackboard 後續跑。
+    /// </summary>
+    [HttpPost("{runId:guid}/approval")]
+    public async Task<ActionResult<AgentRunSummaryResponse>> DecideApproval(
+        Guid runId,
+        ApprovalDecisionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return Ok(await _agentRunService.DecideApprovalAsync(runId, _currentUser.UserId, request.Decision, request.Comment, cancellationToken));
+        }
+        catch (AgentApprovalException exception) when (exception.Code == "agent_run_not_found")
+        {
+            return NotFound(new ApiError(exception.Code, exception.Message));
+        }
+        catch (AgentApprovalException exception)
+        {
+            return BadRequest(new ApiError(exception.Code, exception.Message));
+        }
+    }
 }

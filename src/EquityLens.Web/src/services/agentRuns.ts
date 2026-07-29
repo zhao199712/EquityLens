@@ -146,6 +146,17 @@ export async function cancelAgentRun(id: string): Promise<AgentRunCreatedRespons
   return response.data
 }
 
+export async function decideAgentApproval(
+  id: string,
+  decision: 'Approved' | 'Rejected',
+  comment?: string,
+): Promise<AgentRunCreatedResponse> {
+  const response = await http.post<AgentRunCreatedResponse>(`/agent-runs/${id}/approval`, {
+    decision, comment: comment?.trim() || null,
+  })
+  return response.data
+}
+
 export async function submitAgentFeedback(
   id: string,
   feedbackType: 'Helpful' | 'NeedsCorrection',

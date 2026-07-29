@@ -75,7 +75,9 @@ public sealed class AgentWorkflowPlannerTests
             PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses,
             PortfolioDiagnosisNodeKeys.BuildEvidencePacket,
             PortfolioDiagnosisNodeKeys.DraftDiagnosis,
-            PortfolioDiagnosisNodeKeys.FinalizeDiagnosis
+            PortfolioDiagnosisNodeKeys.ApproveDiagnosis,
+            PortfolioDiagnosisNodeKeys.FinalizeDiagnosis,
+            PortfolioDiagnosisNodeKeys.FinalizeRejectedDiagnosis
         ], planner.GetExecutionOrder(run.WorkflowDefinitionJson));
     }
 

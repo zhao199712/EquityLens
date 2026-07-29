@@ -77,6 +77,9 @@ public static class AgentBlackboardKeys
     public const string OriginalAnswer = "originalAnswer";
     public const string LeadSkill = "leadSkill";
     public const string RoutingContext = "routingContext";
+    public const string ApprovalRequest = "approvalRequest";
+    public const string ApprovalDecision = "approvalDecision";
+    public const string HumanApproval = "humanApproval";
 }
 
 public static class EvidenceCheckFields
