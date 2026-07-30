@@ -70,10 +70,15 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 - Run/node status transitions are centralized in `AgentStateMachine.cs`; use `Transition(...)` / `ResetForRetry(...)`, not direct `Status = ...` assignments.
 - Agent telemetry is in `EquityLensTelemetry`: spans `agent.run.execute` / `agent.node.execute`, metrics `equitylens.agent.*.status.transitions`; persisted `events`, `nodes`, and `toolCalls` remain the source of truth.
 - Node handlers in `CriticReviewNodeHandlers.cs` and `DraftRevisionNodeHandlers.cs` should only execute node business logic and write `InputJson`, `OutputJson`, `BlackboardJson`, tool calls, and events.
-- Current workflows:
+- Human-in-the-loop is a durable suspension node `WaitForHumanApproval` (`HumanApprovalNodeHandlers.cs`): the handler calls `context.RequestApproval()` to pause; the executor moves node+run to `WaitingForFeedback`, releases the lease, and writes NO wake outbox. Resume is driven externally — never block a worker waiting for a human.
+- Decisions arrive via `POST /api/agent-runs/{id}/approval` (`AgentRunService.DecideApprovalAsync`): writes `approvalDecision` to the blackboard + an event, resets the gate node to `Pending`, run→`Running`, re-enqueues. Approve and Reject share one path (decision-as-data); branching is via conditional edges. Reject requires a comment; the update is guarded by the `OrchestrationVersion` concurrency token.
+- Node-level conditional edges (`condition: { path, equals }` on a node definition) resolve dotted blackboard paths (e.g. `humanApproval.decision`); single-segment paths behave as before. Approval blackboard keys: `approvalRequest` (written on pause), `approvalDecision` (written by the service), `humanApproval` (handler projection on resume).
+- A new node type MUST be registered in `Program.cs` AND added to `AgentWorkflowCatalog.cs`: `GetNode` uses `Single()` and throws for unknown types (both the run-creation policy snapshot and the executor's `GetPolicy` call it).
+- Current workflows (full list in `AgentWorkflowCatalog.cs`):
 ```text
 CriticReview: loadResearchRun -> buildEvidencePacket -> checkEvidence -> critiqueAnswer -> finalizeCriticReport
 DraftRevision: loadCriticReviewRun -> draftRevisedAnswer -> finalizeRevision
+PortfolioDiagnosis: loadContext -> … -> draftPortfolioDiagnosis -> approvePortfolioDiagnosis (human gate, always-on) -> finalizePortfolioDiagnosis [Approved] / finalizeRejectedPortfolioDiagnosis [Rejected, fails run]
 ```
 - Add a workflow by adding constants, provider, node contracts/blackboard keys, handlers, DI registrations, and tests for definition contract, planner order, handler coverage, blackboard/output, failure/retry, and user isolation.
 - Production DI maps `ICriticReviewAgent` to `LlmCriticReviewAgent` and `IDraftRevisionAgent` to `LlmDraftRevisionAgent`; tests use deterministic agents/fakes.
