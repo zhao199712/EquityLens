@@ -124,7 +124,7 @@ const columns: DataTableColumns<AgentRunListItem> = [
         row.status === 'Failed'
           ? h(NButton, { size: 'small', type: 'warning', onClick: () => handleRetry(row.id) }, { icon: () => h(NIcon, null, () => h(ReloadOutline)) })
           : null,
-        row.status === 'Pending' || row.status === 'Running'
+        row.status === 'Pending' || row.status === 'Running' || row.status === 'WaitingForApproval'
           ? h(NPopconfirm, { onPositiveClick: () => handleCancel(row.id) }, {
               trigger: () => h(NButton, { size: 'small', type: 'error' }, { icon: () => h(NIcon, null, () => h(CloseCircleOutline)) }),
               default: () => '確定取消此 Agent Run？',
@@ -188,6 +188,7 @@ function statusType(status: string): 'success' | 'error' | 'warning' | 'info' | 
     case 'Running': return 'info'
     case 'Cancelled': return 'default'
     case 'Pending': return 'warning'
+    case 'WaitingForApproval': return 'warning'
     default: return 'default'
   }
 }
@@ -230,6 +231,7 @@ watch(() => route.params.id, () => {
           <option value="">全部狀態</option>
           <option value="Pending">Pending</option>
           <option value="Running">Running</option>
+          <option value="WaitingForApproval">WaitingForApproval</option>
           <option value="Succeeded">Succeeded</option>
           <option value="Failed">Failed</option>
           <option value="Cancelled">Cancelled</option>

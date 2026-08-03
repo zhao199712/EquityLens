@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Amazon;
 using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -60,6 +62,7 @@ Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseDefaultServiceProvider(o => o.ValidateOnBuild = false);
+var e2eTestMode = string.Equals(builder.Configuration["E2E_TEST_MODE"], "1", StringComparison.Ordinal);
 
 const string serviceName = "equitylens-api";
 var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
@@ -188,8 +191,13 @@ builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 builder.Services.AddScoped<IResearchPreflightService, ResearchPreflightService>();
 builder.Services.AddScoped<IResearchRunTraceService, ResearchRunTraceService>();
 builder.Services.AddScoped<ICriticReviewAgent, LlmCriticReviewAgent>();
-builder.Services.AddSingleton<IAgentWorkflowCatalog, AgentWorkflowCatalog>();
+if (e2eTestMode) builder.Services.AddSingleton<IAgentWorkflowCatalog, E2EAgentWorkflowCatalog>();
+else builder.Services.AddSingleton<IAgentWorkflowCatalog, AgentWorkflowCatalog>();
 builder.Services.AddScoped<IAgentWorkflowAdminService, AgentWorkflowAdminService>();
+builder.Services.AddScoped<IAgentApprovalService, AgentApprovalService>();
+builder.Services.AddScoped<IPromptManagementService, PromptManagementService>();
+builder.Services.AddScoped<IAgentPromptSnapshotService, AgentPromptSnapshotService>();
+builder.Services.AddScoped<PromptManagementBootstrapService>();
 builder.Services.AddScoped<IDraftRevisionAgent, LlmDraftRevisionAgent>();
 builder.Services.AddScoped<IPortfolioDiagnosisNarrativeAgent, LlmPortfolioDiagnosisNarrativeAgent>();
 builder.Services.AddScoped<LlmEvidenceRemediationAgent>();
@@ -207,6 +215,11 @@ builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchInvestigati
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, FeedbackRevisionWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceRemediationWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceReanalysisWorkflowDefinitionProvider>();
+if (e2eTestMode)
+{
+    builder.Services.AddScoped<E2EApprovalGateWorkflowDefinitionProvider>();
+    builder.Services.AddScoped<IAgentWorkflowDefinitionProvider>(sp => sp.GetRequiredService<E2EApprovalGateWorkflowDefinitionProvider>());
+}
 builder.Services.AddScoped<PortfolioDiagnosisWorkflowDefinitionProvider>();
 builder.Services.AddScoped<IAgentWorkflowDefinitionProvider>(sp => sp.GetRequiredService<PortfolioDiagnosisWorkflowDefinitionProvider>());
 builder.Services.AddSingleton<IWorkflowGraphTopologyService, WorkflowGraphTopologyService>();
@@ -275,6 +288,7 @@ builder.Services.AddScoped<IAgentNodeHandler, DraftResearchAnswerNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, LoadFeedbackRevisionContextNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, ValidateFeedbackRevisionContextNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, WaitForHumanApprovalNodeHandler>();
+if (e2eTestMode) builder.Services.AddScoped<IAgentNodeHandler, E2EApprovalGateNodeHandler>();
 builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
 builder.Services.AddScoped<IAgentRunService, AgentRunService>();
     builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();
@@ -454,6 +468,8 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                   "http://localhost:5173",
+                  "http://127.0.0.1:5173",
+                  "http://127.0.0.1:5174",
                   "http://192.168.50.11:5173",
                   "http://172.25.14.202:5173",
                   "https://equitylens.pages.dev")
@@ -472,6 +488,13 @@ builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
 
 var app = builder.Build();
 
+// Prompt baseline is data, not a runtime fallback. It only initializes databases upgraded
+// from the pre-management schema; execution always resolves persisted bindings/snapshots.
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider.GetRequiredService<PromptManagementBootstrapService>().EnsureSeededAsync();
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -487,6 +510,55 @@ app.UseAuthorization();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 app.MapControllers();
+if (e2eTestMode)
+{
+    app.MapPost("/api/e2e/approval-gate-runs", async (
+        ICurrentUserContext currentUser,
+        E2EApprovalGateWorkflowDefinitionProvider provider,
+        IAgentWorkflowAdminService workflowAdmin,
+        IAgentWorkflowCatalog catalog,
+        EquityLensDbContext db,
+        IAgentRunQueue queue,
+        CancellationToken cancellationToken) =>
+    {
+        await workflowAdmin.EnsureEnabledAsync(E2EApprovalGateWorkflow.WorkflowType, cancellationToken);
+        var run = provider.CreateRun(currentUser.UserId, Guid.NewGuid());
+        var policies = await workflowAdmin.GetPoliciesAsync([E2EApprovalGateWorkflow.NodeType], cancellationToken);
+        var approvals = await workflowAdmin.GetApprovalPoliciesAsync([E2EApprovalGateWorkflow.NodeType], cancellationToken);
+        var entry = catalog.GetNode(E2EApprovalGateWorkflow.NodeType);
+        var root = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
+        var node = root["nodes"]!.AsArray()[0]!.AsObject();
+        var policy = policies[E2EApprovalGateWorkflow.NodeType];
+        node["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = policy.TimeoutSeconds, ["maxRetryCount"] = policy.MaxRetryCount };
+        node["contract"] = JsonSerializer.SerializeToNode(entry.Contract, AgentNodeJson.SerializerOptions);
+        node["approvalPolicy"] = new JsonObject
+        {
+            ["requiresHumanApproval"] = approvals[E2EApprovalGateWorkflow.NodeType],
+            ["sideEffectLevel"] = entry.SideEffectLevel,
+            ["reason"] = "E2E deterministic side effect requires approval."
+        };
+        run.WorkflowDefinitionJson = root.ToJsonString(AgentNodeJson.SerializerOptions);
+        db.AgentRuns.Add(run);
+        await db.SaveChangesAsync(cancellationToken);
+        await queue.EnqueueAsync(new AgentRunQueueMessage(run.Id, run.UserId, run.WorkflowType, DateTime.UtcNow), cancellationToken);
+        return Results.Accepted($"/api/agent-runs/{run.Id}", new { agentRunId = run.Id, run.Status });
+    }).RequireAuthorization(policy => policy.RequireRole("Admin"));
+
+    app.MapPost("/api/e2e/approval-gate-runs/{runId:guid}/execute", async (
+        Guid runId,
+        ICurrentUserContext currentUser,
+        IAgentRunExecutor executor,
+        EquityLensDbContext db,
+        CancellationToken cancellationToken) =>
+    {
+        var exists = await db.AgentRuns.AnyAsync(
+            x => x.Id == runId && x.UserId == currentUser.UserId && x.WorkflowType == E2EApprovalGateWorkflow.WorkflowType,
+            cancellationToken);
+        if (!exists) return Results.NotFound();
+        await executor.ExecuteAsync(runId, currentUser.UserId, cancellationToken);
+        return Results.NoContent();
+    }).RequireAuthorization(policy => policy.RequireRole("Admin"));
+}
 
 // 匯入法說會模式: dotnet run -- --import-conferences
 if (args.Contains("--import-conferences"))
@@ -668,5 +740,25 @@ static string EscapeCsv(string? value) =>
     value.Contains(',') || value.Contains('"') || value.Contains('\n')
         ? $"\"{value.Replace("\"", "\"\"")}\""
         : value;
+
+if (e2eTestMode)
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<EquityLensDbContext>();
+    var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<AppUser>>();
+    const string email = "playwright-admin-test@example.com";
+    const string password = "Test1234!";
+    var user = await db.Users.SingleOrDefaultAsync(x => x.Email == email);
+    if (user is null)
+    {
+        user = new AppUser { Id = Guid.NewGuid(), Email = email, DisplayName = "Playwright E2E Admin", Role = "Admin", IsActive = true };
+        db.Users.Add(user);
+    }
+    user.Role = "Admin";
+    user.IsActive = true;
+    user.PasswordHash = passwordHasher.HashPassword(user, password);
+    user.UpdatedAtUtc = DateTime.UtcNow;
+    await db.SaveChangesAsync();
+}
 
 app.Run();

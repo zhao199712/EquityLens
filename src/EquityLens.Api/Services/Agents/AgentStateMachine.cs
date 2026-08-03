@@ -69,6 +69,9 @@ public sealed class AgentRunStateMachine : IAgentRunStateMachine
     private static bool CanTransition(string current, string next) => (current, next) switch
     {
         (AgentRunStatuses.Pending, AgentRunStatuses.Running) => true,
+        (AgentRunStatuses.Running, AgentRunStatuses.WaitingForApproval) => true,
+        (AgentRunStatuses.WaitingForApproval, AgentRunStatuses.Running) => true,
+        (AgentRunStatuses.WaitingForApproval, AgentRunStatuses.Cancelled) => true,
         (AgentRunStatuses.Running, AgentRunStatuses.Succeeded) => true,
         (AgentRunStatuses.Running, AgentRunStatuses.Failed) => true,
         (AgentRunStatuses.Running, AgentRunStatuses.Cancelled) => true,
@@ -139,6 +142,13 @@ public sealed class AgentNodeStateMachine : IAgentNodeStateMachine
     private static bool CanTransition(string current, string next) => (current, next) switch
     {
         (AgentNodeStatuses.Pending, AgentNodeStatuses.Ready) => true,
+        (AgentNodeStatuses.Pending, AgentNodeStatuses.WaitingForApproval) => true,
+        (AgentNodeStatuses.WaitingForApproval, AgentNodeStatuses.Pending) => true,
+        (AgentNodeStatuses.WaitingForApproval, AgentNodeStatuses.Cancelled) => true,
+        (AgentNodeStatuses.Pending, AgentNodeStatuses.Cancelled) => true,
+        (AgentNodeStatuses.Ready, AgentNodeStatuses.Cancelled) => true,
+        (AgentNodeStatuses.Queued, AgentNodeStatuses.Cancelled) => true,
+        (AgentNodeStatuses.Running, AgentNodeStatuses.Cancelled) => true,
         (AgentNodeStatuses.Ready, AgentNodeStatuses.Queued) => true,
         (AgentNodeStatuses.Ready, AgentNodeStatuses.Running) => true,
         (AgentNodeStatuses.Queued, AgentNodeStatuses.Running) => true,

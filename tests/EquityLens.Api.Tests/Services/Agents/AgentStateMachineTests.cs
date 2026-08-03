@@ -16,6 +16,9 @@ public sealed class AgentStateMachineTests
     [InlineData(AgentRunStatuses.WaitingForFeedback, AgentRunStatuses.Cancelled)]
     [InlineData(AgentRunStatuses.Pending, AgentRunStatuses.Cancelled)]
     [InlineData(AgentRunStatuses.Failed, AgentRunStatuses.Cancelled)]
+    [InlineData(AgentRunStatuses.Running, AgentRunStatuses.WaitingForApproval)]
+    [InlineData(AgentRunStatuses.WaitingForApproval, AgentRunStatuses.Running)]
+    [InlineData(AgentRunStatuses.WaitingForApproval, AgentRunStatuses.Cancelled)]
     public void AgentRunStateMachine_Transition_AllowsValidTransitions(string current, string next)
     {
         var run = new AgentRun { Status = current };
@@ -74,6 +77,9 @@ public sealed class AgentStateMachineTests
     [InlineData(AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Pending)]
     [InlineData(AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Failed)]
     [InlineData(AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Cancelled)]
+    [InlineData(AgentNodeStatuses.Pending, AgentNodeStatuses.WaitingForApproval)]
+    [InlineData(AgentNodeStatuses.WaitingForApproval, AgentNodeStatuses.Pending)]
+    [InlineData(AgentNodeStatuses.WaitingForApproval, AgentNodeStatuses.Cancelled)]
     public void AgentNodeStateMachine_Transition_AllowsValidTransitions(string current, string next)
     {
         var node = new AgentRunNode { Status = current };

@@ -66,6 +66,23 @@ export interface AgentFeedbackDto {
   followUpAgentRunId?: string | null
 }
 
+export interface AgentApprovalDto {
+  id: string
+  agentRunId: string
+  agentRunNodeId: string
+  nodeKey: string
+  nodeType: string
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'
+  sideEffectLevel: string
+  reason: string
+  requestedAtUtc: string
+  decidedAtUtc: string | null
+  consumedAtUtc: string | null
+  decidedByUserId: string | null
+  decisionComment: string | null
+  clientRequestId: string | null
+}
+
 export interface SubmitAgentFeedbackResponse {
   feedback: AgentFeedbackDto
   followUpAgentRun: AgentRunListItem | null
@@ -78,9 +95,23 @@ export interface AgentRunDetail {
   events: AgentRunEventDto[]
   toolCalls: AgentToolCallDto[]
   feedback: AgentFeedbackDto[]
+  approvals: AgentApprovalDto[]
+  promptSnapshots?: AgentRunPromptSnapshotDto[]
   blackboardJson: Record<string, unknown>
   outputJson: Record<string, unknown> | null
   workflowDefinitionJson: Record<string, unknown>
+}
+
+export interface AgentRunPromptSnapshotDto {
+  id: string
+  usageKey: string
+  ownerType: string
+  ownerKey: string
+  promptTemplateKey: string
+  promptVersionId: string
+  promptVersionNumber: number
+  contentHash: string
+  resolvedAtUtc: string
 }
 
 export interface AgentRunCreatedResponse extends AgentRunListItem {}
@@ -91,6 +122,8 @@ interface RawAgentRunDetail {
   events: Array<Omit<AgentRunEventDto, 'payloadJson'> & { payloadJson: string | null }>
   toolCalls: Array<Omit<AgentToolCallDto, 'argumentsJson' | 'resultJson'> & { argumentsJson: string; resultJson: string | null }>
   feedback: Array<Omit<AgentFeedbackDto, 'responseJson'> & { responseJson: string | null }>
+  approvals?: AgentApprovalDto[] | null
+  promptSnapshots?: AgentRunPromptSnapshotDto[] | null
   blackboardJson: string
   outputJson: string | null
   workflowDefinitionJson: string
@@ -147,12 +180,14 @@ export async function cancelAgentRun(id: string): Promise<AgentRunCreatedRespons
 }
 
 export async function decideAgentApproval(
-  id: string,
-  decision: 'Approved' | 'Rejected',
+  runId: string,
+  approvalId: string,
+  decision: 'approve' | 'reject',
   comment?: string,
-): Promise<AgentRunCreatedResponse> {
-  const response = await http.post<AgentRunCreatedResponse>(`/agent-runs/${id}/approval`, {
-    decision, comment: comment?.trim() || null,
+): Promise<AgentApprovalDto> {
+  const response = await http.post<AgentApprovalDto>(`/agent-runs/${runId}/approvals/${approvalId}/${decision}`, {
+    requestId: crypto.randomUUID(),
+    comment: comment?.trim() || null,
   })
   return response.data
 }
@@ -188,6 +223,8 @@ function normalizeDetail(raw: RawAgentRunDetail): AgentRunDetail {
       resultJson: parseJsonObject(toolCall.resultJson),
     })),
     feedback: raw.feedback.map((item) => ({ ...item, responseJson: parseJsonObject(item.responseJson) })),
+    approvals: raw.approvals ?? [],
+    promptSnapshots: raw.promptSnapshots ?? [],
     blackboardJson: parseJsonObject(raw.blackboardJson) ?? {},
     outputJson: parseJsonObject(raw.outputJson),
     workflowDefinitionJson: parseJsonObject(raw.workflowDefinitionJson) ?? {},

@@ -11,6 +11,23 @@ public sealed record CreateEvidenceReanalysisRequest(Guid EvidenceRemediationRun
 public sealed record CreatePortfolioDiagnosisRequest(DateOnly? From = null, DateOnly? To = null);
 
 public sealed record SubmitAgentFeedbackRequest(Guid RequestId, string FeedbackType, string? Comment = null);
+public sealed record DecideAgentApprovalRequest(Guid RequestId, string? Comment = null);
+
+public sealed record AgentApprovalResponse(
+    Guid Id,
+    Guid AgentRunId,
+    Guid AgentRunNodeId,
+    string NodeKey,
+    string NodeType,
+    string Status,
+    string SideEffectLevel,
+    string Reason,
+    DateTime RequestedAtUtc,
+    DateTime? DecidedAtUtc,
+    DateTime? ConsumedAtUtc,
+    Guid? DecidedByUserId,
+    string? DecisionComment,
+    Guid? ClientRequestId);
 
 public sealed record ApprovalDecisionRequest(string Decision, string? Comment = null);
 
@@ -101,4 +118,6 @@ public sealed record AgentRunDetailResponse(
     IReadOnlyList<AgentFeedbackResponse> Feedback,
     string BlackboardJson,
     string? OutputJson,
-    string WorkflowDefinitionJson);
+    string WorkflowDefinitionJson,
+    IReadOnlyList<AgentApprovalResponse>? Approvals = null,
+    IReadOnlyList<AgentRunPromptSnapshotResponse>? PromptSnapshots = null);

@@ -48,6 +48,13 @@ public static class EquityLensTelemetry
     public static readonly Counter<long> AgentNodeStatusTransitions = Meter.CreateCounter<long>(
         "equitylens.agent.node.status.transitions",
         description: "Number of agent node status transitions.");
+    public static readonly Counter<long> AgentApprovalDecisions = Meter.CreateCounter<long>(
+        "equitylens.agent.approval.decisions",
+        description: "Number of agent approval requests and decisions.");
+    public static readonly Histogram<double> AgentApprovalWaitDuration = Meter.CreateHistogram<double>(
+        "equitylens.agent.approval.wait.duration",
+        unit: "ms",
+        description: "Time agent nodes spend waiting for human approval.");
 
     // Risk analysis. Tags are deliberately limited to operation/model/confidence/outcome;
     // portfolio identifiers, securities and monetary amounts must not enter metrics.

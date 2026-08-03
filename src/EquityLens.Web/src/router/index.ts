@@ -29,6 +29,7 @@ const AISettingsView = () => import('../views/admin/AISettingsView.vue')
 const WorkflowManagementView = () => import('../views/admin/WorkflowManagementView.vue')
 const NodeCatalogManagementView = () => import('../views/admin/NodeCatalogManagementView.vue')
 const AgentRegistryView = () => import('../views/admin/AgentRegistryView.vue')
+const PromptManagementView = () => import('../views/admin/PromptManagementView.vue')
 const AgentRunListView = () => import('../views/agent-runs/AgentRunListView.vue')
 const AgentRunDetailView = () => import('../views/agent-runs/AgentRunDetailView.vue')
 const AgentQueryView = () => import('../views/agent-runs/AgentQueryView.vue')
@@ -175,6 +176,7 @@ export const router = createRouter({
         { path: 'workflows', name: 'admin-workflows', component: WorkflowManagementView },
         { path: 'nodes', name: 'admin-nodes', component: NodeCatalogManagementView },
         { path: 'registry', name: 'admin-registry', component: AgentRegistryView },
+        { path: 'prompts', name: 'admin-prompts', component: PromptManagementView },
         {
           path: 'agent-runs',
           name: 'admin-agent-runs',

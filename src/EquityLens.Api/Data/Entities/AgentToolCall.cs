@@ -14,7 +14,10 @@ public class AgentToolCall
     public DateTime StartedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAtUtc { get; set; }
     public long? DurationMs { get; set; }
+    public Guid? PromptSnapshotId { get; set; }
+    public string? RenderedPromptHash { get; set; }
 
     public AgentRun Run { get; set; } = null!;
     public AgentRunNode? Node { get; set; }
+    public AgentRunPromptSnapshot? PromptSnapshot { get; set; }
 }

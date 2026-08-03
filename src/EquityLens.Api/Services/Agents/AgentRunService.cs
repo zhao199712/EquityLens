@@ -20,6 +20,7 @@ public sealed class AgentRunService : IAgentRunService
     private readonly IAgentWorkflowAdminService? _workflowAdminService;
     private readonly PortfolioDiagnosisWorkflowDefinitionProvider? _portfolioDiagnosisProvider;
     private readonly IAgentWorkflowCatalog _catalog;
+    private readonly IAgentPromptSnapshotService? _promptSnapshots;
 
     public AgentRunService(
         EquityLensDbContext dbContext,
@@ -29,7 +30,8 @@ public sealed class AgentRunService : IAgentRunService
         IAgentRunQueue agentRunQueue,
         IAgentWorkflowAdminService? workflowAdminService = null,
         PortfolioDiagnosisWorkflowDefinitionProvider? portfolioDiagnosisProvider = null,
-        IAgentWorkflowCatalog? catalog = null)
+        IAgentWorkflowCatalog? catalog = null,
+        IAgentPromptSnapshotService? promptSnapshots = null)
     {
         _dbContext = dbContext;
         _workflowProviders = CreateWorkflowProviderRegistry(workflowProviders);
@@ -39,6 +41,7 @@ public sealed class AgentRunService : IAgentRunService
         _workflowAdminService = workflowAdminService;
         _portfolioDiagnosisProvider = portfolioDiagnosisProvider;
         _catalog = catalog ?? new AgentWorkflowCatalog();
+        _promptSnapshots = promptSnapshots;
     }
 
     public async Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
@@ -341,10 +344,24 @@ public sealed class AgentRunService : IAgentRunService
                 x.Id, x.AgentRunNodeId, x.FeedbackType, x.Status, x.Prompt, x.ResponseJson,
                 x.CreatedAtUtc, x.RespondedAtUtc, x.ClientRequestId, x.FollowUpAgentRunId))
             .ToListAsync(cancellationToken);
+        var approvals = await _dbContext.AgentApprovalRequests.AsNoTracking()
+            .Where(x => x.AgentRunId == id)
+            .OrderBy(x => x.RequestedAtUtc)
+            .Select(x => new AgentApprovalResponse(
+                x.Id, x.AgentRunId, x.AgentRunNodeId, x.NodeKey, x.NodeType, x.Status,
+                x.SideEffectLevel, x.Reason, x.RequestedAtUtc, x.DecidedAtUtc, x.ConsumedAtUtc,
+                x.DecidedByUserId, x.DecisionComment, x.ClientRequestId))
+            .ToListAsync(cancellationToken);
+        var promptSnapshots = await _dbContext.AgentRunPromptSnapshots.AsNoTracking()
+            .Where(x => x.AgentRunId == id)
+            .OrderBy(x => x.UsageKey)
+            .Select(x => new AgentRunPromptSnapshotResponse(x.Id, x.UsageKey, x.OwnerType, x.OwnerKey,
+                x.PromptTemplateKey, x.PromptVersionId, x.PromptVersionNumber, x.ContentHash, x.ResolvedAtUtc))
+            .ToListAsync(cancellationToken);
 
         return new AgentRunDetailResponse(
             MapSummary(run), nodes, events, toolCalls, feedback,
-            run.BlackboardJson, run.OutputJson, run.WorkflowDefinitionJson);
+            run.BlackboardJson, run.OutputJson, run.WorkflowDefinitionJson, approvals, promptSnapshots);
     }
 
     public async Task<AgentRunSummaryResponse?> RetryAsync(
@@ -354,11 +371,14 @@ public sealed class AgentRunService : IAgentRunService
     {
         var run = await _dbContext.AgentRuns
             .Include(x => x.Nodes)
+            .Include(x => x.Approvals)
+                .ThenInclude(x => x.Node)
             .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
         if (run is null) return null;
         if (run.Status != AgentRunStatuses.Failed) return MapSummary(run);
 
         _runStateMachine.ResetForRetry(run);
+        run.ExecutionAttempt++;
         run.ErrorMessage = null;
         run.OutputJson = null;
         var provider = GetWorkflowProvider(run.WorkflowType);
@@ -433,13 +453,27 @@ public sealed class AgentRunService : IAgentRunService
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var run = await _dbContext.AgentRuns.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
+        var run = await _dbContext.AgentRuns
+            .Include(x => x.Nodes)
+            .Include(x => x.Approvals)
+                .ThenInclude(x => x.Node)
+            .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
         if (run is null) return null;
         if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Cancelled)
             return MapSummary(run);
 
         _runStateMachine.Transition(run, AgentRunStatuses.Cancelled);
         run.CompletedAtUtc = DateTime.UtcNow;
+        foreach (var approval in run.Approvals.Where(x => x.Status == AgentApprovalStatuses.Pending))
+        {
+            approval.Status = AgentApprovalStatuses.Cancelled;
+            approval.DecidedAtUtc = DateTime.UtcNow;
+            approval.DecidedByUserId = userId;
+            approval.DecisionComment = "Run cancelled by user.";
+            AddEvent(run, approval.Node, AgentEventTypes.ApprovalCancelled, "Pending approval cancelled with the run.", new { approvalId = approval.Id });
+        }
+        foreach (var node in run.Nodes.Where(x => x.Status is AgentNodeStatuses.Pending or AgentNodeStatuses.Ready or AgentNodeStatuses.Queued or AgentNodeStatuses.WaitingForApproval or AgentNodeStatuses.Running))
+            _nodeStateMachine.Transition(node, AgentNodeStatuses.Cancelled);
         if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)
         {
             var artifact = await _dbContext.ResearchRuns.SingleOrDefaultAsync(x => x.Id == researchRunId, cancellationToken);
@@ -516,14 +550,25 @@ public sealed class AgentRunService : IAgentRunService
         var policies = _workflowAdminService is null
             ? nodeTypes.ToDictionary(x => x, x => _catalog.GetNode(x).DefaultPolicy)
             : await _workflowAdminService.GetPoliciesAsync(nodeTypes, cancellationToken);
+        var approvalPolicies = _workflowAdminService is null
+            ? nodeTypes.ToDictionary(x => x, x => _catalog.GetNode(x).Contract.RequiresHumanInput)
+            : await _workflowAdminService.GetApprovalPoliciesAsync(nodeTypes, cancellationToken);
         foreach (var node in root["nodes"]!.AsArray().OfType<JsonObject>())
         {
             var type = node["type"]!.GetValue<string>();
             var p = policies[type];
             node["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = p.TimeoutSeconds, ["maxRetryCount"] = p.MaxRetryCount };
             node["contract"] = JsonSerializer.SerializeToNode(_catalog.GetNode(type).Contract, AgentNodeJson.SerializerOptions);
+            node["approvalPolicy"] = new JsonObject
+            {
+                ["requiresHumanApproval"] = approvalPolicies[type],
+                ["sideEffectLevel"] = _catalog.GetNode(type).SideEffectLevel,
+                ["reason"] = $"執行節點「{_catalog.GetNode(type).DisplayName}」前需要人工批准。"
+            };
         }
         run.WorkflowDefinitionJson = root.ToJsonString(AgentNodeJson.SerializerOptions);
+        if (_promptSnapshots is not null)
+            await _promptSnapshots.SnapshotForRunAsync(run, cancellationToken);
     }
 
     private static IReadOnlyDictionary<string, IAgentWorkflowDefinitionProvider> CreateWorkflowProviderRegistry(

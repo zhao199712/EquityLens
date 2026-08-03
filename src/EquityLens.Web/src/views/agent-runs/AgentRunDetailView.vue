@@ -91,14 +91,6 @@ interface RoutingContext {
   }
 }
 
-interface ApprovalRequestPayload {
-  approvalType?: string
-  prompt?: string | null
-  nodeKey?: string
-  requestedAtUtc?: string
-  subject?: unknown
-}
-
 const route = useRoute()
 const router = useRouter()
 const actionLoading = ref(false)
@@ -154,6 +146,26 @@ async function handleCreateDraftRevision() {
   }
 }
 
+async function handleApproval(decision: 'approve' | 'reject') {
+  if (!run.value || !pendingApproval.value) return
+  if (decision === 'reject' && !approvalComment.value.trim()) {
+    error.value = '拒絕時必須填寫原因。'
+    return
+  }
+  if (decision === 'reject' && !window.confirm('拒絕後會取消整個 Agent Run，確定繼續？')) return
+  actionLoading.value = true
+  error.value = ''
+  try {
+    await decideAgentApproval(run.value.run.id, pendingApproval.value.id, decision, approvalComment.value)
+    approvalComment.value = ''
+  } catch {
+    error.value = 'Approval 狀態可能已變更，已重新載入最新結果。'
+  } finally {
+    refresh()
+    actionLoading.value = false
+  }
+}
+
 function formatDate(iso: string | null) {
   if (!iso) return '-'
   return new Date(iso).toLocaleString('zh-TW')
@@ -175,6 +187,7 @@ function statusColor(status: string) {
     case 'Cancelled': return '#9a917c'
     case 'Pending': return '#9a917c'
     case 'WaitingForFeedback': return '#c9a86a'
+    case 'WaitingForApproval': return '#c9a86a'
     case 'Skipped': return '#9a917c'
     default: return '#9a917c'
   }
@@ -218,6 +231,8 @@ const duration = computed(() => {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
 })
+
+const pendingApproval = computed(() => run.value?.approvals.find(item => item.status === 'Pending') ?? null)
 
 const canCreateDraftRevision = computed(() => {
   if (!run.value || run.value.run.workflowType !== 'CriticReview' || run.value.run.status !== 'Succeeded') return false
@@ -277,38 +292,6 @@ const capabilityRequests = computed(() => {
   }>) ?? []
 })
 
-const approvalRequest = computed((): ApprovalRequestPayload | null => {
-  if (!run.value || run.value.run.status !== 'WaitingForFeedback') return null
-  return (run.value.blackboardJson.approvalRequest as unknown as ApprovalRequestPayload) ?? null
-})
-
-async function submitApproval(decision: 'Approved' | 'Rejected') {
-  if (!run.value) return
-  actionLoading.value = true
-  error.value = ''
-  try {
-    await decideAgentApproval(run.value.run.id, decision, approvalComment.value)
-    approvalComment.value = ''
-    refresh()
-  } catch {
-    error.value = decision === 'Approved' ? '批准失敗。' : '拒絕失敗。'
-  } finally {
-    actionLoading.value = false
-  }
-}
-
-async function handleApprove() {
-  await submitApproval('Approved')
-}
-
-async function handleReject() {
-  if (!approvalComment.value.trim()) {
-    error.value = '拒絕時必須提供說明。'
-    return
-  }
-  await submitApproval('Rejected')
-}
-
 const nextActionLabel = computed(() => {
   const action = criticOutput.value?.recommendedNextAction
   if (!action) return null
@@ -349,7 +332,7 @@ const nextActionLabel = computed(() => {
             <div class="action-row">
               <button v-if="run.run.parentAgentRunId" class="prestige-btn" @click="router.push({ name: 'agent-run-detail', params: { id: run.run.parentAgentRunId } })">查看父版本</button>
               <button v-if="run.run.status === 'Failed'" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
-              <button v-if="run.run.status === 'Running' || run.run.status === 'Pending'" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
+              <button v-if="run.run.status === 'Running' || run.run.status === 'Pending' || run.run.status === 'WaitingForApproval'" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
               <button v-if="canCreateDraftRevision" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleCreateDraftRevision">產生修訂稿</button>
               <button class="prestige-btn" :disabled="actionLoading" @click="refresh">重新整理</button>
             </div>
@@ -363,7 +346,7 @@ const nextActionLabel = computed(() => {
             <div v-if="!isTerminalStatus || run.run.errorMessage" class="live-row">
               <span v-if="!isTerminalStatus" class="live-status">
                 <span class="live-dot" />
-                {{ run.run.status === 'Pending' ? '已加入背景執行佇列，正在等待執行' : '背景執行中，頁面會自動更新' }}
+                {{ run.run.status === 'Pending' ? '已加入背景執行佇列，正在等待執行' : run.run.status === 'WaitingForApproval' ? '等待人工批准，尚未執行高風險節點' : '背景執行中，頁面會自動更新' }}
               </span>
               <span v-if="run.run.errorMessage" class="run-error">{{ run.run.errorMessage }}</span>
             </div>
@@ -374,26 +357,28 @@ const nextActionLabel = computed(() => {
             </div>
           </div>
 
-          <div v-if="approvalRequest" class="prestige-panel prestige-panel-pad approval-panel" data-testid="approval-panel">
-            <h3 class="panel-title">等待人工批准</h3>
-            <div v-if="approvalRequest.prompt" class="summary-block">
-              <div class="prestige-label stat-caption">審核內容</div>
-              <div class="body-text">{{ approvalRequest.prompt }}</div>
+          <div v-if="pendingApproval" class="prestige-panel prestige-panel-pad approval-panel" data-testid="approval-panel">
+            <span class="prestige-label">HUMAN APPROVAL REQUIRED</span>
+            <h3>{{ pendingApproval.nodeKey }}</h3>
+            <div class="approval-meta">
+              <span class="prestige-tag">{{ pendingApproval.nodeType }}</span>
+              <span class="prestige-tag">{{ pendingApproval.sideEffectLevel }}</span>
+              <span class="prestige-mono">請求：{{ formatDate(pendingApproval.requestedAtUtc) }}</span>
             </div>
-            <div class="approval-meta prestige-mono">
-              <span v-if="approvalRequest.approvalType">類型：{{ approvalRequest.approvalType }}</span>
-              <span v-if="approvalRequest.nodeKey">節點：{{ approvalRequest.nodeKey }}</span>
+            <p>{{ pendingApproval.reason }}</p>
+            <textarea v-model="approvalComment" class="prestige-input approval-comment" rows="3" placeholder="批准可選填備註；拒絕必須填寫原因" />
+            <div class="action-row">
+              <button class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleApproval('approve')">批准並繼續</button>
+              <button class="prestige-btn btn-danger" :disabled="actionLoading || !approvalComment.trim()" @click="handleApproval('reject')">拒絕並取消 Run</button>
             </div>
-            <textarea
-              v-model="approvalComment"
-              class="prestige-input approval-comment"
-              placeholder="審核說明（拒絕時必填）"
-              rows="3"
-              data-testid="approval-comment"
-            />
-            <div class="action-row approval-actions">
-              <button class="prestige-btn prestige-btn-solid" :disabled="actionLoading" data-testid="approval-approve" @click="handleApprove">批准</button>
-              <button class="prestige-btn btn-danger" :disabled="actionLoading" data-testid="approval-reject" @click="handleReject">拒絕</button>
+          </div>
+
+          <div v-else-if="run.approvals.length" class="prestige-panel prestige-panel-pad approval-history">
+            <span class="prestige-label">APPROVAL HISTORY</span>
+            <div v-for="item in run.approvals" :key="item.id" class="approval-history-row">
+              <div><strong>{{ item.nodeKey }}</strong> · {{ item.status }}</div>
+              <div class="prestige-mono">{{ formatDate(item.decidedAtUtc) }} · {{ item.decidedByUserId ?? 'System' }}</div>
+              <p v-if="item.decisionComment">{{ item.decisionComment }}</p>
             </div>
           </div>
 
@@ -1093,6 +1078,19 @@ const nextActionLabel = computed(() => {
   margin-top: 16px;
   border-color: var(--gold-border);
 }
+
+.approval-panel,
+.approval-history {
+  margin: 16px 0;
+  border-color: rgba(212, 162, 78, .55);
+}
+.approval-panel h3 { margin: 8px 0; color: var(--ivory); font-family: var(--serif); }
+.approval-panel p, .approval-history p { color: var(--muted); line-height: 1.6; }
+.approval-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; color: var(--muted); font-size: 12px; }
+.approval-comment { width: 100%; margin-bottom: 12px; resize: vertical; }
+.approval-history-row { padding: 12px 0; border-bottom: 1px solid var(--gold-border-soft); color: var(--ivory); }
+.approval-history-row:last-child { border-bottom: 0; }
+.approval-history-row .prestige-mono { margin-top: 4px; color: var(--muted); font-size: 11px; }
 
 .routing-stage h3 {
   margin: 8px 0 5px;

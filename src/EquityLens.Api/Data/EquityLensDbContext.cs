@@ -72,6 +72,12 @@ public class EquityLensDbContext : DbContext
     public DbSet<AgentWorkflowSetting> AgentWorkflowSettings => Set<AgentWorkflowSetting>();
     public DbSet<AgentNodeSetting> AgentNodeSettings => Set<AgentNodeSetting>();
     public DbSet<AgentRunWakeOutbox> AgentRunWakeOutbox => Set<AgentRunWakeOutbox>();
+    public DbSet<AgentApprovalRequest> AgentApprovalRequests => Set<AgentApprovalRequest>();
+    public DbSet<PromptTemplate> PromptTemplates => Set<PromptTemplate>();
+    public DbSet<PromptVersion> PromptVersions => Set<PromptVersion>();
+    public DbSet<PromptBinding> PromptBindings => Set<PromptBinding>();
+    public DbSet<PromptAuditLog> PromptAuditLogs => Set<PromptAuditLog>();
+    public DbSet<AgentRunPromptSnapshot> AgentRunPromptSnapshots => Set<AgentRunPromptSnapshot>();
 
     // Exchange Rates
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();

@@ -3,6 +3,7 @@ using System;
 using EquityLens.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Pgvector;
 namespace EquityLens.Api.Migrations
 {
     [DbContext(typeof(EquityLensDbContext))]
-    partial class EquityLensDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260730071104_AddAgentHumanApprovals")]
+    partial class AddAgentHumanApprovals
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -505,84 +508,6 @@ namespace EquityLens.Api.Migrations
                     b.ToTable("agent_run_node", (string)null);
                 });
 
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRunPromptSnapshot", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AgentRunId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("agent_run_id");
-
-                    b.Property<string>("ContentHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("content_hash");
-
-                    b.Property<string>("OwnerKey")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("owner_key");
-
-                    b.Property<string>("OwnerType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("owner_type");
-
-                    b.Property<Guid>("PromptTemplateId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("prompt_template_id");
-
-                    b.Property<string>("PromptTemplateKey")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("prompt_template_key");
-
-                    b.Property<Guid>("PromptVersionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("prompt_version_id");
-
-                    b.Property<int>("PromptVersionNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("prompt_version_number");
-
-                    b.Property<string>("RequiredVariablesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("required_variables_json");
-
-                    b.Property<DateTime>("ResolvedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("resolved_at_utc");
-
-                    b.Property<string>("SystemPrompt")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("system_prompt");
-
-                    b.Property<string>("UsageKey")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("usage_key");
-
-                    b.Property<string>("UserPrompt")
-                        .HasColumnType("text")
-                        .HasColumnName("user_prompt");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AgentRunId", "UsageKey")
-                        .IsUnique();
-
-                    b.ToTable("agent_run_prompt_snapshot", (string)null);
-                });
-
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRunWakeOutbox", b =>
                 {
                     b.Property<Guid>("Id")
@@ -672,15 +597,6 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("error_message");
 
-                    b.Property<Guid?>("PromptSnapshotId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("prompt_snapshot_id");
-
-                    b.Property<string>("RenderedPromptHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("rendered_prompt_hash");
-
                     b.Property<string>("ResultJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("result_json");
@@ -708,8 +624,6 @@ namespace EquityLens.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AgentRunNodeId");
-
-                    b.HasIndex("PromptSnapshotId");
 
                     b.HasIndex("AgentRunId", "StartedAtUtc");
 
@@ -2271,252 +2185,6 @@ namespace EquityLens.Api.Migrations
                     b.ToTable("portfolio_transaction", (string)null);
                 });
 
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PromptAuditLog", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("action");
-
-                    b.Property<Guid>("ActorUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<string>("MetadataJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("metadata_json");
-
-                    b.Property<Guid?>("PromptBindingId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("PromptTemplateId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("PromptVersionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Reason")
-                        .HasColumnType("text")
-                        .HasColumnName("reason");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("request_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RequestId");
-
-                    b.HasIndex("PromptTemplateId", "CreatedAtUtc");
-
-                    b.ToTable("prompt_audit_log", (string)null);
-                });
-
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PromptBinding", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ConcurrencyToken")
-                        .IsConcurrencyToken()
-                        .HasColumnType("uuid")
-                        .HasColumnName("concurrency_token");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("OwnerKey")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("owner_key");
-
-                    b.Property<string>("OwnerType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("owner_type");
-
-                    b.Property<Guid>("PromptTemplateId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("prompt_template_id");
-
-                    b.Property<Guid>("PromptVersionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("prompt_version_id");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at_utc");
-
-                    b.Property<Guid>("UpdatedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by_user_id");
-
-                    b.Property<string>("UsageKey")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("usage_key");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PromptTemplateId");
-
-                    b.HasIndex("PromptVersionId");
-
-                    b.HasIndex("UsageKey")
-                        .IsUnique();
-
-                    b.ToTable("prompt_binding", (string)null);
-                });
-
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PromptTemplate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ConcurrencyToken")
-                        .IsConcurrencyToken()
-                        .HasColumnType("uuid")
-                        .HasColumnName("concurrency_token");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_user_id");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("key");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("status");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at_utc");
-
-                    b.Property<Guid>("UpdatedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by_user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Key")
-                        .IsUnique();
-
-                    b.ToTable("prompt_template", (string)null);
-                });
-
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PromptVersion", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ChangeSummary")
-                        .HasColumnType("text")
-                        .HasColumnName("change_summary");
-
-                    b.Property<Guid>("ConcurrencyToken")
-                        .IsConcurrencyToken()
-                        .HasColumnType("uuid")
-                        .HasColumnName("concurrency_token");
-
-                    b.Property<string>("ContentHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("content_hash");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_user_id");
-
-                    b.Property<Guid>("PromptTemplateId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("prompt_template_id");
-
-                    b.Property<DateTime?>("PublishedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("published_at_utc");
-
-                    b.Property<Guid?>("PublishedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("published_by_user_id");
-
-                    b.Property<string>("RequiredVariablesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("required_variables_json");
-
-                    b.Property<string>("ResponseFormat")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("response_format");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("SystemPrompt")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("system_prompt");
-
-                    b.Property<string>("UserPrompt")
-                        .HasColumnType("text")
-                        .HasColumnName("user_prompt");
-
-                    b.Property<int>("VersionNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("version_number");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PromptTemplateId", "VersionNumber")
-                        .IsUnique();
-
-                    b.ToTable("prompt_version", (string)null);
-                });
-
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3816,17 +3484,6 @@ namespace EquityLens.Api.Migrations
                     b.Navigation("Run");
                 });
 
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRunPromptSnapshot", b =>
-                {
-                    b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "Run")
-                        .WithMany("PromptSnapshots")
-                        .HasForeignKey("AgentRunId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Run");
-                });
-
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentToolCall", b =>
                 {
                     b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "Run")
@@ -3840,14 +3497,7 @@ namespace EquityLens.Api.Migrations
                         .HasForeignKey("AgentRunNodeId")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.HasOne("EquityLens.Api.Data.Entities.AgentRunPromptSnapshot", "PromptSnapshot")
-                        .WithMany("ToolCalls")
-                        .HasForeignKey("PromptSnapshotId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Node");
-
-                    b.Navigation("PromptSnapshot");
 
                     b.Navigation("Run");
                 });
@@ -4214,36 +3864,6 @@ namespace EquityLens.Api.Migrations
                     b.Navigation("Security");
                 });
 
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PromptBinding", b =>
-                {
-                    b.HasOne("EquityLens.Api.Data.Entities.PromptTemplate", "Template")
-                        .WithMany()
-                        .HasForeignKey("PromptTemplateId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EquityLens.Api.Data.Entities.PromptVersion", "Version")
-                        .WithMany("Bindings")
-                        .HasForeignKey("PromptVersionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Template");
-
-                    b.Navigation("Version");
-                });
-
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PromptVersion", b =>
-                {
-                    b.HasOne("EquityLens.Api.Data.Entities.PromptTemplate", "Template")
-                        .WithMany("Versions")
-                        .HasForeignKey("PromptTemplateId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Template");
-                });
-
             modelBuilder.Entity("EquityLens.Api.Data.Entities.RefreshToken", b =>
                 {
                     b.HasOne("EquityLens.Api.Data.Entities.AppUser", "User")
@@ -4413,8 +4033,6 @@ namespace EquityLens.Api.Migrations
 
                     b.Navigation("Nodes");
 
-                    b.Navigation("PromptSnapshots");
-
                     b.Navigation("ToolCalls");
                 });
 
@@ -4426,11 +4044,6 @@ namespace EquityLens.Api.Migrations
 
                     b.Navigation("Feedback");
 
-                    b.Navigation("ToolCalls");
-                });
-
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRunPromptSnapshot", b =>
-                {
                     b.Navigation("ToolCalls");
                 });
 
@@ -4501,16 +4114,6 @@ namespace EquityLens.Api.Migrations
                     b.Navigation("RiskRuns");
 
                     b.Navigation("Snapshots");
-                });
-
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PromptTemplate", b =>
-                {
-                    b.Navigation("Versions");
-                });
-
-            modelBuilder.Entity("EquityLens.Api.Data.Entities.PromptVersion", b =>
-                {
-                    b.Navigation("Bindings");
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.ResearchRun", b =>

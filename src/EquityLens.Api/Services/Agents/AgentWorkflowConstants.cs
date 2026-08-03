@@ -255,6 +255,7 @@ public static class AgentRunStatuses
 {
     public const string Pending = "Pending";
     public const string Running = "Running";
+    public const string WaitingForApproval = "WaitingForApproval";
     public const string WaitingForFeedback = "WaitingForFeedback";
     public const string Succeeded = "Succeeded";
     public const string Failed = "Failed";
@@ -267,6 +268,7 @@ public static class AgentNodeStatuses
     public const string Ready = "Ready";
     public const string Queued = "Queued";
     public const string Running = "Running";
+    public const string WaitingForApproval = "WaitingForApproval";
     public const string Succeeded = "Succeeded";
     public const string Failed = "Failed";
     public const string Skipped = "Skipped";
@@ -338,6 +340,17 @@ public static class AgentEventTypes
     public const string ApprovalRequested = "ApprovalRequested";
     public const string ApprovalDecision = "ApprovalDecision";
     public const string RunWaitingForFeedback = "RunWaitingForFeedback";
+    public const string ApprovalApproved = "ApprovalApproved";
+    public const string ApprovalRejected = "ApprovalRejected";
+    public const string ApprovalCancelled = "ApprovalCancelled";
+}
+
+public static class AgentApprovalStatuses
+{
+    public const string Pending = "Pending";
+    public const string Approved = "Approved";
+    public const string Rejected = "Rejected";
+    public const string Cancelled = "Cancelled";
 }
 
 public static class AgentFeedbackTypes

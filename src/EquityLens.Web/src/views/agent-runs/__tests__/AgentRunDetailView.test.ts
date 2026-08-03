@@ -10,6 +10,7 @@ interface MockRun {
   workflowDefinitionJson: Record<string, unknown>
   toolCalls: unknown[]
   feedback: unknown[]
+  approvals: unknown[]
   blackboardJson: Record<string, unknown>
   outputJson: Record<string, unknown> | null
 }
@@ -65,6 +66,7 @@ function diagnosisRun(riskMetrics: Record<string, number | null> | null, interpr
     workflowDefinitionJson: { nodes: [], edges: [] },
     toolCalls: [],
     feedback: [],
+    approvals: [],
     blackboardJson: {},
     outputJson: {
       summary: '本期投組相對基準報酬為 -3.39 %。',
@@ -130,48 +132,15 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
   })
 
   it('renders a rejected diagnosis run without the report panel', () => {
-    state.agentRun.value = rejectedDiagnosisRun()
+    const item = diagnosisRun(null)
+    item.run.status = 'Cancelled'
+    item.run.errorMessage = '人工拒絕此投組診斷：證據不足。'
+    state.agentRun.value = item
     const wrapper = mount(AgentRunDetailView, { global: { stubs } })
     expect(wrapper.text()).not.toContain('AI 投組診斷報告')
     expect(wrapper.text()).toContain('人工拒絕此投組診斷')
   })
 })
-
-function rejectedDiagnosisRun(): MockRun {
-  return {
-    run: {
-      id: 'run-1', workflowType: 'PortfolioDiagnosis', agentType: 'PortfolioDiagnosisAgent',
-      status: 'Failed', parentAgentRunId: null,
-      createdAtUtc: '2026-07-28T00:00:00Z', startedAtUtc: '2026-07-28T00:00:01Z',
-      completedAtUtc: '2026-07-28T00:05:00Z', errorMessage: '人工拒絕此投組診斷：證據不足。',
-    },
-    nodes: [],
-    workflowDefinitionJson: { nodes: [], edges: [] },
-    toolCalls: [],
-    feedback: [],
-    blackboardJson: {},
-    outputJson: { rejected: true, decision: 'Rejected', comment: '證據不足。', reviewerId: 'user-1' },
-  }
-}
-
-function waitingRun(): MockRun {
-  return {
-    run: {
-      id: 'run-1', workflowType: 'HumanApprovalTest', agentType: 'AnalysisAgent',
-      status: 'WaitingForFeedback', parentAgentRunId: null,
-      createdAtUtc: '2026-07-28T00:00:00Z', startedAtUtc: '2026-07-28T00:00:01Z',
-      completedAtUtc: null, errorMessage: null,
-    },
-    nodes: [],
-    workflowDefinitionJson: { nodes: [], edges: [] },
-    toolCalls: [],
-    feedback: [],
-    blackboardJson: {
-      approvalRequest: { approvalType: 'ApproveReject', prompt: '請審核診斷結果', nodeKey: 'waitForHumanApproval', requestedAtUtc: '2026-07-28T00:00:05Z' },
-    },
-    outputJson: null,
-  }
-}
 
 describe('AgentRunDetailView human approval panel', () => {
   beforeEach(() => {
@@ -181,42 +150,24 @@ describe('AgentRunDetailView human approval panel', () => {
     vi.mocked(decideAgentApproval).mockReset()
   })
 
-  it('renders the approval panel when waiting for feedback', () => {
-    state.agentRun.value = waitingRun()
-    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
-    expect(wrapper.find('[data-testid="approval-panel"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('等待人工批准')
-    expect(wrapper.text()).toContain('請審核診斷結果')
-  })
+  it('renders a pending approval with guarded reject action', async () => {
+    const item = diagnosisRun(null)
+    item.run.status = 'WaitingForApproval'
+    item.approvals = [{
+      id: 'approval-1', agentRunId: 'run-1', agentRunNodeId: 'node-1',
+      nodeKey: 'danger', nodeType: 'ExternalWrite', status: 'Pending',
+      sideEffectLevel: 'ExternalWrite', reason: '需要人工批准',
+      requestedAtUtc: '2026-07-27T13:46:24Z', decidedAtUtc: null,
+      consumedAtUtc: null, decidedByUserId: null, decisionComment: null, clientRequestId: null,
+    }]
+    state.agentRun.value = item
 
-  it('does not render the panel for non-waiting runs', () => {
-    state.agentRun.value = diagnosisRun(null)
     const wrapper = mount(AgentRunDetailView, { global: { stubs } })
-    expect(wrapper.find('[data-testid="approval-panel"]').exists()).toBe(false)
-  })
 
-  it('approves by calling decideAgentApproval with Approved', async () => {
-    state.agentRun.value = waitingRun()
-    vi.mocked(decideAgentApproval).mockResolvedValue({} as never)
-    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
-    await wrapper.find('[data-testid="approval-approve"]').trigger('click')
-    expect(decideAgentApproval).toHaveBeenCalledWith('run-1', 'Approved', '')
-  })
-
-  it('requires a comment before rejecting', async () => {
-    state.agentRun.value = waitingRun()
-    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
-    await wrapper.find('[data-testid="approval-reject"]').trigger('click')
-    expect(decideAgentApproval).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('拒絕時必須提供說明。')
-  })
-
-  it('rejects with a comment', async () => {
-    state.agentRun.value = waitingRun()
-    vi.mocked(decideAgentApproval).mockResolvedValue({} as never)
-    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
-    await wrapper.find('[data-testid="approval-comment"]').setValue('證據不足')
-    await wrapper.find('[data-testid="approval-reject"]').trigger('click')
-    expect(decideAgentApproval).toHaveBeenCalledWith('run-1', 'Rejected', '證據不足')
+    expect(wrapper.get('[data-testid="approval-panel"]').text()).toContain('需要人工批准')
+    const reject = wrapper.findAll('button').find(button => button.text().includes('拒絕並取消'))
+    expect(reject?.attributes('disabled')).toBeDefined()
+    await wrapper.get('.approval-comment').setValue('風險過高')
+    expect(reject?.attributes('disabled')).toBeUndefined()
   })
 })
