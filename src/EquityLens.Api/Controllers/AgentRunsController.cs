@@ -237,7 +237,6 @@ public sealed class AgentRunsController : ControllerBase
         {
             return Conflict(new ApiError(exception.Code, exception.Message));
         }
-        }
         catch (AgentApprovalException exception)
         {
             return BadRequest(new ApiError(exception.Code, exception.Message));

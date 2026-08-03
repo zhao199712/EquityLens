@@ -226,7 +226,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 node.DurationMs = stopwatch.ElapsedMilliseconds;
                 AddEvent(run, node, AgentEventTypes.ApprovalRequested, $"Node {nodeKey} paused waiting for human approval.", null);
                 await _dbContext.SaveChangesAsync(cancellationToken);
-                return;
+                return false;
             }
             _nodeStateMachine.Transition(node, AgentNodeStatuses.Succeeded);
             node.CompletedAtUtc = DateTime.UtcNow;

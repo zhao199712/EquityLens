@@ -672,8 +672,3 @@ public sealed class AgentFeedbackException(string code, string message) : Invali
 {
     public string Code { get; } = code;
 }
-
-public sealed class AgentApprovalException(string code, string message) : InvalidOperationException(message)
-{
-    public string Code { get; } = code;
-}
