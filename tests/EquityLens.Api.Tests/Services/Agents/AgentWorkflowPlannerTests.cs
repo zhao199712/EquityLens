@@ -68,16 +68,13 @@ public sealed class AgentWorkflowPlannerTests
         Assert.Equal(
         [
             PortfolioDiagnosisNodeKeys.LoadContext,
+            PortfolioDiagnosisNodeKeys.ResolveRiskEvidence,
             PortfolioRiskMathNodeKeys.PrepareInputs,
             PortfolioRiskMathNodeKeys.ExecuteCore,
             PortfolioDiagnosisNodeKeys.CalculateAttribution,
             PortfolioDiagnosisNodeKeys.LoadRiskProfile,
             PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses,
-            PortfolioDiagnosisNodeKeys.BuildEvidencePacket,
-            PortfolioDiagnosisNodeKeys.DraftDiagnosis,
-            PortfolioDiagnosisNodeKeys.ApproveDiagnosis,
-            PortfolioDiagnosisNodeKeys.FinalizeDiagnosis,
-            PortfolioDiagnosisNodeKeys.FinalizeRejectedDiagnosis
+            PortfolioDiagnosisNodeKeys.EvaluateQuality
         ], planner.GetExecutionOrder(run.WorkflowDefinitionJson));
     }
 

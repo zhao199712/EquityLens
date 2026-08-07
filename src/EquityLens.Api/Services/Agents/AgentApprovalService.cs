@@ -85,6 +85,16 @@ public sealed class AgentApprovalService(
             }
             runStateMachine.Transition(run, AgentRunStatuses.Cancelled);
             run.CompletedAtUtc = now;
+            if (run.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
+            {
+                var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+                var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject ?? new JsonObject();
+                runtime["status"] = "Cancelled";
+                runtime["stopReason"] = AgentLoopStopReasons.HumanRejected;
+                runtime["lastReasonCode"] = AgentLoopStopReasons.HumanRejected;
+                board[AgentBlackboardKeys.Runtime] = runtime;
+                run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+            }
             run.LeaseOwner = null;
             run.LeaseExpiresAtUtc = null;
             if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)

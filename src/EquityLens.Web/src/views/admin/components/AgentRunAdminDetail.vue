@@ -271,6 +271,26 @@ const nodeMap = computed(() => {
         </NSpace>
       </section>
 
+      <section v-if="run.loopSummary" class="prestige-panel prestige-panel-pad detail-section" data-testid="admin-loop-summary">
+        <span class="prestige-label detail-label">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? 'Portfolio Diagnosis Loop' : 'Research Quality Loop' }}</span>
+        <div class="detail-field"><span class="detail-field-label">Status</span><span class="detail-field-value">{{ run.loopSummary.status }}</span></div>
+        <div class="detail-field"><span class="detail-field-label">Iteration</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.currentIteration }} / {{ run.loopSummary.maxIterations }}</span></div>
+        <div class="detail-field"><span class="detail-field-label">Dynamic Nodes</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.dynamicNodeCount }} / {{ run.loopSummary.maxDynamicNodes }}</span></div>
+        <template v-if="run.loopSummary.loopType === 'PortfolioDiagnosis'">
+          <div class="detail-field"><span class="detail-field-label">Quality</span><span class="detail-field-value">{{ run.loopSummary.qualityStatus ?? 'Pending' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Risk Cache</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.riskCacheStatus ?? 'Miss' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Reused / Calculated</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.reusedCapabilities?.length ?? 0 }} / {{ run.loopSummary.calculatedCapabilities?.length ?? 0 }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Source Risk Runs</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.sourceRiskRunIds?.join(', ') || '—' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Gaps</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.gapCodes?.join(', ') || '—' }}</span></div>
+        </template>
+        <template v-else>
+          <div class="detail-field"><span class="detail-field-label">Web Retrievals</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.webRetrievalCount }} / {{ run.loopSummary.maxWebRetrievals }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Evidence / Gaps</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.evidenceCount }} / {{ run.loopSummary.unresolvedClaimIds.length }}</span></div>
+        </template>
+        <div v-if="run.loopSummary.lastAction" class="detail-field"><span class="detail-field-label">Last Action</span><span class="detail-field-value">{{ run.loopSummary.lastAction }}</span></div>
+        <div v-if="run.loopSummary.stopReason" class="detail-field"><span class="detail-field-label">Stop Reason</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.stopReason }}</span></div>
+      </section>
+
       <section class="prestige-panel prestige-panel-pad detail-section">
         <span class="prestige-label detail-label">Nodes</span>
         <div v-if="run.nodes.length === 0" class="detail-muted">暫無節點。</div>

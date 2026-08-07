@@ -130,33 +130,61 @@ public sealed class AgentRunsControllerTests
     }
 
     [Fact]
-    public async Task DecideApproval_ValidRequest_CallsService()
+    public async Task Approve_ValidRequest_CallsApprovalService()
     {
-        var service = new FakeAgentRunService(); var controller = new AgentRunsController(service, new FakeCurrentUserContext()); var runId = Guid.NewGuid();
-        var result = await controller.DecideApproval(runId, new ApprovalDecisionRequest("Approved", "看起來沒問題"), CancellationToken.None);
-        var ok = Assert.IsType<OkObjectResult>(result.Result); var response = Assert.IsType<AgentRunSummaryResponse>(ok.Value);
-        Assert.Equal(runId, response.Id); Assert.True(service.DecideApprovalWasCalled); Assert.Equal(runId, service.LastApprovalRunId);
-        Assert.Equal("Approved", service.LastApprovalDecision); Assert.Equal("看起來沒問題", service.LastApprovalComment);
+        var runId = Guid.NewGuid(); var approvalId = Guid.NewGuid(); var requestId = Guid.NewGuid();
+        var approval = new FakeAgentApprovalService
+        {
+            Response = BuildApproval(approvalId, runId, AgentApprovalStatuses.Approved, requestId)
+        };
+        var controller = new AgentRunsController(new FakeAgentRunService(), new FakeCurrentUserContext(), approval);
+
+        var result = await controller.Approve(runId, approvalId, new DecideAgentApprovalRequest(requestId, "看起來沒問題"), CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result); var response = Assert.IsType<AgentApprovalResponse>(ok.Value);
+        Assert.Equal(approvalId, response.Id); Assert.True(approval.ApproveWasCalled); Assert.Equal("看起來沒問題", approval.LastRequest?.Comment);
     }
 
     [Fact]
-    public async Task DecideApproval_RunNotFound_ReturnsNotFound()
+    public async Task Approve_RunNotFound_ReturnsNotFound()
     {
-        var service = new FakeAgentRunService { ApprovalException = new AgentApprovalException("agent_run_not_found", "Agent run not found.") };
-        var controller = new AgentRunsController(service, new FakeCurrentUserContext());
-        var result = await controller.DecideApproval(Guid.NewGuid(), new ApprovalDecisionRequest("Approved", null), CancellationToken.None);
-        var notFound = Assert.IsType<NotFoundObjectResult>(result.Result);
-        Assert.Equal("agent_run_not_found", Assert.IsType<ApiError>(notFound.Value).Code);
+        var controller = new AgentRunsController(new FakeAgentRunService(), new FakeCurrentUserContext(), new FakeAgentApprovalService());
+        var result = await controller.Approve(Guid.NewGuid(), Guid.NewGuid(), new DecideAgentApprovalRequest(Guid.NewGuid()), CancellationToken.None);
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
-    public async Task DecideApproval_NotWaiting_ReturnsBadRequest()
+    public async Task Reject_AlreadyDecided_ReturnsConflict()
     {
-        var service = new FakeAgentRunService { ApprovalException = new AgentApprovalException("agent_run_not_waiting", "Only a run waiting for approval can receive a decision.") };
-        var controller = new AgentRunsController(service, new FakeCurrentUserContext());
-        var result = await controller.DecideApproval(Guid.NewGuid(), new ApprovalDecisionRequest("Approved", null), CancellationToken.None);
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
-        Assert.Equal("agent_run_not_waiting", Assert.IsType<ApiError>(badRequest.Value).Code);
+        var approval = new FakeAgentApprovalService { Exception = new AgentApprovalException("approval_already_decided", "Already decided.") };
+        var controller = new AgentRunsController(new FakeAgentRunService(), new FakeCurrentUserContext(), approval);
+        var result = await controller.Reject(Guid.NewGuid(), Guid.NewGuid(), new DecideAgentApprovalRequest(Guid.NewGuid(), "拒絕"), CancellationToken.None);
+        var conflict = Assert.IsType<ConflictObjectResult>(result.Result);
+        Assert.Equal("approval_already_decided", Assert.IsType<ApiError>(conflict.Value).Code);
+    }
+
+    private static AgentApprovalResponse BuildApproval(Guid approvalId, Guid runId, string status, Guid requestId) =>
+        new(approvalId, runId, Guid.NewGuid(), "node", "NodeType", status, "ExternalWrite", "reason",
+            DateTime.UtcNow, DateTime.UtcNow, null, Guid.NewGuid(), null, requestId);
+
+    private sealed class FakeAgentApprovalService : IAgentApprovalService
+    {
+        public AgentApprovalResponse? Response { get; init; }
+        public AgentApprovalException? Exception { get; init; }
+        public bool ApproveWasCalled { get; private set; }
+        public DecideAgentApprovalRequest? LastRequest { get; private set; }
+
+        public Task<AgentApprovalResponse?> ApproveAsync(Guid runId, Guid approvalId, Guid actorUserId, bool isAdmin, DecideAgentApprovalRequest request, CancellationToken cancellationToken = default)
+        {
+            if (Exception is not null) throw Exception;
+            ApproveWasCalled = true; LastRequest = request; return Task.FromResult(Response);
+        }
+
+        public Task<AgentApprovalResponse?> RejectAsync(Guid runId, Guid approvalId, Guid actorUserId, bool isAdmin, DecideAgentApprovalRequest request, CancellationToken cancellationToken = default)
+        {
+            if (Exception is not null) throw Exception;
+            LastRequest = request; return Task.FromResult(Response);
+        }
     }
 
     private sealed class FakeAgentRunService : IAgentRunService

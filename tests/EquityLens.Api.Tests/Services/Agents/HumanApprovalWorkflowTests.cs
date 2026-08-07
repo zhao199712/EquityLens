@@ -79,9 +79,11 @@ public sealed class HumanApprovalWorkflowTests
         Assert.Equal(AgentRunStatuses.Running, summary.Status);
         Assert.Single(queue.Messages);
         await executor.ExecuteAsync(run.Id, userId);
+        if ((await db.AgentRuns.SingleAsync(x => x.Id == run.Id)).Status == AgentRunStatuses.Running)
+            await executor.ExecuteAsync(run.Id, userId);
 
         var reloaded = await db.AgentRuns.Include(x => x.Nodes).SingleAsync(x => x.Id == run.Id);
-        Assert.Equal(AgentRunStatuses.Succeeded, reloaded.Status);
+        Assert.True(reloaded.Status == AgentRunStatuses.Succeeded, reloaded.ErrorMessage);
         var gate = reloaded.Nodes.Single(x => x.NodeKey == GateKey);
         Assert.Equal(AgentNodeStatuses.Succeeded, gate.Status);
         var board = AgentNodeJson.ParseBlackboard(reloaded.BlackboardJson);
@@ -227,6 +229,7 @@ public sealed class HumanApprovalWorkflowTests
                     ["type"] = HumanApprovalNodeTypes.WaitForHumanApproval,
                     ["required"] = true,
                     ["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = 120, ["maxRetryCount"] = 0 },
+                    ["approvalPolicy"] = new JsonObject { ["requiresHumanApproval"] = false, ["sideEffectLevel"] = "ExternalHumanInteraction", ["reason"] = "Legacy handler-driven approval fixture." },
                     ["config"] = new JsonObject { ["approvalType"] = "ApproveReject", ["prompt"] = "請審核診斷結果", ["subjectKey"] = "draft" }
                 },
                 new JsonObject
@@ -235,6 +238,7 @@ public sealed class HumanApprovalWorkflowTests
                     ["type"] = StampNodeType,
                     ["required"] = true,
                     ["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = 120, ["maxRetryCount"] = 0 },
+                    ["approvalPolicy"] = new JsonObject { ["requiresHumanApproval"] = false, ["sideEffectLevel"] = "Test", ["reason"] = "Test node." },
                     ["condition"] = new JsonObject { ["path"] = "humanApproval.decision", ["equals"] = HumanApprovalDecisions.Approved }
                 },
                 new JsonObject
@@ -243,6 +247,7 @@ public sealed class HumanApprovalWorkflowTests
                     ["type"] = StampNodeType,
                     ["required"] = true,
                     ["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = 120, ["maxRetryCount"] = 0 },
+                    ["approvalPolicy"] = new JsonObject { ["requiresHumanApproval"] = false, ["sideEffectLevel"] = "Test", ["reason"] = "Test node." },
                     ["condition"] = new JsonObject { ["path"] = "humanApproval.decision", ["equals"] = HumanApprovalDecisions.Rejected }
                 }),
             ["edges"] = new JsonArray(

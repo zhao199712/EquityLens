@@ -33,21 +33,25 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
             if (unauthorized is not null)
                 throw new InvalidOperationException($"Capability '{unauthorized.Capability}' is not authorized by lead skill '{leadSkillId}'.");
         }
-        var finalizationCompleted = run.Nodes.Any(x => x.Status == AgentNodeStatuses.Succeeded && x.NodeType is (DraftRevisionNodeTypes.FinalizeRevision or EvidenceRemediationNodeTypes.Finalize or EvidenceReanalysisNodeTypes.Finalize));
+        var finalizationCompleted = run.Nodes.Any(x => x.Status == AgentNodeStatuses.Succeeded && x.NodeType is (DraftRevisionNodeTypes.FinalizeRevision or EvidenceRemediationNodeTypes.Finalize or EvidenceReanalysisNodeTypes.Finalize or PortfolioDiagnosisNodeTypes.FinalizeDiagnosis));
         if (proposal.GoalStatus == DynamicGoalStatuses.Complete && !finalizationCompleted && (review?[CriticReviewFields.RequiresRevision]?.GetValue<bool>() == true || review?[CriticReviewFields.RequiresMoreEvidence]?.GetValue<bool>() == true)) throw new InvalidOperationException("Dynamic plan cannot complete while Critic requirements remain unresolved.");
         if (proposal.GoalStatus == DynamicGoalStatuses.Continue && proposal.Actions.Count == 0) throw new InvalidOperationException("A continuing plan must contain actions.");
         var initialNodeCount = run.Nodes.Count(x => string.IsNullOrWhiteSpace(x.TemplateNodeKey));
-        var dynamicBudget = ResearchQualityReviewWorkflow.MaxDynamicNodes
-            + (run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision ? ResearchInvestigationWorkflow.MaxInitialPlanNodes : 0);
+        var dynamicBudget = run.WorkflowType switch
+        {
+            AgentWorkflowTypes.PortfolioDiagnosis => PortfolioDiagnosisWorkflow.MaxDynamicNodes,
+            AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision => ResearchQualityReviewWorkflow.MaxDynamicNodes + ResearchInvestigationWorkflow.MaxInitialPlanNodes,
+            _ => ResearchQualityReviewWorkflow.MaxDynamicNodes
+        };
         if (run.Nodes.Count + proposal.Actions.Count > initialNodeCount + dynamicBudget) throw new InvalidOperationException("Dynamic node budget exceeded.");
         var webOccurrences = run.Nodes.Count(x => x.NodeType is EvidenceRemediationNodeTypes.RetrieveWebEvidence or ResearchInvestigationNodeTypes.RetrieveWeb)
             + proposal.Actions.Count(x => x.NodeType is EvidenceRemediationNodeTypes.RetrieveWebEvidence or ResearchInvestigationNodeTypes.RetrieveWeb);
         if (webOccurrences > 1) throw new InvalidOperationException("Web retrieval budget exceeded.");
         var request = board[AgentBlackboardKeys.ResearchRequest]?.Deserialize<EquityLens.Api.Contracts.Research.ResearchAskRequest>(AgentNodeJson.SerializerOptions);
-        if (request?.SourcePolicy == EquityLens.Api.Contracts.Research.SourcePolicy.LocalOnly
+        if (request is not null && !SourcePolicyRules.AllowsWeb(request.SourcePolicy)
             && proposal.Actions.Any(x => x.NodeType is EvidenceRemediationNodeTypes.RetrieveWebEvidence or ResearchInvestigationNodeTypes.RetrieveWeb))
             throw new InvalidOperationException("Source policy LocalOnly forbids Web retrieval.");
-        if (request?.SourcePolicy == EquityLens.Api.Contracts.Research.SourcePolicy.WebOnly
+        if (request is not null && !SourcePolicyRules.AllowsLocal(request.SourcePolicy)
             && proposal.Actions.Any(x => x.NodeType is EvidenceRemediationNodeTypes.RetrieveEvidence or ResearchInvestigationNodeTypes.RetrieveLocal))
             throw new InvalidOperationException("Source policy WebOnly forbids local retrieval.");
         ValidateCapabilityRequestGate(run, proposal, board, request);
@@ -91,6 +95,7 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         topology.GetExecutionOrder(definition.ToJsonString());
         ValidateInitialResearchPlan(run, proposal, request);
         ValidateFeedbackRevisionPlan(proposal);
+        ValidatePortfolioDiagnosisPlan(run, proposal, board);
         ValidateWebPlacement(run, proposal.Actions);
         return new(proposal, proposal.Actions);
     }
@@ -111,6 +116,64 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
             var action = proposal.Actions.Single(x => x.NodeType == type);
             if (!DependsTransitivelyOn(action, previous, actions))
                 throw new InvalidOperationException($"Feedback revision node '{action.ClientNodeKey}' must depend on the preceding required stage.");
+            previous = action.ClientNodeKey;
+        }
+    }
+
+    private static void ValidatePortfolioDiagnosisPlan(AgentRun run, DynamicPlanProposal proposal, JsonObject board)
+    {
+        if (run.WorkflowType != AgentWorkflowTypes.PortfolioDiagnosis) return;
+        var allowedTypes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            PortfolioRiskMathNodeTypes.Execute,
+            PortfolioDiagnosisNodeTypes.EvaluateQuality,
+            PortfolioDiagnosisNodeTypes.BuildEvidencePacket,
+            PortfolioDiagnosisNodeTypes.DraftDiagnosis,
+            PortfolioDiagnosisNodeTypes.FinalizeDiagnosis
+        };
+        var unauthorized = proposal.Actions.FirstOrDefault(x => !allowedTypes.Contains(x.NodeType));
+        if (unauthorized is not null)
+            throw new InvalidOperationException($"Portfolio diagnosis plan cannot use node type '{unauthorized.NodeType}'.");
+        if (proposal.GoalStatus == DynamicGoalStatuses.Complete) return;
+
+        var math = proposal.Actions.Where(x => x.NodeType == PortfolioRiskMathNodeTypes.Execute).ToList();
+        var evaluators = proposal.Actions.Where(x => x.NodeType == PortfolioDiagnosisNodeTypes.EvaluateQuality).ToList();
+        var finalTypes = new[] { PortfolioDiagnosisNodeTypes.BuildEvidencePacket, PortfolioDiagnosisNodeTypes.DraftDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeDiagnosis };
+        var hasFinal = proposal.Actions.Any(x => finalTypes.Contains(x.NodeType, StringComparer.Ordinal));
+        if (math.Count > 0)
+        {
+            if (math.Count > PortfolioDiagnosisWorkflow.MaxMathCapabilitiesPerIteration)
+                throw new InvalidOperationException("Portfolio diagnosis math capability budget exceeded.");
+            var quality = board[AgentBlackboardKeys.PortfolioDiagnosisQuality]
+                ?.Deserialize<PortfolioDiagnosisQualityResult>(AgentNodeJson.SerializerOptions)
+                ?? throw new InvalidOperationException("Portfolio diagnosis quality result is missing.");
+            var expected = quality.RequiredCapabilities.Order(StringComparer.Ordinal).ToList();
+            var actual = math.Select(x => x.Capability).Order(StringComparer.Ordinal).ToList();
+            if (!actual.SequenceEqual(expected, StringComparer.Ordinal))
+                throw new InvalidOperationException("Portfolio diagnosis plan must execute exactly the capabilities required by the quality gate.");
+            if (evaluators.Count != 1 || hasFinal)
+                throw new InvalidOperationException("Portfolio diagnosis analysis plan must end with exactly one quality evaluator.");
+            var evaluator = evaluators[0];
+            if (math.Any(x => !evaluator.DependsOn.Contains(x.ClientNodeKey, StringComparer.Ordinal)))
+                throw new InvalidOperationException("Portfolio diagnosis quality evaluator must depend on every planned math node.");
+            return;
+        }
+
+        if (evaluators.Count > 0 || proposal.Actions.Count != 3)
+            throw new InvalidOperationException("Portfolio diagnosis final plan must contain exactly packet, draft, and finalization nodes.");
+        var actions = proposal.Actions.ToDictionary(x => x.ClientNodeKey, StringComparer.Ordinal);
+        var previous = run.Nodes
+            .Where(x => x.Status == AgentNodeStatuses.Succeeded && x.NodeType == PortfolioDiagnosisNodeTypes.EvaluateQuality)
+            .OrderByDescending(x => x.Iteration)
+            .ThenByDescending(x => x.CompletedAtUtc)
+            .FirstOrDefault()?.NodeKey
+            ?? throw new InvalidOperationException("Portfolio diagnosis final plan requires a completed quality gate.");
+        foreach (var type in finalTypes)
+        {
+            var action = proposal.Actions.SingleOrDefault(x => x.NodeType == type)
+                ?? throw new InvalidOperationException($"Portfolio diagnosis final plan is missing '{type}'.");
+            if (!DependsTransitivelyOn(action, previous, actions))
+                throw new InvalidOperationException($"Portfolio diagnosis node '{action.ClientNodeKey}' must depend on the preceding finalization stage.");
             previous = action.ClientNodeKey;
         }
     }
@@ -176,7 +239,7 @@ public sealed class DynamicPlanValidator(INodeCapabilityRegistry capabilities, I
         var permittedCount = required.Length + webCount;
         if (proposal.Actions.Count != permittedCount)
             throw new InvalidOperationException("Capability request continuation contains an unauthorized node.");
-        if (request?.SourcePolicy == EquityLens.Api.Contracts.Research.SourcePolicy.LocalOnly && webCount > 0)
+        if (request is not null && !SourcePolicyRules.AllowsWeb(request.SourcePolicy) && webCount > 0)
             throw new InvalidOperationException("Source policy LocalOnly forbids Web retrieval.");
         var actions = proposal.Actions.ToDictionary(x => x.ClientNodeKey, StringComparer.Ordinal);
         var ordered = webCount == 1 ? new[] { ResearchInvestigationNodeTypes.RetrieveWeb }.Concat(required) : required;

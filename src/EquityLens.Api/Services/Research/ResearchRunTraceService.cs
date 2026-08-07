@@ -91,7 +91,8 @@ public sealed class ResearchRunTraceService : IResearchRunTraceService
             .OrderByDescending(r => r.CreatedAtUtc)
             .Take(limit)
             .Select(r => new ResearchRunSummaryDto(
-                r.Id, r.Ticker, r.Question, r.Status, r.CitationCount, r.RetrievalMode, r.LatencyMs, r.CreatedAtUtc, r.ParentResearchRunId, r.RevisionFeedbackId))
+                r.Id, r.Ticker, r.Question, r.Status, r.CitationCount, r.RetrievalMode, r.LatencyMs, r.CreatedAtUtc,
+                r.ParentResearchRunId, r.RevisionFeedbackId, r.SourcePolicy, r.DocumentType, r.TopK, r.Temperature))
             .ToListAsync(cancellationToken);
     }
 
@@ -131,7 +132,8 @@ public sealed class ResearchRunTraceService : IResearchRunTraceService
             .ToListAsync(cancellationToken);
 
         var summary = new ResearchRunSummaryDto(
-            run.Id, run.Ticker, run.Question, run.Status, run.CitationCount, run.RetrievalMode, run.LatencyMs, run.CreatedAtUtc, run.ParentResearchRunId, run.RevisionFeedbackId);
+            run.Id, run.Ticker, run.Question, run.Status, run.CitationCount, run.RetrievalMode, run.LatencyMs, run.CreatedAtUtc,
+            run.ParentResearchRunId, run.RevisionFeedbackId, run.SourcePolicy, run.DocumentType, run.TopK, run.Temperature);
 
         return new ResearchRunDetailDto(summary, run.Answer, steps, candidates, citations);
     }

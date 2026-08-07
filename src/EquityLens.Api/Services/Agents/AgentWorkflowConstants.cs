@@ -33,9 +33,11 @@ public static class DraftRevisionWorkflow
 
 public static class ResearchQualityReviewWorkflow
 {
-    public const int Version = 4;
+    public const int Version = 5;
+    public const int LoopProfileVersion = 1;
     public const int MaxRetrievalIterations = 2;
     public const int MaxDynamicNodes = 18;
+    public const int MaxWebRetrievals = 1;
 }
 
 public static class ResearchInvestigationWorkflow
@@ -87,7 +89,11 @@ public static class ResearchInvestigationNodeTypes
 
 public static class PortfolioDiagnosisWorkflow
 {
-    public const int Version = 1;
+    public const int Version = 3;
+    public const int LoopProfileVersion = 1;
+    public const int MaxAnalysisIterations = 1;
+    public const int MaxDynamicNodes = 10;
+    public const int MaxMathCapabilitiesPerIteration = 4;
 }
 
 public static class EvidenceRemediationWorkflow
@@ -156,9 +162,11 @@ public static class EvidenceRemediationNodeTypes
 public static class PortfolioDiagnosisNodeKeys
 {
     public const string LoadContext = "loadPortfolioDiagnosisContext";
+    public const string ResolveRiskEvidence = "resolvePortfolioRiskEvidence";
     public const string CalculateAttribution = "calculatePerformanceAttribution";
     public const string LoadRiskProfile = "loadRiskProfile";
     public const string PrioritizeRiskAnalyses = "prioritizeRiskAnalyses";
+    public const string EvaluateQuality = "evaluatePortfolioDiagnosisQuality";
     public const string BuildEvidencePacket = "buildPortfolioEvidencePacket";
     public const string DraftDiagnosis = "draftPortfolioDiagnosis";
     public const string ApproveDiagnosis = "approvePortfolioDiagnosis";
@@ -169,9 +177,11 @@ public static class PortfolioDiagnosisNodeKeys
 public static class PortfolioDiagnosisNodeTypes
 {
     public const string LoadContext = "LoadPortfolioDiagnosisContext";
+    public const string ResolveRiskEvidence = "ResolvePortfolioRiskEvidence";
     public const string CalculateAttribution = "CalculatePerformanceAttribution";
     public const string LoadRiskProfile = "LoadRiskProfile";
     public const string PrioritizeRiskAnalyses = "PrioritizeRiskAnalyses";
+    public const string EvaluateQuality = "EvaluatePortfolioDiagnosisQuality";
     public const string BuildEvidencePacket = "BuildPortfolioEvidencePacket";
     public const string DraftDiagnosis = "DraftPortfolioDiagnosis";
     public const string FinalizeDiagnosis = "FinalizePortfolioDiagnosis";
@@ -343,6 +353,11 @@ public static class AgentEventTypes
     public const string ApprovalApproved = "ApprovalApproved";
     public const string ApprovalRejected = "ApprovalRejected";
     public const string ApprovalCancelled = "ApprovalCancelled";
+    public const string LoopStarted = "LoopStarted";
+    public const string LoopIterationStarted = "LoopIterationStarted";
+    public const string LoopDecisionMade = "LoopDecisionMade";
+    public const string LoopIterationCompleted = "LoopIterationCompleted";
+    public const string LoopStopped = "LoopStopped";
 }
 
 public static class AgentApprovalStatuses

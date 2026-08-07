@@ -16,7 +16,7 @@ public sealed class BlackboardVersioningTests
     {
         var board = CreateBoard(methodName);
 
-        Assert.Equal(1, board["schemaVersion"]?.GetValue<int>());
+        Assert.Equal(methodName == "CreateInitialResearchQualityReviewBlackboard" ? 2 : 1, board["schemaVersion"]?.GetValue<int>());
         Assert.Equal(0, board["blackboardVersion"]?.GetValue<int>());
     }
 

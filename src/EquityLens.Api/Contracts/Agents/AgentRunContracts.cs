@@ -110,6 +110,29 @@ public sealed record SubmitAgentFeedbackResponse(
     AgentRunSummaryResponse? FollowUpAgentRun,
     Guid? FollowUpResearchRunId);
 
+public sealed record AgentLoopSummaryResponse(
+    string Status,
+    int CurrentIteration,
+    int MaxIterations,
+    string? LastAction,
+    string? StopReason,
+    int DynamicNodeCount,
+    int MaxDynamicNodes,
+    int WebRetrievalCount,
+    int MaxWebRetrievals,
+    int EvidenceCount,
+    IReadOnlyList<string> UnresolvedClaimIds,
+    string? LoopType = null,
+    string? QualityStatus = null,
+    IReadOnlyList<string>? GapCodes = null,
+    IReadOnlyList<string>? CompletedCapabilities = null,
+    string? RiskEvidenceSource = null,
+    string? RiskCacheStatus = null,
+    IReadOnlyList<string>? ReusedCapabilities = null,
+    IReadOnlyList<string>? CalculatedCapabilities = null,
+    IReadOnlyList<Guid>? SourceRiskRunIds = null,
+    IReadOnlyList<string>? RiskRunRejectionCodes = null);
+
 public sealed record AgentRunDetailResponse(
     AgentRunSummaryResponse Run,
     IReadOnlyList<AgentRunNodeResponse> Nodes,
@@ -120,4 +143,5 @@ public sealed record AgentRunDetailResponse(
     string? OutputJson,
     string WorkflowDefinitionJson,
     IReadOnlyList<AgentApprovalResponse>? Approvals = null,
-    IReadOnlyList<AgentRunPromptSnapshotResponse>? PromptSnapshots = null);
+    IReadOnlyList<AgentRunPromptSnapshotResponse>? PromptSnapshots = null,
+    AgentLoopSummaryResponse? LoopSummary = null);

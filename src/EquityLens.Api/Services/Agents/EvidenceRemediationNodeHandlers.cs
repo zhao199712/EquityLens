@@ -138,7 +138,25 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
     {
         var board = EvidenceRemediationBoard.Parse(context.Run); var plan = ResolvePlan(context.Node.InputJson, board); var ticker = board[AgentBlackboardKeys.Ticker]?.GetValue<string>() ?? string.Empty;
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievalPlan, plan);
-        var local = await EvidenceRemediationToolCall.RunAsync(context, "documentRetrieval", new { ticker, plan }, () => documents.RetrieveAsync(plan, ticker, cancellationToken), x => $"{x.Count} local candidates", cancellationToken);
+        IReadOnlyList<RetrievedDocumentChunk> local;
+        string? localFailure = null;
+        try
+        {
+            local = await EvidenceRemediationToolCall.RunAsync(context, "documentRetrieval", new { ticker, plan }, () => documents.RetrieveAsync(plan, ticker, cancellationToken), x => $"{x.Count} local candidates", cancellationToken);
+        }
+        catch (Exception exception) when (context.Run.WorkflowType == AgentWorkflowTypes.ResearchQualityReview
+            && exception is InvalidOperationException or HttpRequestException
+            && !cancellationToken.IsCancellationRequested)
+        {
+            // Retrieval availability is evidence about this iteration, not a reason for an
+            // otherwise bounded quality loop to crash. The failed tool call remains in the
+            // trace and the quality gate can now stop deterministically with NO_PROGRESS.
+            local = [];
+            localFailure = exception.Message;
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision,
+                "Local retrieval was unavailable; continuing with no new local evidence.",
+                new { providerStatus = "Unavailable", error = exception.Message, context.Node.Iteration });
+        }
         var roundEvidence = local.OrderByDescending(x => x.Result.RelevanceScore).Take(8).ToList();
         var allowWebFallback = JsonNode.Parse(context.Node.InputJson ?? "{}")?["allowWebFallback"]?.GetValue<bool>() ?? true;
         var usedWebFallback = allowWebFallback && roundEvidence.Count < MinimumLocalEvidence;
@@ -153,9 +171,9 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
         var additions = roundEvidence.Select(x => new RemediationEvidenceItem(0, x.SourceType.ToString(), x.Result.DocumentTitle, x.Result.DocumentType, x.Url ?? x.Result.SourceUrl, x.Result.Content, x.Result.RelevanceScore, x.PublishedAt, x.Query, x.SourceType == CitationSourceType.Web ? "Brave" : "Local"));
         var evidence = existing.Concat(additions).GroupBy(x => new { x.SourceType, x.Title, x.Url, x.Content }).Select(x => x.OrderByDescending(y => y.RelevanceScore).First()).Take(16).Select((x, i) => x with { Index = i + 1 }).ToList();
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievedEvidence, evidence);
-        var history = board[AgentBlackboardKeys.RetrievalHistory]?.AsArray() ?? new JsonArray(); history.Add(JsonSerializer.SerializeToNode(new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback }, AgentNodeJson.SerializerOptions)); board[AgentBlackboardKeys.RetrievalHistory] = history;
+        var history = board[AgentBlackboardKeys.RetrievalHistory]?.AsArray() ?? new JsonArray(); history.Add(JsonSerializer.SerializeToNode(new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback, localFailure }, AgentNodeJson.SerializerOptions)); board[AgentBlackboardKeys.RetrievalHistory] = history;
         var runtime = board[AgentBlackboardKeys.Runtime]?.AsObject() ?? new JsonObject(); if (usedWebFallback) runtime["webFallbackCount"] = (runtime["webFallbackCount"]?.GetValue<int>() ?? 0) + 1; board[AgentBlackboardKeys.Runtime] = runtime;
-        var output = new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback }; EvidenceRemediationBoard.Commit(context, board, output);
+        var output = new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback, localFailure, status = localFailure is null ? "Completed" : "Degraded" }; EvidenceRemediationBoard.Commit(context, board, output);
     }
 
     internal static ResearchRetrievalStrategy ResolvePlan(string? inputJson, JsonObject board)
@@ -291,6 +309,19 @@ public sealed class AssessClaimSupportNodeHandler(IEvidenceAssessor assessor) : 
         var question = board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty; var sourceAnswer = board[AgentBlackboardKeys.Answer]?.GetValue<string>() ?? string.Empty;
         var findings = board[AgentBlackboardKeys.CriticFindings]?.AsArray().Select(AgentNodeJson.ParseFinding).Where(x => x is not null).Cast<CriticFinding>().ToList() ?? [];
         context.Node.InputJson = AgentNodeJson.Serialize(new { question, answerLength = sourceAnswer.Length, claimCount = claims.Count, evidenceCount = evidence.Count, findingCount = findings.Count });
+        if (evidence.Count == 0)
+        {
+            var assessments = claims.Select(x => new ClaimSupportAssessment(
+                x.Id, "Unverifiable", [], "No evidence was retrieved for this claim.", 0,
+                "None", "No evidence is available to assess analysis impact.", "Core", "NoChange")).ToList();
+            EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.ClaimSupportAssessments, assessments);
+            var deterministic = new { assessments, agentIdentity = "DeterministicEvidenceGate", provider = "Deterministic", model = "none", promptTokens = 0, completionTokens = 0, mode = "NoEvidence" };
+            EvidenceRemediationBoard.Commit(context, board, deterministic);
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision,
+                "Evidence assessment skipped because retrieval produced no evidence.",
+                new { claimCount = claims.Count, evidenceCount = 0, mode = "Deterministic" });
+            return;
+        }
         var result = await EvidenceRemediationToolCall.RunAsync(context, "evidenceAssessorLLM", new { agentIdentity = LlmEvidenceAssessor.AgentIdentity, claimCount = claims.Count, evidenceCount = evidence.Count, promptTemplateId = LlmEvidenceAssessor.PromptTemplateId, promptVersion = LlmEvidenceAssessor.PromptVersion }, () => assessor.AssessAsync(new(question, sourceAnswer, claims, evidence, findings), cancellationToken), x => $"{x.Assessments.Count} assessments; {x.Provider}/{x.Model}; {x.PromptTokens + x.CompletionTokens} tokens; cost={x.EstimatedCostUsd?.ToString() ?? "unavailable"}", cancellationToken);
         EvidenceRemediationToolCall.RecordStructuredAttempts(context, "evidenceAssessorLLM", LlmEvidenceAssessor.AgentIdentity, LlmEvidenceAssessor.PromptTemplateId, LlmEvidenceAssessor.PromptVersion, result.Attempts);
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.ClaimSupportAssessments, result.Assessments); EvidenceRemediationBoard.Commit(context, board, result);

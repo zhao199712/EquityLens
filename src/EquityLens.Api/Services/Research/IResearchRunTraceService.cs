@@ -43,7 +43,11 @@ public sealed record ResearchRunSummaryDto(
     long LatencyMs,
     DateTime CreatedAtUtc,
     Guid? ParentResearchRunId = null,
-    Guid? RevisionFeedbackId = null);
+    Guid? RevisionFeedbackId = null,
+    string SourcePolicy = "Auto",
+    string? DocumentType = null,
+    int TopK = 8,
+    double Temperature = 0.2);
 
 public sealed record ResearchRunStepDto(
     Guid Id,

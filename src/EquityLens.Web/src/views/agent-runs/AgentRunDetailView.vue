@@ -253,6 +253,7 @@ const draftOutput = computed((): DraftRevisionOutput | null => {
 
 const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null => {
   if (!run.value || run.value.run.workflowType !== 'PortfolioDiagnosis') return null
+  if (run.value.run.status === 'Cancelled') return null
   const output = run.value.outputJson as unknown as (PortfolioDiagnosisOutput & { rejected?: boolean }) | null
   if (!output || output.rejected === true) return null
   return output
@@ -404,6 +405,31 @@ const nextActionLabel = computed(() => {
             :started-at-utc="run.run.startedAtUtc"
             :completed-at-utc="run.run.completedAtUtc"
           />
+
+          <div v-if="run.loopSummary" class="prestige-panel prestige-panel-pad result-panel" data-testid="loop-summary">
+            <h3 class="panel-title">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? 'Portfolio Diagnosis Loop' : 'Research Quality Loop' }}</h3>
+            <div class="stat-grid">
+              <div><div class="prestige-label stat-caption">狀態</div><div class="stat-value">{{ run.loopSummary.status }}</div></div>
+              <div><div class="prestige-label stat-caption">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? '補算輪次' : '檢索輪次' }}</div><div class="stat-value">{{ run.loopSummary.currentIteration }} / {{ run.loopSummary.maxIterations }}</div></div>
+              <div><div class="prestige-label stat-caption">動態節點</div><div class="stat-value">{{ run.loopSummary.dynamicNodeCount }} / {{ run.loopSummary.maxDynamicNodes }}</div></div>
+              <template v-if="run.loopSummary.loopType === 'PortfolioDiagnosis'">
+                <div><div class="prestige-label stat-caption">品質狀態</div><div class="stat-value">{{ run.loopSummary.qualityStatus ?? 'Pending' }}</div></div>
+                <div><div class="prestige-label stat-caption">Risk Cache</div><div class="stat-value">{{ run.loopSummary.riskCacheStatus ?? 'Miss' }}</div></div>
+                <div><div class="prestige-label stat-caption">重用 / 新算</div><div class="stat-value">{{ run.loopSummary.reusedCapabilities?.length ?? 0 }} / {{ run.loopSummary.calculatedCapabilities?.length ?? 0 }}</div></div>
+                <div><div class="prestige-label stat-caption">未解決缺口</div><div class="stat-value">{{ run.loopSummary.gapCodes?.length ?? 0 }}</div></div>
+              </template>
+              <template v-else>
+                <div><div class="prestige-label stat-caption">Web 檢索</div><div class="stat-value">{{ run.loopSummary.webRetrievalCount }} / {{ run.loopSummary.maxWebRetrievals }}</div></div>
+                <div><div class="prestige-label stat-caption">不同證據</div><div class="stat-value">{{ run.loopSummary.evidenceCount }}</div></div>
+                <div><div class="prestige-label stat-caption">未解決 Claims</div><div class="stat-value">{{ run.loopSummary.unresolvedClaimIds.length }}</div></div>
+              </template>
+            </div>
+            <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.gapCodes?.length" class="summary-block"><div class="prestige-label stat-caption">缺口代碼</div><div class="body-text prestige-mono">{{ run.loopSummary.gapCodes.join(', ') }}</div></div>
+            <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.sourceRiskRunIds?.length" class="summary-block"><div class="prestige-label stat-caption">重用 Risk Run</div><div class="body-text prestige-mono">{{ run.loopSummary.sourceRiskRunIds.join(', ') }}</div></div>
+            <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.riskRunRejectionCodes?.length" class="summary-block"><div class="prestige-label stat-caption">Cache 拒絕原因</div><div class="body-text prestige-mono">{{ run.loopSummary.riskRunRejectionCodes.join(', ') }}</div></div>
+            <div v-if="run.loopSummary.lastAction" class="summary-block"><div class="prestige-label stat-caption">最近決策</div><div class="body-text">{{ run.loopSummary.lastAction }}</div></div>
+            <div v-if="run.loopSummary.stopReason" class="summary-block"><div class="prestige-label stat-caption">停止原因</div><div class="body-text prestige-mono">{{ run.loopSummary.stopReason }}</div></div>
+          </div>
 
           <CapabilityRequestStatus
             :assessment="capabilityAssessment"

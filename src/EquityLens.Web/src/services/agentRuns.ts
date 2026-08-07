@@ -100,6 +100,31 @@ export interface AgentRunDetail {
   blackboardJson: Record<string, unknown>
   outputJson: Record<string, unknown> | null
   workflowDefinitionJson: Record<string, unknown>
+  loopSummary?: AgentLoopSummary | null
+}
+
+export interface AgentLoopSummary {
+  status: string
+  currentIteration: number
+  maxIterations: number
+  lastAction: string | null
+  stopReason: string | null
+  dynamicNodeCount: number
+  maxDynamicNodes: number
+  webRetrievalCount: number
+  maxWebRetrievals: number
+  evidenceCount: number
+  unresolvedClaimIds: string[]
+  loopType?: string | null
+  qualityStatus?: string | null
+  gapCodes?: string[] | null
+  completedCapabilities?: string[] | null
+  riskEvidenceSource?: string | null
+  riskCacheStatus?: string | null
+  reusedCapabilities?: string[] | null
+  calculatedCapabilities?: string[] | null
+  sourceRiskRunIds?: string[] | null
+  riskRunRejectionCodes?: string[] | null
 }
 
 export interface AgentRunPromptSnapshotDto {
@@ -127,6 +152,7 @@ interface RawAgentRunDetail {
   blackboardJson: string
   outputJson: string | null
   workflowDefinitionJson: string
+  loopSummary: AgentLoopSummary | null
 }
 
 export async function listAgentRuns(params?: {
@@ -228,6 +254,7 @@ function normalizeDetail(raw: RawAgentRunDetail): AgentRunDetail {
     blackboardJson: parseJsonObject(raw.blackboardJson) ?? {},
     outputJson: parseJsonObject(raw.outputJson),
     workflowDefinitionJson: parseJsonObject(raw.workflowDefinitionJson) ?? {},
+    loopSummary: raw.loopSummary ?? null,
   }
 }
 

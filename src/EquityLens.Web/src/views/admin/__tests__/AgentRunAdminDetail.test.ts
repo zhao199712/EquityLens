@@ -54,4 +54,18 @@ describe('AgentRunAdminDetail evidence remediation', () => {
     const button = wrapper.findAll('button').find(item => item.text().includes('重新分析')); expect(button).toBeTruthy(); await button!.trigger('click'); await flushPromises()
     expect(createEvidenceReanalysis).toHaveBeenCalledWith('remediation-1'); expect(push).toHaveBeenCalledWith({ name: 'admin-agent-run-detail', params: { id: 'reanalysis-1' } })
   })
+
+  it('顯示 ResearchQualityReview loop 預算與停止原因', async () => {
+    vi.mocked(getAgentRun).mockResolvedValue({
+      run: { id: 'quality-1', workflowType: 'ResearchQualityReview', agentType: 'CriticAgent', status: 'Succeeded', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null },
+      nodes: [], events: [], toolCalls: [], feedback: [], approvals: [], promptSnapshots: [], blackboardJson: {}, outputJson: {}, workflowDefinitionJson: {},
+      loopSummary: { status: 'Stopped', currentIteration: 1, maxIterations: 2, lastAction: 'Complete', stopReason: 'NO_PROGRESS', dynamicNodeCount: 8, maxDynamicNodes: 18, webRetrievalCount: 1, maxWebRetrievals: 1, evidenceCount: 2, unresolvedClaimIds: ['C1'] },
+    })
+
+    const wrapper = mount(AgentRunAdminDetail, { props: { runId: 'quality-1' } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="admin-loop-summary"]').text()).toContain('NO_PROGRESS')
+    expect(wrapper.get('[data-testid="admin-loop-summary"]').text()).toContain('1 / 2')
+  })
 })

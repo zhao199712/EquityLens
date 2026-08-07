@@ -23,6 +23,21 @@ public sealed record PortfolioRiskMetrics(
     decimal? LargestWeight,
     decimal? VolatilityRiskShare);
 public sealed record PortfolioDiagnosisOutput(string Summary, decimal? PortfolioReturn, decimal? BenchmarkReturn, decimal? ActiveReturn, IReadOnlyList<AttributionItem> MainDrags, IReadOnlyList<AttributionItem> MainContributors, IReadOnlyList<RiskAnalysisPriority> RecommendedAnalyses, string EvidenceStatus, PortfolioRiskMetrics RiskMetrics, string? Interpretation);
+public sealed record PortfolioDiagnosisGap(string Code, bool Resolvable, string? RequiredCapability, string Reason);
+public sealed record PortfolioDiagnosisQualityResult(
+    string Status,
+    int Iteration,
+    IReadOnlyList<PortfolioDiagnosisGap> Gaps,
+    IReadOnlyList<string> RequiredCapabilities,
+    IReadOnlyList<string> CompletedCapabilities,
+    PortfolioRiskMetrics Metrics);
+
+public static class PortfolioDiagnosisQualityStatuses
+{
+    public const string Pass = "Pass";
+    public const string NeedsAnalysis = "NeedsAnalysis";
+    public const string Limited = "Limited";
+}
 
 internal static class PortfolioRiskMetricsReader
 {
@@ -163,12 +178,92 @@ public sealed class PrioritizeRiskAnalysesNodeHandler : IAgentNodeHandler
     }
 }
 
+public sealed class EvaluatePortfolioDiagnosisQualityNodeHandler : IAgentNodeHandler
+{
+    public string NodeType => PortfolioDiagnosisNodeTypes.EvaluateQuality;
+
+    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    {
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
+        var diagnosis = PortfolioDiagnosisBlackboard.Context(board);
+        var attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution);
+        var profile = PortfolioDiagnosisBlackboard.Required<PortfolioRiskProfileSnapshot>(board, AgentBlackboardKeys.RiskProfile);
+        var metrics = PortfolioRiskMetricsReader.FromMathResults(board[AgentBlackboardKeys.MathResults]);
+        var completed = CompletedCapabilities(board[AgentBlackboardKeys.MathResults]);
+        var gaps = new List<PortfolioDiagnosisGap>();
+
+        if (attribution.CoverageStatus != "complete")
+            gaps.Add(new("ATTRIBUTION_COVERAGE_INCOMPLETE", false, null, "部分持倉缺少足夠價格，績效歸因僅為部分覆蓋。"));
+        if (!profile.Available)
+            gaps.Add(new("RISK_PROFILE_UNAVAILABLE", false, null, "風險治理快照不可用。"));
+        if (profile.Available && profile.CommonTradingDays < 120)
+            gaps.Add(new("INSUFFICIENT_HISTORY", false, null, "共同交易日少於 120 日，不執行進階統計風險分析。"));
+
+        AddBaselineMetricGap(gaps, metrics.AnnualizedVolatility, "ANNUALIZED_VOLATILITY_UNAVAILABLE", "年化波動率無法計算。");
+        AddBaselineMetricGap(gaps, metrics.MaxDrawdown, "MAX_DRAWDOWN_UNAVAILABLE", "最大回撤無法計算。");
+        AddBaselineMetricGap(gaps, metrics.ConcentrationHhi, "CONCENTRATION_UNAVAILABLE", "集中度無法計算。");
+
+        if (profile.Available && profile.CommonTradingDays >= 120)
+        {
+            Require(gaps, completed, metrics.HistoricalVaR, "calculate-historical-var", "HISTORICAL_VAR_MISSING", "HISTORICAL_VAR_UNAVAILABLE");
+            Require(gaps, completed, metrics.ExpectedShortfall, "calculate-expected-shortfall", "EXPECTED_SHORTFALL_MISSING", "EXPECTED_SHORTFALL_UNAVAILABLE");
+            if (diagnosis.HoldingCount >= 2)
+            {
+                Require(gaps, completed, metrics.PortfolioVolatility, "calculate-portfolio-volatility", "PORTFOLIO_VOLATILITY_MISSING", "PORTFOLIO_VOLATILITY_UNAVAILABLE");
+                Require(gaps, completed, metrics.VolatilityRiskShare, "calculate-volatility-risk-contribution", "RISK_CONTRIBUTION_MISSING", "RISK_CONTRIBUTION_UNAVAILABLE");
+            }
+        }
+
+        var required = gaps.Where(x => x.Resolvable && x.RequiredCapability is not null)
+            .Select(x => x.RequiredCapability!).Distinct(StringComparer.Ordinal).ToList();
+        var status = required.Count > 0
+            ? PortfolioDiagnosisQualityStatuses.NeedsAnalysis
+            : gaps.Count > 0 ? PortfolioDiagnosisQualityStatuses.Limited : PortfolioDiagnosisQualityStatuses.Pass;
+        var result = new PortfolioDiagnosisQualityResult(status, context.Node.Iteration, gaps, required, completed.Order(StringComparer.Ordinal).ToList(), metrics);
+        PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioDiagnosisQuality, result);
+        PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioDiagnosisGaps, gaps);
+        var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject ?? new JsonObject();
+        runtime["iteration"] = context.Node.Iteration;
+        runtime["qualityStatus"] = status;
+        runtime["gapFingerprint"] = string.Join('|', gaps.Select(x => x.Code).Order(StringComparer.Ordinal));
+        runtime["completedCapabilities"] = JsonSerializer.SerializeToNode(result.CompletedCapabilities, AgentNodeJson.SerializerOptions);
+        board[AgentBlackboardKeys.Runtime] = runtime;
+        context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        context.Node.InputJson = AgentNodeJson.Serialize(new { diagnosis.HoldingCount, profile.CommonTradingDays, completedCapabilities = completed.Count });
+        context.Node.OutputJson = AgentNodeJson.Serialize(result);
+        context.AddEvent(context.Run, context.Node, AgentEventTypes.SupervisorDecision,
+            $"Portfolio diagnosis quality gate: {status}.",
+            new { status, context.Node.Iteration, gapCodes = gaps.Select(x => x.Code), requiredCapabilities = required });
+        return Task.CompletedTask;
+    }
+
+    private static HashSet<string> CompletedCapabilities(JsonNode? mathResults) =>
+        (mathResults as JsonArray)?.OfType<JsonObject>()
+            .Select(x => x["operation"]?.GetValue<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Cast<string>().ToHashSet(StringComparer.Ordinal) ?? [];
+
+    private static void AddBaselineMetricGap(List<PortfolioDiagnosisGap> gaps, decimal? value, string code, string reason)
+    {
+        if (value is null) gaps.Add(new(code, false, null, reason));
+    }
+
+    private static void Require(List<PortfolioDiagnosisGap> gaps, HashSet<string> completed, decimal? value,
+        string capability, string missingCode, string unavailableCode)
+    {
+        if (!completed.Contains(capability))
+            gaps.Add(new(missingCode, true, capability, $"缺少必要分析 {capability}。"));
+        else if (value is null)
+            gaps.Add(new(unavailableCode, false, null, $"{capability} 已執行但未產生可用結果。"));
+    }
+}
+
 public sealed class BuildPortfolioEvidencePacketNodeHandler : IAgentNodeHandler
 {
     public string NodeType => PortfolioDiagnosisNodeTypes.BuildEvidencePacket;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var packet = new { context = PortfolioDiagnosisBlackboard.Context(board), attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution), riskProfile = board[AgentBlackboardKeys.RiskProfile]?.DeepClone(), priorities = PortfolioDiagnosisBlackboard.Required<List<RiskAnalysisPriority>>(board, AgentBlackboardKeys.RiskAnalysisPriorities), mathResults = board[AgentBlackboardKeys.MathResults]?.DeepClone() };
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var packet = new { context = PortfolioDiagnosisBlackboard.Context(board), attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution), riskProfile = board[AgentBlackboardKeys.RiskProfile]?.DeepClone(), riskEvidence = board[AgentBlackboardKeys.PortfolioRiskEvidence]?.DeepClone(), priorities = PortfolioDiagnosisBlackboard.Required<List<RiskAnalysisPriority>>(board, AgentBlackboardKeys.RiskAnalysisPriorities), quality = board[AgentBlackboardKeys.PortfolioDiagnosisQuality]?.DeepClone(), gaps = board[AgentBlackboardKeys.PortfolioDiagnosisGaps]?.DeepClone(), mathResults = board[AgentBlackboardKeys.MathResults]?.DeepClone() };
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioEvidencePacket, packet); context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(packet); context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Portfolio evidence packet snapshot written.", null); return Task.CompletedTask;
     }
 }

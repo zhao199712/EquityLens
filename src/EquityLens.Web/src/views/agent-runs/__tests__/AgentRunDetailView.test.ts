@@ -13,6 +13,7 @@ interface MockRun {
   approvals: unknown[]
   blackboardJson: Record<string, unknown>
   outputJson: Record<string, unknown> | null
+  loopSummary?: Record<string, unknown> | null
 }
 
 const state = {
@@ -96,6 +97,24 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
     expect(wrapper.text()).toContain('年化波動率')
     expect(wrapper.text()).toContain('38.71%')
     expect(wrapper.text()).toContain('集中度 HHI')
+  })
+
+  it('renders the bounded research quality loop summary', () => {
+    const value = diagnosisRun(null)
+    value.run.workflowType = 'ResearchQualityReview'
+    value.loopSummary = {
+      status: 'Stopped', currentIteration: 2, maxIterations: 2,
+      lastAction: 'Complete', stopReason: 'MAX_ITERATIONS',
+      dynamicNodeCount: 12, maxDynamicNodes: 18,
+      webRetrievalCount: 1, maxWebRetrievals: 1,
+      evidenceCount: 4, unresolvedClaimIds: ['C2'],
+    }
+    state.agentRun.value = value
+
+    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
+
+    expect(wrapper.get('[data-testid="loop-summary"]').text()).toContain('2 / 2')
+    expect(wrapper.get('[data-testid="loop-summary"]').text()).toContain('MAX_ITERATIONS')
   })
 
   it('hides the risk metrics section when all values are null', () => {
