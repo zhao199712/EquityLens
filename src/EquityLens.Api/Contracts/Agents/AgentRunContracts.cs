@@ -131,7 +131,11 @@ public sealed record AgentLoopSummaryResponse(
     IReadOnlyList<string>? ReusedCapabilities = null,
     IReadOnlyList<string>? CalculatedCapabilities = null,
     IReadOnlyList<Guid>? SourceRiskRunIds = null,
-    IReadOnlyList<string>? RiskRunRejectionCodes = null);
+    IReadOnlyList<string>? RiskRunRejectionCodes = null,
+    string? RiskQualityStatus = null,
+    Guid? RiskQualityEvaluationId = null,
+    Guid? RiskQualityBacktestRunId = null,
+    IReadOnlyList<string>? RiskQualityWarnings = null);
 
 public sealed record AgentRunDetailResponse(
     AgentRunSummaryResponse Run,

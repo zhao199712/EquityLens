@@ -208,6 +208,14 @@ export interface RiskCalculationRun {
   dataFactorVersion:string|null; fallbackReason:string|null; fallbackDepth:number
   createdAtUtc:string; startedAtUtc:string|null; completedAtUtc:string|null
   errorCode:string|null; errorMessage:string|null; result:unknown|null
+  qualityEvaluation:RiskQualityEvaluation|null
+}
+export interface RiskQualityEvaluation {
+  id:string; riskCalculationRunId:string; riskBacktestRunId:string
+  policyVersion:string; status:'Pending'|'Passed'|'Failed'|'InsufficientData'|'Error'
+  model:string; confidenceLevel:number; observationCount:number|null
+  kupiecPValue:number|null; christoffersenPValue:number|null; esStatus:string|null; fitHealthy:boolean|null
+  failureCodes:string[]; warningCodes:string[]; createdAtUtc:string; evaluatedAtUtc:string|null
 }
 
 export interface VtGarchConfidenceLevel { confidenceLevel:number; var:number; expectedShortfall:number }
@@ -253,6 +261,10 @@ export async function createRiskCalculation(
 }
 export async function getRiskCalculation(portfolioId:string, runId:string): Promise<RiskCalculationRun> {
   const response = await http.get<RiskCalculationRun>(`/portfolios/${portfolioId}/risk/calculations/${runId}`)
+  return response.data
+}
+export async function validateRiskCalculation(portfolioId:string, runId:string): Promise<RiskQualityEvaluation> {
+  const response = await http.post<RiskQualityEvaluation>(`/portfolios/${portfolioId}/risk/calculations/${runId}/quality-validation`)
   return response.data
 }
 export async function listRiskCalculations(portfolioId:string): Promise<RiskCalculationRun[]> {

@@ -405,7 +405,11 @@ public sealed class AgentRunService : IAgentRunService
                 riskEvidence?.ReusedCapabilities,
                 riskEvidence?.CalculatedCapabilities,
                 riskEvidence?.SourceRiskRunIds,
-                riskEvidence?.RejectedRuns.Select(x => x.Code).Distinct(StringComparer.Ordinal).ToList());
+                riskEvidence?.RejectedRuns.Select(x => x.Code).Distinct(StringComparer.Ordinal).ToList(),
+                riskEvidence?.QualityStatus,
+                riskEvidence?.QualityEvaluationId,
+                riskEvidence?.QualityBacktestRunId,
+                riskEvidence?.QualityWarnings);
         }
         var unresolved = (board[AgentBlackboardKeys.UnresolvedClaims] as JsonArray)?.Select((x, index) => x switch
         {

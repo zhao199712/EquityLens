@@ -279,6 +279,8 @@ const nodeMap = computed(() => {
         <template v-if="run.loopSummary.loopType === 'PortfolioDiagnosis'">
           <div class="detail-field"><span class="detail-field-label">Quality</span><span class="detail-field-value">{{ run.loopSummary.qualityStatus ?? 'Pending' }}</span></div>
           <div class="detail-field"><span class="detail-field-label">Risk Cache</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.riskCacheStatus ?? 'Miss' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Risk Quality</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.riskQualityStatus ?? 'Unvalidated' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Quality Warnings</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.riskQualityWarnings?.join(', ') || '—' }}</span></div>
           <div class="detail-field"><span class="detail-field-label">Reused / Calculated</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.reusedCapabilities?.length ?? 0 }} / {{ run.loopSummary.calculatedCapabilities?.length ?? 0 }}</span></div>
           <div class="detail-field"><span class="detail-field-label">Source Risk Runs</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.sourceRiskRunIds?.join(', ') || '—' }}</span></div>
           <div class="detail-field"><span class="detail-field-label">Gaps</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.gapCodes?.join(', ') || '—' }}</span></div>

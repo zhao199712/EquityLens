@@ -27,4 +27,13 @@ public sealed record RiskCalculationRunResponse(
     DateTime? CompletedAtUtc,
     string? ErrorCode,
     string? ErrorMessage,
-    JsonElement? Result);
+    JsonElement? Result,
+    RiskQualityEvaluationResponse? QualityEvaluation = null);
+
+public sealed record RiskQualityEvaluationResponse(
+    Guid Id, Guid RiskCalculationRunId, Guid RiskBacktestRunId,
+    string PolicyVersion, string Status, string Model, decimal ConfidenceLevel,
+    int? ObservationCount, decimal? KupiecPValue, decimal? ChristoffersenPValue,
+    string? EsStatus, bool? FitHealthy,
+    IReadOnlyList<string> FailureCodes, IReadOnlyList<string> WarningCodes,
+    DateTime CreatedAtUtc, DateTime? EvaluatedAtUtc);

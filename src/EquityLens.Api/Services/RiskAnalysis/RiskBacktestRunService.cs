@@ -25,6 +25,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
     private readonly IRiskShadowComparisonService _comparisonService;
     private readonly RiskPythonOptions _pythonOptions;
     private readonly ILogger<RiskBacktestRunService> _logger;
+    private readonly IRiskQualityValidationService _qualityValidation;
 
     public RiskBacktestRunService(
         EquityLensDbContext dbContext,
@@ -34,7 +35,8 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
         IRiskPythonShadowQueue shadowQueue,
         IRiskShadowComparisonService comparisonService,
         IOptions<RiskPythonOptions> pythonOptions,
-        ILogger<RiskBacktestRunService> logger)
+        ILogger<RiskBacktestRunService> logger,
+        IRiskQualityValidationService qualityValidation)
     {
         _dbContext = dbContext;
         _queue = queue;
@@ -44,6 +46,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
         _comparisonService = comparisonService;
         _pythonOptions = pythonOptions.Value;
         _logger = logger;
+        _qualityValidation = qualityValidation;
     }
 
     public async Task<Result<PortfolioRiskBacktestRunResponse>> CreateAsync(Guid portfolioId, DateOnly from, DateOnly to, Guid userId, CancellationToken cancellationToken = default)
@@ -140,6 +143,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
                 return false;
             }
 
+            var input = prepared.Value! with { Simulations = run.Simulations };
             RiskEngineComparison? comparison = null;
             if (_pythonOptions.ShadowEnabled || _pythonOptions.PrimaryEnabled)
             {
@@ -160,7 +164,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
                 try
                 {
                     var enqueued = await _shadowQueue.EnqueueAsync(
-                        comparison.Id, run.Id, prepared.Value!, cancellationToken);
+                        comparison.Id, run.Id, input, cancellationToken);
                     comparison.InputHash = enqueued.Job.InputHash;
                     comparison.Status = "Queued";
                     run.InputHash = enqueued.Job.InputHash;
@@ -187,7 +191,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
             }
 
             var stopwatch = Stopwatch.StartNew();
-            var engineResult = _riskBacktestEngine.Calculate(prepared.Value!, cancellationToken);
+            var engineResult = _riskBacktestEngine.Calculate(input, cancellationToken);
             stopwatch.Stop();
             if (comparison is not null)
                 comparison.PrimaryDurationMs = stopwatch.ElapsedMilliseconds;
@@ -223,9 +227,12 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
         }
         finally
         {
-            if (run.Status is "Completed" or "Failed")
+            var terminal = run.Status is "Completed" or "Failed";
+            if (terminal)
                 run.CompletedAtUtc = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync(CancellationToken.None);
+            if (terminal)
+                await _qualityValidation.CompleteForBacktestAsync(run.Id, CancellationToken.None);
         }
         return run.Status is "Completed" or "Running";
     }
@@ -260,6 +267,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
                     run.ErrorMessage = null;
                     run.CompletedAtUtc = DateTime.UtcNow;
                     await _dbContext.SaveChangesAsync(cancellationToken);
+                    await _qualityValidation.CompleteForBacktestAsync(run.Id, cancellationToken);
                     return;
                 }
             }
@@ -276,6 +284,7 @@ public sealed class RiskBacktestRunService : IRiskBacktestRunService
             ? "python_candidate_invalid"
             : "python_worker_failed";
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _qualityValidation.CompleteForBacktestAsync(run.Id, cancellationToken);
 
         var prepared = await _inputProvider.PreparePortfolioRiskBacktestInputAsync(
             run.PortfolioId, run.FromDate, run.ToDate, run.RequestedByUserId, cancellationToken);

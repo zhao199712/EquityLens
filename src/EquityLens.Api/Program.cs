@@ -182,6 +182,7 @@ builder.Services.AddScoped<IRiskAnalysisService>(sp => sp.GetRequiredService<Ris
 builder.Services.AddScoped<IRiskBacktestInputProvider>(sp => sp.GetRequiredService<RiskAnalysisService>());
 builder.Services.AddScoped<IRiskBacktestRunService, RiskBacktestRunService>();
 builder.Services.AddScoped<IRiskCalculationRunService, RiskCalculationRunService>();
+builder.Services.AddScoped<IRiskQualityValidationService, RiskQualityValidationService>();
 builder.Services.AddScoped<IConferenceImportService, ConferenceImportService>();
 builder.Services.AddScoped<IPdfTextExtractionService, PdfPigTextExtractionService>();
 builder.Services.AddScoped<IConferenceChunkingService, ConferenceChunkingService>();

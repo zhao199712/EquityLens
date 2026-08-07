@@ -415,6 +415,7 @@ const nextActionLabel = computed(() => {
               <template v-if="run.loopSummary.loopType === 'PortfolioDiagnosis'">
                 <div><div class="prestige-label stat-caption">品質狀態</div><div class="stat-value">{{ run.loopSummary.qualityStatus ?? 'Pending' }}</div></div>
                 <div><div class="prestige-label stat-caption">Risk Cache</div><div class="stat-value">{{ run.loopSummary.riskCacheStatus ?? 'Miss' }}</div></div>
+                <div><div class="prestige-label stat-caption">Risk Quality</div><div class="stat-value">{{ run.loopSummary.riskQualityStatus ?? 'Unvalidated' }}</div></div>
                 <div><div class="prestige-label stat-caption">重用 / 新算</div><div class="stat-value">{{ run.loopSummary.reusedCapabilities?.length ?? 0 }} / {{ run.loopSummary.calculatedCapabilities?.length ?? 0 }}</div></div>
                 <div><div class="prestige-label stat-caption">未解決缺口</div><div class="stat-value">{{ run.loopSummary.gapCodes?.length ?? 0 }}</div></div>
               </template>
@@ -427,6 +428,7 @@ const nextActionLabel = computed(() => {
             <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.gapCodes?.length" class="summary-block"><div class="prestige-label stat-caption">缺口代碼</div><div class="body-text prestige-mono">{{ run.loopSummary.gapCodes.join(', ') }}</div></div>
             <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.sourceRiskRunIds?.length" class="summary-block"><div class="prestige-label stat-caption">重用 Risk Run</div><div class="body-text prestige-mono">{{ run.loopSummary.sourceRiskRunIds.join(', ') }}</div></div>
             <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.riskRunRejectionCodes?.length" class="summary-block"><div class="prestige-label stat-caption">Cache 拒絕原因</div><div class="body-text prestige-mono">{{ run.loopSummary.riskRunRejectionCodes.join(', ') }}</div></div>
+            <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.riskQualityWarnings?.length" class="summary-block"><div class="prestige-label stat-caption">Risk Quality 警告</div><div class="body-text prestige-mono">{{ run.loopSummary.riskQualityWarnings.join(', ') }}</div></div>
             <div v-if="run.loopSummary.lastAction" class="summary-block"><div class="prestige-label stat-caption">最近決策</div><div class="body-text">{{ run.loopSummary.lastAction }}</div></div>
             <div v-if="run.loopSummary.stopReason" class="summary-block"><div class="prestige-label stat-caption">停止原因</div><div class="body-text prestige-mono">{{ run.loopSummary.stopReason }}</div></div>
           </div>

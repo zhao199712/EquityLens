@@ -19,6 +19,7 @@ public class EquityLensDbContext : DbContext
     public DbSet<RiskReportSnapshot> RiskReportSnapshots => Set<RiskReportSnapshot>();
     public DbSet<RiskBacktestRun> RiskBacktestRuns => Set<RiskBacktestRun>();
     public DbSet<RiskCalculationRun> RiskCalculationRuns => Set<RiskCalculationRun>();
+    public DbSet<RiskQualityEvaluation> RiskQualityEvaluations => Set<RiskQualityEvaluation>();
     public DbSet<RiskEngineComparison> RiskEngineComparisons => Set<RiskEngineComparison>();
 
     // Market Data

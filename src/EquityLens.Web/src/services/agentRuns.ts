@@ -125,6 +125,10 @@ export interface AgentLoopSummary {
   calculatedCapabilities?: string[] | null
   sourceRiskRunIds?: string[] | null
   riskRunRejectionCodes?: string[] | null
+  riskQualityStatus?: string | null
+  riskQualityEvaluationId?: string | null
+  riskQualityBacktestRunId?: string | null
+  riskQualityWarnings?: string[] | null
 }
 
 export interface AgentRunPromptSnapshotDto {

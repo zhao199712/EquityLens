@@ -29,7 +29,11 @@ public sealed record PortfolioRiskEvidenceSnapshot(
     IReadOnlyList<string> ReusedCapabilities,
     IReadOnlyList<string> CalculatedCapabilities,
     IReadOnlyList<PortfolioRiskRunRejection> RejectedRuns,
-    bool CoreCalculationRequired);
+    bool CoreCalculationRequired,
+    string? QualityStatus = null,
+    Guid? QualityEvaluationId = null,
+    Guid? QualityBacktestRunId = null,
+    IReadOnlyList<string>? QualityWarnings = null);
 
 public interface IPortfolioRiskRunResolver
 {
@@ -46,17 +50,25 @@ public sealed class PortfolioRiskRunResolver(
     public async Task<(PortfolioRiskEvidenceSnapshot Evidence, IReadOnlyList<JsonObject> Results)> ResolveAsync(
         PortfolioDiagnosisContext diagnosis, Guid userId, CancellationToken cancellationToken)
     {
-        var candidates = await db.RiskCalculationRuns.AsNoTracking()
+        var candidates = await db.RiskCalculationRuns.AsNoTracking().Include(x => x.QualityEvaluations)
             .Where(x => x.PortfolioId == diagnosis.PortfolioId && x.RequestedByUserId == userId
                 && x.Operation == "risk" && x.Status == "Completed" && x.ResultJson != null)
-            .OrderByDescending(x => x.CompletedAtUtc)
             .Take(10)
             .ToListAsync(cancellationToken);
+        candidates = candidates.OrderBy(x => QualityRank(x.QualityEvaluations
+                .SingleOrDefault(e => e.PolicyVersion == RiskQualityPolicy.Version)?.Status))
+            .ThenByDescending(x => x.CompletedAtUtc).ToList();
         var rejected = new List<PortfolioRiskRunRejection>();
         RiskBacktestEngineInput? currentInput = null;
 
         foreach (var run in candidates)
         {
+            var quality = run.QualityEvaluations.SingleOrDefault(x => x.PolicyVersion == RiskQualityPolicy.Version);
+            if (quality?.Status == "Failed")
+            {
+                rejected.Add(new(run.Id, "QUALITY_GATE_FAILED", "Risk Run failed the risk quality gate."));
+                continue;
+            }
             if (!TrySnapshot(run.InputSnapshotJson, out var snapshot))
             {
                 rejected.Add(new(run.Id, "INPUT_SNAPSHOT_INVALID", "Risk Run input snapshot is invalid."));
@@ -108,7 +120,9 @@ public sealed class PortfolioRiskRunResolver(
             var evidence = new PortfolioRiskEvidenceSnapshot(
                 [run.Id], PortfolioRiskEvidenceSources.PersistedRiskRun,
                 coreRequired ? "PartialHit" : "Hit", dataAsOf, run.InputHash,
-                run.AlgorithmVersion, run.DataFactorVersion, reused, [], rejected, coreRequired);
+                run.AlgorithmVersion, run.DataFactorVersion, reused, [], rejected, coreRequired,
+                quality?.Status ?? "Unvalidated", quality?.Id, quality?.RiskBacktestRunId,
+                QualityWarnings(quality));
             return (evidence, results);
         }
         return Miss(rejected, "NO_COMPATIBLE_RISK_RUN", "No compatible completed Risk Run was found.");
@@ -143,6 +157,22 @@ public sealed class PortfolioRiskRunResolver(
     }
 
     private sealed record RiskInputSnapshot(DateOnly From, DateOnly To, int Simulations = 10000);
+
+    private static int QualityRank(string? status) => status switch
+    {
+        "Passed" => 0,
+        "InsufficientData" => 1,
+        null => 2,
+        _ => 3
+    };
+
+    private static IReadOnlyList<string> QualityWarnings(RiskQualityEvaluation? evaluation)
+    {
+        var warnings = evaluation is null ? new List<string> { "QUALITY_UNVALIDATED" }
+            : JsonSerializer.Deserialize<List<string>>(evaluation.WarningCodesJson, Json) ?? [];
+        if (evaluation?.Status == "InsufficientData") warnings.Insert(0, "QUALITY_INSUFFICIENT_DATA");
+        return warnings;
+    }
 }
 
 internal static class PortfolioRiskRunResultAdapter
