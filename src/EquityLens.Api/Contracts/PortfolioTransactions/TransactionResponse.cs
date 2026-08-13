@@ -16,3 +16,7 @@ public sealed record TransactionResponse(
     decimal? NetProceeds = null,
     decimal? FifoCost = null,
     decimal? RealizedPnl = null);
+
+public sealed record TransactionCreateResult(
+    TransactionResponse Transaction,
+    bool WasIdempotentReplay);

@@ -28,13 +28,19 @@ export interface TransactionResponse {
   realizedPnl: number | null
 }
 
+export function createTransactionIdempotencyKey(): string {
+  return crypto.randomUUID()
+}
+
 export async function createTransaction(
   portfolioId: string,
   request: CreateTransactionRequest,
+  idempotencyKey: string = createTransactionIdempotencyKey(),
 ): Promise<TransactionResponse> {
   const response = await http.post<TransactionResponse>(
     `/portfolios/${portfolioId}/transactions`,
     request,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
   )
   return response.data
 }
