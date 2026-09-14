@@ -1,7 +1,7 @@
 # EquityLens Agent Guide
 
 ## Start Here
-- Root `README.md` is a TWSE filing PoC note, not the architecture source; trust executable config and `src/EquityLens.Api/Program.cs` wiring first.
+- Root `README.md` is the project overview and portfolio-facing entry point. For implementation details, trust executable config, the organized `docs/` tree, and `src/EquityLens.Api/Program.cs` wiring.
 - No `.sln` exists. Run `dotnet` against explicit `.csproj` paths.
 - Main backend: `src/EquityLens.Api` (`net10.0`, nullable, implicit usings). Main frontend: `src/EquityLens.Web` (Vue 3 + Vite + TypeScript).
 - `Kimi_Agent_*/` directories are standalone Vite prototypes, not the production web app; do not edit them unless explicitly asked.
