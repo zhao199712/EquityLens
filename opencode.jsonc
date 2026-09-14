@@ -9,7 +9,7 @@
         "PG_HOST": "localhost",
         "PG_PORT": "5433",
         "PG_USER": "equitylens",
-        "PG_PASSWORD": "equitylens",
+        "PG_PASSWORD": "{env:PG_PASSWORD}",
         "PG_DATABASE": "equitylens"
       }
     },
