@@ -2,8 +2,8 @@
 
 > 日期：2026-07-26
 > 性質：task spec（供 Codex 執行）
-> 前置：`2026-07-26-adjusted-close-pipeline-spec.md` 驗收通過（commit 0bf18d3）
-> 依據：`2026-07-26-risk-engine-validation-plan.md` Phase 5 節
+> 前置：`../data-pipeline/adjusted-close-spec.md` 驗收通過（commit 0bf18d3）
+> 依據：`../validation/risk-engine-validation-plan.md` Phase 5 節
 > 範圍：研究分支。不動 production `market_price`、不動 main、遠端 PostgreSQL 用完停回原狀。
 
 ---

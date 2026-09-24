@@ -2,7 +2,7 @@
 
 > 日期：2026-07-26
 > 性質：task spec（供 Codex 執行）
-> 前置：`2026-07-26-risk-engine-validation-plan.md` Phase 4 設計文件已完成
+> 前置：`../validation/risk-engine-validation-plan.md` Phase 4 設計文件已完成
 > 範圍：研究分支 + 資料庫新增欄位/表。不修改 raw 價格資料、不動 main、遠端 PostgreSQL 用完停回原狀。
 
 ---
@@ -100,4 +100,4 @@ Phase 5（五年回測）依規格停止，閘門原因：
 
 ## 5. 完成後
 
-回報驗收總結。Phase 5（五年回測）的 task spec 將在驗收通過後另行下達，內容依 `2026-07-26-risk-engine-validation-plan.md` Phase 5 節：五年區間、252 lookback、等權重 + 市值權重雙軌、需涵蓋 2022 升息熊市與三個既有壓力期。
+回報驗收總結。Phase 5（五年回測）的 task spec 將在驗收通過後另行下達，內容依 `../validation/risk-engine-validation-plan.md` Phase 5 節：五年區間、252 lookback、等權重 + 市值權重雙軌、需涵蓋 2022 升息熊市與三個既有壓力期。

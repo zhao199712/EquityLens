@@ -50,7 +50,6 @@ pnpm-debug.log*
 
 # Sensitive config (contains credentials)
 appsettings.json
-opencode.jsonc
 
 # IDE / OS
 .vs/
@@ -78,5 +77,6 @@ src/EquityLens.Api/exports/
 # Playwright MCP
 .playwright-mcp/
 
-# Local opencode session notes
+# Local AI coding tool state
 .opencode-sessions/
+.omo/
