@@ -11,6 +11,25 @@ public sealed record CreateEvidenceReanalysisRequest(Guid EvidenceRemediationRun
 public sealed record CreatePortfolioDiagnosisRequest(DateOnly? From = null, DateOnly? To = null);
 
 public sealed record SubmitAgentFeedbackRequest(Guid RequestId, string FeedbackType, string? Comment = null);
+public sealed record DecideAgentApprovalRequest(Guid RequestId, string? Comment = null);
+
+public sealed record AgentApprovalResponse(
+    Guid Id,
+    Guid AgentRunId,
+    Guid AgentRunNodeId,
+    string NodeKey,
+    string NodeType,
+    string Status,
+    string SideEffectLevel,
+    string Reason,
+    DateTime RequestedAtUtc,
+    DateTime? DecidedAtUtc,
+    DateTime? ConsumedAtUtc,
+    Guid? DecidedByUserId,
+    string? DecisionComment,
+    Guid? ClientRequestId);
+
+public sealed record ApprovalDecisionRequest(string Decision, string? Comment = null);
 
 public sealed record AgentRunSummaryResponse(
     Guid Id,
@@ -91,6 +110,33 @@ public sealed record SubmitAgentFeedbackResponse(
     AgentRunSummaryResponse? FollowUpAgentRun,
     Guid? FollowUpResearchRunId);
 
+public sealed record AgentLoopSummaryResponse(
+    string Status,
+    int CurrentIteration,
+    int MaxIterations,
+    string? LastAction,
+    string? StopReason,
+    int DynamicNodeCount,
+    int MaxDynamicNodes,
+    int WebRetrievalCount,
+    int MaxWebRetrievals,
+    int EvidenceCount,
+    IReadOnlyList<string> UnresolvedClaimIds,
+    string? LoopType = null,
+    string? QualityStatus = null,
+    IReadOnlyList<string>? GapCodes = null,
+    IReadOnlyList<string>? CompletedCapabilities = null,
+    string? RiskEvidenceSource = null,
+    string? RiskCacheStatus = null,
+    IReadOnlyList<string>? ReusedCapabilities = null,
+    IReadOnlyList<string>? CalculatedCapabilities = null,
+    IReadOnlyList<Guid>? SourceRiskRunIds = null,
+    IReadOnlyList<string>? RiskRunRejectionCodes = null,
+    string? RiskQualityStatus = null,
+    Guid? RiskQualityEvaluationId = null,
+    Guid? RiskQualityBacktestRunId = null,
+    IReadOnlyList<string>? RiskQualityWarnings = null);
+
 public sealed record AgentRunDetailResponse(
     AgentRunSummaryResponse Run,
     IReadOnlyList<AgentRunNodeResponse> Nodes,
@@ -99,4 +145,7 @@ public sealed record AgentRunDetailResponse(
     IReadOnlyList<AgentFeedbackResponse> Feedback,
     string BlackboardJson,
     string? OutputJson,
-    string WorkflowDefinitionJson);
+    string WorkflowDefinitionJson,
+    IReadOnlyList<AgentApprovalResponse>? Approvals = null,
+    IReadOnlyList<AgentRunPromptSnapshotResponse>? PromptSnapshots = null,
+    AgentLoopSummaryResponse? LoopSummary = null);

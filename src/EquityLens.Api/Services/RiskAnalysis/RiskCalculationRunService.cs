@@ -129,7 +129,7 @@ public sealed class RiskCalculationRunService : IRiskCalculationRunService
         Guid portfolioId, Guid runId, Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var run = await _dbContext.RiskCalculationRuns.AsNoTracking()
+        var run = await _dbContext.RiskCalculationRuns.AsNoTracking().Include(x => x.QualityEvaluations)
             .FirstOrDefaultAsync(x => x.Id == runId && x.PortfolioId == portfolioId &&
                 x.RequestedByUserId == userId, cancellationToken);
         return run is null
@@ -140,7 +140,7 @@ public sealed class RiskCalculationRunService : IRiskCalculationRunService
 
     public async Task<IReadOnlyList<RiskCalculationRunResponse>> ListAsync(
         Guid portfolioId, Guid userId, CancellationToken cancellationToken = default) =>
-        (await _dbContext.RiskCalculationRuns.AsNoTracking()
+        (await _dbContext.RiskCalculationRuns.AsNoTracking().Include(x => x.QualityEvaluations)
             .Where(x => x.PortfolioId == portfolioId && x.RequestedByUserId == userId)
             .OrderByDescending(x => x.CreatedAtUtc).Take(50)
             .ToListAsync(cancellationToken)).Select(ToResponse).ToArray();
@@ -316,7 +316,9 @@ public sealed class RiskCalculationRunService : IRiskCalculationRunService
             run.RequestedModel, run.SelectedModel, run.AlgorithmVersion, run.InputHash,
             run.DataFactorVersion, run.FallbackReason, run.FallbackDepth,
             run.CreatedAtUtc, run.StartedAtUtc, run.CompletedAtUtc,
-            run.ErrorCode, run.ErrorMessage, result);
+            run.ErrorCode, run.ErrorMessage, result,
+            run.QualityEvaluations.Where(x => x.PolicyVersion == RiskQualityPolicy.Version)
+                .OrderByDescending(x => x.CreatedAtUtc).Select(RiskQualityValidationService.ToResponse).FirstOrDefault());
     }
 
     private sealed record CalculationSnapshot(

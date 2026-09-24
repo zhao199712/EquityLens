@@ -100,10 +100,15 @@
   - [x] Research 結果支援 Helpful / NeedsCorrection 回饋
   - [x] NeedsCorrection 建立不可變 child run，由 Planner 依回饋動態組 DAG
   - [x] 父子 Agent Run / Research Run 可追溯，前端可查看版本與執行 stage
-  - [ ] 高風險工具的 Human Approval / Reject gate
+  - [x] 高風險工具的 Human Approval / Reject gate
+    - Run 擁有者與 Admin 可批准或拒絕；決策具 idempotency 與 immutable audit trace
+    - Node Catalog 支援 Catalog 預設與 Admin override，policy 會 snapshot 至每次 run
+    - Approval 後由 outbox / Redis queue 恢復；Reject 會安全取消整個 run
 
 ### 後台 / 系統能力
-- Prompt 管理
+- [ ] Prompt 管理（V3 Agent，資料模型／Admin 管理／snapshot foundation 已完成；執行 adapter 注入待收尾）
+  - Template／Draft／Published／Retired／Disabled version lifecycle、explicit usage binding、rollback 與 immutable audit log
+  - 每個新 Agent Run 凍結有效 prompt snapshot；Run detail 僅顯示收據，內容限 Admin 檢視
 - Skill Registry
 - Agent 管理
 - Tool Call Logs
@@ -159,6 +164,6 @@
 |------|------|
 | V1 | 已完成 |
 | V2 | 已完成（含 trace persistence + step tracking） |
-| V2→V3 前置 | 進行中 |
-| V3 | 下一步：Critic Agent v0 |
+| V2→V3 前置 | 已完成 |
+| V3 | 核心完成，進入品質量測、整合驗收與產品化收尾 |
 | V4 | 尚未開始 |

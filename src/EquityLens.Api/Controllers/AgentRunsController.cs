@@ -17,11 +17,14 @@ public sealed class AgentRunsController : ControllerBase
 {
     private readonly IAgentRunService _agentRunService;
     private readonly ICurrentUserContext _currentUser;
+    private readonly IAgentApprovalService? _approvalService;
+    private bool IsAdmin => HttpContext?.User?.IsInRole("Admin") == true;
 
-    public AgentRunsController(IAgentRunService agentRunService, ICurrentUserContext currentUser)
+    public AgentRunsController(IAgentRunService agentRunService, ICurrentUserContext currentUser, IAgentApprovalService? approvalService = null)
     {
         _agentRunService = agentRunService;
         _currentUser = currentUser;
+        _approvalService = approvalService;
     }
 
     [HttpPost("/api/portfolios/{portfolioId:guid}/agent-diagnoses")]
@@ -143,7 +146,7 @@ public sealed class AgentRunsController : ControllerBase
         [FromQuery] Guid? researchRunId = null,
         CancellationToken cancellationToken = default)
     {
-        var runs = await _agentRunService.ListAsync(_currentUser.UserId, limit, workflowType, status, researchRunId, cancellationToken);
+        var runs = await _agentRunService.ListAsync(IsAdmin ? null : _currentUser.UserId, limit, workflowType, status, researchRunId, cancellationToken);
         return Ok(runs);
     }
 
@@ -155,7 +158,7 @@ public sealed class AgentRunsController : ControllerBase
         Guid runId,
         CancellationToken cancellationToken = default)
     {
-        var detail = await _agentRunService.GetByIdAsync(runId, _currentUser.UserId, cancellationToken);
+        var detail = await _agentRunService.GetByIdAsync(runId, IsAdmin ? null : _currentUser.UserId, cancellationToken);
         if (detail is null) return NotFound();
         return Ok(detail);
     }
@@ -207,5 +210,36 @@ public sealed class AgentRunsController : ControllerBase
         var response = await _agentRunService.CancelAsync(runId, _currentUser.UserId, cancellationToken);
         if (response is null) return NotFound();
         return Ok(response);
+    }
+
+    [HttpPost("{runId:guid}/approvals/{approvalId:guid}/approve")]
+    public async Task<ActionResult<AgentApprovalResponse>> Approve(
+        Guid runId, Guid approvalId, DecideAgentApprovalRequest request, CancellationToken cancellationToken = default) =>
+        await DecideApproval(runId, approvalId, request, approve: true, cancellationToken);
+
+    [HttpPost("{runId:guid}/approvals/{approvalId:guid}/reject")]
+    public async Task<ActionResult<AgentApprovalResponse>> Reject(
+        Guid runId, Guid approvalId, DecideAgentApprovalRequest request, CancellationToken cancellationToken = default) =>
+        await DecideApproval(runId, approvalId, request, approve: false, cancellationToken);
+
+    private async Task<ActionResult<AgentApprovalResponse>> DecideApproval(
+        Guid runId, Guid approvalId, DecideAgentApprovalRequest request, bool approve, CancellationToken cancellationToken)
+    {
+        if (_approvalService is null) return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        try
+        {
+            var result = approve
+                ? await _approvalService.ApproveAsync(runId, approvalId, _currentUser.UserId, IsAdmin, request, cancellationToken)
+                : await _approvalService.RejectAsync(runId, approvalId, _currentUser.UserId, IsAdmin, request, cancellationToken);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (AgentApprovalException exception) when (exception.Code is "approval_already_decided" or "approval_state_conflict")
+        {
+            return Conflict(new ApiError(exception.Code, exception.Message));
+        }
+        catch (AgentApprovalException exception)
+        {
+            return BadRequest(new ApiError(exception.Code, exception.Message));
+        }
     }
 }

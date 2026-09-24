@@ -203,8 +203,20 @@ public sealed class ExecutePortfolioRiskMathNodeHandler(IPortfolioRiskMathExecut
         capabilityArguments.Remove("operations"); capabilityArguments.Remove("operation"); capabilityArguments.Remove("capability");
         if (isBatch && capabilityArguments.Count > 0)
             throw new AgentNodeException("math_batch_parameter_unknown", AgentNodeErrorCategories.ValidationFailure, "Batch math nodes accept only the operations control field.", retryable: false);
+        var completed = (board[AgentBlackboardKeys.MathResults] as JsonArray)?.OfType<JsonObject>()
+            .Select(x => x["operation"]?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x))
+            .Cast<string>().ToHashSet(StringComparer.Ordinal) ?? [];
+        if (isBatch) operations = operations.Where(x => !completed.Contains(x)).ToList();
         var results = operations.Select(operation => executor.Execute(operation, input, capabilityArguments, context.Run.Id)).ToList();
         var existing = board[AgentBlackboardKeys.MathResults] as JsonArray ?? new JsonArray(); foreach (var result in results) existing.Add(JsonSerializer.SerializeToNode(result, AgentNodeJson.SerializerOptions));
+        if (board[AgentBlackboardKeys.PortfolioRiskEvidence] is JsonObject evidence && results.Count > 0)
+        {
+            var calculated = evidence["calculatedCapabilities"] as JsonArray ?? new JsonArray();
+            foreach (var operation in results.Select(x => x.Operation).Where(x => !calculated.Any(y => y?.GetValue<string>() == x))) calculated.Add(operation);
+            evidence["calculatedCapabilities"] = calculated;
+            var reusedCount = (evidence["reusedCapabilities"] as JsonArray)?.Count ?? 0;
+            evidence["source"] = reusedCount > 0 ? PortfolioRiskEvidenceSources.Mixed : PortfolioRiskEvidenceSources.WorkflowCalculation;
+        }
         board[AgentBlackboardKeys.MathResults] = existing; context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(results);
         return Task.CompletedTask;
     }

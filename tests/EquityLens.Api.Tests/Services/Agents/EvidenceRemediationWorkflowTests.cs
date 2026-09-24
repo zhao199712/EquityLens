@@ -125,6 +125,42 @@ public sealed class EvidenceRemediationWorkflowTests
     }
 
     [Fact]
+    public async Task ResearchQualityLoop_LocalProviderUnavailable_ContinuesWithNoEvidence()
+    {
+        await using var db = CreateDb();
+        var run = new ResearchQualityReviewWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var node = new AgentRunNode
+        {
+            Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "retrieveEvidence:1",
+            TemplateNodeKey = "retrieve-primary-financial-evidence", NodeType = EvidenceRemediationNodeTypes.RetrieveEvidence,
+            Iteration = 1, Status = AgentNodeStatuses.Running,
+            InputJson = new JsonObject
+            {
+                ["allowWebFallback"] = false,
+                ["searchIntents"] = new JsonArray(new JsonObject { ["topic"] = "TSMC guidance", ["topK"] = 5 })
+            }.ToJsonString()
+        };
+        run.Nodes.Add(node);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.Ticker] = "2330";
+        board[AgentBlackboardKeys.Question] = "台積電最新財測？";
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        db.AgentRuns.Add(run);
+        await db.SaveChangesAsync();
+        var web = new FakeWebRetriever();
+
+        await new RetrieveRemediationEvidenceNodeHandler(new ThrowingDocumentRetriever(), web)
+            .ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        Assert.Empty(board[AgentBlackboardKeys.RetrievedEvidence]!.AsArray());
+        Assert.Contains("OpenAI API key", board[AgentBlackboardKeys.RetrievalHistory]![0]!["localFailure"]!.GetValue<string>());
+        Assert.Equal("Degraded", JsonNode.Parse(node.OutputJson!)!["status"]!.GetValue<string>());
+        Assert.Equal(0, web.CallCount);
+        Assert.Contains(run.ToolCalls, x => x.ToolName == "documentRetrieval" && x.Status == AgentToolCallStatuses.Failed);
+    }
+
+    [Fact]
     public async Task ExtractClaims_EmptyAgentResult_CreatesInvestigationClaim()
     {
         await using var db = CreateDb(); var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.ExtractClaims);
@@ -134,6 +170,30 @@ public sealed class EvidenceRemediationWorkflowTests
 
         var claims = EvidenceRemediationBoardForTest.Required<List<EvidenceClaim>>(AgentNodeJson.ParseBlackboard(run.BlackboardJson), AgentBlackboardKeys.ExtractedClaims);
         Assert.Equal(6, claims.Count); Assert.All(claims, claim => Assert.Equal(EvidenceClaimKinds.InvestigationClaim, claim.Kind)); Assert.Contains(claims, claim => claim.ResearchDimension == "FCF impact"); Assert.Contains(claims, claim => claim.ResearchDimension == "Shareholder returns"); Assert.DoesNotContain(claims, claim => claim.ClaimType == EvidenceClaimTypes.Answerability);
+    }
+
+    [Fact]
+    public async Task AssessSupport_NoEvidence_UsesDeterministicUnverifiableResults()
+    {
+        await using var db = CreateDb();
+        var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.AssessSupport && x.Iteration == 1);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.Question] = "台積電最新財測？";
+        board[AgentBlackboardKeys.Answer] = "資料不足。";
+        board[AgentBlackboardKeys.ExtractedClaims] = JsonSerializerNode(new[] { new EvidenceClaim("claim-1", "最新財測", []) });
+        board[AgentBlackboardKeys.RetrievedEvidence] = new JsonArray();
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var assessor = new ThrowingEvidenceAssessor();
+
+        await new AssessClaimSupportNodeHandler(assessor)
+            .ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        var results = EvidenceRemediationBoardForTest.Required<List<ClaimSupportAssessment>>(
+            AgentNodeJson.ParseBlackboard(run.BlackboardJson), AgentBlackboardKeys.ClaimSupportAssessments);
+        Assert.Equal("Unverifiable", Assert.Single(results).Status);
+        Assert.Equal(0, assessor.CallCount);
+        Assert.DoesNotContain(run.ToolCalls, x => x.ToolName == "evidenceAssessorLLM");
     }
 
     [Fact]
@@ -314,6 +374,21 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         public Task<IReadOnlyList<RetrievedDocumentChunk>> RetrieveAsync(ResearchRetrievalStrategy strategy, string ticker, CancellationToken cancellationToken = default) => Task.FromResult(results);
         public IReadOnlyList<RetrievedDocumentChunk> GetCandidatesForRerank(IReadOnlyList<RetrievedDocumentChunk> chunks, int targetCount) => chunks;
+    }
+    private sealed class ThrowingDocumentRetriever : IDocumentRetriever
+    {
+        public Task<IReadOnlyList<RetrievedDocumentChunk>> RetrieveAsync(ResearchRetrievalStrategy strategy, string ticker, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("OpenAI API key is not configured.");
+        public IReadOnlyList<RetrievedDocumentChunk> GetCandidatesForRerank(IReadOnlyList<RetrievedDocumentChunk> chunks, int targetCount) => chunks;
+    }
+    private sealed class ThrowingEvidenceAssessor : IEvidenceAssessor
+    {
+        public int CallCount { get; private set; }
+        public Task<EvidenceAssessorResult> AssessAsync(EvidenceAssessmentInput input, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            throw new InvalidOperationException("The LLM must not be called without evidence.");
+        }
     }
     private sealed class FakeWebRetriever : IWebRetriever
     {

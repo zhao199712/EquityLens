@@ -25,6 +25,8 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     private readonly IGraphMaterializer? _graphMaterializer;
     private readonly IWorkflowSkillCatalog? _skills;
     private readonly INodeCapabilityRegistry? _capabilities;
+    private readonly IAgentWorkflowAdminService? _workflowAdminService;
+    private readonly IAgentLoopController? _loopController;
 
     public AgentRunExecutor(
         EquityLensDbContext dbContext,
@@ -39,7 +41,9 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         IDynamicPlanValidator? dynamicPlanValidator = null,
         IGraphMaterializer? graphMaterializer = null,
         IWorkflowSkillCatalog? skills = null,
-        INodeCapabilityRegistry? capabilities = null)
+        INodeCapabilityRegistry? capabilities = null,
+        IAgentWorkflowAdminService? workflowAdminService = null,
+        IAgentLoopController? loopController = null)
     {
         _dbContext = dbContext;
         _topology = topology;
@@ -54,6 +58,8 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         _graphMaterializer = graphMaterializer;
         _skills = skills;
         _capabilities = capabilities;
+        _workflowAdminService = workflowAdminService;
+        _loopController = loopController;
     }
 
     public async Task ExecuteAsync(Guid runId, Guid userId, CancellationToken cancellationToken = default)
@@ -62,9 +68,10 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             .Include(x => x.Nodes)
             .Include(x => x.Events)
             .Include(x => x.ToolCalls)
+            .Include(x => x.Approvals)
             .FirstAsync(x => x.Id == runId && x.UserId == userId, cancellationToken);
 
-        if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Failed or AgentRunStatuses.Cancelled)
+        if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Failed or AgentRunStatuses.Cancelled or AgentRunStatuses.WaitingForFeedback or AgentRunStatuses.WaitingForApproval)
         {
             _logger.LogInformation(
                 "Skipping agent run {AgentRunId} because status is {Status}.",
@@ -111,7 +118,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 _runGraphValidator.Validate(run, executionOrder);
                 var nodeKey = GetNextReadyNode(run, executionOrder);
                 if (nodeKey is null) break;
-                await RunNodeAsync(run, nodeKey, cancellationToken);
+                if (!await RunNodeAsync(run, nodeKey, cancellationToken)) return;
                 lastExecutedNode = run.Nodes.Single(x => x.NodeKey == nodeKey);
                 run.OrchestrationVersion++;
                 if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped))
@@ -142,6 +149,14 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 appended = await TryAdvanceDynamicPlanAsync(run, cancellationToken);
                 if (!appended) CompleteRun(run);
             }
+            else if (run.Nodes.Any(x => x.Status == AgentNodeStatuses.WaitingForFeedback))
+            {
+                _runStateMachine.Transition(run, AgentRunStatuses.WaitingForFeedback);
+                AddEvent(run, null, AgentEventTypes.RunWaitingForFeedback, "Run paused waiting for human approval.", new { waitingNodes = run.Nodes.Count(x => x.Status == AgentNodeStatuses.WaitingForFeedback) });
+                run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
+                await SaveOrchestrationChangesAsync(false, cancellationToken);
+                return;
+            }
             else throw new InvalidOperationException("Workflow has no ready node but is not complete.");
             run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
             await SaveOrchestrationChangesAsync(appended, cancellationToken);
@@ -150,6 +165,14 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         {
             EquityLensTelemetry.MarkError(activity, exception);
             _logger.LogError(exception, "Agent run {AgentRunId} failed", runId);
+            if (run.WorkflowType is AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.PortfolioDiagnosis)
+            {
+                var reasonCode = exception is AgentLoopPlanValidationException
+                    ? AgentLoopStopReasons.PlanValidationFailed
+                    : AgentLoopStopReasons.RunFailed;
+                MarkLoopFailed(run, reasonCode, exception.Message);
+                AddEvent(run, null, AgentEventTypes.LoopStopped, $"{run.WorkflowType} loop failed: {reasonCode}.", new { reasonCode, error = exception.Message });
+            }
             if (run.Status != AgentRunStatuses.Failed)
             {
                 _runStateMachine.Transition(run, AgentRunStatuses.Failed);
@@ -163,9 +186,10 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         }
     }
 
-    private async Task RunNodeAsync(AgentRun run, string nodeKey, CancellationToken cancellationToken)
+    private async Task<bool> RunNodeAsync(AgentRun run, string nodeKey, CancellationToken cancellationToken)
     {
         var node = run.Nodes.First(x => x.NodeKey == nodeKey);
+        if (!await EnsureApprovalAsync(run, node, cancellationToken)) return false;
         using var activity = EquityLensTelemetry.ActivitySource.StartActivity("agent.node.execute");
         activity?.SetTag("agent.run.id", run.Id);
         activity?.SetTag("agent.run.node.id", node.Id);
@@ -198,7 +222,8 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(policy.TimeoutSeconds));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-            await handler.ExecuteAsync(new AgentNodeExecutionContext(_dbContext, run, node, AddEvent), linked.Token);
+            var context = new AgentNodeExecutionContext(_dbContext, run, node, AddEvent);
+            await handler.ExecuteAsync(context, linked.Token);
 
             stopwatch.Stop();
             var boardAfter = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
@@ -206,6 +231,17 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             node.ProducedBlackboardKeys = AgentNodeJson.DetectChangedKeys(boardBefore, boardAfter);
             AgentNodeJson.IncrementBlackboardVersion(boardAfter);
             run.BlackboardJson = boardAfter.ToJsonString(AgentNodeJson.SerializerOptions);
+            if (context.AwaitingApproval)
+            {
+                _nodeStateMachine.Transition(node, AgentNodeStatuses.WaitingForFeedback);
+                _runStateMachine.Transition(run, AgentRunStatuses.WaitingForFeedback);
+                run.LeaseOwner = null;
+                run.LeaseExpiresAtUtc = null;
+                node.DurationMs = stopwatch.ElapsedMilliseconds;
+                AddEvent(run, node, AgentEventTypes.ApprovalRequested, $"Node {nodeKey} paused waiting for human approval.", null);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return false;
+            }
             _nodeStateMachine.Transition(node, AgentNodeStatuses.Succeeded);
             node.CompletedAtUtc = DateTime.UtcNow;
             node.DurationMs = stopwatch.ElapsedMilliseconds;
@@ -218,7 +254,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             run.TotalEstimatedCostUsd += node.EstimatedCostUsd ?? 0;
             AddEvent(run, node, AgentEventTypes.NodeCompleted, $"Node {nodeKey} completed.", new { durationMs = node.DurationMs });
             await _dbContext.SaveChangesAsync(cancellationToken);
-            return;
+            return true;
         }
         catch (AgentNodeException ex)
         {
@@ -275,6 +311,69 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
         }
+        return true;
+    }
+
+    private async Task<bool> EnsureApprovalAsync(AgentRun run, AgentRunNode node, CancellationToken cancellationToken)
+    {
+        var policy = GetApprovalPolicy(run.WorkflowDefinitionJson, node.NodeKey, node.NodeType);
+        if (!policy.RequiresHumanApproval) return true;
+
+        var current = run.Approvals
+            .Where(x => x.AgentRunNodeId == node.Id && x.ExecutionAttempt == run.ExecutionAttempt)
+            .OrderByDescending(x => x.RequestedAtUtc)
+            .FirstOrDefault();
+        if (current?.Status == AgentApprovalStatuses.Approved)
+        {
+            current.ConsumedAtUtc ??= DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        if (current?.Status == AgentApprovalStatuses.Pending)
+        {
+            run.LeaseOwner = null;
+            run.LeaseExpiresAtUtc = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return false;
+        }
+
+        var request = new AgentApprovalRequest
+        {
+            Id = Guid.NewGuid(),
+            AgentRunId = run.Id,
+            AgentRunNodeId = node.Id,
+            NodeKey = node.NodeKey,
+            NodeType = node.NodeType,
+            Status = AgentApprovalStatuses.Pending,
+            SideEffectLevel = policy.SideEffectLevel,
+            Reason = policy.Reason,
+            PolicySnapshotJson = JsonSerializer.Serialize(policy, SerializerOptions),
+            ExecutionAttempt = run.ExecutionAttempt,
+            RequestedAtUtc = DateTime.UtcNow,
+            Run = run,
+            Node = node
+        };
+        _dbContext.AgentApprovalRequests.Add(request);
+        _nodeStateMachine.Transition(node, AgentNodeStatuses.WaitingForApproval);
+        _runStateMachine.Transition(run, AgentRunStatuses.WaitingForApproval);
+        run.LeaseOwner = null;
+        run.LeaseExpiresAtUtc = null;
+        run.OrchestrationVersion++;
+        AddEvent(run, node, AgentEventTypes.ApprovalRequested, policy.Reason, new
+        {
+            approvalId = request.Id,
+            node.NodeKey,
+            node.NodeType,
+            policy.SideEffectLevel,
+            run.ExecutionAttempt
+        });
+        EquityLensTelemetry.AgentApprovalDecisions.Add(1,
+            new KeyValuePair<string, object?>("approval.decision", "requested"),
+            new KeyValuePair<string, object?>("workflow.type", run.WorkflowType),
+            new KeyValuePair<string, object?>("node.type", node.NodeType),
+            new KeyValuePair<string, object?>("side_effect.level", policy.SideEffectLevel));
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return false;
     }
 
     private string? GetNextReadyNode(AgentRun run, IReadOnlyList<string> executionOrder)
@@ -294,7 +393,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             if (nodeDefinitions[key].TryGetProperty("condition", out var condition) && condition.ValueKind == JsonValueKind.Object)
             {
                 var path = condition.GetProperty("path").GetString()!; var expected = condition.GetProperty("equals").GetString();
-                var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); var actual = board[path]?.GetValue<string>();
+                var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson); var actual = ResolveConditionValue(board, path);
                 if (!string.Equals(actual, expected, StringComparison.Ordinal))
                 {
                     node.Status = AgentNodeStatuses.Skipped; node.CompletedAtUtc = DateTime.UtcNow;
@@ -305,6 +404,17 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             return key;
         }
         return null;
+    }
+
+    private static string? ResolveConditionValue(JsonObject board, string path)
+    {
+        JsonNode? current = board;
+        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (current is not JsonObject obj) return null;
+            current = obj[segment];
+        }
+        return current?.GetValue<string>();
     }
 
     private void CompleteRun(AgentRun run)
@@ -326,7 +436,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     private async Task<bool> TryAdvanceDynamicPlanAsync(AgentRun run, CancellationToken cancellationToken)
     {
         using var definition = JsonDocument.Parse(run.WorkflowDefinitionJson);
-        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) || definition.RootElement.TryGetProperty("orchestrationMode", out var mode) is false || mode.GetString() != "DynamicStateful") return false;
+        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision or AgentWorkflowTypes.PortfolioDiagnosis) || definition.RootElement.TryGetProperty("orchestrationMode", out var mode) is false || mode.GetString() != "DynamicStateful") return false;
         var planner = _dynamicPlanner ?? new DeterministicPlannerAdapter();
         var capabilities = _capabilities ?? new NodeCapabilityRegistry(); var skills = _skills ?? new WorkflowSkillCatalog();
         var validator = _dynamicPlanValidator ?? new DynamicPlanValidator(capabilities, _catalog ?? new AgentWorkflowCatalog(), _topology);
@@ -344,6 +454,30 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 : last?.NodeType == ResearchQualityReviewNodeTypes.FinalizeCriticReport
                     ? DynamicPlanningTriggers.CriticCompleted
                     : DynamicPlanningTriggers.BranchCompleted;
+        AgentLoopDecision? loopDecision = null;
+        if (run.WorkflowType is AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.PortfolioDiagnosis)
+        {
+            var controller = _loopController ?? new AgentLoopController([new ResearchQualityReviewLoopPolicy(), new PortfolioDiagnosisLoopPolicy()]);
+            loopDecision = controller.Evaluate(run)
+                ?? throw new InvalidOperationException("ResearchQualityReview loop policy is not registered.");
+            var decision = loopDecision;
+            if (!run.Events.Any(x => x.EventType == AgentEventTypes.LoopStarted))
+                AddEvent(run, last, AgentEventTypes.LoopStarted, $"{run.WorkflowType} loop started.", run.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis
+                    ? new { profileVersion = PortfolioDiagnosisWorkflow.LoopProfileVersion, maxIterations = PortfolioDiagnosisWorkflow.MaxAnalysisIterations, maxDynamicNodes = PortfolioDiagnosisWorkflow.MaxDynamicNodes, maxWebRetrievals = 0 }
+                    : new { profileVersion = ResearchQualityReviewWorkflow.LoopProfileVersion, maxIterations = ResearchQualityReviewWorkflow.MaxRetrievalIterations, maxDynamicNodes = ResearchQualityReviewWorkflow.MaxDynamicNodes, maxWebRetrievals = ResearchQualityReviewWorkflow.MaxWebRetrievals });
+            if (run.WorkflowType == AgentWorkflowTypes.ResearchQualityReview && last?.NodeType == EvidenceRemediationNodeTypes.Route)
+                AddEvent(run, last, AgentEventTypes.LoopIterationCompleted, $"Loop iteration {last.Iteration} completed.", new { last.Iteration, decision.EvidenceCount, decision.UnresolvedClaimIds });
+            AddEvent(run, last, AgentEventTypes.LoopDecisionMade, decision.Reason, decision);
+            if (decision.IsTerminal)
+            {
+                var completedDefinition = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
+                completedDefinition["goalStatus"] = DynamicGoalStatuses.Complete;
+                run.WorkflowDefinitionJson = completedDefinition.ToJsonString(AgentNodeJson.SerializerOptions);
+                AddEvent(run, last, AgentEventTypes.LoopStopped, $"Research quality loop stopped: {decision.ReasonCode}.", decision);
+                return false;
+            }
+            AddEvent(run, last, AgentEventTypes.LoopIterationStarted, $"Loop iteration {decision.Iteration} started.", decision);
+        }
         if (trigger == DynamicPlanningTriggers.CriticCompleted
             && (run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision)
             && AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.CriticReview]?[CriticReviewFields.RecommendedNextAction]?.GetValue<string>() == "AcceptAnswer")
@@ -368,20 +502,25 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             var allowed = leadSkill.Capabilities.ToHashSet(StringComparer.Ordinal);
             visibleCapabilities = capabilities.Capabilities.Where(x => allowed.Contains(x.Id)).ToList();
         }
-        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, planningBoard, run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), visibleSkills, visibleCapabilities, run.Nodes.Where(x => (x.NodeType is EvidenceRemediationNodeTypes.RetrieveEvidence or EvidenceRemediationNodeTypes.RetrieveWebEvidence) && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), dynamicNodeCount, last?.NodeKey);
+        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, trigger, planningBoard, run.Nodes.Where(x => x.Status == AgentNodeStatuses.Succeeded).Select(x => x.NodeType).ToList(), visibleSkills, visibleCapabilities, run.Nodes.Where(x => (x.NodeType is EvidenceRemediationNodeTypes.RetrieveEvidence or EvidenceRemediationNodeTypes.RetrieveWebEvidence) && x.Status == AgentNodeStatuses.Succeeded).Select(x => x.Iteration).DefaultIfEmpty(0).Max(), dynamicNodeCount, last?.NodeKey, loopDecision);
         var started = DateTime.UtcNow;
         AddEvent(run, last, AgentEventTypes.SupervisorPlanningStarted, $"Supervisor planning started for {trigger}.", new { trigger, context.OrchestrationVersion });
         var planningTimeoutSeconds = LlmAgentWorkflowPlanner.TimeoutSeconds;
-        var plannerCall = new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = run.Id, AgentRunNodeId = last?.Id, ToolName = "workflowPlannerLLM", Status = AgentToolCallStatuses.Running, ArgumentsJson = Serialize(new { trigger, promptTemplateId = LlmAgentWorkflowPlanner.PromptTemplateId, promptVersion = LlmAgentWorkflowPlanner.PromptVersion, timeoutSeconds = planningTimeoutSeconds, context.OrchestrationVersion }), StartedAtUtc = started };
-        _dbContext.AgentToolCalls.Add(plannerCall); AddEvent(run, last, AgentEventTypes.ToolCallStarted, "Tool workflowPlannerLLM started.", new { trigger, timeoutSeconds = planningTimeoutSeconds });
+        var plannerToolName = loopDecision is null ? "workflowPlannerLLM" : "loopPlanBuilder";
+        var plannerCall = new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = run.Id, AgentRunNodeId = last?.Id, ToolName = plannerToolName, Status = AgentToolCallStatuses.Running, ArgumentsJson = Serialize(new { trigger, loopDecision, promptTemplateId = loopDecision is null ? LlmAgentWorkflowPlanner.PromptTemplateId : null, promptVersion = loopDecision is null ? LlmAgentWorkflowPlanner.PromptVersion : (int?)null, timeoutSeconds = planningTimeoutSeconds, context.OrchestrationVersion }), StartedAtUtc = started };
+        _dbContext.AgentToolCalls.Add(plannerCall); AddEvent(run, last, AgentEventTypes.ToolCallStarted, $"Tool {plannerToolName} started.", new { trigger, timeoutSeconds = planningTimeoutSeconds });
         DynamicPlanProposal proposal;
         try
         {
             DynamicPlanProposal? planned = null; Exception? planningError = null;
+            if (loopDecision is not null)
+            {
+                planned = DeterministicDynamicWorkflowPlanner.Create(context);
+            }
             var completed = new ManualResetEventSlim(false);
             var plannerThread = new Thread(() =>
             {
-                try { planned = planner.PlanAsync(context, cancellationToken).GetAwaiter().GetResult(); }
+                try { planned ??= planner.PlanAsync(context, cancellationToken).GetAwaiter().GetResult(); }
                 catch (Exception exception) { planningError = exception; }
                 finally { completed.Set(); }
             }) { IsBackground = true, Name = $"workflow-planner-{run.Id:N}" };
@@ -395,11 +534,11 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             if (!completed.IsSet) proposal = DeterministicDynamicWorkflowPlanner.Create(context, $"Workflow planner exceeded the orchestrator {planningTimeoutSeconds} second deadline.");
             else if (planningError is not null) throw planningError;
             else proposal = planned ?? throw new InvalidOperationException("Workflow planner returned no proposal.");
-            plannerCall.Status = AgentToolCallStatuses.Succeeded; plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180); plannerCall.ResultJson = Serialize(proposal); plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
+            plannerCall.Status = AgentToolCallStatuses.Succeeded; plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180); plannerCall.ResultJson = Serialize(proposal); plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallCompleted, $"Tool {plannerToolName} completed.", new { plannerCall.DurationMs, proposal.Mode });
         }
         catch (Exception exception)
         {
-            plannerCall.Status = AgentToolCallStatuses.Failed; plannerCall.ErrorMessage = exception.Message; plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallFailed, "Tool workflowPlannerLLM failed.", new { error = exception.Message }); throw;
+            plannerCall.Status = AgentToolCallStatuses.Failed; plannerCall.ErrorMessage = exception.Message; plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallFailed, $"Tool {plannerToolName} failed.", new { error = exception.Message }); throw;
         }
         AddEvent(run, last, AgentEventTypes.PlannerProposed, proposal.Reason, new { proposal.ProposalId, proposal.Trigger, proposal.GoalStatus, proposal.SelectedSkills, proposal.Mode, proposal.Provider, proposal.Model, proposal.PromptTokens, proposal.CompletionTokens, proposal.FallbackReason, actions = proposal.Actions.Select(x => new { x.ClientNodeKey, x.Capability, x.NodeType }) });
         ValidatedDynamicPlan? validated = null;
@@ -411,7 +550,16 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             {
                 proposal = DeterministicDynamicWorkflowPlanner.Create(context, exception.Message, proposal.Model);
                 AddEvent(run, last, AgentEventTypes.PlannerProposed, proposal.Reason, new { proposal.ProposalId, proposal.Trigger, proposal.GoalStatus, proposal.SelectedSkills, proposal.Mode, proposal.FallbackReason, actions = proposal.Actions.Select(x => new { x.ClientNodeKey, x.Capability, x.NodeType }) });
-                validated = validator.Validate(run, proposal);
+                try
+                {
+                    validated = validator.Validate(run, proposal);
+                }
+                catch (Exception repairException)
+                {
+                    AddEvent(run, last, AgentEventTypes.PlanRejected, repairException.Message, new { proposal.ProposalId, error = repairException.Message, repairAttempt = true });
+                    if (loopDecision is null) throw;
+                    throw new AgentLoopPlanValidationException($"Dynamic plan repair failed validation: {repairException.Message}", repairException);
+                }
                 AddEvent(run, last, AgentEventTypes.PlanValidated, "Deterministic fallback plan validated.", new { proposal.ProposalId, actionCount = proposal.Actions.Count });
             }
         }
@@ -420,6 +568,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             var json = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject(); json["goalStatus"] = DynamicGoalStatuses.Complete; run.WorkflowDefinitionJson = json.ToJsonString(AgentNodeJson.SerializerOptions); return false;
         }
         materializer.Materialize(run, validated!);
+        await SnapshotMissingApprovalPoliciesAsync(run, cancellationToken);
         return true;
     }
 
@@ -489,10 +638,60 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, SerializerOptions);
 
+    private static void MarkLoopFailed(AgentRun run, string reasonCode, string message)
+    {
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject ?? new JsonObject();
+        runtime["status"] = "Failed";
+        runtime["stopReason"] = reasonCode;
+        runtime["lastReasonCode"] = reasonCode;
+        runtime["failureMessage"] = message;
+        board[AgentBlackboardKeys.Runtime] = runtime;
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+    }
+
     private AgentNodeExecutionPolicy GetPolicy(string definition, string nodeKey, string nodeType)
     {
         var node = JsonNode.Parse(definition)?["nodes"]?.AsArray().OfType<JsonObject>().SingleOrDefault(x => x["id"]?.GetValue<string>() == nodeKey);
         var policy = node?["executionPolicy"] as JsonObject;
         return policy is null ? _catalog?.GetNode(nodeType).DefaultPolicy ?? new AgentNodeExecutionPolicy(120, 0) : new(policy["timeoutSeconds"]!.GetValue<int>(), policy["maxRetryCount"]!.GetValue<int>());
     }
+
+    private ApprovalPolicySnapshot GetApprovalPolicy(string definition, string nodeKey, string nodeType)
+    {
+        var node = JsonNode.Parse(definition)?["nodes"]?.AsArray().OfType<JsonObject>().SingleOrDefault(x => x["id"]?.GetValue<string>() == nodeKey);
+        var policy = node?["approvalPolicy"] as JsonObject;
+        if (policy is not null)
+            return new ApprovalPolicySnapshot(
+                policy["requiresHumanApproval"]?.GetValue<bool>() ?? false,
+                policy["sideEffectLevel"]?.GetValue<string>() ?? "ReadOnly",
+                policy["reason"]?.GetValue<string>() ?? $"執行節點「{nodeType}」前需要人工批准。");
+        var catalogNode = _catalog?.GetNode(nodeType) ?? new AgentWorkflowCatalog().GetNode(nodeType);
+        return new ApprovalPolicySnapshot(catalogNode.Contract.RequiresHumanInput, catalogNode.SideEffectLevel, $"執行節點「{catalogNode.DisplayName}」前需要人工批准。");
+    }
+
+    private async Task SnapshotMissingApprovalPoliciesAsync(AgentRun run, CancellationToken cancellationToken)
+    {
+        var root = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
+        var nodes = root["nodes"]!.AsArray().OfType<JsonObject>().Where(x => x["approvalPolicy"] is null).ToList();
+        if (nodes.Count == 0) return;
+        var types = nodes.Select(x => x["type"]!.GetValue<string>()).Distinct(StringComparer.Ordinal).ToArray();
+        var policies = _workflowAdminService is null
+            ? types.ToDictionary(x => x, x => (_catalog ?? new AgentWorkflowCatalog()).GetNode(x).Contract.RequiresHumanInput)
+            : await _workflowAdminService.GetApprovalPoliciesAsync(types, cancellationToken);
+        foreach (var node in nodes)
+        {
+            var type = node["type"]!.GetValue<string>();
+            var catalogNode = (_catalog ?? new AgentWorkflowCatalog()).GetNode(type);
+            node["approvalPolicy"] = new JsonObject
+            {
+                ["requiresHumanApproval"] = policies[type],
+                ["sideEffectLevel"] = catalogNode.SideEffectLevel,
+                ["reason"] = $"執行節點「{catalogNode.DisplayName}」前需要人工批准。"
+            };
+        }
+        run.WorkflowDefinitionJson = root.ToJsonString(AgentNodeJson.SerializerOptions);
+    }
+
+    private sealed record ApprovalPolicySnapshot(bool RequiresHumanApproval, string SideEffectLevel, string Reason);
 }

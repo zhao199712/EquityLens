@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { http } from '../services/http'
+import { useChatStore } from './chat'
 
 interface User {
   id: string
@@ -94,6 +95,7 @@ export const useAuthStore = defineStore('auth', {
       sessionStorage.removeItem('auth_token')
       sessionStorage.removeItem('refresh_token')
       delete http.defaults.headers.common['Authorization']
+      useChatStore().clear()
     },
 
     async refreshAccessToken(): Promise<string | null> {
@@ -137,6 +139,7 @@ export const useAuthStore = defineStore('auth', {
       sessionStorage.removeItem('auth_token')
       sessionStorage.removeItem('refresh_token')
       delete http.defaults.headers.common['Authorization']
+      useChatStore().clear()
     },
 
     initializeAuth() {

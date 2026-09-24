@@ -22,8 +22,11 @@ public class AgentToolCallConfiguration : IEntityTypeConfiguration<AgentToolCall
         builder.Property(x => x.StartedAtUtc).HasColumnName("started_at_utc");
         builder.Property(x => x.CompletedAtUtc).HasColumnName("completed_at_utc");
         builder.Property(x => x.DurationMs).HasColumnName("duration_ms");
+        builder.Property(x => x.PromptSnapshotId).HasColumnName("prompt_snapshot_id");
+        builder.Property(x => x.RenderedPromptHash).HasColumnName("rendered_prompt_hash").HasMaxLength(64);
 
         builder.HasOne(x => x.Node).WithMany(n => n.ToolCalls).HasForeignKey(x => x.AgentRunNodeId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.PromptSnapshot).WithMany(x => x.ToolCalls).HasForeignKey(x => x.PromptSnapshotId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => new { x.AgentRunId, x.StartedAtUtc });
         builder.HasIndex(x => x.AgentRunNodeId);
     }

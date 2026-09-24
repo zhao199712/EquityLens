@@ -54,6 +54,7 @@ async function save() {
       description: editing.value.description,
       timeoutSeconds: editing.value.timeoutSeconds,
       maxRetryCount: editing.value.maxRetryCount,
+      requiresHumanApprovalOverride: editing.value.requiresHumanApprovalOverride,
       metadata,
     })
     rows.value = rows.value.map((row) => row.nodeType === updated.nodeType ? updated : row)
@@ -88,6 +89,7 @@ const columns: DataTableColumns<NodeAdmin> = [
     ]),
   },
   { title: 'Side effect', key: 'sideEffectLevel' },
+  { title: 'Approval', key: 'requiresHumanApproval', render: (row) => h(NTag, { type: row.requiresHumanApproval ? 'warning' : 'default' }, () => row.requiresHumanApproval ? `需要 · ${row.approvalPolicySource}` : `不需要 · ${row.approvalPolicySource}`) },
   { title: 'Policy', key: 'policy', render: (row) => `${row.timeoutSeconds}s · ${row.maxRetryCount} retries` },
   { title: '狀態', key: 'isEnabled', render: (row) => h(NTag, { type: row.isEnabled ? 'success' : 'error' }, () => row.isEnabled ? '啟用' : '停用') },
   { title: '管理', key: 'action', render: (row) => h(NButton, { size: 'small', onClick: () => edit(row) }, () => '設定') },
@@ -138,6 +140,15 @@ onMounted(load)
             <label class="nc-field">
               <span class="nc-field-label">最大重試</span>
               <input v-model.number="editing.maxRetryCount" type="number" min="0" max="5" class="prestige-input" />
+            </label>
+            <label class="nc-field nc-field-wide">
+              <span class="nc-field-label">Human Approval Gate</span>
+              <select v-model="editing.requiresHumanApprovalOverride" class="prestige-input">
+                <option :value="null">繼承 Catalog（{{ editing.contract.requiresHumanInput ? '需要批准' : '不需批准' }}）</option>
+                <option :value="true">強制需要批准</option>
+                <option :value="false">明確不需批准</option>
+              </select>
+              <span class="nc-hint">有效值：{{ editing.requiresHumanApproval ? '需要批准' : '不需批准' }}；儲存後套用於新建立的 run。</span>
             </label>
           </div>
           <NSwitch v-model:value="editing.isEnabled">

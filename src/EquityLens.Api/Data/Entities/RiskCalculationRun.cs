@@ -25,4 +25,5 @@ public sealed class RiskCalculationRun
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
     public Portfolio Portfolio { get; set; } = null!;
+    public ICollection<RiskQualityEvaluation> QualityEvaluations { get; set; } = [];
 }

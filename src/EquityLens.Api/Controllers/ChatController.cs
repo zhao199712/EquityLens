@@ -32,6 +32,16 @@ public sealed class ChatController : ControllerBase
         using var activity = EquityLensTelemetry.ActivitySource.StartActivity("chat.session.create");
 
         var userId = GetUserId();
+        var existing = await _db.ChatSessions
+            .Where(s => s.UserId == userId && !s.Messages.Any())
+            .OrderByDescending(s => s.UpdatedAtUtc)
+            .FirstOrDefaultAsync(ct);
+        if (existing is not null)
+        {
+            activity?.SetTag("chat.session_id", existing.Id);
+            return Ok(new CreateSessionResponse(existing.Id, existing.Title, existing.CreatedAtUtc, existing.UpdatedAtUtc, 0));
+        }
+
         var session = new ChatSession
         {
             UserId = userId,

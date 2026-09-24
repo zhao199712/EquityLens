@@ -3,7 +3,7 @@ name: equitylens-prod
 services:
   caddy:
     image: caddy:2.11.4-alpine
-    container_name: equitylens-caddy
+    container_name: equitylens-prod-caddy
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-80}:80"
@@ -29,7 +29,7 @@ services:
   api:
     build:
       context: ./src/EquityLens.Api
-    container_name: equitylens-api
+    container_name: equitylens-prod-api
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -69,7 +69,7 @@ services:
 
   postgres:
     image: paradedb/paradedb:0.24.1-pg18
-    container_name: equitylens-postgres
+    container_name: equitylens-prod-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-equitylens}
@@ -87,7 +87,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: equitylens-redis
+    container_name: equitylens-prod-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
@@ -103,7 +103,7 @@ services:
   mathematics:
     build:
       context: ./src/EquityLens.Mathematics
-    container_name: equitylens-mathematics
+    container_name: equitylens-prod-mathematics
     restart: unless-stopped
     environment:
       REDIS_URL: redis://redis:6379/0
@@ -127,7 +127,7 @@ services:
 
   garage:
     image: dxflrs/garage:v2.3.0
-    container_name: equitylens-garage
+    container_name: equitylens-prod-garage
     restart: unless-stopped
     command: ["/garage", "server", "--single-node", "--default-bucket"]
     environment:

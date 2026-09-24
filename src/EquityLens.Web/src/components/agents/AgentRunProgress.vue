@@ -41,6 +41,7 @@ const progressPercent = computed(() => {
   return ['Succeeded', 'Failed', 'Cancelled'].includes(props.runStatus) ? calculated : Math.min(calculated, 95)
 })
 const currentNode = computed(() => orderedNodes.value.find(node => node.status === 'Running')
+  ?? orderedNodes.value.find(node => node.status === 'WaitingForApproval')
   ?? orderedNodes.value.find(node => node.status === 'Pending'))
 const elapsed = computed(() => {
   if (!props.startedAtUtc) return '尚未開始'
@@ -54,13 +55,14 @@ const currentStageLabel = computed(() => {
   if (props.runStatus === 'Succeeded') return '已完成'
   if (props.runStatus === 'Running') return '規劃下一階段'
   if (props.runStatus === 'Pending') return '等待啟動'
+  if (props.runStatus === 'WaitingForApproval') return '等待人工批准'
   return props.runStatus
 })
 const isExternalWait = computed(() => currentNode.value?.stage === 'Retrieval' || currentNode.value?.nodeType.includes('Web'))
 
 function stageLabel(stage: string) { return stageLabels[stage] ?? stage }
 function nodeStateLabel(status: string) {
-  return status === 'Succeeded' ? '完成' : status === 'Skipped' ? '略過' : status === 'Running' ? '進行中' : status === 'Failed' ? '失敗' : '等待'
+  return status === 'Succeeded' ? '完成' : status === 'Skipped' ? '略過' : status === 'Running' ? '進行中' : status === 'WaitingForApproval' ? '待批准' : status === 'Failed' ? '失敗' : status === 'Cancelled' ? '已取消' : '等待'
 }
 </script>
 

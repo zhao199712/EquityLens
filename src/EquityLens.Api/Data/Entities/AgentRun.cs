@@ -24,11 +24,14 @@ public class AgentRun
     public int TotalInputTokens { get; set; }
     public int TotalOutputTokens { get; set; }
     public decimal TotalEstimatedCostUsd { get; set; }
+    public int ExecutionAttempt { get; set; }
 
     public ICollection<AgentRunNode> Nodes { get; set; } = [];
     public ICollection<AgentRunEvent> Events { get; set; } = [];
     public ICollection<AgentToolCall> ToolCalls { get; set; } = [];
     public ICollection<AgentFeedback> Feedback { get; set; } = [];
+    public ICollection<AgentApprovalRequest> Approvals { get; set; } = [];
+    public ICollection<AgentRunPromptSnapshot> PromptSnapshots { get; set; } = [];
     public ResearchRun? ResearchRun { get; set; }
     public AgentRun? ParentRun { get; set; }
     public ICollection<AgentRun> ChildRuns { get; set; } = [];

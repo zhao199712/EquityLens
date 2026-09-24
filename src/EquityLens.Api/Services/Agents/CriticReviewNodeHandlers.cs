@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Data.Entities;
+using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Services.Research;
 
 namespace EquityLens.Api.Services.Agents;
@@ -68,6 +69,11 @@ public sealed class LoadResearchRunNodeHandler : IAgentNodeHandler
         blackboard[AgentBlackboardKeys.Citations] = JsonSerializer.SerializeToNode(detail.Citations, AgentNodeJson.SerializerOptions);
         blackboard[AgentBlackboardKeys.Steps] = JsonSerializer.SerializeToNode(detail.Steps, AgentNodeJson.SerializerOptions);
         blackboard[AgentBlackboardKeys.Candidates] = JsonSerializer.SerializeToNode(detail.Candidates, AgentNodeJson.SerializerOptions);
+        var retrievalMode = Enum.TryParse<RetrievalMode>(detail.Run.RetrievalMode, true, out var parsedMode) ? parsedMode : (RetrievalMode?)null;
+        var sourcePolicy = Enum.TryParse<SourcePolicy>(detail.Run.SourcePolicy, true, out var parsedPolicy) ? parsedPolicy : SourcePolicy.Auto;
+        blackboard[AgentBlackboardKeys.ResearchRequest] = JsonSerializer.SerializeToNode(new ResearchAskRequest(
+            detail.Run.Ticker, detail.Run.Question, retrievalMode, detail.Run.DocumentType, sourcePolicy,
+            detail.Run.TopK, detail.Run.Temperature), AgentNodeJson.SerializerOptions);
         run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
         node.OutputJson = AgentNodeJson.Serialize(new LoadResearchRunNodeOutput(
             detail.Run.Ticker,

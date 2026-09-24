@@ -1,3 +1,4 @@
+using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.PortfolioTransactions;
 using EquityLens.Api.Services.PortfolioTransactions;
 using Microsoft.AspNetCore.Authorization;
@@ -40,13 +41,24 @@ public class PortfolioTransactionsController : ApiControllerBase
     public async Task<ActionResult<TransactionResponse>> CreateTransaction(
         Guid portfolioId,
         CreateTransactionRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        var result = await _transactionService.CreateAsync(portfolioId, request, cancellationToken);
+        var result = await _transactionService.CreateAsync(portfolioId, request, idempotencyKey, cancellationToken);
         if (!result.IsSuccess)
-            return ToActionResult(result);
+        {
+            var error = new ApiError(result.ErrorCode!, result.ErrorMessage!);
+            return result.ErrorCode!.EndsWith("not_found", StringComparison.Ordinal)
+                ? NotFound(error)
+                : result.ErrorCode.EndsWith("conflict", StringComparison.Ordinal)
+                    ? Conflict(error)
+                    : BadRequest(error);
+        }
 
-        return CreatedAtAction(nameof(GetTransactions), new { portfolioId }, result.Value);
+        if (result.Value!.WasIdempotentReplay)
+            return Ok(result.Value.Transaction);
+
+        return CreatedAtAction(nameof(GetTransactions), new { portfolioId }, result.Value.Transaction);
     }
 
     /// <summary>

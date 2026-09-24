@@ -7,10 +7,12 @@ import CapabilityRequestStatus from '../../components/agents/CapabilityRequestSt
 import {
   cancelAgentRun,
   createDraftRevision,
+  decideAgentApproval,
   retryAgentRun,
   type AgentRunNodeDto,
 } from '../../services/agentRuns'
 import { useAgentRunPolling } from '../../composables/useAgentRunPolling'
+import { renderMarkdown } from '../../utils/markdown'
 
 interface CriticFinding {
   severity: string
@@ -48,6 +50,17 @@ interface AttributionItem {
   contribution: number
 }
 
+interface PortfolioRiskMetrics {
+  annualizedVolatility?: number | null
+  maxDrawdown?: number | null
+  historicalVaR?: number | null
+  expectedShortfall?: number | null
+  portfolioVolatility?: number | null
+  concentrationHhi?: number | null
+  largestWeight?: number | null
+  volatilityRiskShare?: number | null
+}
+
 interface PortfolioDiagnosisOutput {
   summary: string
   portfolioReturn?: number | null
@@ -57,6 +70,8 @@ interface PortfolioDiagnosisOutput {
   mainContributors: AttributionItem[]
   recommendedAnalyses: Array<{ evidenceId: string; priority: number; analysis: string; reason: string }>
   evidenceStatus: string
+  riskMetrics?: PortfolioRiskMetrics | null
+  interpretation?: string | null
 }
 
 interface RoutingContext {
@@ -81,6 +96,7 @@ const router = useRouter()
 const actionLoading = ref(false)
 const activeTab = ref<'timeline' | 'nodes' | 'toolCalls' | 'feedback' | 'blackboard' | 'workflow'>('timeline')
 const debugExpanded = ref(false)
+const approvalComment = ref('')
 
 const runId = computed(() => route.params.id as string)
 const { agentRun: run, isLoading, isPolling, isTerminalStatus, error: pollError, startPolling, refresh } = useAgentRunPolling(runId)
@@ -130,6 +146,26 @@ async function handleCreateDraftRevision() {
   }
 }
 
+async function handleApproval(decision: 'approve' | 'reject') {
+  if (!run.value || !pendingApproval.value) return
+  if (decision === 'reject' && !approvalComment.value.trim()) {
+    error.value = '拒絕時必須填寫原因。'
+    return
+  }
+  if (decision === 'reject' && !window.confirm('拒絕後會取消整個 Agent Run，確定繼續？')) return
+  actionLoading.value = true
+  error.value = ''
+  try {
+    await decideAgentApproval(run.value.run.id, pendingApproval.value.id, decision, approvalComment.value)
+    approvalComment.value = ''
+  } catch {
+    error.value = 'Approval 狀態可能已變更，已重新載入最新結果。'
+  } finally {
+    refresh()
+    actionLoading.value = false
+  }
+}
+
 function formatDate(iso: string | null) {
   if (!iso) return '-'
   return new Date(iso).toLocaleString('zh-TW')
@@ -137,6 +173,10 @@ function formatDate(iso: string | null) {
 
 function formatPercent(value: number | null | undefined) {
   return value == null ? '資料不足' : new Intl.NumberFormat('zh-TW', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+}
+
+function formatHhi(value: number | null | undefined) {
+  return value == null ? '資料不足' : new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(value)
 }
 
 function statusColor(status: string) {
@@ -147,6 +187,7 @@ function statusColor(status: string) {
     case 'Cancelled': return '#9a917c'
     case 'Pending': return '#9a917c'
     case 'WaitingForFeedback': return '#c9a86a'
+    case 'WaitingForApproval': return '#c9a86a'
     case 'Skipped': return '#9a917c'
     default: return '#9a917c'
   }
@@ -191,6 +232,8 @@ const duration = computed(() => {
   return `${(ms / 1000).toFixed(1)}s`
 })
 
+const pendingApproval = computed(() => run.value?.approvals.find(item => item.status === 'Pending') ?? null)
+
 const canCreateDraftRevision = computed(() => {
   if (!run.value || run.value.run.workflowType !== 'CriticReview' || run.value.run.status !== 'Succeeded') return false
   const output = run.value.outputJson as CriticReviewOutput | null
@@ -210,7 +253,17 @@ const draftOutput = computed((): DraftRevisionOutput | null => {
 
 const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null => {
   if (!run.value || run.value.run.workflowType !== 'PortfolioDiagnosis') return null
-  return (run.value.outputJson as unknown as PortfolioDiagnosisOutput) ?? null
+  if (run.value.run.status === 'Cancelled') return null
+  const output = run.value.outputJson as unknown as (PortfolioDiagnosisOutput & { rejected?: boolean }) | null
+  if (!output || output.rejected === true) return null
+  return output
+})
+
+const riskMetrics = computed((): PortfolioRiskMetrics | null => {
+  const metrics = portfolioDiagnosisOutput.value?.riskMetrics
+  if (!metrics) return null
+  const hasAny = Object.values(metrics).some((value) => value != null)
+  return hasAny ? metrics : null
 })
 
 const routingContext = computed((): RoutingContext | null => {
@@ -280,7 +333,7 @@ const nextActionLabel = computed(() => {
             <div class="action-row">
               <button v-if="run.run.parentAgentRunId" class="prestige-btn" @click="router.push({ name: 'agent-run-detail', params: { id: run.run.parentAgentRunId } })">查看父版本</button>
               <button v-if="run.run.status === 'Failed'" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
-              <button v-if="run.run.status === 'Running' || run.run.status === 'Pending'" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
+              <button v-if="run.run.status === 'Running' || run.run.status === 'Pending' || run.run.status === 'WaitingForApproval'" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
               <button v-if="canCreateDraftRevision" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleCreateDraftRevision">產生修訂稿</button>
               <button class="prestige-btn" :disabled="actionLoading" @click="refresh">重新整理</button>
             </div>
@@ -294,7 +347,7 @@ const nextActionLabel = computed(() => {
             <div v-if="!isTerminalStatus || run.run.errorMessage" class="live-row">
               <span v-if="!isTerminalStatus" class="live-status">
                 <span class="live-dot" />
-                {{ run.run.status === 'Pending' ? '已加入背景執行佇列，正在等待執行' : '背景執行中，頁面會自動更新' }}
+                {{ run.run.status === 'Pending' ? '已加入背景執行佇列，正在等待執行' : run.run.status === 'WaitingForApproval' ? '等待人工批准，尚未執行高風險節點' : '背景執行中，頁面會自動更新' }}
               </span>
               <span v-if="run.run.errorMessage" class="run-error">{{ run.run.errorMessage }}</span>
             </div>
@@ -302,6 +355,31 @@ const nextActionLabel = computed(() => {
             <div v-if="isPolling" class="polling-row">
               <span class="live-dot live-dot-small" />
               自動重新整理中
+            </div>
+          </div>
+
+          <div v-if="pendingApproval" class="prestige-panel prestige-panel-pad approval-panel" data-testid="approval-panel">
+            <span class="prestige-label">HUMAN APPROVAL REQUIRED</span>
+            <h3>{{ pendingApproval.nodeKey }}</h3>
+            <div class="approval-meta">
+              <span class="prestige-tag">{{ pendingApproval.nodeType }}</span>
+              <span class="prestige-tag">{{ pendingApproval.sideEffectLevel }}</span>
+              <span class="prestige-mono">請求：{{ formatDate(pendingApproval.requestedAtUtc) }}</span>
+            </div>
+            <p>{{ pendingApproval.reason }}</p>
+            <textarea v-model="approvalComment" class="prestige-input approval-comment" rows="3" placeholder="批准可選填備註；拒絕必須填寫原因" />
+            <div class="action-row">
+              <button class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleApproval('approve')">批准並繼續</button>
+              <button class="prestige-btn btn-danger" :disabled="actionLoading || !approvalComment.trim()" @click="handleApproval('reject')">拒絕並取消 Run</button>
+            </div>
+          </div>
+
+          <div v-else-if="run.approvals.length" class="prestige-panel prestige-panel-pad approval-history">
+            <span class="prestige-label">APPROVAL HISTORY</span>
+            <div v-for="item in run.approvals" :key="item.id" class="approval-history-row">
+              <div><strong>{{ item.nodeKey }}</strong> · {{ item.status }}</div>
+              <div class="prestige-mono">{{ formatDate(item.decidedAtUtc) }} · {{ item.decidedByUserId ?? 'System' }}</div>
+              <p v-if="item.decisionComment">{{ item.decisionComment }}</p>
             </div>
           </div>
 
@@ -327,6 +405,33 @@ const nextActionLabel = computed(() => {
             :started-at-utc="run.run.startedAtUtc"
             :completed-at-utc="run.run.completedAtUtc"
           />
+
+          <div v-if="run.loopSummary" class="prestige-panel prestige-panel-pad result-panel" data-testid="loop-summary">
+            <h3 class="panel-title">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? 'Portfolio Diagnosis Loop' : 'Research Quality Loop' }}</h3>
+            <div class="stat-grid">
+              <div><div class="prestige-label stat-caption">狀態</div><div class="stat-value">{{ run.loopSummary.status }}</div></div>
+              <div><div class="prestige-label stat-caption">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? '補算輪次' : '檢索輪次' }}</div><div class="stat-value">{{ run.loopSummary.currentIteration }} / {{ run.loopSummary.maxIterations }}</div></div>
+              <div><div class="prestige-label stat-caption">動態節點</div><div class="stat-value">{{ run.loopSummary.dynamicNodeCount }} / {{ run.loopSummary.maxDynamicNodes }}</div></div>
+              <template v-if="run.loopSummary.loopType === 'PortfolioDiagnosis'">
+                <div><div class="prestige-label stat-caption">品質狀態</div><div class="stat-value">{{ run.loopSummary.qualityStatus ?? 'Pending' }}</div></div>
+                <div><div class="prestige-label stat-caption">Risk Cache</div><div class="stat-value">{{ run.loopSummary.riskCacheStatus ?? 'Miss' }}</div></div>
+                <div><div class="prestige-label stat-caption">Risk Quality</div><div class="stat-value">{{ run.loopSummary.riskQualityStatus ?? 'Unvalidated' }}</div></div>
+                <div><div class="prestige-label stat-caption">重用 / 新算</div><div class="stat-value">{{ run.loopSummary.reusedCapabilities?.length ?? 0 }} / {{ run.loopSummary.calculatedCapabilities?.length ?? 0 }}</div></div>
+                <div><div class="prestige-label stat-caption">未解決缺口</div><div class="stat-value">{{ run.loopSummary.gapCodes?.length ?? 0 }}</div></div>
+              </template>
+              <template v-else>
+                <div><div class="prestige-label stat-caption">Web 檢索</div><div class="stat-value">{{ run.loopSummary.webRetrievalCount }} / {{ run.loopSummary.maxWebRetrievals }}</div></div>
+                <div><div class="prestige-label stat-caption">不同證據</div><div class="stat-value">{{ run.loopSummary.evidenceCount }}</div></div>
+                <div><div class="prestige-label stat-caption">未解決 Claims</div><div class="stat-value">{{ run.loopSummary.unresolvedClaimIds.length }}</div></div>
+              </template>
+            </div>
+            <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.gapCodes?.length" class="summary-block"><div class="prestige-label stat-caption">缺口代碼</div><div class="body-text prestige-mono">{{ run.loopSummary.gapCodes.join(', ') }}</div></div>
+            <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.sourceRiskRunIds?.length" class="summary-block"><div class="prestige-label stat-caption">重用 Risk Run</div><div class="body-text prestige-mono">{{ run.loopSummary.sourceRiskRunIds.join(', ') }}</div></div>
+            <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.riskRunRejectionCodes?.length" class="summary-block"><div class="prestige-label stat-caption">Cache 拒絕原因</div><div class="body-text prestige-mono">{{ run.loopSummary.riskRunRejectionCodes.join(', ') }}</div></div>
+            <div v-if="run.loopSummary.loopType === 'PortfolioDiagnosis' && run.loopSummary.riskQualityWarnings?.length" class="summary-block"><div class="prestige-label stat-caption">Risk Quality 警告</div><div class="body-text prestige-mono">{{ run.loopSummary.riskQualityWarnings.join(', ') }}</div></div>
+            <div v-if="run.loopSummary.lastAction" class="summary-block"><div class="prestige-label stat-caption">最近決策</div><div class="body-text">{{ run.loopSummary.lastAction }}</div></div>
+            <div v-if="run.loopSummary.stopReason" class="summary-block"><div class="prestige-label stat-caption">停止原因</div><div class="body-text prestige-mono">{{ run.loopSummary.stopReason }}</div></div>
+          </div>
 
           <CapabilityRequestStatus
             :assessment="capabilityAssessment"
@@ -439,6 +544,23 @@ const nextActionLabel = computed(() => {
               <div><div class="prestige-label stat-caption">證據覆蓋</div><div class="stat-value">{{ portfolioDiagnosisOutput.evidenceStatus === 'complete' ? '完整' : '部分' }}</div></div>
             </div>
             <div class="summary-block"><div class="prestige-label stat-caption">摘要</div><div class="body-text">{{ portfolioDiagnosisOutput.summary }}</div></div>
+            <div v-if="portfolioDiagnosisOutput.interpretation" class="summary-block" style="margin-top: 18px">
+              <div class="prestige-label stat-caption">分析解讀</div>
+              <div class="body-text interpretation" v-html="renderMarkdown(portfolioDiagnosisOutput.interpretation)"></div>
+            </div>
+            <div v-if="riskMetrics" class="finding-list" style="margin-top: 18px">
+              <div class="prestige-label stat-caption">風險指標</div>
+              <div class="stat-grid">
+                <div><div class="prestige-label stat-caption">年化波動率</div><div class="stat-value">{{ formatPercent(riskMetrics.annualizedVolatility) }}</div></div>
+                <div><div class="prestige-label stat-caption">最大回撤</div><div class="stat-value" :style="{ color: (riskMetrics.maxDrawdown ?? 0) < 0 ? '#b05c5c' : undefined }">{{ formatPercent(riskMetrics.maxDrawdown) }}</div></div>
+                <div><div class="prestige-label stat-caption">歷史 VaR</div><div class="stat-value">{{ formatPercent(riskMetrics.historicalVaR) }}</div></div>
+                <div><div class="prestige-label stat-caption">預期缺口 ES</div><div class="stat-value">{{ formatPercent(riskMetrics.expectedShortfall) }}</div></div>
+                <div><div class="prestige-label stat-caption">投組波動率</div><div class="stat-value">{{ formatPercent(riskMetrics.portfolioVolatility) }}</div></div>
+                <div><div class="prestige-label stat-caption">集中度 HHI</div><div class="stat-value">{{ formatHhi(riskMetrics.concentrationHhi) }}</div></div>
+                <div><div class="prestige-label stat-caption">最大持倉權重</div><div class="stat-value">{{ formatPercent(riskMetrics.largestWeight) }}</div></div>
+                <div><div class="prestige-label stat-caption">波動風險貢獻</div><div class="stat-value">{{ formatPercent(riskMetrics.volatilityRiskShare) }}</div></div>
+              </div>
+            </div>
             <div class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">主要拖累</div>
               <div v-if="portfolioDiagnosisOutput.mainDrags.length === 0" class="body-text">資料不足，無法列出拖累來源。</div>
@@ -631,6 +753,30 @@ const nextActionLabel = computed(() => {
 .btn-danger:hover {
   border-color: var(--down);
   background: rgba(176, 92, 92, 0.08);
+}
+
+.approval-panel {
+  margin-bottom: 16px;
+  border-color: var(--gold-border);
+}
+
+.approval-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.approval-comment {
+  width: 100%;
+  margin-bottom: 12px;
+  resize: vertical;
+}
+
+.approval-actions {
+  margin-top: 4px;
 }
 
 .run-dates {
@@ -960,6 +1106,19 @@ const nextActionLabel = computed(() => {
   margin-top: 16px;
   border-color: var(--gold-border);
 }
+
+.approval-panel,
+.approval-history {
+  margin: 16px 0;
+  border-color: rgba(212, 162, 78, .55);
+}
+.approval-panel h3 { margin: 8px 0; color: var(--ivory); font-family: var(--serif); }
+.approval-panel p, .approval-history p { color: var(--muted); line-height: 1.6; }
+.approval-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; color: var(--muted); font-size: 12px; }
+.approval-comment { width: 100%; margin-bottom: 12px; resize: vertical; }
+.approval-history-row { padding: 12px 0; border-bottom: 1px solid var(--gold-border-soft); color: var(--ivory); }
+.approval-history-row:last-child { border-bottom: 0; }
+.approval-history-row .prestige-mono { margin-top: 4px; color: var(--muted); font-size: 11px; }
 
 .routing-stage h3 {
   margin: 8px 0 5px;

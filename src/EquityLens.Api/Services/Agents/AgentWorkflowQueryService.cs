@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Research;
@@ -37,7 +38,8 @@ public sealed class AgentWorkflowQueryService(
         if (string.Equals(decision.WorkflowType, AgentWorkflowTypes.PortfolioDiagnosis, StringComparison.OrdinalIgnoreCase))
         {
             var portfolioId = ResolvePortfolio(decision.PortfolioId, portfolios);
-            var created = await agentRuns.CreatePortfolioDiagnosisAsync(userId, portfolioId, null, null, decision.RoutingContext, cancellationToken);
+            var (from, to) = ResolveDiagnosisWindow(decision.RoutingContext.ContextEnvelope.Horizon, question);
+            var created = await agentRuns.CreatePortfolioDiagnosisAsync(userId, portfolioId, from, to, decision.RoutingContext, cancellationToken);
             return Response(created.Id, null, created.WorkflowType, created.Status, decision.RoutingContext);
         }
 
@@ -68,6 +70,60 @@ public sealed class AgentWorkflowQueryService(
         if (selected.HasValue && portfolios.Any(x => x.Id == selected.Value)) return selected.Value;
         throw new AgentWorkflowQueryException("portfolio_required", "問題被判定為 Portfolio Diagnosis；請在問題中寫明要診斷的投資組合名稱。");
     }
+
+    private static (DateOnly? From, DateOnly? To) ResolveDiagnosisWindow(string? horizon, string question)
+    {
+        var months = ParseHorizonMonths(horizon) ?? ParseQuestionHorizonMonths(question);
+        if (months is null) return (null, null);
+        var end = DateOnly.FromDateTime(DateTime.UtcNow);
+        return (end.AddMonths(-months.Value), end);
+    }
+
+    public static int? ParseHorizonMonths(string? horizon)
+    {
+        if (string.IsNullOrWhiteSpace(horizon)) return null;
+        var match = Regex.Match(horizon.Trim(), @"^(\d+(?:\.\d+)?)\s*(y|year|years|m|month|months|d|day|days|年|月|天|日)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success) return null;
+        var amount = decimal.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        var months = match.Groups[2].Value.ToLowerInvariant() switch
+        {
+            "y" or "year" or "years" or "年" => (int)(amount * 12m),
+            "m" or "month" or "months" or "月" => (int)amount,
+            _ => (int)(amount / 30m)
+        };
+        return Math.Clamp(months, 1, 120);
+    }
+
+    private static readonly Regex QuestionHorizonRegex = new(
+        @"(?:最近|近|過去|以來|這|此)\s*(?:(\d+(?:\.\d+)?)|([一二三四五六七八九十兩]))\s*(年|個月|季|天|日)",
+        RegexOptions.CultureInvariant);
+
+    public static int? ParseQuestionHorizonMonths(string? question)
+    {
+        if (string.IsNullOrWhiteSpace(question)) return null;
+        if (question.Contains("半年", StringComparison.Ordinal)) return 6;
+        var match = QuestionHorizonRegex.Match(question);
+        if (!match.Success) return null;
+        var amount = match.Groups[1].Success
+            ? decimal.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture)
+            : ParseChineseNumber(match.Groups[2].Value) ?? 0m;
+        if (amount <= 0) return null;
+        var months = match.Groups[3].Value switch
+        {
+            "年" => (int)(amount * 12m),
+            "個月" => (int)amount,
+            "季" => (int)(amount * 3m),
+            _ => (int)(amount / 30m)
+        };
+        return Math.Clamp(months, 1, 120);
+    }
+
+    private static decimal? ParseChineseNumber(string token) => token switch
+    {
+        "一" => 1, "二" => 2, "兩" => 2, "三" => 3, "四" => 4, "五" => 5,
+        "六" => 6, "七" => 7, "八" => 8, "九" => 9, "十" => 10,
+        _ => null
+    };
 
     private async Task<string> ResolveTickerAsync(string? securityQuery, string originalQuestion, CancellationToken cancellationToken)
     {

@@ -146,6 +146,14 @@ public sealed class ResearchQualityReviewWorkflowDefinitionProvider : IAgentWork
         ["workflowType"] = AgentWorkflowTypes.ResearchQualityReview,
         ["version"] = ResearchQualityReviewWorkflow.Version,
         ["orchestrationMode"] = "DynamicStateful",
+        ["loopProfile"] = new JsonObject
+        {
+            ["type"] = AgentWorkflowTypes.ResearchQualityReview,
+            ["version"] = ResearchQualityReviewWorkflow.LoopProfileVersion,
+            ["maxRetrievalIterations"] = ResearchQualityReviewWorkflow.MaxRetrievalIterations,
+            ["maxDynamicNodes"] = ResearchQualityReviewWorkflow.MaxDynamicNodes,
+            ["maxWebRetrievals"] = ResearchQualityReviewWorkflow.MaxWebRetrievals
+        },
         ["goalStatus"] = "PendingPlanning",
         ["planningHistory"] = new JsonArray(),
         ["nodes"] = new JsonArray

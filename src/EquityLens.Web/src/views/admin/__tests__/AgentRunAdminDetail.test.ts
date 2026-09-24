@@ -16,7 +16,7 @@ vi.mock('naive-ui', () => ({
   NTimelineItem: defineComponent({ template: '<div><slot /></div>' }),
   useMessage: () => message,
 }))
-vi.mock('../../../services/agentRuns', () => ({ getAgentRun: vi.fn(), retryAgentRun: vi.fn(), cancelAgentRun: vi.fn(), createEvidenceRemediation: vi.fn(), createEvidenceReanalysis: vi.fn() }))
+vi.mock('../../../services/agentRuns', () => ({ getAgentRun: vi.fn(), retryAgentRun: vi.fn(), cancelAgentRun: vi.fn(), createEvidenceRemediation: vi.fn(), createEvidenceReanalysis: vi.fn(), decideAgentApproval: vi.fn() }))
 
 import AgentRunAdminDetail from '../components/AgentRunAdminDetail.vue'
 import { createEvidenceRemediation, createEvidenceReanalysis, getAgentRun } from '../../../services/agentRuns'
@@ -26,7 +26,7 @@ describe('AgentRunAdminDetail evidence remediation', () => {
     vi.clearAllMocks()
     vi.mocked(getAgentRun).mockResolvedValue({
       run: { id: 'critic-1', workflowType: 'CriticReview', agentType: 'CriticAgent', status: 'Succeeded', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null },
-      nodes: [], events: [], toolCalls: [], feedback: [], blackboardJson: {}, outputJson: { requiresMoreEvidence: true }, workflowDefinitionJson: {},
+      nodes: [], events: [], toolCalls: [], feedback: [], approvals: [], blackboardJson: {}, outputJson: { requiresMoreEvidence: true }, workflowDefinitionJson: {},
     })
     vi.mocked(createEvidenceRemediation).mockResolvedValue({ id: 'remediation-1', workflowType: 'EvidenceRemediation', agentType: 'ResearchAgent', status: 'Pending', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null })
     vi.mocked(createEvidenceReanalysis).mockResolvedValue({ id: 'reanalysis-1', workflowType: 'EvidenceReanalysis', agentType: 'AnalysisAgent', status: 'Pending', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null })
@@ -48,10 +48,24 @@ describe('AgentRunAdminDetail evidence remediation', () => {
   it('只在 EvidenceRemediation 建議重新分析時建立流程並導頁', async () => {
     vi.mocked(getAgentRun).mockResolvedValue({
       run: { id: 'remediation-1', workflowType: 'EvidenceRemediation', agentType: 'ResearchAgent', status: 'Succeeded', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null },
-      nodes: [], events: [], toolCalls: [], feedback: [], blackboardJson: {}, outputJson: { requiresReanalysis: true }, workflowDefinitionJson: {},
+      nodes: [], events: [], toolCalls: [], feedback: [], approvals: [], blackboardJson: {}, outputJson: { requiresReanalysis: true }, workflowDefinitionJson: {},
     })
     const wrapper = mount(AgentRunAdminDetail, { props: { runId: 'remediation-1' } }); await flushPromises()
     const button = wrapper.findAll('button').find(item => item.text().includes('重新分析')); expect(button).toBeTruthy(); await button!.trigger('click'); await flushPromises()
     expect(createEvidenceReanalysis).toHaveBeenCalledWith('remediation-1'); expect(push).toHaveBeenCalledWith({ name: 'admin-agent-run-detail', params: { id: 'reanalysis-1' } })
+  })
+
+  it('顯示 ResearchQualityReview loop 預算與停止原因', async () => {
+    vi.mocked(getAgentRun).mockResolvedValue({
+      run: { id: 'quality-1', workflowType: 'ResearchQualityReview', agentType: 'CriticAgent', status: 'Succeeded', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null },
+      nodes: [], events: [], toolCalls: [], feedback: [], approvals: [], promptSnapshots: [], blackboardJson: {}, outputJson: {}, workflowDefinitionJson: {},
+      loopSummary: { status: 'Stopped', currentIteration: 1, maxIterations: 2, lastAction: 'Complete', stopReason: 'NO_PROGRESS', dynamicNodeCount: 8, maxDynamicNodes: 18, webRetrievalCount: 1, maxWebRetrievals: 1, evidenceCount: 2, unresolvedClaimIds: ['C1'] },
+    })
+
+    const wrapper = mount(AgentRunAdminDetail, { props: { runId: 'quality-1' } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="admin-loop-summary"]').text()).toContain('NO_PROGRESS')
+    expect(wrapper.get('[data-testid="admin-loop-summary"]').text()).toContain('1 / 2')
   })
 })

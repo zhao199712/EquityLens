@@ -32,6 +32,9 @@ const node: NodeAdmin = {
   isEnabled: true,
   timeoutSeconds: 120,
   maxRetryCount: 0,
+  requiresHumanApproval: false,
+  requiresHumanApprovalOverride: null,
+  approvalPolicySource: 'Catalog',
   metadata: { owner: 'research' },
   contract: {
     nodeType: 'loadResearchRun', version: 1, displayName: '載入研究結果', description: '載入既有 Research Run。', stage: 'Load', sideEffectLevel: 'ReadOnly',
@@ -63,7 +66,7 @@ describe('NodeCatalogManagementView', () => {
 
     const table = wrapper.findComponent({ name: 'NDataTable' })
     const columns = table.props('columns') as TableColumn[]
-    expect(columns.map((column) => column.title)).toEqual(['Node', 'Stage', 'Input / Output', 'Blackboard', 'Side effect', 'Policy', '狀態', '管理'])
+    expect(columns.map((column) => column.title)).toEqual(['Node', 'Stage', 'Input / Output', 'Blackboard', 'Side effect', 'Approval', 'Policy', '狀態', '管理'])
 
     const blackboard = columns.find((column) => column.key === 'blackboard')!.render!(node)
     expect(blackboard.props?.title).toContain('Required: researchRunId, userId, locale')
@@ -98,6 +101,7 @@ describe('NodeCatalogManagementView', () => {
       description: '載入既有 Research Run。',
       timeoutSeconds: 120,
       maxRetryCount: 0,
+      requiresHumanApprovalOverride: null,
       metadata: { owner: 'research' },
     })
     expect(message.success).toHaveBeenCalledWith('Node 設定已儲存')

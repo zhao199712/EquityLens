@@ -25,7 +25,9 @@ public abstract class ApiControllerBase : ControllerBase
         var error = new ApiError(result.ErrorCode!, result.ErrorMessage!);
         return result.ErrorCode!.EndsWith("not_found", StringComparison.Ordinal)
             ? NotFound(error)
-            : BadRequest(error);
+            : result.ErrorCode.EndsWith("conflict", StringComparison.Ordinal)
+                ? Conflict(error)
+                : BadRequest(error);
     }
 
     /// <summary>
@@ -40,6 +42,9 @@ public abstract class ApiControllerBase : ControllerBase
         var error = new ApiError(result.ErrorCode!, result.ErrorMessage!);
         return result.ErrorCode!.EndsWith("not_found", StringComparison.Ordinal)
             ? NotFound(error)
-            : BadRequest(error);
+            : result.ErrorCode.EndsWith("conflict", StringComparison.Ordinal)
+                ? Conflict(error)
+                : BadRequest(error);
     }
+
 }

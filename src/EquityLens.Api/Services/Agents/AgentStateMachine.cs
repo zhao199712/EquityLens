@@ -69,9 +69,16 @@ public sealed class AgentRunStateMachine : IAgentRunStateMachine
     private static bool CanTransition(string current, string next) => (current, next) switch
     {
         (AgentRunStatuses.Pending, AgentRunStatuses.Running) => true,
+        (AgentRunStatuses.Running, AgentRunStatuses.WaitingForApproval) => true,
+        (AgentRunStatuses.WaitingForApproval, AgentRunStatuses.Running) => true,
+        (AgentRunStatuses.WaitingForApproval, AgentRunStatuses.Cancelled) => true,
         (AgentRunStatuses.Running, AgentRunStatuses.Succeeded) => true,
         (AgentRunStatuses.Running, AgentRunStatuses.Failed) => true,
         (AgentRunStatuses.Running, AgentRunStatuses.Cancelled) => true,
+        (AgentRunStatuses.Running, AgentRunStatuses.WaitingForFeedback) => true,
+        (AgentRunStatuses.WaitingForFeedback, AgentRunStatuses.Running) => true,
+        (AgentRunStatuses.WaitingForFeedback, AgentRunStatuses.Failed) => true,
+        (AgentRunStatuses.WaitingForFeedback, AgentRunStatuses.Cancelled) => true,
         (AgentRunStatuses.Pending, AgentRunStatuses.Cancelled) => true,
         (AgentRunStatuses.Failed, AgentRunStatuses.Cancelled) => true,
         _ => false
@@ -135,11 +142,22 @@ public sealed class AgentNodeStateMachine : IAgentNodeStateMachine
     private static bool CanTransition(string current, string next) => (current, next) switch
     {
         (AgentNodeStatuses.Pending, AgentNodeStatuses.Ready) => true,
+        (AgentNodeStatuses.Pending, AgentNodeStatuses.WaitingForApproval) => true,
+        (AgentNodeStatuses.WaitingForApproval, AgentNodeStatuses.Pending) => true,
+        (AgentNodeStatuses.WaitingForApproval, AgentNodeStatuses.Cancelled) => true,
+        (AgentNodeStatuses.Pending, AgentNodeStatuses.Cancelled) => true,
+        (AgentNodeStatuses.Ready, AgentNodeStatuses.Cancelled) => true,
+        (AgentNodeStatuses.Queued, AgentNodeStatuses.Cancelled) => true,
+        (AgentNodeStatuses.Running, AgentNodeStatuses.Cancelled) => true,
         (AgentNodeStatuses.Ready, AgentNodeStatuses.Queued) => true,
         (AgentNodeStatuses.Ready, AgentNodeStatuses.Running) => true,
         (AgentNodeStatuses.Queued, AgentNodeStatuses.Running) => true,
         (AgentNodeStatuses.Running, AgentNodeStatuses.Succeeded) => true,
         (AgentNodeStatuses.Running, AgentNodeStatuses.Failed) => true,
+        (AgentNodeStatuses.Running, AgentNodeStatuses.WaitingForFeedback) => true,
+        (AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Pending) => true,
+        (AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Failed) => true,
+        (AgentNodeStatuses.WaitingForFeedback, AgentNodeStatuses.Cancelled) => true,
         _ => false
     };
 }

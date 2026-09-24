@@ -10,5 +10,6 @@ public sealed class AgentNodeSetting
     public string? MetadataJson { get; set; }
     public int? TimeoutSeconds { get; set; }
     public int? MaxRetryCount { get; set; }
+    public bool? RequiresHumanApprovalOverride { get; set; }
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

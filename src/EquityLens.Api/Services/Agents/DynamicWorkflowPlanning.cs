@@ -58,7 +58,7 @@ public sealed class WorkflowSkillCatalog : IWorkflowSkillCatalog
             SupportedWorkflowTypes = [AgentWorkflowTypes.ResearchInvestigation],
             Routable = true
         },
-        new("portfolio-risk-summary", "Summarize portfolio concentration, drawdown, volatility, VaR, attribution and portfolio health.", ["prepare-portfolio-risk-math-inputs", ..PortfolioRiskMathCapabilities.All.Select(x => x.Id)])
+        new("portfolio-risk-summary", "Summarize portfolio concentration, drawdown, volatility, VaR, attribution and portfolio health.", ["prepare-portfolio-risk-math-inputs", ..PortfolioRiskMathCapabilities.All.Select(x => x.Id), "evaluate-portfolio-diagnosis-quality", "build-portfolio-evidence-packet", "draft-portfolio-diagnosis", "finalize-portfolio-diagnosis"])
         {
             DisplayName = "組合風險摘要",
             Kind = WorkflowSkillKinds.Lead,
@@ -109,6 +109,10 @@ public sealed class NodeCapabilityRegistry : INodeCapabilityRegistry
         C("critique-reanalysis", EvidenceReanalysisNodeTypes.Critique, "Independently critique the reanalysis."),
         C("revise-reanalysis", EvidenceReanalysisNodeTypes.Revise, "Apply one bounded reanalysis revision."),
         C("finalize-reanalysis", EvidenceReanalysisNodeTypes.Finalize, "Finalize the reanalysis result."),
+        C("evaluate-portfolio-diagnosis-quality", PortfolioDiagnosisNodeTypes.EvaluateQuality, "Deterministically evaluate portfolio diagnosis completeness.", loop: true, max: 2),
+        C("build-portfolio-evidence-packet", PortfolioDiagnosisNodeTypes.BuildEvidencePacket, "Build the final portfolio evidence packet."),
+        C("draft-portfolio-diagnosis", PortfolioDiagnosisNodeTypes.DraftDiagnosis, "Draft the portfolio diagnosis from validated evidence."),
+        C("finalize-portfolio-diagnosis", PortfolioDiagnosisNodeTypes.FinalizeDiagnosis, "Publish the portfolio diagnosis after approval."),
         new("prepare-portfolio-risk-math-inputs", PortfolioRiskMathNodeTypes.PrepareInputs, "Load authorized market and portfolio data into provenance-backed Blackboard math inputs.", "PreparePortfolioRiskMathInputs", [], [AgentBlackboardKeys.MathInputs], "ReadOnly", true, false, 1, new JsonObject { ["type"] = "object", ["additionalProperties"] = false }, "Any"),
         ..PortfolioRiskMathCapabilities.All
     ];
@@ -123,7 +127,7 @@ public sealed class NodeCapabilityRegistry : INodeCapabilityRegistry
 public sealed record DynamicPlanCondition(string Path, string ExpectedValue);
 public sealed record DynamicPlanAction(string ClientNodeKey, string Capability, string NodeType, IReadOnlyList<string> DependsOn, JsonObject Arguments, DynamicPlanCondition? Condition = null, int Iteration = 0);
 public sealed record DynamicPlanProposal(Guid ProposalId, long BaseOrchestrationVersion, string Trigger, string GoalStatus, string Reason, IReadOnlyList<string> SelectedSkills, IReadOnlyList<DynamicPlanAction> Actions, string Mode = "Llm", string? Model = null, int PromptTokens = 0, int CompletionTokens = 0, string? FallbackReason = null, string? Provider = null);
-public sealed record WorkflowPlanningContext(Guid RunId, long OrchestrationVersion, string Trigger, JsonObject Blackboard, IReadOnlyList<string> CompletedNodeTypes, IReadOnlyList<WorkflowSkill> Skills, IReadOnlyList<NodeCapability> Capabilities, int RetrievalIterations, int DynamicNodeCount, string? PlanningAnchorNodeKey = null);
+public sealed record WorkflowPlanningContext(Guid RunId, long OrchestrationVersion, string Trigger, JsonObject Blackboard, IReadOnlyList<string> CompletedNodeTypes, IReadOnlyList<WorkflowSkill> Skills, IReadOnlyList<NodeCapability> Capabilities, int RetrievalIterations, int DynamicNodeCount, string? PlanningAnchorNodeKey = null, AgentLoopDecision? LoopDecision = null);
 public interface IAgentWorkflowPlanner { Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default); }
 
 public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgentWorkflowPlanner
@@ -143,7 +147,7 @@ public sealed class LlmAgentWorkflowPlanner(IChatCompletionService chat) : IAgen
             {
                 var completion = chat.CompleteAsync(new ChatCompletionRequest(SystemPrompt, JsonSerializer.Serialize(new
                 {
-                    context.RunId, context.OrchestrationVersion, context.Trigger, context.PlanningAnchorNodeKey,
+                    context.RunId, context.OrchestrationVersion, context.Trigger, context.PlanningAnchorNodeKey, context.LoopDecision,
                     blackboard = Summarize(context.Blackboard), context.CompletedNodeTypes,
                     skills = context.Skills,
                     tools = VisibleCapabilities(context).Select(x => new
@@ -210,6 +214,8 @@ public static class DeterministicDynamicWorkflowPlanner
         var requiresEvidence = review?[CriticReviewFields.RequiresMoreEvidence]?.GetValue<bool>() == true;
         var requiresRevision = review?[CriticReviewFields.RequiresRevision]?.GetValue<bool>() == true;
         IReadOnlyList<DynamicPlanAction> actions; IReadOnlyList<string> skills; string goal; string reason;
+        if (c.LoopDecision is not null)
+            return CreateLoopProposal(c, fallbackReason, model);
         if (c.Trigger == DynamicPlanningTriggers.ResearchContextReady)
         {
             var request = board[AgentBlackboardKeys.ResearchRequest]?.Deserialize<ResearchAskRequest>(AgentNodeJson.SerializerOptions)
@@ -350,6 +356,103 @@ public static class DeterministicDynamicWorkflowPlanner
         }
         else { actions = []; skills = ["quality-finalization"]; goal = DynamicGoalStatuses.Complete; reason = "評論已接受目前答案。"; }
         return new(Guid.NewGuid(), c.OrchestrationVersion, c.Trigger, goal, reason, skills, actions, "DeterministicFallback", model, 0, 0, fallbackReason);
+    }
+
+    private static DynamicPlanProposal CreateLoopProposal(WorkflowPlanningContext c, string? fallbackReason, string? model)
+    {
+        var decision = c.LoopDecision!;
+        IReadOnlyList<DynamicPlanAction> actions;
+        IReadOnlyList<string> skills;
+        var anchor = c.PlanningAnchorNodeKey ?? Last(c);
+        switch (decision.Action)
+        {
+            case AgentLoopActions.Complete:
+                actions = [];
+                skills = ["quality-finalization"];
+                break;
+            case AgentLoopActions.ReviseAnswer:
+                actions = Chain([
+                    A($"draftRevisedAnswer:{decision.Iteration}", "revise-answer", DraftRevisionNodeTypes.DraftRevisedAnswer, iteration: decision.Iteration),
+                    A($"finalizeRevision:{decision.Iteration}", "finalize-revision", DraftRevisionNodeTypes.FinalizeRevision, iteration: decision.Iteration)
+                ], anchor);
+                skills = ["answer-revision"];
+                break;
+            case AgentLoopActions.Reanalyze:
+                actions = Chain([
+                    A($"buildRemediatedPacket:{decision.Iteration}", "build-evidence-packet", EvidenceRemediationNodeTypes.BuildPacket, iteration: decision.Iteration),
+                    A($"buildAnalysisContext:{decision.Iteration}", "build-analysis-context", EvidenceReanalysisNodeTypes.BuildContext, iteration: decision.Iteration),
+                    A($"reanalyzeAnswer:{decision.Iteration}", "reanalyze-investment-answer", EvidenceReanalysisNodeTypes.Reanalyze, iteration: decision.Iteration),
+                    A($"critiqueReanalysis:{decision.Iteration}", "critique-reanalysis", EvidenceReanalysisNodeTypes.Critique, iteration: decision.Iteration),
+                    A($"reviseReanalysis:{decision.Iteration}", "revise-reanalysis", EvidenceReanalysisNodeTypes.Revise, iteration: decision.Iteration),
+                    A($"finalizeReanalysis:{decision.Iteration}", "finalize-reanalysis", EvidenceReanalysisNodeTypes.Finalize, iteration: decision.Iteration)
+                ], anchor);
+                skills = ["evidence-driven-reanalysis"];
+                break;
+            case AgentLoopActions.FinalizeLimited:
+                actions = Chain([
+                    A($"buildRemediatedPacket:{decision.Iteration}", "build-evidence-packet", EvidenceRemediationNodeTypes.BuildPacket, iteration: decision.Iteration),
+                    A($"draftEvidenceRevision:{decision.Iteration}", "revise-with-evidence", EvidenceRemediationNodeTypes.DraftRevision, iteration: decision.Iteration),
+                    A($"finalizeQuality:{decision.Iteration}", "finalize-quality", EvidenceRemediationNodeTypes.Finalize, iteration: decision.Iteration)
+                ], anchor);
+                skills = ["evidence-remediation", "quality-finalization"];
+                break;
+            case AgentLoopActions.RunRiskAnalyses:
+                var mathActions = (decision.RequiredCapabilities ?? []).Select(capability =>
+                    A($"{capability}:{decision.Iteration}", capability, PortfolioRiskMathNodeTypes.Execute, iteration: decision.Iteration)
+                    with { DependsOn = [anchor] }).ToList();
+                var evaluator = A($"evaluatePortfolioQuality:{decision.Iteration}", "evaluate-portfolio-diagnosis-quality", PortfolioDiagnosisNodeTypes.EvaluateQuality, iteration: decision.Iteration)
+                    with { DependsOn = mathActions.Select(x => x.ClientNodeKey).ToList() };
+                actions = [..mathActions, evaluator];
+                skills = ["portfolio-risk-summary"];
+                break;
+            case AgentLoopActions.FinalizeDiagnosis:
+                actions = Chain([
+                    A($"buildPortfolioEvidence:{decision.Iteration}", "build-portfolio-evidence-packet", PortfolioDiagnosisNodeTypes.BuildEvidencePacket, iteration: decision.Iteration),
+                    A($"draftPortfolioDiagnosis:{decision.Iteration}", "draft-portfolio-diagnosis", PortfolioDiagnosisNodeTypes.DraftDiagnosis, iteration: decision.Iteration),
+                    A($"finalizePortfolioDiagnosis:{decision.Iteration}", "finalize-portfolio-diagnosis", PortfolioDiagnosisNodeTypes.FinalizeDiagnosis, iteration: decision.Iteration)
+                ], anchor);
+                skills = ["portfolio-risk-summary"];
+                break;
+            default:
+                var iteration = decision.Iteration;
+                var planned = new List<DynamicPlanAction>();
+                if ((c.Blackboard[AgentBlackboardKeys.ExtractedClaims] as JsonArray)?.Count is null or 0)
+                    planned.Add(A($"extractClaims:{iteration}", "extract-claims", EvidenceRemediationNodeTypes.ExtractClaims, iteration: iteration));
+                var webCount = c.CompletedNodeTypes.Count(x => x == EvidenceRemediationNodeTypes.RetrieveWebEvidence);
+                var request = c.Blackboard[AgentBlackboardKeys.ResearchRequest]?.Deserialize<ResearchAskRequest>(AgentNodeJson.SerializerOptions);
+                var sourcePolicy = request?.SourcePolicy ?? SourcePolicy.Auto;
+                var sources = SourcePolicyRules.SelectRemediationSources(
+                    sourcePolicy,
+                    iteration,
+                    webCount >= ResearchQualityReviewWorkflow.MaxWebRetrievals,
+                    NeedsCurrentWebEvidence(c.Blackboard));
+                if (sources.UseLocal)
+                    planned.Add(A($"retrieveEvidence:{iteration}", "retrieve-primary-financial-evidence", EvidenceRemediationNodeTypes.RetrieveEvidence, Args(c.Blackboard), iteration));
+                if (sources.UseWeb)
+                    planned.Add(A($"retrieveWebEvidence:{iteration}", "retrieve-web-evidence", EvidenceRemediationNodeTypes.RetrieveWebEvidence, Args(c.Blackboard, false), iteration));
+                if (!sources.UseLocal && !sources.UseWeb)
+                {
+                    planned.AddRange([
+                        A($"buildRemediatedPacket:{iteration}", "build-evidence-packet", EvidenceRemediationNodeTypes.BuildPacket, iteration: iteration),
+                        A($"draftEvidenceRevision:{iteration}", "revise-with-evidence", EvidenceRemediationNodeTypes.DraftRevision, iteration: iteration),
+                        A($"finalizeQuality:{iteration}", "finalize-quality", EvidenceRemediationNodeTypes.Finalize, iteration: iteration)
+                    ]);
+                    actions = Chain(planned, anchor);
+                    skills = ["evidence-remediation", "quality-finalization"];
+                    break;
+                }
+                planned.AddRange([
+                    A($"assessEvidence:{iteration}", "assess-claim-evidence", EvidenceRemediationNodeTypes.AssessSupport, iteration: iteration),
+                    A($"validateEvidence:{iteration}", "validate-evidence", EvidenceRemediationNodeTypes.ValidateMappings, iteration: iteration),
+                    A($"routeEvidence:{iteration}", "route-evidence", EvidenceRemediationNodeTypes.Route, iteration: iteration)
+                ]);
+                actions = Chain(planned, anchor);
+                skills = ["evidence-remediation", "financial-guidance-verification"];
+                break;
+        }
+        return new(Guid.NewGuid(), c.OrchestrationVersion, c.Trigger,
+            decision.IsTerminal ? DynamicGoalStatuses.Complete : DynamicGoalStatuses.Continue,
+            decision.Reason, skills, actions, "LoopController", model, 0, 0, fallbackReason);
     }
     internal static bool IsConferenceCapabilityGate(JsonObject board, ResearchAskRequest request) =>
         board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>() == "conference-call-takeaways"

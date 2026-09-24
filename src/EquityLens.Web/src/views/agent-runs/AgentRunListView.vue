@@ -48,6 +48,7 @@ function statusColor(status: string) {
     case 'Cancelled': return '#9a917c'
     case 'Pending': return '#9a917c'
     case 'WaitingForFeedback': return '#c9a86a'
+    case 'WaitingForApproval': return '#c9a86a'
     default: return '#9a917c'
   }
 }
@@ -77,6 +78,7 @@ function statusColor(status: string) {
           <option value="">全部狀態</option>
           <option value="Pending">Pending</option>
           <option value="Running">Running</option>
+          <option value="WaitingForApproval">WaitingForApproval</option>
           <option value="Succeeded">Succeeded</option>
           <option value="Failed">Failed</option>
           <option value="Cancelled">Cancelled</option>

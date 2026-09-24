@@ -647,7 +647,7 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
-    public async Task CreateResearchQualityReviewAsync_ValidResearchRun_Completes7NodeWorkflow()
+    public async Task CreateResearchQualityReviewAsync_ValidResearchRun_CompletesBoundedLoopWorkflow()
     {
         await using var db = CreateDbContext();
         var userId = Guid.NewGuid();
@@ -661,17 +661,26 @@ public sealed class AgentRunServiceTests
 
         Assert.True(summary.Status == AgentRunStatuses.Succeeded, summary.ErrorMessage);
         Assert.Equal(AgentWorkflowTypes.ResearchQualityReview, summary.WorkflowType);
+        var persistedRun = await db.AgentRuns.SingleAsync(x => x.Id == summary.Id);
+        var persistedBoard = AgentNodeJson.ParseBlackboard(persistedRun.BlackboardJson);
+        persistedBoard[AgentBlackboardKeys.UnresolvedClaims] = new JsonArray("claim-1", "claim-2");
+        persistedRun.BlackboardJson = persistedBoard.ToJsonString(AgentNodeJson.SerializerOptions);
+        await db.SaveChangesAsync();
         var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
         Assert.NotNull(detail);
-        Assert.Equal(7, detail.Nodes.Count);
+        Assert.Equal(13, detail.Nodes.Count);
         Assert.Contains(detail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.LoadResearchRun && n.Status == AgentNodeStatuses.Succeeded);
         Assert.Contains(detail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.BuildEvidencePacket && n.Status == AgentNodeStatuses.Succeeded);
         Assert.Contains(detail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.CheckEvidence && n.Status == AgentNodeStatuses.Succeeded);
         Assert.Contains(detail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Succeeded);
         Assert.Contains(detail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.FinalizeCriticReport && n.Status == AgentNodeStatuses.Succeeded);
-        Assert.Contains(detail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.DraftRevisedAnswer && n.Status == AgentNodeStatuses.Succeeded);
-        Assert.Contains(detail.Nodes, n => n.NodeKey == ResearchQualityReviewNodeKeys.FinalizeRevision && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(detail.Nodes, n => n.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && n.Iteration == 1 && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(detail.Nodes, n => n.NodeType == EvidenceRemediationNodeTypes.Route && n.Iteration == 1 && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(detail.Nodes, n => n.NodeType == EvidenceRemediationNodeTypes.Finalize && n.Status == AgentNodeStatuses.Succeeded);
         Assert.NotNull(detail.OutputJson);
+        Assert.NotNull(detail.LoopSummary);
+        Assert.Equal("Stopped", detail.LoopSummary.Status);
+        Assert.Equal(["claim-1", "claim-2"], detail.LoopSummary.UnresolvedClaimIds);
         Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunStarted);
         Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunSucceeded);
     }
@@ -1341,8 +1350,67 @@ public sealed class AgentRunServiceTests
         new FinalizeCriticReportNodeHandler([new CriticReviewPolicyEvaluator(), new ResearchQualityReviewPolicyEvaluator()]),
         new LoadCriticReviewRunNodeHandler(),
         new DraftRevisedAnswerNodeHandler(new DeterministicDraftRevisionAgent()),
-        new FinalizeRevisionNodeHandler()
+        new FinalizeRevisionNodeHandler(),
+        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.ExtractClaims),
+        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.RetrieveEvidence),
+        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.RetrieveWebEvidence),
+        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.AssessSupport),
+        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.ValidateMappings),
+        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.Route),
+        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.BuildPacket),
+        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.DraftRevision),
+        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.Finalize)
     ];
+
+    private sealed class LoopFixtureNodeHandler(string nodeType) : IAgentNodeHandler
+    {
+        public string NodeType => nodeType;
+
+        public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
+            switch (NodeType)
+            {
+                case EvidenceRemediationNodeTypes.ExtractClaims:
+                    board[AgentBlackboardKeys.ExtractedClaims] = new JsonArray(new JsonObject { ["claimId"] = "C1", ["claim"] = "answer" });
+                    break;
+                case EvidenceRemediationNodeTypes.RetrieveEvidence:
+                    board[AgentBlackboardKeys.RetrievedEvidence] = new JsonArray(new JsonObject { ["documentChunkId"] = Guid.NewGuid(), ["content"] = "evidence" });
+                    break;
+                case EvidenceRemediationNodeTypes.AssessSupport:
+                    board[AgentBlackboardKeys.ClaimSupportAssessments] = new JsonArray(new JsonObject { ["claimId"] = "C1", ["status"] = "Supported" });
+                    break;
+                case EvidenceRemediationNodeTypes.ValidateMappings:
+                    board[AgentBlackboardKeys.EvidenceValidationResults] = new JsonObject { ["status"] = "Supported" };
+                    board[AgentBlackboardKeys.UnresolvedClaims] = new JsonArray();
+                    break;
+                case EvidenceRemediationNodeTypes.Route:
+                    board[AgentBlackboardKeys.RouteDecision] = "Supported";
+                    board[AgentBlackboardKeys.RequiresReanalysis] = false;
+                    break;
+                case EvidenceRemediationNodeTypes.BuildPacket:
+                    board[AgentBlackboardKeys.RemediatedEvidencePacket] = new JsonObject { ["status"] = "Supported", ["evidence"] = board[AgentBlackboardKeys.RetrievedEvidence]?.DeepClone() };
+                    break;
+                case EvidenceRemediationNodeTypes.DraftRevision:
+                    board[AgentBlackboardKeys.RevisedAnswer] = "revised answer [1]";
+                    board[AgentBlackboardKeys.RevisionSummary] = "Evidence-backed revision";
+                    break;
+                case EvidenceRemediationNodeTypes.Finalize:
+                    var output = new JsonObject
+                    {
+                        [DraftRevisionFields.RevisedAnswer] = board[AgentBlackboardKeys.RevisedAnswer]?.DeepClone(),
+                        [DraftRevisionFields.RevisionSummary] = board[AgentBlackboardKeys.RevisionSummary]?.DeepClone(),
+                        [DraftRevisionFields.RevisionRequired] = true
+                    };
+                    board[AgentBlackboardKeys.FinalOutput] = output.DeepClone();
+                    context.Run.OutputJson = output.ToJsonString(AgentNodeJson.SerializerOptions);
+                    break;
+            }
+            context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+            context.Node.OutputJson = "{}";
+            return Task.CompletedTask;
+        }
+    }
 
     private static EquityLensDbContext CreateDbContext()
     {

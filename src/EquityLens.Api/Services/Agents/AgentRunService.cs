@@ -20,6 +20,7 @@ public sealed class AgentRunService : IAgentRunService
     private readonly IAgentWorkflowAdminService? _workflowAdminService;
     private readonly PortfolioDiagnosisWorkflowDefinitionProvider? _portfolioDiagnosisProvider;
     private readonly IAgentWorkflowCatalog _catalog;
+    private readonly IAgentPromptSnapshotService? _promptSnapshots;
 
     public AgentRunService(
         EquityLensDbContext dbContext,
@@ -29,7 +30,8 @@ public sealed class AgentRunService : IAgentRunService
         IAgentRunQueue agentRunQueue,
         IAgentWorkflowAdminService? workflowAdminService = null,
         PortfolioDiagnosisWorkflowDefinitionProvider? portfolioDiagnosisProvider = null,
-        IAgentWorkflowCatalog? catalog = null)
+        IAgentWorkflowCatalog? catalog = null,
+        IAgentPromptSnapshotService? promptSnapshots = null)
     {
         _dbContext = dbContext;
         _workflowProviders = CreateWorkflowProviderRegistry(workflowProviders);
@@ -39,6 +41,7 @@ public sealed class AgentRunService : IAgentRunService
         _workflowAdminService = workflowAdminService;
         _portfolioDiagnosisProvider = portfolioDiagnosisProvider;
         _catalog = catalog ?? new AgentWorkflowCatalog();
+        _promptSnapshots = promptSnapshots;
     }
 
     public async Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
@@ -341,11 +344,104 @@ public sealed class AgentRunService : IAgentRunService
                 x.Id, x.AgentRunNodeId, x.FeedbackType, x.Status, x.Prompt, x.ResponseJson,
                 x.CreatedAtUtc, x.RespondedAtUtc, x.ClientRequestId, x.FollowUpAgentRunId))
             .ToListAsync(cancellationToken);
+        var approvals = await _dbContext.AgentApprovalRequests.AsNoTracking()
+            .Where(x => x.AgentRunId == id)
+            .OrderBy(x => x.RequestedAtUtc)
+            .Select(x => new AgentApprovalResponse(
+                x.Id, x.AgentRunId, x.AgentRunNodeId, x.NodeKey, x.NodeType, x.Status,
+                x.SideEffectLevel, x.Reason, x.RequestedAtUtc, x.DecidedAtUtc, x.ConsumedAtUtc,
+                x.DecidedByUserId, x.DecisionComment, x.ClientRequestId))
+            .ToListAsync(cancellationToken);
+        var promptSnapshots = await _dbContext.AgentRunPromptSnapshots.AsNoTracking()
+            .Where(x => x.AgentRunId == id)
+            .OrderBy(x => x.UsageKey)
+            .Select(x => new AgentRunPromptSnapshotResponse(x.Id, x.UsageKey, x.OwnerType, x.OwnerKey,
+                x.PromptTemplateKey, x.PromptVersionId, x.PromptVersionNumber, x.ContentHash, x.ResolvedAtUtc))
+            .ToListAsync(cancellationToken);
 
         return new AgentRunDetailResponse(
             MapSummary(run), nodes, events, toolCalls, feedback,
-            run.BlackboardJson, run.OutputJson, run.WorkflowDefinitionJson);
+            run.BlackboardJson, run.OutputJson, run.WorkflowDefinitionJson,
+            approvals, promptSnapshots, BuildLoopSummary(run, nodeEntities));
     }
+
+    private static AgentLoopSummaryResponse? BuildLoopSummary(AgentRun run, IReadOnlyList<AgentRunNode> nodes)
+    {
+        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.PortfolioDiagnosis)) return null;
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject;
+        if (run.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
+        {
+            var quality = board[AgentBlackboardKeys.PortfolioDiagnosisQuality]
+                ?.Deserialize<PortfolioDiagnosisQualityResult>(AgentNodeJson.SerializerOptions);
+            var gaps = quality?.Gaps.Select(x => x.Code).Distinct(StringComparer.Ordinal).ToList()
+                ?? (runtime?["gapCodes"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? string.Empty)
+                    .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).ToList()
+                ?? [];
+            var completed = quality?.CompletedCapabilities.Distinct(StringComparer.Ordinal).ToList()
+                ?? (runtime?["completedCapabilities"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? string.Empty)
+                    .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).ToList()
+                ?? [];
+            var riskEvidence = board[AgentBlackboardKeys.PortfolioRiskEvidence]
+                ?.Deserialize<PortfolioRiskEvidenceSnapshot>(AgentNodeJson.SerializerOptions);
+            return new(
+                LoopStatus(run, runtime),
+                runtime?["iteration"]?.GetValue<int>() ?? quality?.Iteration ?? 0,
+                runtime?["maxIterations"]?.GetValue<int>() ?? PortfolioDiagnosisWorkflow.MaxAnalysisIterations,
+                runtime?["lastAction"]?.GetValue<string>(),
+                runtime?["stopReason"]?.GetValue<string>(),
+                nodes.Count(x => !string.IsNullOrWhiteSpace(x.TemplateNodeKey)),
+                runtime?["maxDynamicNodes"]?.GetValue<int>() ?? PortfolioDiagnosisWorkflow.MaxDynamicNodes,
+                0,
+                0,
+                completed.Count,
+                gaps,
+                AgentWorkflowTypes.PortfolioDiagnosis,
+                quality?.Status ?? runtime?["qualityStatus"]?.GetValue<string>(),
+                gaps,
+                completed,
+                riskEvidence?.Source,
+                riskEvidence?.CacheStatus,
+                riskEvidence?.ReusedCapabilities,
+                riskEvidence?.CalculatedCapabilities,
+                riskEvidence?.SourceRiskRunIds,
+                riskEvidence?.RejectedRuns.Select(x => x.Code).Distinct(StringComparer.Ordinal).ToList(),
+                riskEvidence?.QualityStatus,
+                riskEvidence?.QualityEvaluationId,
+                riskEvidence?.QualityBacktestRunId,
+                riskEvidence?.QualityWarnings);
+        }
+        var unresolved = (board[AgentBlackboardKeys.UnresolvedClaims] as JsonArray)?.Select((x, index) => x switch
+        {
+            JsonValue value when value.TryGetValue<string>(out var claimId) && !string.IsNullOrWhiteSpace(claimId) => claimId,
+            JsonObject claim => claim["claimId"]?.GetValue<string>() ?? claim["id"]?.GetValue<string>() ?? $"claim:{index}",
+            _ => $"claim:{index}"
+        })
+            .Distinct(StringComparer.Ordinal).ToList() ?? [];
+        var evidenceCount = (board[AgentBlackboardKeys.RetrievedEvidence] as JsonArray)?.Select(x =>
+            x?["documentChunkId"]?.ToJsonString() ?? x?["url"]?.GetValue<string>() ?? x?.ToJsonString())
+            .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).Count() ?? 0;
+        return new(
+            LoopStatus(run, runtime),
+            runtime?["iteration"]?.GetValue<int>() ?? 0,
+            runtime?["maxIterations"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxRetrievalIterations,
+            runtime?["lastAction"]?.GetValue<string>(),
+            runtime?["stopReason"]?.GetValue<string>(),
+            nodes.Count(x => !string.IsNullOrWhiteSpace(x.TemplateNodeKey)),
+            runtime?["maxDynamicNodes"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxDynamicNodes,
+            nodes.Count(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence && x.Status == AgentNodeStatuses.Succeeded),
+            runtime?["maxWebRetrievals"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxWebRetrievals,
+            evidenceCount,
+            unresolved,
+            AgentWorkflowTypes.ResearchQualityReview);
+    }
+
+    private static string LoopStatus(AgentRun run, JsonObject? runtime) => run.Status switch
+    {
+        AgentRunStatuses.Failed => "Failed",
+        AgentRunStatuses.Cancelled => "Cancelled",
+        _ => runtime?["status"]?.GetValue<string>() ?? "NotStarted"
+    };
 
     public async Task<AgentRunSummaryResponse?> RetryAsync(
         Guid id,
@@ -354,11 +450,14 @@ public sealed class AgentRunService : IAgentRunService
     {
         var run = await _dbContext.AgentRuns
             .Include(x => x.Nodes)
+            .Include(x => x.Approvals)
+                .ThenInclude(x => x.Node)
             .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
         if (run is null) return null;
         if (run.Status != AgentRunStatuses.Failed) return MapSummary(run);
 
         _runStateMachine.ResetForRetry(run);
+        run.ExecutionAttempt++;
         run.ErrorMessage = null;
         run.OutputJson = null;
         var provider = GetWorkflowProvider(run.WorkflowType);
@@ -433,13 +532,27 @@ public sealed class AgentRunService : IAgentRunService
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var run = await _dbContext.AgentRuns.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
+        var run = await _dbContext.AgentRuns
+            .Include(x => x.Nodes)
+            .Include(x => x.Approvals)
+                .ThenInclude(x => x.Node)
+            .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
         if (run is null) return null;
         if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Cancelled)
             return MapSummary(run);
 
         _runStateMachine.Transition(run, AgentRunStatuses.Cancelled);
         run.CompletedAtUtc = DateTime.UtcNow;
+        foreach (var approval in run.Approvals.Where(x => x.Status == AgentApprovalStatuses.Pending))
+        {
+            approval.Status = AgentApprovalStatuses.Cancelled;
+            approval.DecidedAtUtc = DateTime.UtcNow;
+            approval.DecidedByUserId = userId;
+            approval.DecisionComment = "Run cancelled by user.";
+            AddEvent(run, approval.Node, AgentEventTypes.ApprovalCancelled, "Pending approval cancelled with the run.", new { approvalId = approval.Id });
+        }
+        foreach (var node in run.Nodes.Where(x => x.Status is AgentNodeStatuses.Pending or AgentNodeStatuses.Ready or AgentNodeStatuses.Queued or AgentNodeStatuses.WaitingForApproval or AgentNodeStatuses.Running))
+            _nodeStateMachine.Transition(node, AgentNodeStatuses.Cancelled);
         if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)
         {
             var artifact = await _dbContext.ResearchRuns.SingleOrDefaultAsync(x => x.Id == researchRunId, cancellationToken);
@@ -447,6 +560,56 @@ public sealed class AgentRunService : IAgentRunService
         }
         AddEvent(run, null, AgentEventTypes.RunCancelled, "Run cancelled by user.", null);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        return MapSummary(run);
+    }
+
+    public async Task<AgentRunSummaryResponse> DecideApprovalAsync(
+        Guid runId, Guid userId, string decision, string? comment, CancellationToken cancellationToken = default)
+    {
+        var normalizedDecision = decision?.Trim();
+        if (normalizedDecision is not (HumanApprovalDecisions.Approved or HumanApprovalDecisions.Rejected))
+            throw new AgentApprovalException("approval_decision_invalid", "decision must be Approved or Rejected.");
+        var normalizedComment = comment?.Trim();
+        if (normalizedDecision == HumanApprovalDecisions.Rejected && string.IsNullOrWhiteSpace(normalizedComment))
+            throw new AgentApprovalException("approval_comment_required", "拒絕時必須提供說明。");
+
+        var run = await _dbContext.AgentRuns
+            .Include(x => x.Nodes)
+            .FirstOrDefaultAsync(x => x.Id == runId && x.UserId == userId, cancellationToken)
+            ?? throw new AgentApprovalException("agent_run_not_found", "Agent run not found.");
+        if (run.Status != AgentRunStatuses.WaitingForFeedback)
+            throw new AgentApprovalException("agent_run_not_waiting", "Only a run waiting for approval can receive a decision.");
+        var gateNode = run.Nodes.FirstOrDefault(x => x.Status == AgentNodeStatuses.WaitingForFeedback)
+            ?? throw new AgentApprovalException("approval_node_not_found", "No node is waiting for approval.");
+
+        var blackboard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        blackboard[AgentBlackboardKeys.ApprovalDecision] = JsonSerializer.SerializeToNode(new
+        {
+            decision = normalizedDecision,
+            comment = normalizedComment,
+            reviewerId = userId,
+            decidedAtUtc = DateTime.UtcNow
+        }, SerializerOptions);
+        run.BlackboardJson = blackboard.ToJsonString(SerializerOptions);
+        run.OrchestrationVersion++;
+        AddEvent(run, gateNode, AgentEventTypes.ApprovalDecision, "Human approval decision recorded.", new { decision = normalizedDecision, reviewerId = userId });
+
+        _nodeStateMachine.Transition(gateNode, AgentNodeStatuses.Pending);
+        gateNode.StartedAtUtc = null;
+        gateNode.CompletedAtUtc = null;
+        gateNode.DurationMs = null;
+        _runStateMachine.Transition(run, AgentRunStatuses.Running);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new AgentApprovalException("approval_conflict", "This approval was already resolved by another reviewer.");
+        }
+
+        await EnqueueAsync(run, userId, cancellationToken);
         return MapSummary(run);
     }
 
@@ -466,14 +629,25 @@ public sealed class AgentRunService : IAgentRunService
         var policies = _workflowAdminService is null
             ? nodeTypes.ToDictionary(x => x, x => _catalog.GetNode(x).DefaultPolicy)
             : await _workflowAdminService.GetPoliciesAsync(nodeTypes, cancellationToken);
+        var approvalPolicies = _workflowAdminService is null
+            ? nodeTypes.ToDictionary(x => x, x => _catalog.GetNode(x).Contract.RequiresHumanInput)
+            : await _workflowAdminService.GetApprovalPoliciesAsync(nodeTypes, cancellationToken);
         foreach (var node in root["nodes"]!.AsArray().OfType<JsonObject>())
         {
             var type = node["type"]!.GetValue<string>();
             var p = policies[type];
             node["executionPolicy"] = new JsonObject { ["timeoutSeconds"] = p.TimeoutSeconds, ["maxRetryCount"] = p.MaxRetryCount };
             node["contract"] = JsonSerializer.SerializeToNode(_catalog.GetNode(type).Contract, AgentNodeJson.SerializerOptions);
+            node["approvalPolicy"] = new JsonObject
+            {
+                ["requiresHumanApproval"] = approvalPolicies[type],
+                ["sideEffectLevel"] = _catalog.GetNode(type).SideEffectLevel,
+                ["reason"] = $"執行節點「{_catalog.GetNode(type).DisplayName}」前需要人工批准。"
+            };
         }
         run.WorkflowDefinitionJson = root.ToJsonString(AgentNodeJson.SerializerOptions);
+        if (_promptSnapshots is not null)
+            await _promptSnapshots.SnapshotForRunAsync(run, cancellationToken);
     }
 
     private static IReadOnlyDictionary<string, IAgentWorkflowDefinitionProvider> CreateWorkflowProviderRegistry(

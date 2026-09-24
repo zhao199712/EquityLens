@@ -8,6 +8,7 @@ import {
   getPortfolioRisk,
   createRiskCalculation,
   getRiskCalculation,
+  validateRiskCalculation,
   listRiskCalculations,
   createPortfolioRiskBacktestRun,
   getPortfolioRiskBacktestRun,
@@ -42,6 +43,7 @@ const portfolioName = ref('投資組合風險分析')
 const risk = ref<PortfolioRiskResponse | null>(null)
 const loading = ref(false)
 const calculationRun = ref<RiskCalculationRun | null>(null)
+const qualityValidationLoading = ref(false)
 const portfolioTotalValue = ref<number | null>(null)
 const portfolioCurrency = ref('TWD')
 const risk99 = ref<PortfolioRiskResponse | null>(null)
@@ -559,10 +561,27 @@ const loadModelComparison = () => loadDeferred(modelComparisonState, modelCompar
 })
 const loadStressTest = () => loadDeferred(stressTestState, stressTestError, async () => { stressTest.value = await getPortfolioStressTest(portfolioId.value) })
 const loadBacktest = () => loadDeferred(backtestState, backtestError, async () => {
+  if (calculationRun.value?.status === 'Completed') {
+    await runQualityValidation()
+    return
+  }
   const runs = await getPortfolioRiskBacktestRuns(portfolioId.value)
   const existing = runs.find(run => run.from === backtestFromDate.value && run.to === toDate.value && run.status !== 'Failed')
   await waitForBacktestRun(existing ?? await createPortfolioRiskBacktestRun(portfolioId.value, backtestFromDate.value, toDate.value))
 })
+async function runQualityValidation() {
+  const calculation = calculationRun.value
+  if (!calculation || calculation.status !== 'Completed' || qualityValidationLoading.value) return
+  qualityValidationLoading.value = true
+  try {
+    const evaluation = await validateRiskCalculation(portfolioId.value, calculation.id)
+    const linked = await getPortfolioRiskBacktestRun(portfolioId.value, evaluation.riskBacktestRunId)
+    await waitForBacktestRun(linked)
+    calculationRun.value = await getRiskCalculation(portfolioId.value, calculation.id)
+  } finally {
+    qualityValidationLoading.value = false
+  }
+}
 async function waitForBacktestRun(initialRun: PortfolioRiskBacktestRun) {
   let run = initialRun
   while (viewIsActive) {
@@ -1020,6 +1039,15 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                 <span class="info-value prestige-mono">{{ item.value }}</span>
               </div>
             </div>
+            <div class="info-grid info-grid-4" style="margin-top: 1px">
+              <div class="info-cell"><span class="prestige-label cell-label">RISK QUALITY</span><span class="info-value prestige-mono">{{ calculationRun?.qualityEvaluation?.status ?? 'Unvalidated' }}</span></div>
+              <div class="info-cell"><span class="prestige-label cell-label">KUPIEC P</span><span class="info-value prestige-mono">{{ calculationRun?.qualityEvaluation?.kupiecPValue?.toFixed(4) ?? '—' }}</span></div>
+              <div class="info-cell"><span class="prestige-label cell-label">CHRISTOFFERSEN P</span><span class="info-value prestige-mono">{{ calculationRun?.qualityEvaluation?.christoffersenPValue?.toFixed(4) ?? '—' }}</span></div>
+              <div class="info-cell"><button class="prestige-btn" type="button" :disabled="qualityValidationLoading" @click="runQualityValidation">{{ qualityValidationLoading ? '驗證中…' : '驗證模型' }}</button></div>
+            </div>
+            <p v-if="calculationRun?.qualityEvaluation?.failureCodes.length || calculationRun?.qualityEvaluation?.warningCodes.length" class="table-note prestige-mono">
+              {{ [...(calculationRun.qualityEvaluation.failureCodes ?? []), ...(calculationRun.qualityEvaluation.warningCodes ?? [])].join(', ') }}
+            </p>
           </div>
         </ScrollReveal>
 

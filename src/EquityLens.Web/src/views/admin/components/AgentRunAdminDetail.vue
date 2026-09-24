@@ -18,7 +18,7 @@ import {
   ReloadOutline,
   CloseOutline,
 } from '@vicons/ionicons5'
-import { getAgentRun, retryAgentRun, cancelAgentRun, createEvidenceRemediation, createEvidenceReanalysis, type AgentRunDetail, type AgentRunNodeDto } from '../../../services/agentRuns'
+import { getAgentRun, retryAgentRun, cancelAgentRun, createEvidenceRemediation, createEvidenceReanalysis, decideAgentApproval, type AgentRunDetail, type AgentRunNodeDto } from '../../../services/agentRuns'
 
 const props = defineProps<{ runId: string }>()
 const message = useMessage()
@@ -29,6 +29,7 @@ const loading = ref(true)
 const error = ref('')
 const creatingRemediation = ref(false)
 const creatingReanalysis = ref(false)
+const approvalComment = ref('')
 let timer: ReturnType<typeof setInterval> | null = null
 const TERMINAL_STATUSES = new Set(['Succeeded', 'Failed', 'Cancelled'])
 
@@ -44,6 +45,7 @@ const canRemediateEvidence = computed(() => run.value?.run.workflowType === 'Cri
 const canReanalyzeEvidence = computed(() => run.value?.run.workflowType === 'EvidenceRemediation'
   && run.value.run.status === 'Succeeded'
   && run.value.outputJson?.requiresReanalysis === true)
+const pendingApproval = computed(() => run.value?.approvals.find(item => item.status === 'Pending') ?? null)
 
 onMounted(() => {
   loadRun()
@@ -108,6 +110,22 @@ async function handleCancel() {
   }
 }
 
+async function handleApproval(decision: 'approve' | 'reject') {
+  if (!pendingApproval.value) return
+  if (decision === 'reject' && !approvalComment.value.trim()) {
+    message.error('拒絕時必須填寫原因。')
+    return
+  }
+  try {
+    await decideAgentApproval(props.runId, pendingApproval.value.id, decision, approvalComment.value)
+    approvalComment.value = ''
+    message.success(decision === 'approve' ? '已批准並排程恢復。' : '已拒絕並取消 Run。')
+  } catch {
+    message.error('Approval 狀態可能已變更，已重新載入。')
+  }
+  await loadRun()
+}
+
 async function handleEvidenceRemediation() {
   if (!run.value || creatingRemediation.value) return
   creatingRemediation.value = true
@@ -148,6 +166,7 @@ function statusType(status: string): 'success' | 'error' | 'warning' | 'info' | 
     case 'Running': return 'info'
     case 'Cancelled': return 'default'
     case 'Pending': return 'warning'
+    case 'WaitingForApproval': return 'warning'
     default: return 'default'
   }
 }
@@ -222,12 +241,12 @@ const nodeMap = computed(() => {
           <span class="detail-field-label">Error</span>
           <span class="detail-field-value detail-down">{{ run.run.errorMessage }}</span>
         </div>
-        <NSpace v-if="run.run.status === 'Failed' || run.run.status === 'Pending' || run.run.status === 'Running'" class="detail-actions">
+        <NSpace v-if="run.run.status === 'Failed' || run.run.status === 'Pending' || run.run.status === 'Running' || run.run.status === 'WaitingForApproval'" class="detail-actions">
           <button v-if="run.run.status === 'Failed'" type="button" class="prestige-btn" @click="handleRetry">
             <NIcon size="16"><ReloadOutline /></NIcon>
             重試
           </button>
-          <button v-if="run.run.status === 'Pending' || run.run.status === 'Running'" type="button" class="prestige-btn detail-btn-danger" @click="handleCancel">
+          <button v-if="run.run.status === 'Pending' || run.run.status === 'Running' || run.run.status === 'WaitingForApproval'" type="button" class="prestige-btn detail-btn-danger" @click="handleCancel">
             <NIcon size="16"><CloseOutline /></NIcon>
             取消
           </button>
@@ -238,6 +257,40 @@ const nodeMap = computed(() => {
         <button v-if="canReanalyzeEvidence" type="button" class="prestige-btn detail-remediation-btn" :disabled="creatingReanalysis" @click="handleEvidenceReanalysis">
           {{ creatingReanalysis ? '建立中…' : '重新分析' }}
         </button>
+      </section>
+
+      <section v-if="pendingApproval" class="prestige-panel prestige-panel-pad detail-section approval-admin" data-testid="admin-approval-panel">
+        <span class="prestige-label detail-label">Human Approval Required</span>
+        <div class="detail-field"><span class="detail-field-label">Node</span><span class="detail-field-value">{{ pendingApproval.nodeKey }} · {{ pendingApproval.nodeType }}</span></div>
+        <div class="detail-field"><span class="detail-field-label">Side Effect</span><span class="detail-field-value">{{ pendingApproval.sideEffectLevel }}</span></div>
+        <div class="detail-field"><span class="detail-field-label">Reason</span><span class="detail-field-value">{{ pendingApproval.reason }}</span></div>
+        <textarea v-model="approvalComment" class="prestige-input approval-admin-comment" rows="3" placeholder="批准可選填；拒絕必填" />
+        <NSpace>
+          <button type="button" class="prestige-btn prestige-btn-solid" @click="handleApproval('approve')">批准並繼續</button>
+          <button type="button" class="prestige-btn detail-btn-danger" :disabled="!approvalComment.trim()" @click="handleApproval('reject')">拒絕並取消</button>
+        </NSpace>
+      </section>
+
+      <section v-if="run.loopSummary" class="prestige-panel prestige-panel-pad detail-section" data-testid="admin-loop-summary">
+        <span class="prestige-label detail-label">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? 'Portfolio Diagnosis Loop' : 'Research Quality Loop' }}</span>
+        <div class="detail-field"><span class="detail-field-label">Status</span><span class="detail-field-value">{{ run.loopSummary.status }}</span></div>
+        <div class="detail-field"><span class="detail-field-label">Iteration</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.currentIteration }} / {{ run.loopSummary.maxIterations }}</span></div>
+        <div class="detail-field"><span class="detail-field-label">Dynamic Nodes</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.dynamicNodeCount }} / {{ run.loopSummary.maxDynamicNodes }}</span></div>
+        <template v-if="run.loopSummary.loopType === 'PortfolioDiagnosis'">
+          <div class="detail-field"><span class="detail-field-label">Quality</span><span class="detail-field-value">{{ run.loopSummary.qualityStatus ?? 'Pending' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Risk Cache</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.riskCacheStatus ?? 'Miss' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Risk Quality</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.riskQualityStatus ?? 'Unvalidated' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Quality Warnings</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.riskQualityWarnings?.join(', ') || '—' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Reused / Calculated</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.reusedCapabilities?.length ?? 0 }} / {{ run.loopSummary.calculatedCapabilities?.length ?? 0 }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Source Risk Runs</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.sourceRiskRunIds?.join(', ') || '—' }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Gaps</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.gapCodes?.join(', ') || '—' }}</span></div>
+        </template>
+        <template v-else>
+          <div class="detail-field"><span class="detail-field-label">Web Retrievals</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.webRetrievalCount }} / {{ run.loopSummary.maxWebRetrievals }}</span></div>
+          <div class="detail-field"><span class="detail-field-label">Evidence / Gaps</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.evidenceCount }} / {{ run.loopSummary.unresolvedClaimIds.length }}</span></div>
+        </template>
+        <div v-if="run.loopSummary.lastAction" class="detail-field"><span class="detail-field-label">Last Action</span><span class="detail-field-value">{{ run.loopSummary.lastAction }}</span></div>
+        <div v-if="run.loopSummary.stopReason" class="detail-field"><span class="detail-field-label">Stop Reason</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.stopReason }}</span></div>
       </section>
 
       <section class="prestige-panel prestige-panel-pad detail-section">
@@ -305,6 +358,8 @@ const nodeMap = computed(() => {
 </template>
 
 <style scoped>
+.approval-admin { border-color: rgba(212, 162, 78, .55); }
+.approval-admin-comment { width: 100%; margin: 12px 0; resize: vertical; }
 .agent-run-detail {
   --gold: #c9a86a;
   --gold-strong: #ddc18a;

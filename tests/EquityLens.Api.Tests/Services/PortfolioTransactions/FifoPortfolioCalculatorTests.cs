@@ -10,10 +10,11 @@ public sealed class FifoPortfolioCalculatorTests
     [Fact]
     public void Calculate_BuyThenFullSell_MatchesCostAndRealizedPnl()
     {
+        var created = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var transactions = new[]
         {
-            Buy(100m, 10m, 0m),
-            Sell(100m, 12m, 10m),
+            Buy(100m, 10m, 0m, createdAt: created),
+            Sell(100m, 12m, 10m, createdAt: created.AddSeconds(1)),
         };
 
         var result = FifoPortfolioCalculator.Calculate(transactions);
@@ -30,10 +31,11 @@ public sealed class FifoPortfolioCalculatorTests
     [Fact]
     public void Calculate_PartialSell_KeepsRemainingLot()
     {
+        var created = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var transactions = new[]
         {
-            Buy(100m, 10m, 100m),
-            Sell(30m, 12m, 30m),
+            Buy(100m, 10m, 100m, createdAt: created),
+            Sell(30m, 12m, 30m, createdAt: created.AddSeconds(1)),
         };
 
         var result = FifoPortfolioCalculator.Calculate(transactions);
@@ -50,11 +52,12 @@ public sealed class FifoPortfolioCalculatorTests
     [Fact]
     public void Calculate_MultipleBuysThenSell_UsesFifoOrder()
     {
+        var created = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var transactions = new[]
         {
-            Buy(50m, 10m, 0m),
-            Buy(50m, 12m, 0m),
-            Sell(60m, 15m, 0m),
+            Buy(50m, 10m, 0m, createdAt: created),
+            Buy(50m, 12m, 0m, createdAt: created.AddSeconds(1)),
+            Sell(60m, 15m, 0m, createdAt: created.AddSeconds(2)),
         };
 
         var result = FifoPortfolioCalculator.Calculate(transactions);
@@ -110,13 +113,13 @@ public sealed class FifoPortfolioCalculatorTests
         Assert.False(result.IsValid);
     }
 
-    private static PortfolioTransaction Buy(decimal quantity, decimal price, decimal fee, DateOnly? date = null)
-        => CreateTransaction("BUY", quantity, price, fee, date ?? DateOnly.FromDateTime(DateTime.UtcNow));
+    private static PortfolioTransaction Buy(decimal quantity, decimal price, decimal fee, DateOnly? date = null, DateTime? createdAt = null)
+        => CreateTransaction("BUY", quantity, price, fee, date ?? DateOnly.FromDateTime(DateTime.UtcNow), createdAt);
 
-    private static PortfolioTransaction Sell(decimal quantity, decimal price, decimal fee, DateOnly? date = null)
-        => CreateTransaction("SELL", quantity, price, fee, date ?? DateOnly.FromDateTime(DateTime.UtcNow));
+    private static PortfolioTransaction Sell(decimal quantity, decimal price, decimal fee, DateOnly? date = null, DateTime? createdAt = null)
+        => CreateTransaction("SELL", quantity, price, fee, date ?? DateOnly.FromDateTime(DateTime.UtcNow), createdAt);
 
-    private static PortfolioTransaction CreateTransaction(string type, decimal quantity, decimal price, decimal fee, DateOnly date)
+    private static PortfolioTransaction CreateTransaction(string type, decimal quantity, decimal price, decimal fee, DateOnly date, DateTime? createdAt = null)
     {
         return new PortfolioTransaction
         {
@@ -128,7 +131,7 @@ public sealed class FifoPortfolioCalculatorTests
             Price = price,
             Fee = fee,
             TransactionDate = date,
-            CreatedAtUtc = DateTime.UtcNow,
+            CreatedAtUtc = createdAt ?? DateTime.UtcNow,
         };
     }
 }

@@ -17,6 +17,7 @@ public sealed class PortfolioRiskController : ApiControllerBase
     private readonly IRiskAnalysisService _riskAnalysisService;
     private readonly IRiskBacktestRunService _riskBacktestRunService;
     private readonly IRiskCalculationRunService _riskCalculationRunService;
+    private readonly IRiskQualityValidationService _riskQualityValidationService;
     private readonly ICurrentUserContext _currentUser;
 
     /// <summary>
@@ -28,11 +29,13 @@ public sealed class PortfolioRiskController : ApiControllerBase
         IRiskAnalysisService riskAnalysisService,
         IRiskBacktestRunService riskBacktestRunService,
         IRiskCalculationRunService riskCalculationRunService,
+        IRiskQualityValidationService riskQualityValidationService,
         ICurrentUserContext currentUser)
     {
         _riskAnalysisService = riskAnalysisService;
         _riskBacktestRunService = riskBacktestRunService;
         _riskCalculationRunService = riskCalculationRunService;
+        _riskQualityValidationService = riskQualityValidationService;
         _currentUser = currentUser;
     }
 
@@ -60,6 +63,16 @@ public sealed class PortfolioRiskController : ApiControllerBase
         var result = await _riskCalculationRunService.GetAsync(
             portfolioId, runId, _currentUser.UserId, cancellationToken);
         return ToActionResult(result);
+    }
+
+    [HttpPost("calculations/{runId:guid}/quality-validation")]
+    public async Task<ActionResult<RiskQualityEvaluationResponse>> ValidateRiskCalculation(
+        Guid portfolioId, Guid runId, CancellationToken cancellationToken = default)
+    {
+        var result = await _riskQualityValidationService.EnsureAsync(
+            portfolioId, runId, _currentUser.UserId, cancellationToken);
+        if (!result.IsSuccess) return ToActionResult(result);
+        return Accepted(result.Value);
     }
 
     /// <summary>列出目前使用者的近期正式風險計算。</summary>

@@ -30,4 +30,5 @@ public class AgentRunNode
     public ICollection<AgentRunEvent> Events { get; set; } = [];
     public ICollection<AgentToolCall> ToolCalls { get; set; } = [];
     public ICollection<AgentFeedback> Feedback { get; set; } = [];
+    public ICollection<AgentApprovalRequest> Approvals { get; set; } = [];
 }

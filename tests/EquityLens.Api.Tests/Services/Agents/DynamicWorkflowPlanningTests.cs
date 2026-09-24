@@ -338,6 +338,103 @@ public sealed class DynamicWorkflowPlanningTests
         Assert.Equal("Web retrieval budget exceeded.", error.Message);
     }
 
+    [Fact]
+    public void PortfolioLoopPlanner_AnalysisGaps_ProducesParallelMathAndOneEvaluator()
+    {
+        var run = PortfolioRunReadyForPlanning();
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var required = new[] { "calculate-historical-var", "calculate-expected-shortfall" };
+        var decision = new AgentLoopDecision(AgentLoopActions.RunRiskAnalyses, "ANALYSIS_GAPS", "需要補算。", 1,
+            false, 0, [], ["HISTORICAL_VAR_MISSING", "EXPECTED_SHORTFALL_MISSING"], required, 3);
+        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, DynamicPlanningTriggers.BranchCompleted,
+            board, run.Nodes.Select(x => x.NodeType).ToList(), new WorkflowSkillCatalog().Skills,
+            new NodeCapabilityRegistry().Capabilities, 0, 0, PortfolioDiagnosisNodeKeys.EvaluateQuality, decision);
+
+        var proposal = DeterministicDynamicWorkflowPlanner.Create(context);
+        var validated = new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService())
+            .Validate(run, proposal);
+
+        var math = validated.Actions.Where(x => x.NodeType == PortfolioRiskMathNodeTypes.Execute).ToList();
+        var evaluator = validated.Actions.Single(x => x.NodeType == PortfolioDiagnosisNodeTypes.EvaluateQuality);
+        Assert.Equal(required.Order(), math.Select(x => x.Capability).Order());
+        Assert.All(math, x => Assert.Equal([PortfolioDiagnosisNodeKeys.EvaluateQuality], x.DependsOn));
+        Assert.Equal(math.Select(x => x.ClientNodeKey).Order(), evaluator.DependsOn.Order());
+    }
+
+    [Fact]
+    public void PortfolioLoopPlanner_PassedGate_ProducesPacketDraftFinalizeChain()
+    {
+        var run = PortfolioRunReadyForPlanning();
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.PortfolioDiagnosisQuality] = JsonSerializer.SerializeToNode(
+            new PortfolioDiagnosisQualityResult(PortfolioDiagnosisQualityStatuses.Pass, 1, [], [], [],
+                new(.2m, -.1m, -.03m, -.04m, .18m, .5m, .6m, 1m)), AgentNodeJson.SerializerOptions);
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var decision = new AgentLoopDecision(AgentLoopActions.FinalizeDiagnosis, AgentLoopStopReasons.QualityGatePassed,
+            "品質通過。", 1, false, 0, []);
+        var context = new WorkflowPlanningContext(run.Id, run.OrchestrationVersion, DynamicPlanningTriggers.BranchCompleted,
+            board, run.Nodes.Select(x => x.NodeType).ToList(), new WorkflowSkillCatalog().Skills,
+            new NodeCapabilityRegistry().Capabilities, 0, 0, PortfolioDiagnosisNodeKeys.EvaluateQuality, decision);
+
+        var validated = new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService())
+            .Validate(run, DeterministicDynamicWorkflowPlanner.Create(context));
+
+        Assert.Equal([
+            PortfolioDiagnosisNodeTypes.BuildEvidencePacket,
+            PortfolioDiagnosisNodeTypes.DraftDiagnosis,
+            PortfolioDiagnosisNodeTypes.FinalizeDiagnosis
+        ], validated.Actions.Select(x => x.NodeType));
+    }
+
+    [Fact]
+    public void PortfolioValidator_RejectsMathNotRequestedByQualityGate()
+    {
+        var run = PortfolioRunReadyForPlanning();
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var actions = new DynamicPlanAction[]
+        {
+            new("calculate-beta:1", "calculate-beta", PortfolioRiskMathNodeTypes.Execute,
+                [PortfolioDiagnosisNodeKeys.EvaluateQuality], new()),
+            new("quality:1", "evaluate-portfolio-diagnosis-quality", PortfolioDiagnosisNodeTypes.EvaluateQuality,
+                ["calculate-beta:1"], new())
+        };
+        var proposal = new DynamicPlanProposal(Guid.NewGuid(), run.OrchestrationVersion, DynamicPlanningTriggers.BranchCompleted,
+            DynamicGoalStatuses.Continue, "bad", ["portfolio-risk-summary"], actions);
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            new DynamicPlanValidator(new NodeCapabilityRegistry(), new AgentWorkflowCatalog(), new WorkflowGraphTopologyService())
+                .Validate(run, proposal));
+
+        Assert.Contains("exactly the capabilities required", error.Message, StringComparison.Ordinal);
+    }
+
+    private static AgentRun PortfolioRunReadyForPlanning()
+    {
+        var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(
+            Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31));
+        foreach (var node in run.Nodes)
+        {
+            node.Status = AgentNodeStatuses.Succeeded;
+            node.CompletedAtUtc = DateTime.UtcNow;
+        }
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(
+            new PortfolioDiagnosisContext(Guid.NewGuid(), "Test", "TWD", new(2025, 1, 1), new(2025, 12, 31), 2),
+            AgentNodeJson.SerializerOptions);
+        board[AgentBlackboardKeys.MathInputs] = new JsonObject();
+        board[AgentBlackboardKeys.PerformanceAttribution] = new JsonObject();
+        board[AgentBlackboardKeys.RiskProfile] = new JsonObject();
+        board[AgentBlackboardKeys.RiskAnalysisPriorities] = new JsonArray();
+        board[AgentBlackboardKeys.PortfolioDiagnosisQuality] = JsonSerializer.SerializeToNode(
+            new PortfolioDiagnosisQualityResult(PortfolioDiagnosisQualityStatuses.NeedsAnalysis, 0,
+                [new("HISTORICAL_VAR_MISSING", true, "calculate-historical-var", "missing"),
+                 new("EXPECTED_SHORTFALL_MISSING", true, "calculate-expected-shortfall", "missing")],
+                ["calculate-historical-var", "calculate-expected-shortfall"], ["calculate-annualized-volatility"],
+                new(.2m, -.1m, null, null, null, .5m, .6m, null)), AgentNodeJson.SerializerOptions);
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        return run;
+    }
+
     private static AgentRun RunWithEvidenceContext()
     {
         var run = new ResearchQualityReviewWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()); var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);

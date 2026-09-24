@@ -161,6 +161,7 @@ public sealed class ResearchControllerTests
         public Task<AgentRunDetailResponse?> GetByIdAsync(Guid id, Guid? userId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<AgentRunSummaryResponse?> RetryAsync(Guid id, Guid userId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<AgentRunSummaryResponse?> CancelAsync(Guid id, Guid userId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<AgentRunSummaryResponse> DecideApprovalAsync(Guid runId, Guid userId, string decision, string? comment, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     }
 
     private sealed class FakeDocumentSearchService : IDocumentSearchService

@@ -11,6 +11,8 @@ public class PortfolioTransaction
     public decimal Fee { get; set; }
     public DateOnly TransactionDate { get; set; }
     public string? Note { get; set; }
+    public string? IdempotencyKey { get; set; }
+    public string? RequestHash { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     // Navigation

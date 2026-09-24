@@ -12,5 +12,6 @@ public sealed class AgentNodeSettingConfiguration : IEntityTypeConfiguration<Age
         b.Property(x => x.NodeType).HasMaxLength(128).IsRequired(); b.HasIndex(x => x.NodeType).IsUnique();
         b.Property(x => x.DisplayName).HasMaxLength(160); b.Property(x => x.Description).HasMaxLength(2000);
         b.Property(x => x.MetadataJson).HasColumnType("jsonb");
+        b.Property(x => x.RequiresHumanApprovalOverride).HasColumnName("requires_human_approval_override");
     }
 }

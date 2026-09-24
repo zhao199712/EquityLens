@@ -35,14 +35,13 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
         CreatedAtUtc = DateTime.UtcNow,
         Nodes = [
             Node(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext),
+            Node(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, PortfolioDiagnosisNodeTypes.ResolveRiskEvidence),
             Node(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeTypes.PrepareInputs),
-            new AgentRunNode { Id = Guid.NewGuid(), NodeKey = PortfolioRiskMathNodeKeys.ExecuteCore, NodeType = PortfolioRiskMathNodeTypes.Execute, TemplateNodeKey = "portfolio-risk-core", Status = AgentNodeStatuses.Pending, InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-portfolio-return", "calculate-concentration", "calculate-annualized-volatility", "calculate-max-drawdown", "calculate-historical-var", "calculate-expected-shortfall", "calculate-portfolio-volatility", "calculate-volatility-risk-contribution" } }) },
+            new AgentRunNode { Id = Guid.NewGuid(), NodeKey = PortfolioRiskMathNodeKeys.ExecuteCore, NodeType = PortfolioRiskMathNodeTypes.Execute, Status = AgentNodeStatuses.Pending, InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-portfolio-return", "calculate-concentration", "calculate-annualized-volatility", "calculate-max-drawdown" } }) },
             Node(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution),
             Node(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile),
             Node(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses),
-            Node(PortfolioDiagnosisNodeKeys.BuildEvidencePacket, PortfolioDiagnosisNodeTypes.BuildEvidencePacket),
-            Node(PortfolioDiagnosisNodeKeys.DraftDiagnosis, PortfolioDiagnosisNodeTypes.DraftDiagnosis),
-            Node(PortfolioDiagnosisNodeKeys.FinalizeDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeDiagnosis)]
+            Node(PortfolioDiagnosisNodeKeys.EvaluateQuality, PortfolioDiagnosisNodeTypes.EvaluateQuality)]
     };
 
     public static PortfolioDiagnosisInput ParseInput(string inputJson) =>
@@ -67,16 +66,32 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
     {
         ["workflowType"] = AgentWorkflowTypes.PortfolioDiagnosis,
         ["version"] = PortfolioDiagnosisWorkflow.Version,
+        ["orchestrationMode"] = "DynamicStateful",
+        ["loopProfile"] = new JsonObject
+        {
+            ["type"] = AgentWorkflowTypes.PortfolioDiagnosis,
+            ["version"] = PortfolioDiagnosisWorkflow.LoopProfileVersion,
+            ["maxAnalysisIterations"] = PortfolioDiagnosisWorkflow.MaxAnalysisIterations,
+            ["maxDynamicNodes"] = PortfolioDiagnosisWorkflow.MaxDynamicNodes,
+            ["maxMathCapabilitiesPerIteration"] = PortfolioDiagnosisWorkflow.MaxMathCapabilitiesPerIteration
+        },
+        ["goalStatus"] = "PendingPlanning",
+        ["planningHistory"] = new JsonArray(),
         ["nodes"] = new JsonArray
         {
-            N(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext), N(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeTypes.PrepareInputs), N(PortfolioRiskMathNodeKeys.ExecuteCore, PortfolioRiskMathNodeTypes.Execute), N(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution), N(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile), N(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses), N(PortfolioDiagnosisNodeKeys.BuildEvidencePacket, PortfolioDiagnosisNodeTypes.BuildEvidencePacket), N(PortfolioDiagnosisNodeKeys.DraftDiagnosis, PortfolioDiagnosisNodeTypes.DraftDiagnosis), N(PortfolioDiagnosisNodeKeys.FinalizeDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeDiagnosis)
+            N(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext), N(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, PortfolioDiagnosisNodeTypes.ResolveRiskEvidence), N(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeTypes.PrepareInputs, AgentBlackboardKeys.CoreRiskCalculationRequired, "true"), N(PortfolioRiskMathNodeKeys.ExecuteCore, PortfolioRiskMathNodeTypes.Execute, AgentBlackboardKeys.CoreRiskCalculationRequired, "true"), N(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution), N(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile), N(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses),
+            N(PortfolioDiagnosisNodeKeys.EvaluateQuality, PortfolioDiagnosisNodeTypes.EvaluateQuality)
         },
         ["edges"] = new JsonArray
         {
-            E(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioRiskMathNodeKeys.PrepareInputs), E(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeKeys.ExecuteCore), E(PortfolioRiskMathNodeKeys.ExecuteCore, PortfolioDiagnosisNodeKeys.CalculateAttribution), E(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeKeys.LoadRiskProfile), E(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses), E(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeKeys.BuildEvidencePacket), E(PortfolioDiagnosisNodeKeys.BuildEvidencePacket, PortfolioDiagnosisNodeKeys.DraftDiagnosis), E(PortfolioDiagnosisNodeKeys.DraftDiagnosis, PortfolioDiagnosisNodeKeys.FinalizeDiagnosis)
+            E(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeKeys.ResolveRiskEvidence), E(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, PortfolioRiskMathNodeKeys.PrepareInputs), E(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeKeys.ExecuteCore), E(PortfolioRiskMathNodeKeys.ExecuteCore, PortfolioDiagnosisNodeKeys.CalculateAttribution), E(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeKeys.LoadRiskProfile), E(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses), E(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeKeys.EvaluateQuality)
         }
     };
 
-    private static JsonObject N(string id, string type) => new() { ["id"] = id, ["type"] = type, ["required"] = true };
+    private static JsonObject N(string id, string type, string? conditionPath = null, string? expected = null) => new()
+    {
+        ["id"] = id, ["type"] = type, ["required"] = true,
+        ["condition"] = conditionPath is null ? null : new JsonObject { ["path"] = conditionPath, ["equals"] = expected }
+    };
     private static JsonObject E(string from, string to) => new() { ["from"] = from, ["to"] = to };
 }

@@ -76,4 +76,11 @@ public interface IAgentRunService
         Guid id,
         Guid userId,
         CancellationToken cancellationToken = default);
+
+    Task<AgentRunSummaryResponse> DecideApprovalAsync(
+        Guid runId,
+        Guid userId,
+        string decision,
+        string? comment,
+        CancellationToken cancellationToken = default);
 }
