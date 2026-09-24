@@ -130,7 +130,7 @@ public sealed class PlanEvidenceRetrievalNodeHandler(IEvidenceRetrievalPlanAgent
     }
 }
 
-public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever documents, IWebRetriever web) : IAgentNodeHandler
+public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever documents, IWebRetriever web, ResearchEvidenceTriageShadow? shadow = null) : IAgentNodeHandler
 {
     private const int MinimumLocalEvidence = 2;
     public string NodeType => EvidenceRemediationNodeTypes.RetrieveEvidence;
@@ -158,6 +158,25 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
                 new { providerStatus = "Unavailable", error = exception.Message, context.Node.Iteration });
         }
         var roundEvidence = local.OrderByDescending(x => x.Result.RelevanceScore).Take(8).ToList();
+        EvidenceTriageShadowResult? shadowResult = null;
+        if (shadow is not null)
+        {
+            try
+            {
+                var question = board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? string.Empty;
+                var dimensions = board[AgentBlackboardKeys.RequiredResearchDimensions] is JsonArray values
+                    ? values.Select(x => x?.GetValue<string>() ?? string.Empty).Where(x => x.Length > 0).ToList()
+                    : [];
+                shadowResult = await shadow.RunAsync(context, question, dimensions, roundEvidence, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception exception)
+            {
+                context.AddEvent(context.Run, context.Node, AgentEventTypes.ToolCallFailed,
+                    "Jev evidence shadow could not run; existing retrieval continues.",
+                    new { errorType = exception.GetType().Name });
+            }
+        }
         var allowWebFallback = JsonNode.Parse(context.Node.InputJson ?? "{}")?["allowWebFallback"]?.GetValue<bool>() ?? true;
         var usedWebFallback = allowWebFallback && roundEvidence.Count < MinimumLocalEvidence;
         if (usedWebFallback)
@@ -167,6 +186,10 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
             var webResults = await EvidenceRemediationToolCall.RunAsync(context, "webSearch", new { query, count = 5, freshness }, () => web.RetrieveWebAsync(query, 5, freshness, cancellationToken), x => $"{x.Count} web candidates", cancellationToken);
             roundEvidence.AddRange(webResults.Take(5));
         }
+        if (shadowResult is not null)
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.ToolCallCompleted,
+                "Jev evidence shadow comparison recorded.",
+                new { shadowResult.WouldSearchWeb, allowWebFallback, usedWebFallback });
         var existing = context.Node.Iteration > 1 && board[AgentBlackboardKeys.RetrievedEvidence] is not null ? EvidenceRemediationBoard.Required<List<RemediationEvidenceItem>>(board, AgentBlackboardKeys.RetrievedEvidence) : [];
         var additions = roundEvidence.Select(x => new RemediationEvidenceItem(0, x.SourceType.ToString(), x.Result.DocumentTitle, x.Result.DocumentType, x.Url ?? x.Result.SourceUrl, x.Result.Content, x.Result.RelevanceScore, x.PublishedAt, x.Query, x.SourceType == CitationSourceType.Web ? "Brave" : "Local"));
         var evidence = existing.Concat(additions).GroupBy(x => new { x.SourceType, x.Title, x.Url, x.Content }).Select(x => x.OrderByDescending(y => y.RelevanceScore).First()).Take(16).Select((x, i) => x with { Index = i + 1 }).ToList();

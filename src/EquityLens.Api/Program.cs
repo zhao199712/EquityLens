@@ -268,6 +268,10 @@ builder.Services.AddScoped<IAgentNodeHandler, FinalizePortfolioDiagnosisNodeHand
 builder.Services.AddScoped<IAgentNodeHandler, FinalizeRejectedPortfolioDiagnosisNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, LoadEvidenceRemediationContextNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, PlanEvidenceRetrievalNodeHandler>();
+builder.Services.Configure<JevEvidenceTriageOptions>(builder.Configuration.GetSection(JevEvidenceTriageOptions.SectionName));
+builder.Services.AddHttpClient<IResearchEvidenceTriage, JevResearchEvidenceTriage>(client =>
+    client.BaseAddress = new Uri("https://api.typesafe.ai/"));
+builder.Services.AddScoped<ResearchEvidenceTriageShadow>();
 builder.Services.AddScoped<IAgentNodeHandler, RetrieveRemediationEvidenceNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, RetrieveWebEvidenceNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, ExtractAnswerClaimsNodeHandler>();

@@ -1,4 +1,6 @@
 using System.Text.Json.Nodes;
+using System.Net;
+using System.Text.Json;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
@@ -7,6 +9,8 @@ using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Ai.Retrieval;
 using EquityLens.Api.Services.Chat;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Tests.Services.Agents;
 
@@ -122,6 +126,132 @@ public sealed class EvidenceRemediationWorkflowTests
         await new RetrieveRemediationEvidenceNodeHandler(new FakeDocumentRetriever([Chunk("A"), Chunk("B")]), web).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
 
         Assert.Equal(0, web.CallCount);
+    }
+
+    [Fact]
+    public async Task JevShadow_PublicEvidenceRecordsGapWithoutChangingWebDecision()
+    {
+        await using var db = CreateDb();
+        var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && x.Iteration == 1);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.Ticker] = "2330";
+        board[AgentBlackboardKeys.Question] = "毛利率改善是否與產能利用率有關？";
+        board[AgentBlackboardKeys.RequiredResearchDimensions] = new JsonArray("產能利用率與毛利率的關係");
+        board[AgentBlackboardKeys.RetrievalPlan] = JsonSerializerNode(new ResearchRetrievalStrategy("Auto", [new ResearchRetrievalSearch(null, "Primary", "毛利率", 5, "test")]));
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var chunks = new[] { Chunk("董事名單"), Chunk("股利分派") };
+        foreach (var chunk in chunks) AddDocument(db, chunk, "https://www.sec.gov/Archives/test", null);
+        db.AgentRuns.Add(run);
+        await db.SaveChangesAsync();
+        var model = new FakeEvidenceTriage(.1);
+        var web = new FakeWebRetriever();
+        var shadow = new ResearchEvidenceTriageShadow(model, ShadowOptions(run.UserId));
+
+        await new RetrieveRemediationEvidenceNodeHandler(new FakeDocumentRetriever(chunks), web, shadow)
+            .ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        Assert.Equal(2, model.CallCount);
+        Assert.Equal(0, web.CallCount);
+        Assert.Equal(2, AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.RetrievedEvidence]!.AsArray().Count);
+        var call = Assert.Single(run.ToolCalls, x => x.ToolName == "jevEvidenceTriageShadow");
+        Assert.True(JsonNode.Parse(call.ResultJson!)!["wouldSearchWeb"]!.GetValue<bool>());
+        Assert.DoesNotContain("董事名單", call.ResultJson!);
+    }
+
+    [Fact]
+    public async Task JevShadow_SkipsUserUploadAndKeepsCoverageUnknown()
+    {
+        await using var db = CreateDb();
+        var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && x.Iteration == 1);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.Ticker] = "2330";
+        board[AgentBlackboardKeys.Question] = "財報問題";
+        board[AgentBlackboardKeys.RetrievalPlan] = JsonSerializerNode(new ResearchRetrievalStrategy("Auto", [new ResearchRetrievalSearch(null, "Primary", "財報", 5, "test")]));
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var publicChunk = Chunk("公開內容"); var privateChunk = Chunk("私有內容");
+        AddDocument(db, publicChunk, "https://www.sec.gov/Archives/test", null);
+        AddDocument(db, privateChunk, "https://www.sec.gov/Archives/test", Guid.NewGuid());
+        db.AgentRuns.Add(run);
+        await db.SaveChangesAsync();
+        var model = new FakeEvidenceTriage(.9); var web = new FakeWebRetriever();
+
+        await new RetrieveRemediationEvidenceNodeHandler(new FakeDocumentRetriever([publicChunk, privateChunk]), web,
+                new ResearchEvidenceTriageShadow(model, ShadowOptions(run.UserId)))
+            .ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        Assert.Equal(1, model.CallCount);
+        Assert.Equal(0, web.CallCount);
+        var call = Assert.Single(run.ToolCalls, x => x.ToolName == "jevEvidenceTriageShadow");
+        Assert.Null(JsonNode.Parse(call.ResultJson!)!["wouldSearchWeb"]);
+        Assert.DoesNotContain("私有內容", call.ResultJson!);
+    }
+
+    [Fact]
+    public async Task JevShadow_ModelFailureDoesNotChangeRetrieval()
+    {
+        await using var db = CreateDb();
+        var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && x.Iteration == 1);
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.Ticker] = "2330"; board[AgentBlackboardKeys.Question] = "財報問題";
+        board[AgentBlackboardKeys.RetrievalPlan] = JsonSerializerNode(new ResearchRetrievalStrategy("Auto", [new ResearchRetrievalSearch(null, "Primary", "財報", 5, "test")]));
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var chunk = Chunk("公開內容"); AddDocument(db, chunk, "https://www.sec.gov/Archives/test", null);
+        db.AgentRuns.Add(run); await db.SaveChangesAsync();
+        var web = new FakeWebRetriever();
+
+        await new RetrieveRemediationEvidenceNodeHandler(new FakeDocumentRetriever([chunk]), web,
+                new ResearchEvidenceTriageShadow(new FakeEvidenceTriage(.2, fail: true), ShadowOptions(run.UserId)))
+            .ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        Assert.Equal(1, web.CallCount);
+        Assert.Equal(2, AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.RetrievedEvidence]!.AsArray().Count);
+        Assert.Contains(run.ToolCalls, x => x.ToolName == "jevEvidenceTriageShadow" && x.Status == AgentToolCallStatuses.Failed);
+    }
+
+    [Fact]
+    public async Task JevShadow_DynamicLocalOnlyNodeDoesNotTriggerHiddenWeb()
+    {
+        await using var db = CreateDb();
+        var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var node = run.Nodes.Single(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveEvidence && x.Iteration == 1);
+        node.InputJson = new JsonObject { ["allowWebFallback"] = false }.ToJsonString();
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board[AgentBlackboardKeys.Ticker] = "2330"; board[AgentBlackboardKeys.Question] = "毛利率問題";
+        board[AgentBlackboardKeys.RetrievalPlan] = JsonSerializerNode(new ResearchRetrievalStrategy("Auto", [new ResearchRetrievalSearch(null, "Primary", "毛利率", 5, "test")]));
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        var chunk = Chunk("公開內容"); AddDocument(db, chunk, "https://www.sec.gov/Archives/test", null);
+        db.AgentRuns.Add(run); await db.SaveChangesAsync();
+        var web = new FakeWebRetriever();
+
+        await new RetrieveRemediationEvidenceNodeHandler(new FakeDocumentRetriever([chunk]), web,
+                new ResearchEvidenceTriageShadow(new FakeEvidenceTriage(.1), ShadowOptions(run.UserId)))
+            .ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+
+        Assert.Equal(0, web.CallCount);
+        Assert.Single(AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.RetrievedEvidence]!.AsArray());
+        Assert.True(JsonNode.Parse(Assert.Single(run.ToolCalls, x => x.ToolName == "jevEvidenceTriageShadow").ResultJson!)!["wouldSearchWeb"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task JevClient_UsesTypedQuestionsAndReadsProbabilities()
+    {
+        var transport = new FakeJevTransport();
+        using var http = new HttpClient(transport) { BaseAddress = new Uri("https://api.typesafe.ai/") };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["TYPESAFE_API_KEY"] = "test-only" }).Build();
+        var model = new JevResearchEvidenceTriage(http, config, Options.Create(new JevEvidenceTriageOptions()));
+
+        var result = await model.AssessAsync("毛利率為何改善？", ["產能利用率"], Chunk("毛利率與利用率資料"), CancellationToken.None);
+
+        Assert.Equal(.8, result.Relevance);
+        Assert.Equal(.4, result.DimensionCoverage[0]);
+        Assert.Equal(120, result.InputTokens);
+        Assert.Equal("jev-1.13.0", result.Model);
+        Assert.NotNull(transport.Body);
+        Assert.Contains("dimension_0", transport.Body!);
+        Assert.Equal("Bearer test-only", transport.Authorization);
     }
 
     [Fact]
@@ -355,6 +485,19 @@ public sealed class EvidenceRemediationWorkflowTests
     }
 
     private static JsonNode JsonSerializerNode<T>(T value) => System.Text.Json.JsonSerializer.SerializeToNode(value, AgentNodeJson.SerializerOptions)!;
+    private static IOptions<JevEvidenceTriageOptions> ShadowOptions(Guid userId) => Options.Create(new JevEvidenceTriageOptions
+    {
+        Enabled = true,
+        AllowedUserIds = [userId.ToString()],
+        AllowedPublicHosts = ["www.sec.gov"]
+    });
+    private static void AddDocument(TestDb db, RetrievedDocumentChunk chunk, string sourceUrl, Guid? uploadedBy)
+    {
+        var file = new UploadedFile { Id = Guid.NewGuid(), UploadedByUserId = uploadedBy, UploadStatus = "Uploaded" };
+        db.UploadedFiles.Add(file);
+        db.Documents.Add(new Document { Id = chunk.Result.DocumentId, UploadedFileId = file.Id, UploadedFile = file,
+            Title = chunk.Result.DocumentTitle, SourceUrl = sourceUrl, ParseStatus = "Completed" });
+    }
     private static AgentRun CriticSource(Guid userId)
     {
         var board = AgentBlackboardContracts.CreateInitialCriticReviewBlackboard(Guid.NewGuid()); board[AgentBlackboardKeys.Ticker] = "2330"; board[AgentBlackboardKeys.Question] = "問題"; board[AgentBlackboardKeys.Answer] = "原回答"; board[AgentBlackboardKeys.CriticFindings] = new JsonArray(AgentBlackboardContracts.CreateFinding("High", "WeakCitation", "引用不足", "補充證據")); board[AgentBlackboardKeys.CriticReview] = new JsonObject { [CriticReviewFields.RequiresMoreEvidence] = true, [CriticReviewFields.Findings] = board[AgentBlackboardKeys.CriticFindings]!.DeepClone() };
@@ -374,6 +517,33 @@ public sealed class EvidenceRemediationWorkflowTests
     {
         public Task<IReadOnlyList<RetrievedDocumentChunk>> RetrieveAsync(ResearchRetrievalStrategy strategy, string ticker, CancellationToken cancellationToken = default) => Task.FromResult(results);
         public IReadOnlyList<RetrievedDocumentChunk> GetCandidatesForRerank(IReadOnlyList<RetrievedDocumentChunk> chunks, int targetCount) => chunks;
+    }
+    private sealed class FakeEvidenceTriage(double coverage, bool fail = false) : IResearchEvidenceTriage
+    {
+        public int CallCount { get; private set; }
+        public Task<EvidenceTriageItem> AssessAsync(string question, IReadOnlyList<string> dimensions, RetrievedDocumentChunk chunk, CancellationToken cancellationToken)
+        {
+            CallCount++;
+            if (fail) throw new HttpRequestException("Jev unavailable.");
+            return Task.FromResult(new EvidenceTriageItem(chunk.Result.DocumentChunkId, .8, coverage, .1,
+                dimensions.Select(_ => coverage).ToList(), "jev-test", 10));
+        }
+    }
+    private sealed class FakeJevTransport : HttpMessageHandler
+    {
+        public string? Body { get; private set; }
+        public string? Authorization { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            Authorization = request.Headers.Authorization?.ToString();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""
+                    {"model":"jev-1.13.0","answers":{"relevant":{"noul":0.8},"direct_answer":{"noul":0.6},"contradiction":{"noul":0.1},"dimension_0":{"noul":0.4}},"usage":{"input_tokens":120}}
+                    """)
+            };
+        }
     }
     private sealed class ThrowingDocumentRetriever : IDocumentRetriever
     {
