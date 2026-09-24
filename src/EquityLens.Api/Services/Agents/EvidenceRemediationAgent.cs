@@ -24,7 +24,7 @@ public static class InvestigationModes
 }
 
 public sealed record EvidenceClaim(string Id, string Text, IReadOnlyList<string> NumericValues, string Kind = EvidenceClaimKinds.AnswerClaim, string ClaimType = EvidenceClaimTypes.Factual, string? ResearchDimension = null);
-public sealed record RemediationEvidenceItem(int Index, string SourceType, string? Title, string? DocumentType, string? Url, string Content, double RelevanceScore, DateTimeOffset? PublishedAt = null, string? Query = null, string? Provider = null);
+public sealed record RemediationEvidenceItem(int Index, string SourceType, string? Title, string? DocumentType, string? Url, string Content, double RelevanceScore, DateTimeOffset? PublishedAt = null, string? Query = null, string? Provider = null, Guid? DocumentId = null, Guid? DocumentChunkId = null);
 public sealed record ClaimSupportAssessment(
     string ClaimId,
     string Status,

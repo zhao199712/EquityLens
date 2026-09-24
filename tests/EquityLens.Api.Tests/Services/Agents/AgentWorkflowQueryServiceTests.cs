@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
@@ -6,11 +7,61 @@ using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Ai;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Tests.Services.Agents;
 
 public sealed class AgentWorkflowQueryServiceTests
 {
+    [Fact]
+    public async Task RouterJevShadow_RecordsDisagreementWithoutChangingRoute_AndSendsOnlyPortfolioIdAndName()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid(); var portfolioId = Guid.NewGuid();
+        db.Portfolios.Add(new Portfolio { Id = portfolioId, OwnerUserId = userId, Name = "退休投組" });
+        await db.SaveChangesAsync();
+        var transport = new RouterJevTransport(portfolioId);
+        using var http = new HttpClient(transport) { BaseAddress = new Uri("https://api.typesafe.ai/") };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["TYPESAFE_API_KEY"] = "test-only" }).Build();
+        var shadow = new JevRouterShadow(new TypeSafeDecisionClient(http, config),
+            Options.Create(new JevRouterShadowOptions { Enabled = true, AllowedUserIds = [userId.ToString()] }));
+        var runs = new FakeAgentRuns();
+        var service = new AgentWorkflowQueryService(db,
+            new InvestmentResearchRouter(new FakeChat(PortfolioRoute()), new WorkflowSkillCatalog(), shadow), runs);
+
+        var created = await service.CreateAsync(userId, new("退休投組的風險如何？"));
+
+        Assert.Equal(AgentWorkflowTypes.PortfolioDiagnosis, created.WorkflowType);
+        Assert.Equal(portfolioId, runs.PortfolioId);
+        Assert.False(runs.RoutingContext!.JevShadow!.MatchesLlmWorkflow);
+        Assert.Equal(150, runs.RoutingContext.JevShadow.InputTokens);
+        using var payload = JsonDocument.Parse(transport.Body);
+        var option = payload.RootElement.GetProperty("state").GetProperty("availablePortfolios")[0];
+        Assert.Equal(portfolioId, option.GetProperty("id").GetGuid());
+        Assert.Equal("退休投組", option.GetProperty("name").GetString());
+        Assert.DoesNotContain("holdingCount", transport.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("baseCurrency", transport.Body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RouterJevShadow_WithoutApiKey_DoesNotBlockLlmRoute()
+    {
+        await using var db = CreateDb(); var userId = Guid.NewGuid();
+        db.Portfolios.Add(new Portfolio { Id = Guid.NewGuid(), OwnerUserId = userId, Name = "P" });
+        await db.SaveChangesAsync();
+        using var http = new HttpClient(new RouterJevTransport(Guid.NewGuid())) { BaseAddress = new Uri("https://api.typesafe.ai/") };
+        var shadow = new JevRouterShadow(new TypeSafeDecisionClient(http, new ConfigurationBuilder().Build()),
+            Options.Create(new JevRouterShadowOptions { Enabled = true, AllowedUserIds = [userId.ToString()] }));
+        var runs = new FakeAgentRuns();
+        var service = new AgentWorkflowQueryService(db,
+            new InvestmentResearchRouter(new FakeChat(PortfolioRoute()), new WorkflowSkillCatalog(), shadow), runs);
+
+        var created = await service.CreateAsync(userId, new("我的投組風險如何？"));
+
+        Assert.Equal(AgentWorkflowTypes.PortfolioDiagnosis, created.WorkflowType);
+        Assert.Null(runs.RoutingContext?.JevShadow);
+    }
+
     [Fact]
     public async Task PortfolioQuestion_WithOnePortfolio_CreatesDiagnosis()
     {
@@ -297,6 +348,30 @@ public sealed class AgentWorkflowQueryServiceTests
         {
             LastRequest = request;
             return Task.FromResult(new ChatCompletionResult(content, "router-test", 10, 5));
+        }
+    }
+
+    private sealed class RouterJevTransport(Guid portfolioId) : HttpMessageHandler
+    {
+        public string Body { get; private set; } = "";
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            var choices = new Dictionary<string, string>
+            {
+                ["workflow"] = AgentWorkflowTypes.ResearchInvestigation, ["skill"] = "research-investigation",
+                ["market"] = "TW", ["asset"] = "portfolio", ["depth"] = "standard",
+                ["portfolio"] = portfolioId.ToString()
+            };
+            var answers = choices.ToDictionary(x => x.Key, x => new
+            {
+                type = "choice", choice = x.Value, confidence = .8,
+                probabilities = new Dictionary<string, double> { [x.Value] = .9 }
+            });
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new { model = "jev-test", answers, usage = new { input_tokens = 150 } }))
+            };
         }
     }
 

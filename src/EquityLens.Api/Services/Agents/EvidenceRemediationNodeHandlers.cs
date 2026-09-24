@@ -191,7 +191,7 @@ public sealed class RetrieveRemediationEvidenceNodeHandler(IDocumentRetriever do
                 "Jev evidence shadow comparison recorded.",
                 new { shadowResult.WouldSearchWeb, allowWebFallback, usedWebFallback });
         var existing = context.Node.Iteration > 1 && board[AgentBlackboardKeys.RetrievedEvidence] is not null ? EvidenceRemediationBoard.Required<List<RemediationEvidenceItem>>(board, AgentBlackboardKeys.RetrievedEvidence) : [];
-        var additions = roundEvidence.Select(x => new RemediationEvidenceItem(0, x.SourceType.ToString(), x.Result.DocumentTitle, x.Result.DocumentType, x.Url ?? x.Result.SourceUrl, x.Result.Content, x.Result.RelevanceScore, x.PublishedAt, x.Query, x.SourceType == CitationSourceType.Web ? "Brave" : "Local"));
+        var additions = roundEvidence.Select(x => new RemediationEvidenceItem(0, x.SourceType.ToString(), x.Result.DocumentTitle, x.Result.DocumentType, x.Url ?? x.Result.SourceUrl, x.Result.Content, x.Result.RelevanceScore, x.PublishedAt, x.Query, x.SourceType == CitationSourceType.Web ? "Brave" : "Local", x.SourceType == CitationSourceType.Web ? null : x.Result.DocumentId, x.SourceType == CitationSourceType.Web ? null : x.Result.DocumentChunkId));
         var evidence = existing.Concat(additions).GroupBy(x => new { x.SourceType, x.Title, x.Url, x.Content }).Select(x => x.OrderByDescending(y => y.RelevanceScore).First()).Take(16).Select((x, i) => x with { Index = i + 1 }).ToList();
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.RetrievedEvidence, evidence);
         var history = board[AgentBlackboardKeys.RetrievalHistory]?.AsArray() ?? new JsonArray(); history.Add(JsonSerializer.SerializeToNode(new { iteration = context.Node.Iteration, localCount = local.Count, totalCount = evidence.Count, usedWebFallback, localFailure }, AgentNodeJson.SerializerOptions)); board[AgentBlackboardKeys.RetrievalHistory] = history;
@@ -323,7 +323,7 @@ public sealed class ExtractAnswerClaimsNodeHandler(IClaimExtractionAgent agent, 
     }
 }
 
-public sealed class AssessClaimSupportNodeHandler(IEvidenceAssessor assessor) : IAgentNodeHandler
+public sealed class AssessClaimSupportNodeHandler(IEvidenceAssessor assessor, JevClaimEvidenceShadow? shadow = null) : IAgentNodeHandler
 {
     public string NodeType => EvidenceRemediationNodeTypes.AssessSupport;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
@@ -347,6 +347,7 @@ public sealed class AssessClaimSupportNodeHandler(IEvidenceAssessor assessor) : 
         }
         var result = await EvidenceRemediationToolCall.RunAsync(context, "evidenceAssessorLLM", new { agentIdentity = LlmEvidenceAssessor.AgentIdentity, claimCount = claims.Count, evidenceCount = evidence.Count, promptTemplateId = LlmEvidenceAssessor.PromptTemplateId, promptVersion = LlmEvidenceAssessor.PromptVersion }, () => assessor.AssessAsync(new(question, sourceAnswer, claims, evidence, findings), cancellationToken), x => $"{x.Assessments.Count} assessments; {x.Provider}/{x.Model}; {x.PromptTokens + x.CompletionTokens} tokens; cost={x.EstimatedCostUsd?.ToString() ?? "unavailable"}", cancellationToken);
         EvidenceRemediationToolCall.RecordStructuredAttempts(context, "evidenceAssessorLLM", LlmEvidenceAssessor.AgentIdentity, LlmEvidenceAssessor.PromptTemplateId, LlmEvidenceAssessor.PromptVersion, result.Attempts);
+        if (shadow is not null) await shadow.RunAsync(context, claims, evidence, result.Assessments, cancellationToken);
         EvidenceRemediationBoard.Set(board, AgentBlackboardKeys.ClaimSupportAssessments, result.Assessments); EvidenceRemediationBoard.Commit(context, board, result);
     }
 }
@@ -380,7 +381,8 @@ public sealed class ValidateEvidenceMappingsNodeHandler : IAgentNodeHandler
         if (assessment is not null && assessment.AnalysisImpact is not ("None" or "WordingOnly" or "Material")) errors.Add("Analysis impact is invalid.");
         if (assessment is not null && assessment.QuestionRelevance is not ("None" or "Peripheral" or "Core")) errors.Add("Question relevance is invalid.");
         if (assessment is not null && assessment.AnswerabilityEffect is not ("NoChange" or "EnablesBoundedAnswer" or "EnablesDirectAnswer")) errors.Add("Answerability effect is invalid.");
-        var selectedText = string.Join(" ", indexes.Where(i => i >= 1 && i <= evidence.Count).Select(i => evidence[i - 1].Content)); foreach (var number in claim.NumericValues) if (!selectedText.Contains(number, StringComparison.OrdinalIgnoreCase)) errors.Add($"Numeric value '{number}' is not present in mapped evidence.");
+        var selected = indexes.Where(i => i >= 1 && i <= evidence.Count).Select(i => evidence[i - 1]).ToList();
+        errors.AddRange(DeterministicClaimEvidenceValidator.Validate(claim, selected));
         var status = errors.Count > 0 ? "Unsupported" : assessment?.Status switch { "Supported" => "Supported", "PartiallySupported" => "PartiallySupported", "Contradicted" => "Contradicted", "Unverifiable" => "Unverifiable", _ => "Unsupported" }; return new ValidatedClaimSupport(claim.Id, claim.Text, status, indexes, errors);
     }
 }

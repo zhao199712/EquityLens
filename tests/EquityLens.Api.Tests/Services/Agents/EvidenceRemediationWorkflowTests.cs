@@ -241,7 +241,7 @@ public sealed class EvidenceRemediationWorkflowTests
         var transport = new FakeJevTransport();
         using var http = new HttpClient(transport) { BaseAddress = new Uri("https://api.typesafe.ai/") };
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["TYPESAFE_API_KEY"] = "test-only" }).Build();
-        var model = new JevResearchEvidenceTriage(http, config, Options.Create(new JevEvidenceTriageOptions()));
+        var model = new JevResearchEvidenceTriage(new TypeSafeDecisionClient(http, config), Options.Create(new JevEvidenceTriageOptions()));
 
         var result = await model.AssessAsync("毛利率為何改善？", ["產能利用率"], Chunk("毛利率與利用率資料"), CancellationToken.None);
 
@@ -252,6 +252,39 @@ public sealed class EvidenceRemediationWorkflowTests
         Assert.NotNull(transport.Body);
         Assert.Contains("dimension_0", transport.Body!);
         Assert.Equal("Bearer test-only", transport.Authorization);
+    }
+
+    [Fact]
+    public async Task ClaimEvidenceShadow_OnlySendsAllowlistedPublicEvidence_AndKeepsAssessorFinal()
+    {
+        await using var db = CreateDb();
+        var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "assess:test",
+            TemplateNodeKey = "assess-support", NodeType = EvidenceRemediationNodeTypes.AssessSupport,
+            Iteration = 1, Status = AgentNodeStatuses.Running };
+        run.Nodes.Add(node); db.AgentRuns.Add(run); await db.SaveChangesAsync();
+        var transport = new ClaimJevTransport();
+        using var http = new HttpClient(transport) { BaseAddress = new Uri("https://api.typesafe.ai/") };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["TYPESAFE_API_KEY"] = "test-only" }).Build();
+        var shadow = new JevClaimEvidenceShadow(new TypeSafeDecisionClient(http, config),
+            Options.Create(new JevClaimEvidenceShadowOptions { Enabled = true,
+                AllowedUserIds = [run.UserId.ToString()], AllowedPublicHosts = ["public.example"] }));
+        var claims = new[] { new EvidenceClaim("c1", "公司已完成擴建", []) };
+        var evidence = new[]
+        {
+            new RemediationEvidenceItem(1, "Web", "公告", null, "https://public.example/report", "公司預計明年完成擴建", 1),
+            new RemediationEvidenceItem(2, "Local", "私人", null, null, "PRIVATE_PASSAGE", 1)
+        };
+        var assessment = new[] { new ClaimSupportAssessment("c1", "Supported", [1, 2], "LLM judgment") };
+
+        var result = await shadow.RunAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }),
+            claims, evidence, assessment, CancellationToken.None);
+
+        Assert.Single(result!.Pairs);
+        Assert.Equal("insufficient", result.Pairs[0].Relation);
+        Assert.Equal(1, result.SkippedPairCount);
+        Assert.DoesNotContain("PRIVATE_PASSAGE", transport.Body);
+        Assert.Equal("Supported", assessment[0].Status);
     }
 
     [Fact]
@@ -540,7 +573,21 @@ public sealed class EvidenceRemediationWorkflowTests
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""
-                    {"model":"jev-1.13.0","answers":{"relevant":{"noul":0.8},"direct_answer":{"noul":0.6},"contradiction":{"noul":0.1},"dimension_0":{"noul":0.4}},"usage":{"input_tokens":120}}
+                    {"model":"jev-1.13.0","answers":{"relevant":{"type":"noul","noul":0.8},"direct_answer":{"type":"noul","noul":0.6},"contradiction":{"type":"noul","noul":0.1},"dimension_0":{"type":"noul","noul":0.4}},"usage":{"input_tokens":120}}
+                    """)
+            };
+        }
+    }
+    private sealed class ClaimJevTransport : HttpMessageHandler
+    {
+        public string Body { get; private set; } = "";
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""
+                    {"model":"jev-test","answers":{"relation":{"type":"choice","choice":"insufficient","confidence":0.8,"probabilities":{"insufficient":0.9}},"certainty":{"type":"choice","choice":"forecast","confidence":0.8,"probabilities":{"forecast":0.9}}},"usage":{"input_tokens":80}}
                     """)
             };
         }

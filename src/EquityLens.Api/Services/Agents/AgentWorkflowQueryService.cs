@@ -33,7 +33,7 @@ public sealed class AgentWorkflowQueryService(
             .OrderBy(x => x.Name)
             .Select(x => new InvestmentResearchPortfolioOption(x.Id, x.Name, x.BaseCurrency, x.Holdings.Count))
             .ToListAsync(cancellationToken);
-        var decision = await router.RouteAsync(question, portfolios, cancellationToken);
+        var decision = await router.RouteAsync(question, portfolios, cancellationToken, userId);
 
         if (string.Equals(decision.WorkflowType, AgentWorkflowTypes.PortfolioDiagnosis, StringComparison.OrdinalIgnoreCase))
         {

@@ -269,9 +269,14 @@ builder.Services.AddScoped<IAgentNodeHandler, FinalizeRejectedPortfolioDiagnosis
 builder.Services.AddScoped<IAgentNodeHandler, LoadEvidenceRemediationContextNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, PlanEvidenceRetrievalNodeHandler>();
 builder.Services.Configure<JevEvidenceTriageOptions>(builder.Configuration.GetSection(JevEvidenceTriageOptions.SectionName));
-builder.Services.AddHttpClient<IResearchEvidenceTriage, JevResearchEvidenceTriage>(client =>
+builder.Services.Configure<JevRouterShadowOptions>(builder.Configuration.GetSection(JevRouterShadowOptions.SectionName));
+builder.Services.Configure<JevClaimEvidenceShadowOptions>(builder.Configuration.GetSection(JevClaimEvidenceShadowOptions.SectionName));
+builder.Services.AddHttpClient<TypeSafeDecisionClient>(client =>
     client.BaseAddress = new Uri("https://api.typesafe.ai/"));
+builder.Services.AddScoped<IResearchEvidenceTriage, JevResearchEvidenceTriage>();
 builder.Services.AddScoped<ResearchEvidenceTriageShadow>();
+builder.Services.AddScoped<JevRouterShadow>();
+builder.Services.AddScoped<JevClaimEvidenceShadow>();
 builder.Services.AddScoped<IAgentNodeHandler, RetrieveRemediationEvidenceNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, RetrieveWebEvidenceNodeHandler>();
 builder.Services.AddScoped<IAgentNodeHandler, ExtractAnswerClaimsNodeHandler>();

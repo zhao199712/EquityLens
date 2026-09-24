@@ -19,12 +19,14 @@ public interface IInvestmentResearchRouter
     Task<InvestmentResearchRouteDecision> RouteAsync(
         string question,
         IReadOnlyList<InvestmentResearchPortfolioOption> portfolios,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Guid? userId = null);
 }
 
 public sealed class InvestmentResearchRouter(
     IChatCompletionService chat,
-    IWorkflowSkillCatalog skillCatalog) : IInvestmentResearchRouter
+    IWorkflowSkillCatalog skillCatalog,
+    JevRouterShadow? jevShadow = null) : IInvestmentResearchRouter
 {
     public const string PromptTemplateId = "investment-research-question-router";
     public const int PromptVersion = 2;
@@ -38,7 +40,8 @@ public sealed class InvestmentResearchRouter(
     public async Task<InvestmentResearchRouteDecision> RouteAsync(
         string question,
         IReadOnlyList<InvestmentResearchPortfolioOption> portfolios,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? userId = null)
     {
         var routableSkills = skillCatalog.Skills.Where(x => x.Routable).ToList();
         var stopwatch = Stopwatch.StartNew();
@@ -122,7 +125,13 @@ public sealed class InvestmentResearchRouter(
             result.PromptTokens,
             result.CompletionTokens,
             stopwatch.ElapsedMilliseconds);
-        return new(output.WorkflowType, output.PortfolioId, Trim(output.SecurityQuery), routing);
+        var decision = new InvestmentResearchRouteDecision(output.WorkflowType, output.PortfolioId, Trim(output.SecurityQuery), routing);
+        if (jevShadow is not null)
+        {
+            var shadow = await jevShadow.RunAsync(userId, question, portfolios, routableSkills, decision, cancellationToken);
+            if (shadow is not null) decision = decision with { RoutingContext = routing with { JevShadow = shadow } };
+        }
+        return decision;
     }
 
     private static string BuildSystemPrompt(IReadOnlyList<WorkflowSkill> skills) => $$"""

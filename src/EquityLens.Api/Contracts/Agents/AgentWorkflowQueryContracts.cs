@@ -10,6 +10,11 @@ public sealed record InvestmentResearchContextEnvelope(
     string? Currency,
     string Language);
 
+public sealed record JevRouterShadowResult(
+    string WorkflowType, string LeadSkill, string Market, string Asset, string Depth,
+    Guid? PortfolioId, bool MatchesLlmWorkflow, bool MatchesLlmSkill,
+    double WorkflowProbability, double SkillProbability, string Model, int InputTokens, long DurationMs);
+
 public sealed record InvestmentResearchRoutingContext(
     string LeadSkill,
     string LeadSkillDisplayName,
@@ -26,7 +31,8 @@ public sealed record InvestmentResearchRoutingContext(
     int PromptVersion,
     int PromptTokens,
     int CompletionTokens,
-    long DurationMs);
+    long DurationMs,
+    JevRouterShadowResult? JevShadow = null);
 
 public sealed record AgentWorkflowQueryCreatedResponse(
     Guid AgentRunId,
