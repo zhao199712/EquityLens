@@ -181,16 +181,33 @@ def score_case(case: EvalCase, output: RunOutput) -> list[ScoreItem]:
     return [scorer(case, output) for scorer in DETERMINISTIC_SCORERS]
 
 
-def case_passed(case: EvalCase, items: list[ScoreItem]) -> bool:
-    """Strict gate: right behaviour, every verified fact, no forbidden text, no dangling citation."""
+# A judge score below 3/5 on the rubric fails the case: a well-cited but wrong answer must not pass.
+JUDGE_MIN_SCORE = 0.5
+
+GATED_SCORES = ("facts", "keywords", "citation_integrity")
+JUDGE_SCORES = ("judge_correctness", "judge_groundedness")
+
+
+def case_passed(case: EvalCase, items: list[ScoreItem]) -> bool | None:
+    """Strict pass/fail gate for verified cases.
+
+    Returns None for draft (unverified) cases: they are still scored for diagnostics but must never
+    count toward pass_rate, otherwise an answer to an unchecked question can "pass" by citing anything.
+    A verified case passes only when behaviour is right, every applicable deterministic score is 1.0
+    (all facts, all must_include groups, no forbidden text, no dangling citation) and, when the judge
+    ran, its scores clear JUDGE_MIN_SCORE.
+    """
+    if not case.verified:
+        return None
     by_name = {item.name: item for item in items}
     if by_name["behavior"].score != 1.0:
         return False
-    for name in ("facts", "citation_integrity"):
+    for name in GATED_SCORES:
         item = by_name.get(name)
         if item and item.applicable and item.score < 1.0:
             return False
-    keywords = by_name.get("keywords")
-    if keywords and keywords.applicable and keywords.details.get("forbidden_present"):
-        return False
+    for name in JUDGE_SCORES:
+        item = by_name.get(name)
+        if item and item.applicable and item.score < JUDGE_MIN_SCORE:
+            return False
     return True

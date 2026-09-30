@@ -16,7 +16,8 @@ pip install -e '.[test]'
 python -m equitylens_eval validate --cases cases/research_v1.jsonl -v
 
 # 2. 對本機 API 跑一次（ask = 單次 RAG；investigation = 完整 agent workflow）
-export EQUITYLENS_TOKEN=<JWT>
+#    預設只跑已核實（verified）的題目；草稿題要加 --include-unverified
+export EQUITYLENS_TOKEN=<Admin 帳號的 JWT>   # 一般帳號每分鐘只能呼叫 10 次研究 API
 python -m equitylens_eval run --cases cases/research_v1.jsonl --mode ask --label prompt-v4 \
     --base-url http://localhost:5035
 
@@ -24,9 +25,9 @@ python -m equitylens_eval run --cases cases/research_v1.jsonl --mode ask --label
 python -m equitylens_eval run --cases cases/research_v1.jsonl --mode ask --label prompt-v5
 python -m equitylens_eval compare runs/prompt-v4 runs/prompt-v5
 
-# 4. 只改了評分規則？不必重打 API，直接重新評分
+# 4. 只改了評分規則？不必重打 API，直接重新評分（一定寫到新目錄，原本的報告不會被覆寫）
 python -m equitylens_eval rescore --responses runs/prompt-v4/responses.jsonl \
-    --cases cases/research_v1.jsonl --label prompt-v4
+    --cases cases/research_v1.jsonl --label prompt-v4-rescored
 
 pytest   # harness 自己的測試，全部離線
 ```
@@ -35,10 +36,16 @@ pytest   # harness 自己的測試，全部離線
 
 | 檔案 | 內容 |
 |---|---|
+| `run_meta.json` | 答案是**怎麼產生**的：模式、API 位址、`system_commit`。只在 `run` 時寫一次 |
 | `responses.jsonl` | 系統原始輸出（可重新評分，不必再花 API 費用） |
 | `results.jsonl` | 每題的各項分數與失敗細節 |
-| `summary.json` | 彙總數字，並附上 git commit、考卷的 sha256 和 judge 模型，確保結果可追溯 |
+| `summary.json` | 彙總數字；`meta` 同時記錄 `system_commit`（答案來源）與 `scorer_commit`（評分程式），加上考卷 sha256 和 judge 模型 |
 | `report.md` | 給人看的報告 |
+
+`system_commit` 預設是執行 harness 的這份 checkout 的 HEAD；如果 API 跑的是別的版本，請用 `--system-commit` 指定。
+`rescore` 會沿用原本的 `system_commit`，另外記下新的 `scorer_commit` 和 `rescored_from`，所以過幾天用新的評分程式重評舊答案，也不會把舊答案誤標成來自目前的版本。
+
+API 回應 429（被限流）時，client 會依 `Retry-After` 等待後重試，最多 3 次、每次最多等 60 秒。
 
 ---
 
@@ -71,12 +78,13 @@ pytest   # harness 自己的測試，全部離線
 | `must_not_include` | 出現就判定失敗，例如「保證獲利」 |
 | `sources` | 正確答案所在的文件和頁碼，用來區分是**檢索失敗**還是**生成失敗** |
 | `reference_answer` | 給 LLM judge 的參考答案；沒填就不做 judge |
-| `verified` | 已經對照原始 PDF 核實過。`--only-verified` 只跑已核實的題目 |
+| `verified` | 已經對照原始 PDF 核實過。**只有 verified 的題目會計入 `pass_rate` 和所有品質指標**；草稿題（`verified: false`）預設不會執行，加 `--include-unverified` 才會跑，結果只列在報告的「Draft cases」區塊 |
 
 **目前的考卷（13 題）**：`unanswerable` 和 `policy` 類共 5 題可以直接使用；其餘 8 題的數字和頁碼標了 `TODO`，要**你親自打開資料庫裡的那份 PDF 核對後填入**。這一步不能交給 AI 代勞：標準答案本身錯了，整份考卷就沒有意義。
 
 ### 出題原則
 
+- **題目核實完才改成 `verified: true`**：未核實的題目不會影響分數，但也不會被執行，所以核實的進度就是 eval 的覆蓋範圍。
 - **每一類都要有題目**，特別是 `unanswerable`。在金融場景，「不知道卻硬答」比「答不出來」嚴重得多。
 - **固定時間點**：寫「2025 年報」，不要寫「最新」，否則資料更新後標準答案會漂移。
 - **一題考一件事**：一題同時考檢索、計算和推理，失敗時你會不知道是哪一環壞掉。
@@ -108,7 +116,12 @@ pytest   # harness 自己的測試，全部離線
 | 低 | 高 | 撈到了但沒選上或沒引用 → 調整 rerank 或 context selection |
 | 低 | 低 | 根本沒撈到 → 調整 chunking、embedding 或 BM25 |
 
-**判定通過（pass）**：`behavior` 正確、所有已核實的 fact 都答對、沒有懸空引用、沒有命中禁用詞。
+**判定通過（pass）**，只針對 verified 題目：
+- `behavior` 正確；
+- 所有適用的確定性分數都是滿分：每個 fact 都答對、`must_include` 每一組都命中、沒有禁用詞、沒有懸空引用；
+- 有跑 LLM judge 時，`judge_correctness` 與 `judge_groundedness` 都至少 0.5（評分標準的 3/5）。「引用格式正確但內容錯誤」的答案不會通過。
+
+草稿題的 `passed` 是 `null`，不算通過也不算失敗。`validate` 也會要求：verified 的作答題至少要有一個已核實的 fact 或 `must_include`，只有 `reference_answer` 的題目在沒開 judge 時無法用程式驗證。
 
 **營運指標**：`hallucination_rate`（應拒答卻作答的比例）、`over_refusal_rate`、`error_rate`、延遲 p50/p95、平均 token 數、總成本（investigation 模式才有）。
 

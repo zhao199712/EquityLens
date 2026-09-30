@@ -96,6 +96,11 @@ def validate_case(case: EvalCase) -> list[str]:
         case.facts or case.must_include or case.reference_answer
     ):
         problems.append("answer cases need facts, must_include or a reference_answer to be scorable")
+    if case.verified and case.expected_behavior == "answer" and not (
+        any(f.verified for f in case.facts) or case.must_include
+    ):
+        problems.append("verified answer cases need verified facts or must_include; "
+                        "a reference_answer alone is only checked when the LLM judge runs")
     if case.verified and any(not f.verified for f in case.facts):
         problems.append("case is marked verified but has facts with value=null")
     for source in case.sources:

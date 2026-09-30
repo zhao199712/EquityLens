@@ -11,7 +11,6 @@ from typing import Any
 
 METRIC_ORDER = (
     "pass_rate",
-    "pass_rate_verified",
     "behavior",
     "facts",
     "keywords",
@@ -37,9 +36,8 @@ def _percentile(values: list[float], pct: float) -> float | None:
 def _metric_means(records: list[dict[str, Any]]) -> dict[str, dict[str, float | int]]:
     buckets: dict[str, list[float]] = defaultdict(list)
     for record in records:
-        buckets["pass_rate"].append(1.0 if record["passed"] else 0.0)
-        if record.get("verified"):
-            buckets["pass_rate_verified"].append(1.0 if record["passed"] else 0.0)
+        if record["passed"] is not None:  # None = draft case, never part of pass_rate
+            buckets["pass_rate"].append(1.0 if record["passed"] else 0.0)
         for name, score in record["scores"].items():
             if score is not None:
                 buckets[name].append(score)
@@ -47,12 +45,18 @@ def _metric_means(records: list[dict[str, Any]]) -> dict[str, dict[str, float | 
 
 
 def summarize(records: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, Any]:
+    """Quality metrics use verified cases only; drafts are summarized separately for diagnostics.
+
+    Latency, tokens, cost and error rate cover every case that was sent, because they were all paid for.
+    """
+    verified = [r for r in records if r["passed"] is not None]
+    drafts = [r for r in records if r["passed"] is None]
     by_category: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for record in records:
+    for record in verified:
         by_category[record["category"]].append(record)
 
-    should_decline = [r for r in records if r["expected_behavior"] == "insufficient_evidence"]
-    should_answer = [r for r in records if r["expected_behavior"] == "answer"]
+    should_decline = [r for r in verified if r["expected_behavior"] == "insufficient_evidence"]
+    should_answer = [r for r in verified if r["expected_behavior"] == "answer"]
     latencies = [r["latency_ms"] for r in records if r.get("latency_ms") is not None]
     tokens = [r["total_tokens"] for r in records if r.get("total_tokens") is not None]
     costs = [r["cost_usd"] for r in records if r.get("cost_usd") is not None]
@@ -73,11 +77,15 @@ def summarize(records: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, 
     return {
         "meta": meta,
         "case_count": len(records),
-        "metrics": _metric_means(records),
+        "verified_case_count": len(verified),
+        "draft_case_count": len(drafts),
+        "metrics": _metric_means(verified),
         "operational": operational,
         "by_category": {cat: {"case_count": len(rs), "metrics": _metric_means(rs)}
                         for cat, rs in sorted(by_category.items())},
-        "failed_cases": [r["case_id"] for r in records if not r["passed"]],
+        "failed_cases": [r["case_id"] for r in verified if r["passed"] is False],
+        "draft_cases": [r["case_id"] for r in drafts],
+        "draft_metrics": _metric_means(drafts) if drafts else {},
     }
 
 
@@ -94,7 +102,10 @@ def render_markdown(summary: dict[str, Any], records: list[dict[str, Any]]) -> s
     lines = [
         f"# Eval report — {meta.get('label')}",
         "",
-        f"- mode: `{meta.get('mode')}` · cases: {summary['case_count']} · git: `{meta.get('git_commit')}`",
+        f"- mode: `{meta.get('mode')}` · verified cases: {summary['verified_case_count']}"
+        f" · drafts (not in pass_rate): {summary['draft_case_count']}",
+        f"- system commit: `{meta.get('system_commit')}` · scorer commit: `{meta.get('scorer_commit')}`"
+        + (f" · rescored from `{meta['rescored_from']}`" if meta.get("rescored_from") else ""),
         f"- cases file: `{meta.get('cases_file')}` (sha256 {str(meta.get('cases_sha256'))[:12]})",
         f"- judge: {meta.get('judge_model') or 'disabled'} · started: {meta.get('started_at')}",
         "",
@@ -117,13 +128,17 @@ def render_markdown(summary: dict[str, Any], records: list[dict[str, Any]]) -> s
             f"| {category} | {block['case_count']} | {_fmt(metrics.get('pass_rate', {}).get('mean'))} | "
             f"{_fmt(metrics.get('facts', {}).get('mean'))} | {_fmt(metrics.get('source_hit', {}).get('mean'))} |"
         )
-    failed = [r for r in records if not r["passed"]]
+    failed = [r for r in records if r["passed"] is False]
     if failed:
         lines += ["", "## Failed cases", ""]
         for record in failed:
             reasons = ", ".join(f"{k}={_fmt(v)}" for k, v in record["scores"].items() if v is not None and v < 1)
             lines.append(f"- **{record['case_id']}** ({record['category']}, detected `{record['detected_behavior']}`)"
                          f": {reasons or record.get('error') or 'see results.jsonl'}")
+    drafts = [r for r in records if r["passed"] is None]
+    if drafts:
+        lines += ["", "## Draft cases (not verified, excluded from pass_rate)", ""]
+        lines += [f"- {r['case_id']} (detected `{r['detected_behavior']}`)" for r in drafts]
     return "\n".join(lines) + "\n"
 
 
@@ -147,6 +162,8 @@ def compare(baseline_dir: str | Path, candidate_dir: str | Path) -> str:
         "| metric | baseline | candidate | Δ |",
         "|---|---|---|---|",
     ]
+    if base_summary["meta"].get("cases_sha256") != cand_summary["meta"].get("cases_sha256"):
+        lines[1:1] = ["", "> ⚠️ The two runs used different case files; metric deltas are not directly comparable.", ""]
 
     def row(name: str, base: float | None, cand: float | None) -> None:
         if base is None and cand is None:
@@ -165,8 +182,8 @@ def compare(baseline_dir: str | Path, candidate_dir: str | Path) -> str:
         row(name, base_summary["operational"].get(name), cand_summary["operational"].get(name))
 
     shared = sorted(set(base_records) & set(cand_records))
-    regressions = [c for c in shared if base_records[c]["passed"] and not cand_records[c]["passed"]]
-    fixes = [c for c in shared if not base_records[c]["passed"] and cand_records[c]["passed"]]
+    regressions = [c for c in shared if base_records[c]["passed"] is True and cand_records[c]["passed"] is False]
+    fixes = [c for c in shared if base_records[c]["passed"] is False and cand_records[c]["passed"] is True]
     lines += ["", f"**Regressions ({len(regressions)})**: " + (", ".join(regressions) or "none"),
               "", f"**Fixed ({len(fixes)})**: " + (", ".join(fixes) or "none")]
     only = sorted(set(base_records) ^ set(cand_records))

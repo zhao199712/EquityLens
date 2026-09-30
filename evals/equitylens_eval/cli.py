@@ -35,9 +35,9 @@ def _git_commit() -> str | None:
         return None
 
 
-def _select(cases: list[EvalCase], only_verified: bool, categories: list[str] | None,
+def _select(cases: list[EvalCase], include_unverified: bool, categories: list[str] | None,
             ids: list[str] | None) -> list[EvalCase]:
-    selected = [c for c in cases if (not only_verified or c.verified)]
+    selected = [c for c in cases if include_unverified or c.verified]
     if categories:
         selected = [c for c in selected if c.category in categories]
     if ids:
@@ -82,17 +82,36 @@ def _write_outputs(out_dir: Path, records: list[dict], meta: dict) -> dict:
     return summary
 
 
-def _meta(args: argparse.Namespace, mode: str, judge: LlmJudge | None) -> dict:
-    cases_bytes = Path(args.cases).read_bytes()
+def _now() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
+RUN_META_FILE = "run_meta.json"
+
+
+def _run_meta(args: argparse.Namespace) -> dict:
+    """Facts about how the answers were PRODUCED. Written once by `run`, never rewritten by `rescore`."""
     return {
         "label": args.label,
-        "mode": mode,
-        "cases_file": str(args.cases),
-        "cases_sha256": hashlib.sha256(cases_bytes).hexdigest(),
-        "git_commit": _git_commit(),
-        "judge_model": judge.config.model if judge else None,
-        "started_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "mode": args.mode,
+        "base_url": args.base_url,
+        # the system under test; defaults to this checkout's HEAD, override when the API runs another build
+        "system_commit": args.system_commit or _git_commit(),
+        "started_at": _now(),
         "notes": args.notes,
+    }
+
+
+def _score_meta(args: argparse.Namespace, run_meta: dict, judge: LlmJudge | None) -> dict:
+    """Run provenance plus facts about how the answers were SCORED (which may happen later)."""
+    return {
+        **run_meta,
+        "label": args.label,
+        "cases_file": str(args.cases),
+        "cases_sha256": hashlib.sha256(Path(args.cases).read_bytes()).hexdigest(),
+        "scorer_commit": _git_commit(),
+        "scored_at": _now(),
+        "judge_model": judge.config.model if judge else None,
     }
 
 
@@ -107,7 +126,7 @@ def _make_judge(disabled: bool) -> LlmJudge | None:
 
 
 def _progress(index: int, total: int, record: dict) -> None:
-    mark = "PASS" if record["passed"] else "FAIL"
+    mark = {True: "PASS", False: "FAIL", None: "DRAFT"}[record["passed"]]
     print(f"[{index}/{total}] {mark} {record['case_id']} ({record['detected_behavior']}, "
           f"{record['latency_ms']} ms)", file=sys.stderr)
 
@@ -130,14 +149,21 @@ def cmd_validate(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     from .client import EquityLensClient  # imported lazily so rescore/compare work without network deps
 
-    cases = _select(load_cases(args.cases), args.only_verified, args.category, args.case)
+    all_cases = load_cases(args.cases)
+    cases = _select(all_cases, args.include_unverified, args.category, args.case)
     if not cases:
-        print("no cases selected", file=sys.stderr)
+        print("no cases selected (unverified cases need --include-unverified)", file=sys.stderr)
         return 2
+    skipped_drafts = sum(1 for c in all_cases if not c.verified) if not args.include_unverified else 0
+    if skipped_drafts:
+        print(f"skipping {skipped_drafts} unverified case(s); pass --include-unverified to run them as drafts",
+              file=sys.stderr)
     judge = _make_judge(args.no_judge)
     out_dir = Path(args.out or Path(__file__).resolve().parent.parent / "runs" / args.label)
     out_dir.mkdir(parents=True, exist_ok=True)
     token = args.token or os.getenv("EQUITYLENS_TOKEN")
+    run_meta = _run_meta(args)
+    (out_dir / RUN_META_FILE).write_text(json.dumps(run_meta, ensure_ascii=False, indent=2), encoding="utf-8")
     records = []
     with EquityLensClient(args.base_url, token=token, investigation_timeout_s=args.investigation_timeout) as client, \
             (out_dir / "responses.jsonl").open("w", encoding="utf-8") as responses:
@@ -148,9 +174,15 @@ def cmd_run(args: argparse.Namespace) -> int:
             record = build_record(case, output, judge)
             records.append(record)
             _progress(index, len(cases), record)
-    summary = _write_outputs(out_dir, records, _meta(args, args.mode, judge))
-    print(f"\npass_rate={summary['metrics']['pass_rate']['mean']} → {out_dir / 'report.md'}")
+    summary = _write_outputs(out_dir, records, _score_meta(args, run_meta, judge))
+    _print_result(summary, out_dir)
     return 0
+
+
+def _print_result(summary: dict, out_dir: Path) -> None:
+    pass_rate = summary["metrics"].get("pass_rate", {}).get("mean")
+    print(f"\npass_rate={pass_rate} over {summary['verified_case_count']} verified case(s)"
+          f" → {out_dir / 'report.md'}")
 
 
 def _read_responses(path: str | Path) -> Iterable[RunOutput]:
@@ -167,10 +199,21 @@ def cmd_rescore(args: argparse.Namespace) -> int:
     skipped = [o.case_id for o in outputs if o.case_id not in cases]
     if skipped:
         print(f"skipped responses with unknown case ids: {', '.join(skipped)}", file=sys.stderr)
-    mode = outputs[0].mode if outputs else "unknown"
-    out_dir = Path(args.out or Path(args.responses).parent)
-    summary = _write_outputs(out_dir, records, _meta(args, mode, judge))
-    print(f"pass_rate={summary['metrics']['pass_rate']['mean']} → {out_dir / 'report.md'}")
+    source_dir = Path(args.responses).resolve().parent
+    out_dir = Path(args.out).resolve() if args.out else source_dir.parent / args.label
+    if out_dir == source_dir:
+        print("rescore must write to a new directory so the original run's report stays intact; "
+              "choose a different --label or --out", file=sys.stderr)
+        return 2
+    run_meta_path = source_dir / RUN_META_FILE
+    if run_meta_path.exists():
+        run_meta = json.loads(run_meta_path.read_text(encoding="utf-8"))
+    else:
+        run_meta = {"mode": outputs[0].mode if outputs else "unknown", "system_commit": None}
+        print(f"warning: {run_meta_path} not found; system provenance unknown", file=sys.stderr)
+    meta = {**_score_meta(args, run_meta, judge), "rescored_from": str(source_dir)}
+    summary = _write_outputs(out_dir, records, meta)
+    _print_result(summary, out_dir)
     return 0
 
 
@@ -195,7 +238,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--base-url", default=os.getenv("EQUITYLENS_BASE_URL", "http://localhost:5035"))
     run.add_argument("--token", help="JWT bearer token (default: $EQUITYLENS_TOKEN)")
     run.add_argument("--out")
-    run.add_argument("--only-verified", action="store_true")
+    run.add_argument("--include-unverified", action="store_true",
+                     help="also run draft cases; they are scored but never counted in pass_rate")
+    run.add_argument("--system-commit", help="commit of the API under test (default: this checkout's HEAD)")
     run.add_argument("--category", action="append")
     run.add_argument("--case", action="append", help="run only this case id (repeatable)")
     run.add_argument("--no-judge", action="store_true")

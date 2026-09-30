@@ -2,7 +2,9 @@ import pytest
 
 from equitylens_eval import normalize as n
 from equitylens_eval.schema import Citation, EvalCase, RetrievedCandidate, RunOutput, validate_case
-from equitylens_eval.scorers import case_passed, score_case
+from equitylens_eval.cli import _select
+from equitylens_eval.report import summarize
+from equitylens_eval.scorers import ScoreItem, case_passed, score_case
 
 
 def make_case(**overrides):
@@ -141,3 +143,50 @@ def test_years_alone_do_not_require_citations():
     case = make_case(must_include=[["毛利率"]])
     items = by_name(score_case(case, make_output("2025 年表現穩健。毛利率 59.1%[1]。", citations=[Citation(1)])))
     assert items["citation_coverage"].score == 1.0
+
+
+# ---- pass gate -----------------------------------------------------------------------------
+
+def test_draft_case_is_never_passed_or_failed():
+    case = make_case(verified=False, facts=[{"label": "毛利率", "value": None, "unit": "%"}],
+                     must_include=[["毛利率"]])
+    items = score_case(case, make_output("毛利率是 42%[1]", citations=[Citation(1)]))
+    assert case_passed(case, items) is None  # a wrong number must not become a PASS
+
+
+def test_partial_must_include_fails_verified_case():
+    case = make_case(category="qualitative", must_include=[["風險"], ["匯率"], ["產能"]])
+    items = score_case(case, make_output("主要風險包括匯率波動[1]。", citations=[Citation(1)]))
+    assert by_name(items)["keywords"].score < 1.0
+    assert case_passed(case, items) is False
+
+
+def test_low_judge_score_fails_an_otherwise_clean_answer():
+    case = make_case(category="qualitative", must_include=[["風險"]], reference_answer="...")
+    items = score_case(case, make_output("主要風險是匯率[1]。", citations=[Citation(1)]))
+    assert case_passed(case, items) is True
+    items.append(ScoreItem("judge_correctness", 0.25))
+    assert case_passed(case, items) is False
+
+
+def test_summary_excludes_drafts_from_pass_rate():
+    records = [
+        {"case_id": "a", "category": "numeric_lookup", "verified": True, "passed": True,
+         "expected_behavior": "answer", "detected_behavior": "answer", "scores": {"behavior": 1.0}},
+        {"case_id": "b", "category": "numeric_lookup", "verified": False, "passed": None,
+         "expected_behavior": "answer", "detected_behavior": "answer", "scores": {"behavior": 1.0}},
+    ]
+    summary = summarize(records, {"label": "t"})
+    assert summary["metrics"]["pass_rate"] == {"mean": 1.0, "n": 1}
+    assert summary["draft_cases"] == ["b"] and summary["verified_case_count"] == 1
+
+
+def test_validate_requires_deterministic_checks_on_verified_answer_cases():
+    case = make_case(reference_answer="毛利率 59.1%")  # verified, but nothing a program can check
+    assert any("verified answer cases need" in p for p in validate_case(case))
+
+
+def test_run_selects_only_verified_cases_by_default():
+    cases = [make_case(id="v"), make_case(id="d", verified=False, must_include=[["x"]])]
+    assert [c.id for c in _select(cases, False, None, None)] == ["v"]
+    assert [c.id for c in _select(cases, True, None, None)] == ["v", "d"]

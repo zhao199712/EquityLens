@@ -109,22 +109,28 @@ def _write_responses(path, answer):
     path.write_text(json.dumps(output.to_dict(), ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def test_rescore_and_compare_report_regressions(tmp_path, capsys):
+def _verified_cases_file(tmp_path):
     cases = tmp_path / "cases.jsonl"
     cases.write_text(json.dumps({
         "id": "2330-gm", "category": "numeric_lookup", "ticker": "2330", "question": "毛利率？", "verified": True,
         "facts": [{"label": "毛利率", "value": 59.1, "unit": "%"}],
         "sources": [{"document_type": "AnnualReport", "page": 45}],
     }, ensure_ascii=False) + "\n", encoding="utf-8")
-    good, bad = tmp_path / "v4", tmp_path / "v5"
-    good.mkdir(), bad.mkdir()
-    _write_responses(good / "responses.jsonl", "毛利率 59.1%[1]")
-    _write_responses(bad / "responses.jsonl", "毛利率 56.1%[1]")
+    return cases
 
-    assert main(["rescore", "--responses", str(good / "responses.jsonl"), "--cases", str(cases),
+
+def test_rescore_and_compare_report_regressions(tmp_path, capsys):
+    cases = _verified_cases_file(tmp_path)
+    good_raw, bad_raw = tmp_path / "raw-v4", tmp_path / "raw-v5"
+    good_raw.mkdir(), bad_raw.mkdir()
+    _write_responses(good_raw / "responses.jsonl", "毛利率 59.1%[1]")
+    _write_responses(bad_raw / "responses.jsonl", "毛利率 56.1%[1]")
+
+    assert main(["rescore", "--responses", str(good_raw / "responses.jsonl"), "--cases", str(cases),
                  "--label", "prompt-v4", "--no-judge"]) == 0
-    assert main(["rescore", "--responses", str(bad / "responses.jsonl"), "--cases", str(cases),
+    assert main(["rescore", "--responses", str(bad_raw / "responses.jsonl"), "--cases", str(cases),
                  "--label", "prompt-v5", "--no-judge"]) == 0
+    good, bad = tmp_path / "prompt-v4", tmp_path / "prompt-v5"
     summary = json.loads((good / "summary.json").read_text(encoding="utf-8"))
     assert summary["metrics"]["pass_rate"]["mean"] == 1.0
     assert (bad / "report.md").read_text(encoding="utf-8").count("2330-gm") >= 1
@@ -134,3 +140,50 @@ def test_rescore_and_compare_report_regressions(tmp_path, capsys):
     report = capsys.readouterr().out
     assert "**Regressions (1)**: 2330-gm" in report
     assert "⚠️" in report
+
+
+def test_rescore_keeps_system_provenance_and_never_overwrites_the_original_run(tmp_path):
+    cases = _verified_cases_file(tmp_path)
+    original = tmp_path / "baseline"
+    original.mkdir()
+    _write_responses(original / "responses.jsonl", "毛利率 59.1%[1]")
+    (original / "run_meta.json").write_text(json.dumps({"mode": "ask", "system_commit": "abc1234"}), encoding="utf-8")
+
+    # writing into the run's own directory is refused
+    assert main(["rescore", "--responses", str(original / "responses.jsonl"), "--cases", str(cases),
+                 "--label", "baseline", "--no-judge"]) == 2
+    assert not (original / "summary.json").exists()
+
+    assert main(["rescore", "--responses", str(original / "responses.jsonl"), "--cases", str(cases),
+                 "--label", "baseline-rescored", "--no-judge"]) == 0
+    meta = json.loads((tmp_path / "baseline-rescored" / "summary.json").read_text(encoding="utf-8"))["meta"]
+    assert meta["system_commit"] == "abc1234"  # where the answers came from
+    assert "scorer_commit" in meta  # which scoring code judged them
+    assert meta["rescored_from"] == str(original.resolve())
+
+
+def test_client_waits_out_rate_limits_then_succeeds():
+    calls, waits = {"n": 0}, []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            return httpx.Response(429, headers={"Retry-After": "7"}, json={"code": "rate_limited"})
+        return httpx.Response(200, json=ASK_BODY)
+
+    with EquityLensClient("http://api", transport=httpx.MockTransport(handler), sleep=waits.append) as client:
+        output = client.run(CASE, "ask")
+
+    assert output.status == "Answered"
+    assert waits == [7.0, 7.0]
+
+
+def test_client_gives_up_after_repeated_rate_limits():
+    waits = []
+    transport = httpx.MockTransport(lambda request: httpx.Response(429, headers={"Retry-After": "600"}))
+
+    with EquityLensClient("http://api", transport=transport, sleep=waits.append) as client:
+        output = client.run(CASE, "ask")
+
+    assert output.status == "Error" and "HTTP 429" in output.error
+    assert waits == [60.0, 60.0, 60.0]  # Retry-After is capped
