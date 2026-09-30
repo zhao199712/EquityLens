@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Services.Agents;
+using EquityLens.Api.Services.Ai;
 
 namespace EquityLens.Api.Tests.Services.Agents;
 
@@ -81,6 +82,70 @@ public sealed class PlannerInvocationTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             PlannerInvocation.InvokeAsync(planner, Context, TimeSpan.FromSeconds(10), caller.Token));
+    }
+
+    [Fact]
+    public void ClassifyToolCall_MarksDeterministicFallbackAsFailedWithReason()
+    {
+        var fallback = DeterministicDynamicWorkflowPlanner.Create(ResearchContext(), "Workflow planner timed out after 15 seconds.");
+
+        var outcome = PlannerInvocation.ClassifyToolCall(fallback);
+
+        Assert.True(outcome.UsedFallback);
+        Assert.Equal(AgentToolCallStatuses.Failed, outcome.Status);
+        Assert.Equal("Workflow planner timed out after 15 seconds.", outcome.ErrorMessage);
+    }
+
+    [Fact]
+    public void ClassifyToolCall_MarksLlmPlanAsSucceeded()
+    {
+        var outcome = PlannerInvocation.ClassifyToolCall(Proposal(Context) with { Mode = "Llm" });
+
+        Assert.False(outcome.UsedFallback);
+        Assert.Equal(AgentToolCallStatuses.Succeeded, outcome.Status);
+        Assert.Null(outcome.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task LlmPlannerOwnTimeout_IsRecordedAsFailedToolCall_NotSucceeded()
+    {
+        // The common timeout path: LlmAgentWorkflowPlanner catches its own 15s timeout and returns a
+        // deterministic plan instead of throwing, so the orchestrator deadline never fires.
+        var planner = new LlmAgentWorkflowPlanner(new TimingOutChat());
+
+        var result = await PlannerInvocation.InvokeAsync(planner, ResearchContext(), TimeSpan.FromSeconds(5), CancellationToken.None);
+        var outcome = PlannerInvocation.ClassifyToolCall(result.Proposal!);
+
+        Assert.False(result.TimedOut);
+        Assert.Equal(PlannerInvocation.DeterministicFallbackMode, result.Proposal!.Mode);
+        Assert.Equal(AgentToolCallStatuses.Failed, outcome.Status);
+        Assert.Contains("timed out", outcome.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static WorkflowPlanningContext ResearchContext()
+    {
+        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(
+            Guid.NewGuid(), Guid.NewGuid(), new("2330", "台積電 2025 年毛利率是多少？"));
+        return new WorkflowPlanningContext(
+            run.Id,
+            run.OrchestrationVersion,
+            DynamicPlanningTriggers.ResearchContextReady,
+            AgentNodeJson.ParseBlackboard(run.BlackboardJson),
+            [],
+            new WorkflowSkillCatalog().Skills,
+            new NodeCapabilityRegistry().Capabilities,
+            0,
+            0);
+    }
+
+    private sealed class TimingOutChat : IChatCompletionService
+    {
+        public string Provider => "Test";
+
+        public string Model => "test-model";
+
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) =>
+            Task.FromException<ChatCompletionResult>(new OperationCanceledException("simulated provider timeout"));
     }
 
     private sealed class DelegatePlanner(Func<WorkflowPlanningContext, CancellationToken, Task<DynamicPlanProposal>> plan)

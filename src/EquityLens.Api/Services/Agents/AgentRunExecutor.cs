@@ -400,10 +400,16 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             else
             {
                 proposal = invocation.Proposal ?? throw new InvalidOperationException("Workflow planner returned no proposal.");
-                plannerCall.Status = AgentToolCallStatuses.Succeeded;
+                var outcome = PlannerInvocation.ClassifyToolCall(proposal);
+                plannerCall.Status = outcome.Status;
+                plannerCall.ErrorMessage = outcome.ErrorMessage;
                 plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180);
                 plannerCall.ResultJson = Serialize(proposal);
-                AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
+                if (outcome.UsedFallback)
+                    AddEvent(run, last, AgentEventTypes.ToolCallFailed, "Tool workflowPlannerLLM fell back to the deterministic plan.",
+                        new { error = outcome.ErrorMessage, plannerCall.DurationMs, fallbackMode = proposal.Mode });
+                else
+                    AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
             }
         }
         catch (Exception exception)

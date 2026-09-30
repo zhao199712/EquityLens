@@ -349,7 +349,7 @@ public static class DeterministicDynamicWorkflowPlanner
             actions = Chain([A("draftRevisedAnswer", "revise-answer", DraftRevisionNodeTypes.DraftRevisedAnswer), A("finalizeRevision", "finalize-revision", DraftRevisionNodeTypes.FinalizeRevision)], Last(c)); skills = ["answer-revision"]; goal = DynamicGoalStatuses.Continue; reason = "評論結果需要受限的答案修訂。";
         }
         else { actions = []; skills = ["quality-finalization"]; goal = DynamicGoalStatuses.Complete; reason = "評論已接受目前答案。"; }
-        return new(Guid.NewGuid(), c.OrchestrationVersion, c.Trigger, goal, reason, skills, actions, "DeterministicFallback", model, 0, 0, fallbackReason);
+        return new(Guid.NewGuid(), c.OrchestrationVersion, c.Trigger, goal, reason, skills, actions, PlannerInvocation.DeterministicFallbackMode, model, 0, 0, fallbackReason);
     }
     internal static bool IsConferenceCapabilityGate(JsonObject board, ResearchAskRequest request) =>
         board[AgentBlackboardKeys.LeadSkill]?.GetValue<string>() == "conference-call-takeaways"
