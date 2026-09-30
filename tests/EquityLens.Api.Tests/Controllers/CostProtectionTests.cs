@@ -5,6 +5,7 @@ using EquityLens.Api.Controllers.Filters;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Agents;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
