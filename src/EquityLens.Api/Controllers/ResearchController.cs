@@ -9,6 +9,7 @@ using EquityLens.Api.Services.Research;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using EquityLens.Api.Controllers.Filters;
 
 namespace EquityLens.Api.Controllers;
 
@@ -121,6 +122,7 @@ public sealed class ResearchController : ControllerBase
     /// <summary>建立端到端研究調查流程並立即回傳背景執行識別碼。</summary>
     [HttpPost("investigations")]
     [EnableRateLimiting(RateLimitPolicies.Llm)]
+    [LimitActiveAgentRuns]
     public async Task<ActionResult<ResearchInvestigationCreatedResponse>> CreateInvestigation(ResearchAskRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Question)) return BadRequest(new ApiError("question_required", "請輸入問題。"));

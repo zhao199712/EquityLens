@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using EquityLens.Api.Controllers.Filters;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace EquityLens.Api.Common;
 
@@ -11,24 +13,60 @@ public sealed class LlmRateLimitOptions
 {
     public const string SectionName = "RateLimiting:Llm";
 
-    /// <summary>每個使用者在一個時間窗內允許的請求數。</summary>
+    /// <summary>每個一般使用者在一個時間窗內允許的請求數。</summary>
     public int PermitLimit { get; set; } = 10;
+
+    /// <summary>管理員在一個時間窗內允許的請求數；給較高額度而非無上限，避免 token 外洩時費用失控。</summary>
+    public int AdminPermitLimit { get; set; } = 120;
+
+    /// <summary>全站所有使用者合計在一個時間窗內允許的請求數；開放註冊時，擋住大量帳號各自用滿額度。</summary>
+    public int GlobalPermitLimit { get; set; } = 60;
 
     /// <summary>時間窗長度（秒）。</summary>
     public int WindowSeconds { get; set; } = 60;
 }
 
 /// <summary>
-/// 速率限制政策。會呼叫 DeepSeek、Cohere、Brave 等付費 API 的端點套用 <see cref="Llm"/>，
-/// 依登入使用者分區，避免單一帳號以迴圈大量呼叫造成費用失控。管理員不受限制（例如執行 eval）。
+/// 登入與註冊端點的速率限制設定（設定區段 <c>RateLimiting:Auth</c>），以來源 IP 分區。
 /// </summary>
+public sealed class AuthRateLimitOptions
+{
+    public const string SectionName = "RateLimiting:Auth";
+
+    /// <summary>每個 IP 在一個時間窗內允許的登入／換發 token 次數。</summary>
+    public int PermitLimit { get; set; } = 10;
+
+    public int WindowSeconds { get; set; } = 60;
+
+    /// <summary>每個 IP 在註冊時間窗內允許建立的帳號數。</summary>
+    public int RegisterPermitLimit { get; set; } = 3;
+
+    public int RegisterWindowSeconds { get; set; } = 3600;
+}
+
+/// <summary>
+/// 速率限制政策。
+/// </summary>
+/// <remarks>
+/// <list type="bullet">
+/// <item><see cref="Llm"/>：會呼叫 DeepSeek、Cohere、Brave 等付費 API 的端點，依使用者分區；
+/// 另有一個全站共用的上限（<see cref="LlmRateLimitOptions.GlobalPermitLimit"/>），因為註冊是開放的，
+/// 單靠每使用者額度會被「多開帳號」繞過。</item>
+/// <item><see cref="Auth"/>／<see cref="Register"/>：登入與註冊依來源 IP 分區，
+/// 需要 <see cref="ForwardedHeadersSetup"/> 才能拿到 Caddy 後面的真實 IP。</item>
+/// </list>
+/// </remarks>
 public static class RateLimitPolicies
 {
     public const string Llm = "llm";
+    public const string Auth = "auth";
+    public const string Register = "register";
 
     public static IServiceCollection AddEquityLensRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
-        var options = configuration.GetSection(LlmRateLimitOptions.SectionName).Get<LlmRateLimitOptions>() ?? new LlmRateLimitOptions();
+        var llm = configuration.GetSection(LlmRateLimitOptions.SectionName).Get<LlmRateLimitOptions>() ?? new LlmRateLimitOptions();
+        var auth = configuration.GetSection(AuthRateLimitOptions.SectionName).Get<AuthRateLimitOptions>() ?? new AuthRateLimitOptions();
+        services.Configure<ActiveAgentRunLimitOptions>(configuration.GetSection(ActiveAgentRunLimitOptions.SectionName));
 
         services.AddRateLimiter(limiter =>
         {
@@ -45,30 +83,52 @@ public static class RateLimitPolicies
                     new ApiError("rate_limited", "請求過於頻繁，請稍後再試。"),
                     cancellationToken);
             };
-            limiter.AddPolicy(Llm, httpContext => CreateLlmPartition(httpContext.User, options));
+
+            // 全站 LLM 總量：GlobalLimiter 會套用在每個請求上，這裡只對標記 Llm 政策的端點計數。
+            limiter.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context => CreateGlobalPartition(context, llm));
+            limiter.AddPolicy(Llm, context => CreateLlmPartition(context.User, llm));
+            limiter.AddPolicy(Auth, context => CreateIpPartition(context, "auth", auth.PermitLimit, auth.WindowSeconds));
+            limiter.AddPolicy(Register, context => CreateIpPartition(context, "register", auth.RegisterPermitLimit, auth.RegisterWindowSeconds));
         });
 
         return services;
     }
 
     /// <summary>
-    /// 依使用者建立分區：管理員不限制，其餘使用者各自一個固定時間窗限制器。
+    /// 依使用者建立分區：管理員使用較高額度，其餘使用者各自一個固定時間窗限制器。
     /// </summary>
     internal static RateLimitPartition<string> CreateLlmPartition(ClaimsPrincipal user, LlmRateLimitOptions options)
     {
-        if (user.IsInRole("Admin"))
-        {
-            return RateLimitPartition.GetNoLimiter("admin");
-        }
-
-        // 端點都要求登入，理論上一定有使用者識別碼；保險起見，缺少時全部共用一個最嚴格的分區。
         var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        return RateLimitPartition.GetFixedWindowLimiter($"user:{userId}", _ => new FixedWindowRateLimiterOptions
+        var isAdmin = user.IsInRole("Admin");
+        return FixedWindow(isAdmin ? $"admin:{userId}" : $"user:{userId}",
+            isAdmin ? options.AdminPermitLimit : options.PermitLimit,
+            options.WindowSeconds);
+    }
+
+    /// <summary>
+    /// 全站分區：只有標記 <see cref="Llm"/> 政策的端點共用同一個計數器，其他端點不受影響。
+    /// </summary>
+    internal static RateLimitPartition<string> CreateGlobalPartition(HttpContext context, LlmRateLimitOptions options)
+    {
+        var policy = context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
+        return string.Equals(policy, Llm, StringComparison.Ordinal)
+            ? FixedWindow("global:llm", options.GlobalPermitLimit, options.WindowSeconds)
+            : RateLimitPartition.GetNoLimiter("global:none");
+    }
+
+    internal static RateLimitPartition<string> CreateIpPartition(HttpContext context, string scope, int permitLimit, int windowSeconds)
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return FixedWindow($"{scope}:{ip}", permitLimit, windowSeconds);
+    }
+
+    private static RateLimitPartition<string> FixedWindow(string key, int permitLimit, int windowSeconds) =>
+        RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = Math.Max(1, options.PermitLimit),
-            Window = TimeSpan.FromSeconds(Math.Max(1, options.WindowSeconds)),
+            PermitLimit = Math.Max(1, permitLimit),
+            Window = TimeSpan.FromSeconds(Math.Max(1, windowSeconds)),
             QueueLimit = 0,
             AutoReplenishment = true
         });
-    }
 }

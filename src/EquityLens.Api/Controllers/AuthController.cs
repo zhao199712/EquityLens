@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace EquityLens.Api.Controllers;
 
@@ -52,6 +53,7 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">取消權杖。</param>
     /// <returns>註冊成功時返回 JWT token 與使用者資訊。</returns>
     [HttpPost("register")]
+    [EnableRateLimiting(RateLimitPolicies.Register)]
     public async Task<ActionResult<AuthResponse>> Register(
         RegisterRequest request,
         CancellationToken cancellationToken)
@@ -103,6 +105,7 @@ public class AuthController : ControllerBase
     /// 使用 Email 與密碼登入。
     /// </summary>
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<ActionResult<AuthResponse>> Login(
         LoginRequest request,
         CancellationToken cancellationToken)
@@ -144,6 +147,7 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">取消權杖。</param>
     /// <returns>登入成功時返回 JWT token 與使用者資訊。</returns>
     [HttpPost("google")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<ActionResult<AuthResponse>> GoogleLogin(
         GoogleLoginRequest request,
         CancellationToken cancellationToken)
@@ -231,6 +235,7 @@ public class AuthController : ControllerBase
     /// 使用 Refresh Token 換取新的 Access Token。
     /// </summary>
     [HttpPost("refresh")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<ActionResult<AuthResponse>> Refresh(
         [FromBody] RefreshRequest request,
         CancellationToken cancellationToken)

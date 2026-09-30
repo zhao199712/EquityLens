@@ -463,6 +463,7 @@ builder.Services.AddCors(options =>
 
 // 付費 LLM 端點的速率限制
 builder.Services.AddEquityLensRateLimiting(builder.Configuration);
+builder.Services.AddEquityLensForwardedHeaders();
 
 // CurrentUser context
 builder.Services.AddHttpContextAccessor();
@@ -481,6 +482,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseForwardedHeaders(); // 必須最先執行：讓後面的限流與日誌拿到 Caddy 轉發的真實 IP
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();

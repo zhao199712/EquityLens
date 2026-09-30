@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Security.Claims;
 using EquityLens.Api.Common;
 using EquityLens.Api.Controllers;
+using EquityLens.Api.Controllers.Filters;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
@@ -126,17 +128,76 @@ public sealed class EndpointProtectionTests
     }
 
     [Fact]
-    public async Task LlmPartition_DoesNotLimitAdmins()
+    public async Task LlmPartition_GivesAdminsAHigherButFiniteQuota()
     {
-        var options = new LlmRateLimitOptions { PermitLimit = 1, WindowSeconds = 60 };
+        var options = new LlmRateLimitOptions { PermitLimit = 1, AdminPermitLimit = 3, WindowSeconds = 60 };
         var admin = RateLimitPolicies.CreateLlmPartition(Principal("root", "Admin"), options);
 
         using var limiter = admin.Factory(admin.PartitionKey);
-        for (var i = 0; i < 20; i++)
+        for (var i = 0; i < 3; i++)
         {
             Assert.True((await limiter.AcquireAsync()).IsAcquired);
         }
+        Assert.False((await limiter.AcquireAsync()).IsAcquired);
     }
+
+    [Fact]
+    public async Task GlobalPartition_SharesOneBudgetAcrossLlmEndpointsOnly()
+    {
+        var options = new LlmRateLimitOptions { GlobalPermitLimit = 2, WindowSeconds = 60 };
+        var llmRequest = ContextFor(new EnableRateLimitingAttribute(RateLimitPolicies.Llm));
+        var otherRequest = ContextFor();
+
+        var llm = RateLimitPolicies.CreateGlobalPartition(llmRequest, options);
+        var other = RateLimitPolicies.CreateGlobalPartition(otherRequest, options);
+
+        Assert.Equal("global:llm", llm.PartitionKey);
+        Assert.Equal("global:none", other.PartitionKey);
+        using var limiter = llm.Factory(llm.PartitionKey);
+        Assert.True((await limiter.AcquireAsync()).IsAcquired);
+        Assert.True((await limiter.AcquireAsync()).IsAcquired);
+        Assert.False((await limiter.AcquireAsync()).IsAcquired);
+    }
+
+    [Fact]
+    public void IpPartition_SeparatesClientsByAddress()
+    {
+        var a = ContextFor();
+        a.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.10");
+        var b = ContextFor();
+        b.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.11");
+
+        Assert.NotEqual(
+            RateLimitPolicies.CreateIpPartition(a, "register", 3, 3600).PartitionKey,
+            RateLimitPolicies.CreateIpPartition(b, "register", 3, 3600).PartitionKey);
+    }
+
+    [Theory]
+    [InlineData("AuthController.Register", RateLimitPolicies.Register)]
+    [InlineData("AuthController.Login", RateLimitPolicies.Auth)]
+    [InlineData("AuthController.GoogleLogin", RateLimitPolicies.Auth)]
+    [InlineData("AuthController.Refresh", RateLimitPolicies.Auth)]
+    public void AnonymousAuthEndpoints_AreRateLimitedByIp(string endpoint, string policy)
+    {
+        Assert.Equal(policy, FindAction(endpoint).GetCustomAttribute<EnableRateLimitingAttribute>()?.PolicyName);
+    }
+
+    [Theory]
+    [MemberData(nameof(RunCreators))]
+    public void RunCreatingEndpoints_CapActiveRunsPerUser(string endpoint)
+    {
+        Assert.NotNull(FindAction(endpoint).GetCustomAttribute<LimitActiveAgentRunsAttribute>());
+    }
+
+    private static HttpContext ContextFor(params object[] endpointMetadata)
+    {
+        var context = new DefaultHttpContext();
+        context.SetEndpoint(new Endpoint(_ => Task.CompletedTask, new EndpointMetadataCollection(endpointMetadata), "test"));
+        return context;
+    }
+
+    public static TheoryData<string> RunCreators() => ToTheoryData(PaidLlmEndpoints.Where(x =>
+        x is not "ResearchController.Search" and not "ResearchController.Ask"));
 
     public static TheoryData<string> AdminOnly() => ToTheoryData(AdminOnlyEndpoints);
 
