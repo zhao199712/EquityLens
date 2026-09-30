@@ -1,3 +1,4 @@
+using EquityLens.Api.Common;
 using System.Text;
 using Amazon;
 using Amazon.S3;
@@ -460,6 +461,9 @@ builder.Services.AddCors(options =>
     });
 });
 
+// 付費 LLM 端點的速率限制
+builder.Services.AddEquityLensRateLimiting(builder.Configuration);
+
 // CurrentUser context
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
@@ -480,6 +484,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter(); // 放在授權之後：未登入的請求先被 401 擋下，限流才能依使用者分區
 
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 

@@ -4,6 +4,7 @@ using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.CurrentUser;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace EquityLens.Api.Controllers;
 
@@ -25,6 +26,7 @@ public sealed class AgentRunsController : ControllerBase
     }
 
     [HttpPost("/api/portfolios/{portfolioId:guid}/agent-diagnoses")]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
     public async Task<ActionResult<AgentRunSummaryResponse>> CreatePortfolioDiagnosis(
         Guid portfolioId, CreatePortfolioDiagnosisRequest request, CancellationToken cancellationToken)
     {
@@ -37,6 +39,7 @@ public sealed class AgentRunsController : ControllerBase
     /// 建立並執行 CriticReview workflow，檢查既有 research run 的回答品質與證據覆蓋。
     /// </summary>
     [HttpPost("critic-review")]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
     public async Task<ActionResult<AgentRunSummaryResponse>> CreateCriticReview(
         CreateCriticReviewRequest request,
         CancellationToken cancellationToken)
@@ -57,6 +60,7 @@ public sealed class AgentRunsController : ControllerBase
     /// 建立並執行 DraftRevision workflow，根據 CriticReview 結果產生修訂稿。
     /// </summary>
     [HttpPost("draft-revision")]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
     public async Task<ActionResult<AgentRunSummaryResponse>> CreateDraftRevision(
         CreateDraftRevisionRequest request,
         CancellationToken cancellationToken)
@@ -77,6 +81,7 @@ public sealed class AgentRunsController : ControllerBase
     /// 建立並執行 Research Quality Review workflow，合併 CriticReview 與 DraftRevision 為單一完整流程。
     /// </summary>
     [HttpPost("research-quality-review")]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
     public async Task<ActionResult<AgentRunSummaryResponse>> CreateResearchQualityReview(
         CreateResearchQualityReviewRequest request,
         CancellationToken cancellationToken)
@@ -97,6 +102,7 @@ public sealed class AgentRunsController : ControllerBase
     /// 從需要更多證據的 CriticReview 建立 EvidenceRemediation workflow。
     /// </summary>
     [HttpPost("evidence-remediation")]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
     public async Task<ActionResult<AgentRunSummaryResponse>> CreateEvidenceRemediation(
         CreateEvidenceRemediationRequest request,
         CancellationToken cancellationToken)
@@ -111,6 +117,7 @@ public sealed class AgentRunsController : ControllerBase
 
     /// <summary>從需要重新分析的 EvidenceRemediation 建立受控重新分析流程。</summary>
     [HttpPost("evidence-reanalysis")]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
     public async Task<ActionResult<AgentRunSummaryResponse>> CreateEvidenceReanalysis(
         CreateEvidenceReanalysisRequest request,
         CancellationToken cancellationToken)
@@ -161,6 +168,7 @@ public sealed class AgentRunsController : ControllerBase
     }
 
     [HttpPost("{runId:guid}/feedback")]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
     public async Task<ActionResult<SubmitAgentFeedbackResponse>> SubmitFeedback(
         Guid runId, SubmitAgentFeedbackRequest request, CancellationToken cancellationToken = default)
     {
@@ -187,6 +195,7 @@ public sealed class AgentRunsController : ControllerBase
     /// 重新執行失敗的 Agent run。第一版以整個 run 為 retry 單位。
     /// </summary>
     [HttpPost("{runId:guid}/retry")]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
     public async Task<ActionResult<AgentRunSummaryResponse>> Retry(
         Guid runId,
         CancellationToken cancellationToken = default)
