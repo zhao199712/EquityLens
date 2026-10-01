@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" /><PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" /><ProjectReference Include="../../src/EquityLens.Api/EquityLens.Api.csproj" /></ItemGroup>
+</Project>

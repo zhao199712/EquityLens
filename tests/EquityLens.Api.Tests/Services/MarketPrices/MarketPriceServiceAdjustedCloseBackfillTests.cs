@@ -18,44 +18,18 @@ public sealed class MarketPriceServiceAdjustedCloseBackfillTests
     private static readonly DateOnly To = new(2026, 7, 21);
 
     [Fact]
-    public async Task ImportByTicker_TwseSecurity_BackfillsAdjustedCloseFromYahoo()
+    public async Task ImportByTicker_VerifiedImporterUnavailable_DoesNotWrite()
     {
         var db = CreateDb();
         db.Securities.Add(BuildSecurity("TWSE"));
         await db.SaveChangesAsync();
-
-        var finmind = new FakeProvider("FinMind", [BuildPrice(From, null), BuildPrice(To, null)]);
-        var yahoo = new FakeProvider("YahooFinance", [BuildPrice(From, 2320.5m), BuildPrice(To, 2410.25m)]);
-        var service = CreateService(db, finmind, yahoo);
-
+        var service = CreateService(db, new FakeProvider("FinMind", [BuildPrice(From, null)]), new FakeProvider("YahooFinance", null));
         var result = await service.ImportDailyPricesByTickerAsync(
             new ImportMarketPricesByTickerRequest("2330", "TWSE", From, To, null, null, null, null, null, null), default);
-
-        Assert.True(result.IsSuccess);
-        var rows = await db.MarketPrices.OrderBy(x => x.PriceTime).ToListAsync();
-        Assert.Equal(2, rows.Count);
-        Assert.All(rows, x => Assert.Equal("FinMind", x.DataSource));
-        Assert.Equal(2320.5m, rows[0].AdjustedClose);
-        Assert.Equal(2410.25m, rows[1].AdjustedClose);
-    }
-
-    [Fact]
-    public async Task ImportByTicker_YahooBackfillFails_ImportStillSucceeds()
-    {
-        var db = CreateDb();
-        db.Securities.Add(BuildSecurity("TWSE"));
-        await db.SaveChangesAsync();
-
-        var finmind = new FakeProvider("FinMind", [BuildPrice(From, null)]);
-        var yahoo = new FakeProvider("YahooFinance", null);
-        var service = CreateService(db, finmind, yahoo);
-
-        var result = await service.ImportDailyPricesByTickerAsync(
-            new ImportMarketPricesByTickerRequest("2330", "TWSE", From, To, null, null, null, null, null, null), default);
-
-        Assert.True(result.IsSuccess);
-        var row = await db.MarketPrices.SingleAsync();
-        Assert.Null(row.AdjustedClose);
+        Assert.False(result.IsSuccess);
+        Assert.Equal("market_price.provider_error", result.ErrorCode);
+        Assert.Empty(await db.MarketPrices.ToListAsync());
+        Assert.Null((await db.Securities.SingleAsync()).PricesSyncedAtUtc);
     }
 
     [Fact]
@@ -75,6 +49,71 @@ public sealed class MarketPriceServiceAdjustedCloseBackfillTests
         Assert.True(result.IsSuccess);
         Assert.Equal(0, finmind.GetDailyPricesCallCount);
         Assert.Equal(1, yahoo.GetDailyPricesCallCount);
+    }
+
+    [Theory]
+    [InlineData("unverified")]
+    [InlineData("valid")]
+    [InlineData("null_adjustment")]
+    [InlineData("insufficient_range")]
+    [InlineData("wrong_row_version")]
+    [InlineData("missing_first")]
+    [InlineData("missing_day")]
+    [InlineData("missing_cutoff")]
+    [InlineData("valid_no_trade")]
+    [InlineData("price_on_no_trade")]
+    public async Task SyncToday_SkipsOnlyVerifiedCompleteBatch(string state)
+    {
+        var db = CreateDb();
+        var s = BuildSecurity("TWSE");
+        s.PricesSyncedAtUtc = DateTime.UtcNow;
+        db.Securities.Add(s);
+        var to = TaiwanTradingClock.LatestCompleteDate(DateTimeOffset.UtcNow);
+        var from = to.AddDays(-5);
+        var dates = Enumerable.Range(0, 6).Select(i => from.AddDays(i)).Where(x => x.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday)).ToList();
+        if (state != "unverified")
+        {
+            var id = Guid.NewGuid();
+            var noTrades = state is "valid_no_trade" or "price_on_no_trade" ? new[] { dates[0] } : [];
+            var snapshot = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                noTrades,
+                official = System.Text.Json.JsonSerializer.Serialize(new[] { new
+                {
+                    source = "FinMind:TaiwanStockTradingDate",
+                    snapshot = System.Text.Json.JsonSerializer.Serialize(new { data = dates.Select(x => new { date = x.ToString("yyyy-MM-dd") }) })
+                } })
+            });
+            db.PriceAdjustmentBatches.Add(new PriceAdjustmentBatch { Id = id, SecurityId = s.Id, From = state == "insufficient_range" ? to : from,
+                To = to, VerifiedThrough = dates[^1], Source = "fixture", SnapshotJson = snapshot });
+            s.PriceAdjustmentBatchId = id; s.PricesVerifiedThrough = dates[^1];
+            var missing = state switch
+            {
+                "missing_first" or "valid_no_trade" => (DateOnly?)dates[0],
+                "missing_day" => dates[1],
+                "missing_cutoff" => dates[^1],
+                _ => null
+            };
+            foreach (var day in dates.Where(x => x != missing))
+                db.MarketPrices.Add(new MarketPrice { Id = Guid.NewGuid(), SecurityId = s.Id,
+                    PriceTime = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), Open = 100, High = 100, Low = 100,
+                    Close = 100, AdjustedClose = state == "null_adjustment" ? null : 100,
+                    PriceAdjustmentBatchId = state == "wrong_row_version" ? null : id });
+        }
+        await db.SaveChangesAsync();
+        var service = CreateService(db, new FakeProvider("FinMind", null), new FakeProvider("YahooFinance", null));
+        var result = await service.SyncDailyPricesAsync(s.Id, 5, false, default);
+        if (state is "valid" or "valid_no_trade")
+        {
+            Assert.True(result.IsSuccess);
+            Assert.True(result.Value!.Skipped);
+            Assert.Equal(s.PriceAdjustmentBatchId, result.Value.AdjustmentVersion);
+        }
+        else
+        {
+            Assert.False(result.IsSuccess);
+            Assert.Equal("market_price.provider_error", result.ErrorCode);
+        }
     }
 
     private static Security BuildSecurity(string exchange) => new()
@@ -132,7 +171,8 @@ public sealed class MarketPriceServiceAdjustedCloseBackfillTests
 
         public Task<IReadOnlyList<SecurityResponse>> SearchAsync(string? query, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<SecurityResponse?> GetAsync(Guid id, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<Security?> GetEntityAsync(Guid id, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Security?> GetEntityAsync(Guid id, CancellationToken cancellationToken) =>
+            _db.Securities.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         public Task<bool> ActiveExistsAsync(Guid id, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<bool> TickerExchangeExistsAsync(string ticker, string exchange, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<IReadOnlyList<Security>> GetActiveEntitiesAsync(int limit, CancellationToken cancellationToken) => throw new NotImplementedException();

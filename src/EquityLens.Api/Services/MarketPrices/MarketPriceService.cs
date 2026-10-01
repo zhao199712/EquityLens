@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.MarketPrices;
 using EquityLens.Api.Contracts.Securities;
@@ -15,6 +16,7 @@ namespace EquityLens.Api.Services.MarketPrices;
 /// </summary>
 public sealed class MarketPriceService : IMarketPriceService
 {
+    private readonly TaiwanPriceImportCoordinator? _taiwanImporter;
     private const string DailyInterval = "1d";
 
     private readonly EquityLensDbContext _dbContext;
@@ -36,8 +38,10 @@ public sealed class MarketPriceService : IMarketPriceService
         ISecurityRepository securityRepository,
         IMarketPriceRepository marketPriceRepository,
         IEnumerable<IMarketDataProvider> marketDataProviders,
-        ILogger<MarketPriceService> logger)
+        ILogger<MarketPriceService> logger,
+        TaiwanPriceImportCoordinator? taiwanImporter = null)
     {
+        _taiwanImporter = taiwanImporter;
         _dbContext = dbContext;
         _securityRepository = securityRepository;
         _marketPriceRepository = marketPriceRepository;
@@ -99,8 +103,15 @@ public sealed class MarketPriceService : IMarketPriceService
             return Result<SyncMarketPricesResponse>.Failure("security.not_found", "Security was not found.");
         }
 
-        if (!force && IsPricesSyncedToday(security))
+        var to = security.Exchange is "TWSE" or "TPEX"
+            ? TaiwanTradingClock.LatestCompleteDate(DateTimeOffset.UtcNow)
+            : DateOnly.FromDateTime(DateTime.UtcNow);
+        var from = to.AddDays(-days);
+
+        if (!force && await IsPricesSyncedTodayAsync(security, from, to, cancellationToken))
         {
+            var skipBatch = security.PriceAdjustmentBatchId is null ? null :
+                await _dbContext.PriceAdjustmentBatches.AsNoTracking().SingleOrDefaultAsync(x => x.Id == security.PriceAdjustmentBatchId, cancellationToken);
             return Result<SyncMarketPricesResponse>.Success(new SyncMarketPricesResponse(
                 securityId,
                 security.PricesSource,
@@ -111,11 +122,8 @@ public sealed class MarketPriceService : IMarketPriceService
                 null,
                 0,
                 0,
-                0));
+                0, skipBatch?.Source, skipBatch?.Id, skipBatch?.From, skipBatch?.To, skipBatch?.VerifiedThrough));
         }
-
-        var to = DateOnly.FromDateTime(DateTime.UtcNow);
-        var from = to.AddDays(-days);
 
         var importResult = await ImportPricesForSecurityAsync(security, from, to, cancellationToken);
         if (!importResult.IsSuccess)
@@ -134,7 +142,8 @@ public sealed class MarketPriceService : IMarketPriceService
             to,
             value.ImportedCount,
             value.InsertedCount,
-            value.UpdatedCount));
+            value.UpdatedCount, value.AdjustmentSource, value.AdjustmentVersion,
+            value.CoverageFrom, value.CoverageTo, value.VerifiedThrough));
     }
 
     /// <inheritdoc />
@@ -153,11 +162,12 @@ public sealed class MarketPriceService : IMarketPriceService
         var failures = new List<RefreshSecurityPriceFailureResponse>();
 
         var to = DateOnly.FromDateTime(DateTime.UtcNow);
-        var from = to.AddDays(-days);
 
         foreach (var security in candidates)
         {
-            if (!force && IsPricesSyncedToday(security))
+            var securityTo = security.Exchange is "TWSE" or "TPEX"
+                ? TaiwanTradingClock.LatestCompleteDate(DateTimeOffset.UtcNow) : to;
+            if (!force && await IsPricesSyncedTodayAsync(security, securityTo.AddDays(-days), securityTo, cancellationToken))
             {
                 skipped++;
                 continue;
@@ -165,7 +175,7 @@ public sealed class MarketPriceService : IMarketPriceService
 
             try
             {
-                var result = await ImportPricesForSecurityAsync(security, from, to, cancellationToken);
+                var result = await ImportPricesForSecurityAsync(security, securityTo.AddDays(-days), securityTo, cancellationToken);
                 if (result.IsSuccess)
                 {
                     synced++;
@@ -181,7 +191,7 @@ public sealed class MarketPriceService : IMarketPriceService
                         result.ErrorMessage ?? "Unknown error"));
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 failed++;
                 failures.Add(new RefreshSecurityPriceFailureResponse(
@@ -247,7 +257,8 @@ public sealed class MarketPriceService : IMarketPriceService
             value.Source,
             value.ImportedCount,
             value.InsertedCount,
-            value.UpdatedCount));
+            value.UpdatedCount, value.AdjustmentSource, value.AdjustmentVersion,
+            value.CoverageFrom, value.CoverageTo, value.VerifiedThrough));
     }
 
     private async Task<Result<ImportMarketPricesResponse>> ImportPricesForSecurityAsync(
@@ -256,6 +267,13 @@ public sealed class MarketPriceService : IMarketPriceService
         DateOnly to,
         CancellationToken cancellationToken)
     {
+        if (security.Exchange is "TWSE" or "TPEX")
+        {
+            if (_taiwanImporter is null)
+                return Result<ImportMarketPricesResponse>.Failure("market_price.provider_error", "Verified Taiwan importer is unavailable.");
+            return await _taiwanImporter.ImportAsync(security.Id, from, to, cancellationToken);
+        }
+
         var providers = GetOrderedPriceProviders(security.Exchange);
         if (providers.Count == 0)
         {
@@ -320,7 +338,6 @@ public sealed class MarketPriceService : IMarketPriceService
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 
-            await TryBackfillAdjustedCloseAsync(security, from, to, cancellationToken);
 
             return Result<ImportMarketPricesResponse>.Success(new ImportMarketPricesResponse(
                 security.Id,
@@ -334,48 +351,6 @@ public sealed class MarketPriceService : IMarketPriceService
         return Result<ImportMarketPricesResponse>.Failure(
             "market_price.provider_error",
             $"No price data returned from any provider. Details: {errorDetail}");
-    }
-
-    /// <summary>
-    /// 台股（TWSE/TPEX）匯入價格後，透過 Yahoo Finance 回補缺失的調整後收盤價。
-    /// 失敗僅記錄 log，不影響匯入結果。
-    /// </summary>
-    private async Task TryBackfillAdjustedCloseAsync(
-        Security security,
-        DateOnly from,
-        DateOnly to,
-        CancellationToken cancellationToken)
-    {
-        if (security.Exchange is not ("TWSE" or "TPEX"))
-        {
-            return;
-        }
-
-        var yahoo = _marketDataProviders.FirstOrDefault(x => x.SourceName == "YahooFinance");
-        if (yahoo is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var yahooPrices = await yahoo.GetDailyPricesAsync(security, from, to, cancellationToken);
-            var adjustedCloseByDate = yahooPrices
-                .Where(x => x.AdjustedClose.HasValue)
-                .GroupBy(x => x.Date)
-                .ToDictionary(x => x.Key, x => x.First().AdjustedClose!.Value);
-            if (adjustedCloseByDate.Count == 0)
-            {
-                return;
-            }
-
-            await _marketPriceRepository.UpdateAdjustedCloseAsync(
-                security.Id, adjustedCloseByDate, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "Adjusted-close backfill failed for {Ticker} ({Exchange}).", security.Ticker, security.Exchange);
-        }
     }
 
     private IReadOnlyList<IMarketDataProvider> GetOrderedPriceProviders(string exchange)
@@ -408,15 +383,52 @@ public sealed class MarketPriceService : IMarketPriceService
         return ordered;
     }
 
-    private static bool IsPricesSyncedToday(Security security)
+    private async Task<bool> IsPricesSyncedTodayAsync(Security security, DateOnly from, DateOnly to, CancellationToken ct)
     {
-        if (security.PricesSyncedAtUtc is null)
-        {
+        if (security.PricesSyncedAtUtc is null ||
+            DateOnly.FromDateTime(security.PricesSyncedAtUtc.Value) != DateOnly.FromDateTime(DateTime.UtcNow))
             return false;
+        if (security.Exchange is not ("TWSE" or "TPEX")) return true;
+        if (security.PriceAdjustmentBatchId is null || security.PricesVerifiedThrough is null) return false;
+        var batch = await _dbContext.PriceAdjustmentBatches.AsNoTracking().SingleOrDefaultAsync(
+            x => x.Id == security.PriceAdjustmentBatchId && x.SecurityId == security.Id, ct);
+        if (batch is null || batch.From > from || batch.To < to || batch.VerifiedThrough != security.PricesVerifiedThrough)
+            return false;
+        if (batch.VerifiedThrough < batch.From || batch.VerifiedThrough > batch.To) return false;
+        // 核對整個批次的交易日與明確無成交證據；不能只檢查剩餘價格列。
+        var calendarDates = new HashSet<DateOnly>();
+        var noTrades = new HashSet<DateOnly>();
+        try
+        {
+            using var snapshot = JsonDocument.Parse(batch.SnapshotJson);
+            if (snapshot.RootElement.TryGetProperty("noTrades", out var gaps))
+                noTrades = gaps.EnumerateArray().Select(x => DateOnly.Parse(x.GetString()!)).ToHashSet();
+            using var sources = JsonDocument.Parse(snapshot.RootElement.GetProperty("official").GetString()!);
+            foreach (var source in sources.RootElement.EnumerateArray())
+            {
+                if (source.GetProperty("source").GetString() != "FinMind:TaiwanStockTradingDate") continue;
+                using var calendar = JsonDocument.Parse(source.GetProperty("snapshot").GetString()!);
+                var dates = calendar.RootElement.GetProperty("data").EnumerateArray()
+                    .Select(x => DateOnly.Parse(x.GetProperty("date").GetString()!)).ToList();
+                calendarDates = dates.ToHashSet();
+                if (calendarDates.Count != dates.Count) return false;
+                break;
+            }
         }
-
-        var syncedDate = DateOnly.FromDateTime(security.PricesSyncedAtUtc.Value);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        return syncedDate == today;
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or ArgumentException)
+        { return false; }
+        var lastRequired = calendarDates.Where(x => x >= from && x <= to).Select(x => (DateOnly?)x).Max();
+        if (lastRequired is null || batch.VerifiedThrough < lastRequired) return false;
+        var expectedDates = calendarDates.Where(x => x >= batch.From && x <= batch.VerifiedThrough).ToHashSet();
+        if (!noTrades.IsSubsetOf(expectedDates)) return false;
+        expectedDates.ExceptWith(noTrades);
+        var prices = await _dbContext.MarketPrices.AsNoTracking()
+            .Where(x => x.SecurityId == security.Id && x.Interval == "1d")
+            .Select(x => new { x.PriceTime, x.PriceAdjustmentBatchId, x.AdjustedClose, x.Open, x.High, x.Low, x.Close })
+            .ToListAsync(ct);
+        if (prices.Count == 0 || prices.Any(x => x.PriceAdjustmentBatchId != batch.Id || x.AdjustedClose is null or <= 0 ||
+                x.Open <= 0 || x.High <= 0 || x.Low <= 0 || x.Close <= 0)) return false;
+        var actualDates = prices.Select(x => DateOnly.FromDateTime(x.PriceTime)).ToHashSet();
+        return actualDates.Count == prices.Count && actualDates.SetEquals(expectedDates);
     }
 }

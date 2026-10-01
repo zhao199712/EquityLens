@@ -27,6 +27,10 @@ public class SecurityConfiguration : IEntityTypeConfiguration<Security>
         builder.Property(x => x.PricesSyncedAtUtc).HasColumnName("prices_synced_at_utc");
         builder.Property(x => x.PricesSource).HasColumnName("prices_source").HasMaxLength(32);
 
+        builder.Property(x => x.PriceAdjustmentBatchId).HasColumnName("price_adjustment_batch_id").IsConcurrencyToken();
+        builder.Property(x => x.PricesVerifiedThrough).HasColumnName("prices_verified_through");
+        builder.HasOne<PriceAdjustmentBatch>().WithMany().HasForeignKey(x => x.PriceAdjustmentBatchId).OnDelete(DeleteBehavior.Restrict);
+
         // Unique constraint on (Ticker, Exchange)
         builder.HasIndex(x => new { x.Ticker, x.Exchange }).IsUnique();
     }

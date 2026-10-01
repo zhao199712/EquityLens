@@ -7,4 +7,5 @@ public sealed record ImportedMarketPrice(
     decimal Low,
     decimal Close,
     decimal? AdjustedClose,
-    long? Volume);
+    long? Volume,
+    string? RawSource = null);

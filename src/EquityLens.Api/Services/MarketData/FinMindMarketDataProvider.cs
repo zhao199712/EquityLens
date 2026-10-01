@@ -9,13 +9,16 @@ namespace EquityLens.Api.Services.MarketData;
 /// <summary>
 /// FinMind 市場資料提供者，提供台股（TWSE/TPEX）證券搜尋、解析與每日價格查詢。
 /// </summary>
-public sealed class FinMindMarketDataProvider : IMarketDataProvider
+public sealed class FinMindMarketDataProvider : IMarketDataProvider, IMarketDataEvidenceProvider
 {
     private static readonly HashSet<string> SupportedExchanges = new(StringComparer.OrdinalIgnoreCase)
     {
         "TWSE",
         "TPEX"
     };
+
+    public string? SourceProvenanceJson { get; private set; }
+    public string? LastPriceEvidenceJson { get; private set; }
 
     private readonly HttpClient _httpClient;
     private readonly FinMindOptions _options;
@@ -124,6 +127,8 @@ public sealed class FinMindMarketDataProvider : IMarketDataProvider
         DateOnly to,
         CancellationToken cancellationToken)
     {
+        LastPriceEvidenceJson = null;
+        SourceProvenanceJson = null;
         var queryParameters = new Dictionary<string, string?>
         {
             ["dataset"] = "TaiwanStockPrice",
@@ -142,8 +147,11 @@ public sealed class FinMindMarketDataProvider : IMarketDataProvider
         using var response = await _httpClient.GetAsync(query, cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        SourceProvenanceJson = response.Headers.TryGetValues("X-EquityLens-Replay-Origin", out var provenance) ? provenance.Single() : null;
+        LastPriceEvidenceJson = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var document = JsonDocument.Parse(LastPriceEvidenceJson);
+        if (!document.RootElement.TryGetProperty("status", out var status) || status.GetInt32() != 200)
+            throw new HttpRequestException("FinMind price request was not successful.");
 
         if (!document.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
         {
@@ -153,10 +161,10 @@ public sealed class FinMindMarketDataProvider : IMarketDataProvider
         var prices = new List<ImportedMarketPrice>();
         foreach (var item in data.EnumerateArray())
         {
+            if (item.TryGetProperty("stock_id", out var stockId) && stockId.GetString() != security.Ticker)
+                throw new EquityLens.Api.Services.MarketPrices.PriceIntegrityException("Raw-price ticker mismatch.");
             if (!DateOnly.TryParse(item.GetProperty("date").GetString(), CultureInfo.InvariantCulture, out var date) || date < from || date > to)
-            {
-                continue;
-            }
+                throw new EquityLens.Api.Services.MarketPrices.PriceIntegrityException("Invalid/out-of-range raw-price date.");
 
             prices.Add(new ImportedMarketPrice(
                 date,

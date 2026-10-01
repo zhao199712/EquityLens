@@ -1,0 +1,1729 @@
+{
+  "snapshotSha256": "60a427e243eef2b6d324fb06716ae646ce3c93b1aa53f5bb78221ee11eedbd1b",
+  "overview": [
+    {
+      "metric": "quantile",
+      "confidence": 0.95,
+      "opponent": "FHS",
+      "count": 27,
+      "hsMeanWins": 2,
+      "hsSignificantWins": 0,
+      "opponentSignificantWins": 0
+    },
+    {
+      "metric": "quantile",
+      "confidence": 0.95,
+      "opponent": "GARCH-FHS",
+      "count": 27,
+      "hsMeanWins": 1,
+      "hsSignificantWins": 0,
+      "opponentSignificantWins": 0
+    },
+    {
+      "metric": "quantile",
+      "confidence": 0.99,
+      "opponent": "FHS",
+      "count": 27,
+      "hsMeanWins": 6,
+      "hsSignificantWins": 0,
+      "opponentSignificantWins": 0
+    },
+    {
+      "metric": "quantile",
+      "confidence": 0.99,
+      "opponent": "GARCH-FHS",
+      "count": 27,
+      "hsMeanWins": 4,
+      "hsSignificantWins": 0,
+      "opponentSignificantWins": 0
+    },
+    {
+      "metric": "fz0",
+      "confidence": 0.95,
+      "opponent": "FHS",
+      "count": 27,
+      "hsMeanWins": 4,
+      "hsSignificantWins": 0,
+      "opponentSignificantWins": 0
+    },
+    {
+      "metric": "fz0",
+      "confidence": 0.95,
+      "opponent": "GARCH-FHS",
+      "count": 27,
+      "hsMeanWins": 0,
+      "hsSignificantWins": 0,
+      "opponentSignificantWins": 0
+    },
+    {
+      "metric": "fz0",
+      "confidence": 0.99,
+      "opponent": "FHS",
+      "count": 27,
+      "hsMeanWins": 15,
+      "hsSignificantWins": 0,
+      "opponentSignificantWins": 0
+    },
+    {
+      "metric": "fz0",
+      "confidence": 0.99,
+      "opponent": "GARCH-FHS",
+      "count": 27,
+      "hsMeanWins": 3,
+      "hsSignificantWins": 0,
+      "opponentSignificantWins": 0
+    }
+  ],
+  "benchmarkMetrics": [],
+  "benchmarkComparisons": [],
+  "last252Significant": [
+    {
+      "ciHigh": -0.0001291287024863191,
+      "ciLow": -0.0003999269777085636,
+      "confidence": 0.99,
+      "count": 252,
+      "dataset": "stock-2408",
+      "delta": -0.0002586408851695845,
+      "holmP": 0.021597840215978402,
+      "kind": "stock",
+      "mainEligible": true,
+      "metric": "quantile",
+      "opponent": "VT-GARCH-t + Joint-Vector FHS",
+      "pValue": 0.00039996000399960006,
+      "period": "last252Available",
+      "significantHsBetter": true,
+      "significantOpponentBetter": false
+    },
+    {
+      "ciHigh": -0.11979695578177235,
+      "ciLow": -0.40232634988786625,
+      "confidence": 0.99,
+      "count": 252,
+      "dataset": "stock-2408",
+      "delta": -0.2539715754908361,
+      "holmP": 0.026997300269973,
+      "kind": "stock",
+      "mainEligible": true,
+      "metric": "fz0",
+      "opponent": "VT-GARCH-t + Joint-Vector FHS",
+      "pValue": 0.0004999500049995,
+      "period": "last252Available",
+      "significantHsBetter": true,
+      "significantOpponentBetter": false
+    }
+  ],
+  "failures": [],
+  "datasets": [
+    {
+      "absent": [
+        "1216"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "1216": null
+      },
+      "mainEligible": false,
+      "name": "stock-1216",
+      "segmentCount": 0,
+      "tickers": [
+        "1216"
+      ],
+      "unverifiedTickers": [
+        "1216"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-1301-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "1301": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-1301",
+      "segmentCount": 1,
+      "tickers": [
+        "1301"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-1303-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "1303": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-1303",
+      "segmentCount": 1,
+      "tickers": [
+        "1303"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2002"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1607,
+      "kind": "stock",
+      "latestByTicker": {
+        "2002": null
+      },
+      "mainEligible": false,
+      "name": "stock-2002",
+      "segmentCount": 0,
+      "tickers": [
+        "2002"
+      ],
+      "unverifiedTickers": [
+        "2002"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2059-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2059": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2059",
+      "segmentCount": 1,
+      "tickers": [
+        "2059"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2207"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1607,
+      "kind": "stock",
+      "latestByTicker": {
+        "2207": null
+      },
+      "mainEligible": false,
+      "name": "stock-2207",
+      "segmentCount": 0,
+      "tickers": [
+        "2207"
+      ],
+      "unverifiedTickers": [
+        "2207"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2301-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2301": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2301",
+      "segmentCount": 1,
+      "tickers": [
+        "2301"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2303-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2303": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2303",
+      "segmentCount": 1,
+      "tickers": [
+        "2303"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2308-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2308": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2308",
+      "segmentCount": 1,
+      "tickers": [
+        "2308"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1174,
+      "files": [
+        "stock-2317-segment-000",
+        "stock-2317-segment-001"
+      ],
+      "interiorGaps": [
+        {
+          "date": "2025-07-30",
+          "missingTickers": [
+            "2317"
+          ]
+        }
+      ],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2317": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2317",
+      "segmentCount": 2,
+      "tickers": [
+        "2317"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2327"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1615,
+      "kind": "stock",
+      "latestByTicker": {
+        "2327": null
+      },
+      "mainEligible": false,
+      "name": "stock-2327",
+      "segmentCount": 0,
+      "tickers": [
+        "2327"
+      ],
+      "unverifiedTickers": [
+        "2327"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2330-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2330": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2330",
+      "segmentCount": 1,
+      "tickers": [
+        "2330"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2344"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2344": null
+      },
+      "mainEligible": false,
+      "name": "stock-2344",
+      "segmentCount": 0,
+      "tickers": [
+        "2344"
+      ],
+      "unverifiedTickers": [
+        "2344"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2345-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2345": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2345",
+      "segmentCount": 1,
+      "tickers": [
+        "2345"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2357-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2357": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2357",
+      "segmentCount": 1,
+      "tickers": [
+        "2357"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2360-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2360": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2360",
+      "segmentCount": 1,
+      "tickers": [
+        "2360"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2368"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1622,
+      "kind": "stock",
+      "latestByTicker": {
+        "2368": null
+      },
+      "mainEligible": false,
+      "name": "stock-2368",
+      "segmentCount": 0,
+      "tickers": [
+        "2368"
+      ],
+      "unverifiedTickers": [
+        "2368"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2382-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2382": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2382",
+      "segmentCount": 1,
+      "tickers": [
+        "2382"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2383-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2383": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2383",
+      "segmentCount": 1,
+      "tickers": [
+        "2383"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2395"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2395": null
+      },
+      "mainEligible": false,
+      "name": "stock-2395",
+      "segmentCount": 0,
+      "tickers": [
+        "2395"
+      ],
+      "unverifiedTickers": [
+        "2395"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2408-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2408": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2408",
+      "segmentCount": 1,
+      "tickers": [
+        "2408"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2412-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2412": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2412",
+      "segmentCount": 1,
+      "tickers": [
+        "2412"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2449"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2449": null
+      },
+      "mainEligible": false,
+      "name": "stock-2449",
+      "segmentCount": 0,
+      "tickers": [
+        "2449"
+      ],
+      "unverifiedTickers": [
+        "2449"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2454-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2454": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2454",
+      "segmentCount": 1,
+      "tickers": [
+        "2454"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-2498-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "2498": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-2498",
+      "segmentCount": 1,
+      "tickers": [
+        "2498"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2603"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1622,
+      "kind": "stock",
+      "latestByTicker": {
+        "2603": null
+      },
+      "mainEligible": false,
+      "name": "stock-2603",
+      "segmentCount": 0,
+      "tickers": [
+        "2603"
+      ],
+      "unverifiedTickers": [
+        "2603"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2880"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2880": null
+      },
+      "mainEligible": false,
+      "name": "stock-2880",
+      "segmentCount": 0,
+      "tickers": [
+        "2880"
+      ],
+      "unverifiedTickers": [
+        "2880"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2881"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2881": null
+      },
+      "mainEligible": false,
+      "name": "stock-2881",
+      "segmentCount": 0,
+      "tickers": [
+        "2881"
+      ],
+      "unverifiedTickers": [
+        "2881"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2882"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2882": null
+      },
+      "mainEligible": false,
+      "name": "stock-2882",
+      "segmentCount": 0,
+      "tickers": [
+        "2882"
+      ],
+      "unverifiedTickers": [
+        "2882"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2883"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2883": null
+      },
+      "mainEligible": false,
+      "name": "stock-2883",
+      "segmentCount": 0,
+      "tickers": [
+        "2883"
+      ],
+      "unverifiedTickers": [
+        "2883"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2884"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2884": null
+      },
+      "mainEligible": false,
+      "name": "stock-2884",
+      "segmentCount": 0,
+      "tickers": [
+        "2884"
+      ],
+      "unverifiedTickers": [
+        "2884"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2885"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2885": null
+      },
+      "mainEligible": false,
+      "name": "stock-2885",
+      "segmentCount": 0,
+      "tickers": [
+        "2885"
+      ],
+      "unverifiedTickers": [
+        "2885"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2886"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2886": null
+      },
+      "mainEligible": false,
+      "name": "stock-2886",
+      "segmentCount": 0,
+      "tickers": [
+        "2886"
+      ],
+      "unverifiedTickers": [
+        "2886"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2887"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2887": null
+      },
+      "mainEligible": false,
+      "name": "stock-2887",
+      "segmentCount": 0,
+      "tickers": [
+        "2887"
+      ],
+      "unverifiedTickers": [
+        "2887"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2890"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2890": null
+      },
+      "mainEligible": false,
+      "name": "stock-2890",
+      "segmentCount": 0,
+      "tickers": [
+        "2890"
+      ],
+      "unverifiedTickers": [
+        "2890"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2891"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2891": null
+      },
+      "mainEligible": false,
+      "name": "stock-2891",
+      "segmentCount": 0,
+      "tickers": [
+        "2891"
+      ],
+      "unverifiedTickers": [
+        "2891"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2892"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "2892": null
+      },
+      "mainEligible": false,
+      "name": "stock-2892",
+      "segmentCount": 0,
+      "tickers": [
+        "2892"
+      ],
+      "unverifiedTickers": [
+        "2892"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-3008-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "3008": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-3008",
+      "segmentCount": 1,
+      "tickers": [
+        "3008"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "3017"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "3017": null
+      },
+      "mainEligible": false,
+      "name": "stock-3017",
+      "segmentCount": 0,
+      "tickers": [
+        "3017"
+      ],
+      "unverifiedTickers": [
+        "3017"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "3037"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 728,
+      "kind": "stock",
+      "latestByTicker": {
+        "3037": null
+      },
+      "mainEligible": false,
+      "name": "stock-3037",
+      "segmentCount": 0,
+      "tickers": [
+        "3037"
+      ],
+      "unverifiedTickers": [
+        "3037"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-3045-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "3045": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-3045",
+      "segmentCount": 1,
+      "tickers": [
+        "3045"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-3231-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "3231": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-3231",
+      "segmentCount": 1,
+      "tickers": [
+        "3231"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-3443-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "3443": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-3443",
+      "segmentCount": 1,
+      "tickers": [
+        "3443"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "3653"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "3653": null
+      },
+      "mainEligible": false,
+      "name": "stock-3653",
+      "segmentCount": 0,
+      "tickers": [
+        "3653"
+      ],
+      "unverifiedTickers": [
+        "3653"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-3661-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "3661": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-3661",
+      "segmentCount": 1,
+      "tickers": [
+        "3661"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "3665"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 728,
+      "kind": "stock",
+      "latestByTicker": {
+        "3665": null
+      },
+      "mainEligible": false,
+      "name": "stock-3665",
+      "segmentCount": 0,
+      "tickers": [
+        "3665"
+      ],
+      "unverifiedTickers": [
+        "3665"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-3711-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "3711": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-3711",
+      "segmentCount": 1,
+      "tickers": [
+        "3711"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-4904-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "4904": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-4904",
+      "segmentCount": 1,
+      "tickers": [
+        "4904"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1344,
+      "files": [
+        "stock-4958-segment-000"
+      ],
+      "interiorGaps": [
+        {
+          "date": "2020-03-10",
+          "missingTickers": [
+            "4958"
+          ]
+        }
+      ],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "4958": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-4958",
+      "segmentCount": 2,
+      "tickers": [
+        "4958"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "5880"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "5880": null
+      },
+      "mainEligible": false,
+      "name": "stock-5880",
+      "segmentCount": 0,
+      "tickers": [
+        "5880"
+      ],
+      "unverifiedTickers": [
+        "5880"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-6505-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "6505": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-6505",
+      "segmentCount": 1,
+      "tickers": [
+        "6505"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "6669"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 1629,
+      "kind": "stock",
+      "latestByTicker": {
+        "6669": null
+      },
+      "mainEligible": false,
+      "name": "stock-6669",
+      "segmentCount": 0,
+      "tickers": [
+        "6669"
+      ],
+      "unverifiedTickers": [
+        "6669"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "6919"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 823,
+      "kind": "stock",
+      "latestByTicker": {
+        "6919": null
+      },
+      "mainEligible": false,
+      "name": "stock-6919",
+      "segmentCount": 0,
+      "tickers": [
+        "6919"
+      ],
+      "unverifiedTickers": [
+        "6919"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "7769"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 413,
+      "kind": "stock",
+      "latestByTicker": {
+        "7769": null
+      },
+      "mainEligible": false,
+      "name": "stock-7769",
+      "segmentCount": 0,
+      "tickers": [
+        "7769"
+      ],
+      "unverifiedTickers": [
+        "7769"
+      ],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [],
+      "excludedReason": null,
+      "expectedObservations": 1428,
+      "files": [
+        "stock-8046-segment-000"
+      ],
+      "interiorGaps": [],
+      "invalidPrices": 0,
+      "kind": "stock",
+      "latestByTicker": {
+        "8046": "2026-09-30"
+      },
+      "mainEligible": true,
+      "name": "stock-8046",
+      "segmentCount": 1,
+      "tickers": [
+        "8046"
+      ],
+      "unverifiedTickers": [],
+      "weights": [
+        1.0
+      ]
+    },
+    {
+      "absent": [
+        "2891",
+        "2344",
+        "2881",
+        "2882",
+        "2887",
+        "3017",
+        "2885",
+        "2886"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 13032,
+      "kind": "benchmark",
+      "latestByTicker": {
+        "1303": "2026-09-30",
+        "2303": "2026-09-30",
+        "2308": "2026-09-30",
+        "2317": "2026-09-30",
+        "2330": "2026-09-30",
+        "2344": null,
+        "2345": "2026-09-30",
+        "2360": "2026-09-30",
+        "2382": "2026-09-30",
+        "2383": "2026-09-30",
+        "2412": "2026-09-30",
+        "2454": "2026-09-30",
+        "2881": null,
+        "2882": null,
+        "2885": null,
+        "2886": null,
+        "2887": null,
+        "2891": null,
+        "3017": null,
+        "3711": "2026-09-30"
+      },
+      "mainEligible": false,
+      "name": "benchmark-equal",
+      "segmentCount": 0,
+      "tickers": [
+        "2330",
+        "2454",
+        "2308",
+        "2317",
+        "3711",
+        "2303",
+        "2383",
+        "2891",
+        "2344",
+        "2345",
+        "2881",
+        "2882",
+        "1303",
+        "2382",
+        "2887",
+        "2360",
+        "3017",
+        "2885",
+        "2412",
+        "2886"
+      ],
+      "unverifiedTickers": [
+        "2891",
+        "2344",
+        "2881",
+        "2882",
+        "2887",
+        "3017",
+        "2885",
+        "2886"
+      ],
+      "weights": [
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05
+      ]
+    },
+    {
+      "absent": [
+        "2891",
+        "2344",
+        "2881",
+        "2882",
+        "2887",
+        "3017",
+        "2885",
+        "2886"
+      ],
+      "excludedReason": "unverified price adjustment batch",
+      "expectedObservations": 0,
+      "files": [],
+      "interiorGaps": [],
+      "invalidPrices": 13032,
+      "kind": "benchmark",
+      "latestByTicker": {
+        "1303": "2026-09-30",
+        "2303": "2026-09-30",
+        "2308": "2026-09-30",
+        "2317": "2026-09-30",
+        "2330": "2026-09-30",
+        "2344": null,
+        "2345": "2026-09-30",
+        "2360": "2026-09-30",
+        "2382": "2026-09-30",
+        "2383": "2026-09-30",
+        "2412": "2026-09-30",
+        "2454": "2026-09-30",
+        "2881": null,
+        "2882": null,
+        "2885": null,
+        "2886": null,
+        "2887": null,
+        "2891": null,
+        "3017": null,
+        "3711": "2026-09-30"
+      },
+      "mainEligible": false,
+      "name": "benchmark-2330-50",
+      "segmentCount": 0,
+      "tickers": [
+        "2330",
+        "2454",
+        "2308",
+        "2317",
+        "3711",
+        "2303",
+        "2383",
+        "2891",
+        "2344",
+        "2345",
+        "2881",
+        "2882",
+        "1303",
+        "2382",
+        "2887",
+        "2360",
+        "3017",
+        "2885",
+        "2412",
+        "2886"
+      ],
+      "unverifiedTickers": [
+        "2891",
+        "2344",
+        "2881",
+        "2882",
+        "2887",
+        "3017",
+        "2885",
+        "2886"
+      ],
+      "weights": [
+        0.5,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421,
+        0.02631578947368421
+      ]
+    }
+  ],
+  "provenance": {
+    "baseCommit": "5ec4093252b4f625f82838378fe62d08ed8dfbc3",
+    "garchRuntime": {
+      "algorithmVersion": "vt-garch-t-joint-fhs-v1",
+      "packages": {
+        "arch": "8.0.0",
+        "numpy": "2.5.1",
+        "pandas": "3.0.5",
+        "pydantic": "2.13.4",
+        "scipy": "1.17.0",
+        "statsmodels": "0.14.6"
+      },
+      "python": "3.13.14 (main, Aug  5 2026, 01:09:38) [GCC 14.2.0]"
+    },
+    "sourceSha256": {
+      "research/EquityLens.RiskEvaluation/Program.cs": "168db92db377a888ec8490bb2e4ab753961af1a608432a1de46ed05995555ba2",
+      "scripts/refresh_tw_prices.py": "423165d662c4243f787764e2643de3a3be2450e123379941a7dec665ce23d5a0",
+      "scripts/report_hs_comparison.py": "51c7d99f6db66a7f2c276ef0d661dcebe33034a74073ff49cb567bb0ef19014b",
+      "scripts/run_risk_research_container.py": "52074643a89512aa5974d0cf89456ac948b3a015238b86fdf26b7f8df606f8fb",
+      "src/EquityLens.Api/Domain/Calculations/RiskMath.cs": "7c520cd0e0c24c3d974ed2e0ca16d805d783acf06d60d09187fec01775ba5265",
+      "src/EquityLens.Api/Services/RiskAnalysis/CSharpRiskBacktestEngine.cs": "cbdfaf3429304c22104b9805f2612ad9aa345a8a1c911e7c272870a85925351e",
+      "src/EquityLens.Mathematics/src/equitylens_mathematics/engine.py": "f97ab0d3678d07fcc9adbd13349a8b676baa7155066d196d1204c609ee9270cf",
+      "src/EquityLens.Mathematics/src/equitylens_mathematics/garch.py": "bd3960817b54e82fb9d5fe9b87ded504a86f431a6537413cf8cda5d2ad873aca",
+      "src/EquityLens.Mathematics/src/equitylens_mathematics/research/hs_comparison.py": "31d12a7a2d37487c55d1ee142550947e2d059ec2414952ebb296ff352b8c3f80"
+    }
+  }
+}

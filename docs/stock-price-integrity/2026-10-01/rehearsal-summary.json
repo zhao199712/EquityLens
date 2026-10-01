@@ -1,0 +1,855 @@
+{
+  "scope": {
+    "stocks": 57,
+    "from": "2019-11-01",
+    "to": "2026-09-30"
+  },
+  "initialLive": {
+    "succeeded": 27,
+    "failed": 30,
+    "stopped": false,
+    "database": "equitylens_price_repair_ba119d692ac14671bfc32ac5762b6dca"
+  },
+  "subsequentLiveWithQuotaFailure": {
+    "succeeded": 10,
+    "failed": 47,
+    "stopped": false,
+    "database": "equitylens_price_repair_bd1d06f752c6444c9c5543b4f803cc46"
+  },
+  "finalFrozenReplay": {
+    "succeeded": 27,
+    "failed": 30,
+    "stopped": false,
+    "replay": true,
+    "source_directory": "exports/price-repair/frozen-sources",
+    "database": "equitylens_price_repair_1ac4cb0b432749c3b31335561fbe5769"
+  },
+  "recoveryDrill": {
+    "stopped": true,
+    "failed": 1,
+    "successful": 0,
+    "restoredAllOriginalRowsAndSyncState": true,
+    "retainedWithdrawnAuditBatch": true
+  },
+  "tests": {
+    "backendTargeted": 237,
+    "python": 22,
+    "postgresIntegrationIncluded": true,
+    "migrationModelConsistent": true
+  },
+  "checks": {
+    "productionUnchanged": true,
+    "sourceSnapshotHashesVerified": 27,
+    "exactSeriesHashesMatched": 27,
+    "exactModelInputsMatched": 28
+  },
+  "modelEvaluation": {
+    "forecastRows": 229308,
+    "comparisons": 432,
+    "failures": 0,
+    "eligibleStocks": 27,
+    "fullPeriodHolmSignificantHsWins": 0,
+    "fullPeriodHolmSignificantOpponentWins": 0
+  },
+  "hashes": {
+    "backup": "0d51e78e4b7a69ab20a3d85de6b2dd3bb41b434070ad427751a80397cf91920e",
+    "finalSnapshot": "60a427e243eef2b6d324fb06716ae646ce3c93b1aa53f5bb78221ee11eedbd1b",
+    "calendar": "ec67712ba41e6e4eedb24d74b65f9db538dac6f2aa14ed9fcf42a0ce45ce362d"
+  },
+  "outcomes": [
+    {
+      "ticker": "2330",
+      "success": true,
+      "response": {
+        "security_id": "ca4e748c-2831-4e77-964e-ce660da68da9",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 45,
+        "updated_count": 1636,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "45c18e17-9367-4258-817c-99d534fcc944",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "0050",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Official source cannot verify missing/zero price on 06/11/2025."
+    },
+    {
+      "ticker": "00835B",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "1216",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Unmatched/ambiguous action on 2023-08-04."
+    },
+    {
+      "ticker": "1301",
+      "success": true,
+      "response": {
+        "security_id": "4e3deba1-1c92-4e19-a3c5-bb1d8319c0e4",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 74,
+        "updated_count": 1607,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "86d9ea92-a7d4-4c00-b5cf-40a9e5cc3f15",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "1303",
+      "success": true,
+      "response": {
+        "security_id": "677c6f04-ad16-48b8-a7de-06973007f5a5",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "4fc8817f-180d-4cbd-a6b3-491d0706f67a",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2002",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Unmatched/ambiguous action on 2024-07-26."
+    },
+    {
+      "ticker": "2059",
+      "success": true,
+      "response": {
+        "security_id": "497c9383-2701-4d0c-91a5-15a941230c4c",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "7b08daa2-e52c-438e-973e-3d19367d6241",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2207",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Unmatched/ambiguous action on 2023-08-04."
+    },
+    {
+      "ticker": "2301",
+      "success": true,
+      "response": {
+        "security_id": "fdcc878d-6f91-4d03-a689-4547d8cc0d11",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "b2de1da2-5e58-44bd-827f-cf6ae38e0872",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2303",
+      "success": true,
+      "response": {
+        "security_id": "589322f3-c596-41c2-8b8d-d7e9f3bf6b21",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "6d296788-5a2c-4f2e-a790-753b2f020b17",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2308",
+      "success": true,
+      "response": {
+        "security_id": "b03eebfa-328e-4abf-a5d8-acaa6c73bb77",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "0cf9b84f-0d93-47e8-9dfc-230d51eeef46",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2317",
+      "success": true,
+      "response": {
+        "security_id": "27e7711a-9a74-4ca5-84f0-3abebdfda226",
+        "source": "FinMind",
+        "imported_count": 1680,
+        "inserted_count": 52,
+        "updated_count": 1628,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "efe9096a-3500-4199-87f8-74cdd07b7abc",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2327",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2344",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2345",
+      "success": true,
+      "response": {
+        "security_id": "178a49c4-ffd4-4ad0-a1dc-e4b6c124d8da",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "9c94d03e-7e3f-4e09-8aaf-e0d61683089f",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2357",
+      "success": true,
+      "response": {
+        "security_id": "66d4b12a-68f3-49dc-b674-725e8192c689",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "3bd9f84b-eb1f-446a-9880-2603540b37c7",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2360",
+      "success": true,
+      "response": {
+        "security_id": "5ecf7bbb-fce1-429f-b2bd-460a5d62d8b6",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "db7e516b-a882-47dd-b375-234c4c6cde24",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2368",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2382",
+      "success": true,
+      "response": {
+        "security_id": "e4c5f051-0237-4c69-99f8-e7c9094eba4b",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "dd949fc9-a063-4c96-a71e-1cd72876b491",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2383",
+      "success": true,
+      "response": {
+        "security_id": "95d54310-6763-4770-b43e-b253747775ec",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "7c0fa741-840b-48e9-abc5-d7adc14dc0e6",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2395",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 2020-07-31."
+    },
+    {
+      "ticker": "2408",
+      "success": true,
+      "response": {
+        "security_id": "4ae95b01-c982-4a2c-8756-4cfad532e89c",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "d5752e69-5432-402f-b8f9-92af5991e0ea",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2412",
+      "success": true,
+      "response": {
+        "security_id": "bdf31805-ad10-418f-b0cc-f6a0506db961",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "37ec9896-c855-427b-86c9-784548ed50d1",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2449",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 2020-07-13."
+    },
+    {
+      "ticker": "2454",
+      "success": true,
+      "response": {
+        "security_id": "0c72834a-8ac8-425c-b614-8e59778ce272",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "5c8cda21-5ff8-4b9a-97a0-dda74c6612fa",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2498",
+      "success": true,
+      "response": {
+        "security_id": "39285a0c-ca42-4369-9823-74e24a6bf19f",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 1438,
+        "updated_count": 243,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "d30e6fc2-9748-44bb-a3e0-48b4d4687958",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "2603",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2880",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2881",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2882",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2883",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2884",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2885",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2886",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 2020-08-13."
+    },
+    {
+      "ticker": "2887",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 2020-08-11."
+    },
+    {
+      "ticker": "2890",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2891",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "2892",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "3008",
+      "success": true,
+      "response": {
+        "security_id": "ecb87023-d2fb-43aa-86d3-3a6d7982cdd1",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "3d7014a5-ecbc-40d3-8bf6-da6a2dbf227d",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "3017",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "3037",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "3045",
+      "success": true,
+      "response": {
+        "security_id": "8b9b7eda-c4ad-40eb-9cc4-53caf3a134eb",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "50163501-2b45-4efe-9e1d-9001af124ddb",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "3231",
+      "success": true,
+      "response": {
+        "security_id": "d89e21de-933f-438c-86da-2786e2b1f276",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "d5c3b0b3-30f4-40ec-9f8d-5425b44ddb12",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "3443",
+      "success": true,
+      "response": {
+        "security_id": "d6b7194f-0cd5-47ae-9142-1c8fe29445e3",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 953,
+        "updated_count": 728,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "5e5b3012-7387-4736-a8bc-a3fbd6253e58",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "3653",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 2020-08-20."
+    },
+    {
+      "ticker": "3661",
+      "success": true,
+      "response": {
+        "security_id": "86e0a2a8-b653-45b5-aa80-64dedd3050a8",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "3f49202d-f8cb-4cbb-932b-2915c6b1637f",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "3665",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "3711",
+      "success": true,
+      "response": {
+        "security_id": "0e657883-c8d5-4f60-af1a-d7acde3f1d44",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "664623c6-cb0b-437b-b8c5-0da10401e259",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "4904",
+      "success": true,
+      "response": {
+        "security_id": "9c25229e-815d-4c12-93d5-2da62e3feaf0",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "3e6f39bf-08a6-4697-8e80-33058ff28b81",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "4958",
+      "success": true,
+      "response": {
+        "security_id": "f1ea3dd2-df59-4991-a27e-c0ab2eba7bd0",
+        "source": "FinMind",
+        "imported_count": 1680,
+        "inserted_count": 952,
+        "updated_count": 728,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "dce8660c-d1aa-47c8-a3ad-52a332e81459",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "5880",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "6505",
+      "success": true,
+      "response": {
+        "security_id": "b90360d5-2576-45d2-a1b8-18e0d562d041",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 52,
+        "updated_count": 1629,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "01a120f9-a514-4b1a-a61f-acd8369c9183",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    },
+    {
+      "ticker": "6669",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "6919",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "7769",
+      "success": false,
+      "error_code": "market_price.provider_error",
+      "error_message": "Source failure (HttpRequestException, HTTP ServiceUnavailable); no prices were committed."
+    },
+    {
+      "ticker": "8046",
+      "success": true,
+      "response": {
+        "security_id": "af47b92a-330e-461c-912c-607fc4c25130",
+        "source": "FinMind",
+        "imported_count": 1681,
+        "inserted_count": 953,
+        "updated_count": 728,
+        "adjustment_source": "TWSE+FinMindOfficial",
+        "adjustment_version": "7dba3291-8937-4559-b2e0-e98b862b7d84",
+        "coverage_from": "2019-11-01",
+        "coverage_to": "2026-09-30",
+        "verified_through": "2026-09-30"
+      }
+    }
+  ],
+  "initialLiveFailures": [
+    {
+      "ticker": "0050",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Official source cannot verify missing/zero price on 06/11/2025."
+    },
+    {
+      "ticker": "00835B",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Official monthly prices are unavailable."
+    },
+    {
+      "ticker": "1216",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Unmatched/ambiguous action on 08/04/2023."
+    },
+    {
+      "ticker": "2002",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Unmatched/ambiguous action on 07/26/2024."
+    },
+    {
+      "ticker": "2207",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Unmatched/ambiguous action on 08/04/2023."
+    },
+    {
+      "ticker": "2327",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Official source cannot verify missing/zero price on 10/20/2022."
+    },
+    {
+      "ticker": "2344",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2368",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Official source cannot verify missing/zero price on 09/07/2022."
+    },
+    {
+      "ticker": "2395",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2449",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2603",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Official source cannot verify missing/zero price on 09/07/2022."
+    },
+    {
+      "ticker": "2880",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2881",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2882",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2883",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2884",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Unmatched/ambiguous action on 07/26/2024."
+    },
+    {
+      "ticker": "2885",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2886",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2887",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2890",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "2891",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Unmatched/ambiguous action on 07/13/2026."
+    },
+    {
+      "ticker": "2892",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "3017",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "3037",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "3653",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "3665",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "5880",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "6669",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Corporate-action factor conflict on 11/01/2019."
+    },
+    {
+      "ticker": "6919",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Official monthly prices are unavailable."
+    },
+    {
+      "ticker": "7769",
+      "success": false,
+      "error_code": "market_price.quality_error",
+      "error_message": "Official monthly prices are unavailable."
+    }
+  ]
+}

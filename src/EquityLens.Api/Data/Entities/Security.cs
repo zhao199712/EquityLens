@@ -17,6 +17,9 @@ public class Security
     public DateTime? PricesSyncedAtUtc { get; set; }
     public string? PricesSource { get; set; }
 
+    public Guid? PriceAdjustmentBatchId { get; set; }
+    public DateOnly? PricesVerifiedThrough { get; set; }
+
     // Navigation
     public ICollection<PortfolioHolding> Holdings { get; set; } = [];
     public ICollection<MarketPrice> Prices { get; set; } = [];

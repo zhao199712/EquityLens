@@ -31,6 +31,9 @@ public class MarketPriceConfiguration : IEntityTypeConfiguration<MarketPrice>
             .HasForeignKey(x => x.SecurityId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.Property(x => x.PriceAdjustmentBatchId).HasColumnName("price_adjustment_batch_id");
+        builder.HasOne<PriceAdjustmentBatch>().WithMany().HasForeignKey(x => x.PriceAdjustmentBatchId).OnDelete(DeleteBehavior.Restrict);
+
         // Unique index for querying and preventing duplicates
         builder.HasIndex(x => new { x.SecurityId, x.Interval, x.PriceTime }).IsUnique();
     }

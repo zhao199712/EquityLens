@@ -9,7 +9,7 @@ namespace EquityLens.Api.Services.MarketData;
 /// Yahoo Finance 市場資料提供者，提供美股每日價格查詢。
 /// 透過 Yahoo Finance Chart API 直接取得歷史日線資料，並支援重試與退避機制。
 /// </summary>
-public sealed class YahooFinanceMarketDataProvider : IMarketDataProvider
+public sealed class YahooFinanceMarketDataProvider : IMarketDataProvider, IAdjustedCloseProvider
 {
     private static readonly HashSet<string> SupportedExchanges = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -19,6 +19,7 @@ public sealed class YahooFinanceMarketDataProvider : IMarketDataProvider
         "US"
     };
 
+    public string? LastAdjustmentEvidenceJson { get; private set; }
     private readonly HttpClient _httpClient;
 
     /// <summary>
@@ -129,137 +130,139 @@ public sealed class YahooFinanceMarketDataProvider : IMarketDataProvider
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<ImportedMarketPrice>> GetDailyPricesAsync(
-        Security security,
-        DateOnly from,
-        DateOnly to,
-        CancellationToken cancellationToken)
+        Security security, DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
-        var yahooSymbol = ToYahooSymbol(security.Ticker, security.Exchange);
-        var fromUnix = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).ToUnixTimeSeconds();
-        var toUnix = new DateTimeOffset(to.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero).ToUnixTimeSeconds();
-
-        var url = $"/v8/finance/chart/{Uri.EscapeDataString(yahooSymbol)}?period1={fromUnix}&period2={toUnix}&interval=1d&events=history&includeAdjustedClose=true";
-
-        var lastError = "";
-        for (int attempt = 0; attempt < 3; attempt++)
+        var json = await FetchChartAsync(security, from, to, cancellationToken);
+        using var document = JsonDocument.Parse(json);
+        var result = ChartResult(document.RootElement);
+        var timestamps = result.GetProperty("timestamp");
+        var quote = result.GetProperty("indicators").GetProperty("quote")[0];
+        ValidateArrays(quote, timestamps.GetArrayLength());
+        var adjusted = ParseAdjustmentSnapshot(json, security.Exchange, from, to).AdjustedCloses;
+        var prices = new List<ImportedMarketPrice>();
+        for (var i = 0; i < timestamps.GetArrayLength(); i++)
         {
-            if (attempt > 0)
+            var date = ChartDate(result, timestamps[i].GetInt64(), security.Exchange);
+            if (date < from || date > to) continue;
+            var o = ReadDecimal(quote, "open", i);
+            var h = ReadDecimal(quote, "high", i);
+            var l = ReadDecimal(quote, "low", i);
+            var c = ReadDecimal(quote, "close", i);
+            if (o is null || h is null || l is null || c is null) continue;
+            prices.Add(new(date, o.Value, h.Value, l.Value, c.Value,
+                adjusted.TryGetValue(date, out var a) ? a : null, ReadLong(quote, "volume", i)));
+        }
+        return prices.OrderBy(x => x.Date).ToList();
+    }
+
+    public async Task<AdjustmentSnapshot> GetAdjustmentSnapshotAsync(
+        Security security, DateOnly from, DateOnly to, CancellationToken cancellationToken) =>
+        ParseAdjustmentSnapshot(await FetchChartAsync(security, from, to, cancellationToken), security.Exchange, from, to);
+
+    private async Task<string> FetchChartAsync(Security security, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        LastAdjustmentEvidenceJson = null;
+        var symbol = ToYahooSymbol(security.Ticker, security.Exchange);
+        // 前後各一日，避免交易所時區把邊界日排除；解析後再依當地日期篩選。
+        var start = new DateTimeOffset(from.AddDays(-1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).ToUnixTimeSeconds();
+        var end = new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).ToUnixTimeSeconds();
+        var url = $"/v8/finance/chart/{Uri.EscapeDataString(symbol)}?period1={start}&period2={end}&interval=1d&events=div%2Csplits&includeAdjustedClose=true";
+        for (var attempt = 0; ; attempt++)
+        {
+            using var response = await _httpClient.GetAsync(url, cancellationToken);
+            if (((int)response.StatusCode == 429 || (int)response.StatusCode >= 500) && attempt < 2)
             {
-                var delayMs = attempt * 1000;
-                await Task.Delay(delayMs, cancellationToken);
+                await Task.Delay((attempt + 1) * 1000, cancellationToken);
+                continue;
             }
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            LastAdjustmentEvidenceJson = json;
+            using var document = JsonDocument.Parse(json);
+            var result = ChartResult(document.RootElement);
+            if (result.TryGetProperty("meta", out var meta) && meta.TryGetProperty("symbol", out var returnedSymbol) &&
+                !string.Equals(returnedSymbol.GetString(), symbol, StringComparison.OrdinalIgnoreCase))
+                throw new EquityLens.Api.Services.MarketPrices.PriceIntegrityException("Yahoo price ticker mismatch.");
+            return json;
+        }
+    }
 
-            try
+    public static AdjustmentSnapshot ParseAdjustmentSnapshot(string json, string exchange, DateOnly from, DateOnly to)
+    {
+        using var document = JsonDocument.Parse(json);
+        var result = ChartResult(document.RootElement);
+        var timestamps = result.GetProperty("timestamp");
+        if (timestamps.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("Invalid Yahoo timestamps.");
+        var length = timestamps.GetArrayLength();
+        var indicators = result.GetProperty("indicators");
+        if (indicators.TryGetProperty("quote", out var quotes) && quotes.GetArrayLength() > 0)
+            ValidateArrays(quotes[0], length);
+        var adjusted = indicators.TryGetProperty("adjclose", out var list) && list.GetArrayLength() > 0
+            ? list[0].GetProperty("adjclose") : default;
+        if (adjusted.ValueKind != JsonValueKind.Undefined &&
+            (adjusted.ValueKind != JsonValueKind.Array || adjusted.GetArrayLength() != length))
+            throw new InvalidOperationException("Yahoo adjusted-close/timestamp lengths differ.");
+        var closes = new Dictionary<DateOnly, decimal>();
+        var dates = new HashSet<DateOnly>();
+        DateOnly? previous = null;
+        for (var i = 0; i < length; i++)
+        {
+            var date = ChartDate(result, timestamps[i].GetInt64(), exchange);
+            if (!dates.Add(date) || previous >= date) throw new InvalidOperationException("Yahoo dates duplicate or unordered.");
+            previous = date;
+            if (date < from || date > to) continue;
+            var value = ReadDecimal(adjusted, i);
+            if (value is <= 0) throw new InvalidOperationException($"Nonpositive Yahoo adjusted close on {date}.");
+            if (value.HasValue) closes.Add(date, value.Value);
+        }
+        var actions = new List<CorporatePriceAction>();
+        if (result.TryGetProperty("events", out var events))
+        {
+            foreach (var kind in new[] { "dividends", "splits" })
             {
-                using var response = await _httpClient.GetAsync(url, cancellationToken);
-
-                if ((int)response.StatusCode == 429)
+                if (!events.TryGetProperty(kind, out var entries)) continue;
+                foreach (var entry in entries.EnumerateObject())
                 {
-                    lastError = $"429 Too Many Requests (attempt {attempt + 1}/3)";
-                    continue;
+                    var item = entry.Value;
+                    var date = ChartDate(result, item.GetProperty("date").GetInt64(), exchange);
+                    if (date < from || date > to) continue;
+                    var value = kind == "dividends" ? item.GetProperty("amount").GetDecimal()
+                        : item.GetProperty("numerator").GetDecimal() / item.GetProperty("denominator").GetDecimal();
+                    actions.Add(new(date, kind == "dividends" ? "cash" : "split", value));
                 }
-
-                if ((int)response.StatusCode >= 500)
-                {
-                    lastError = $"{(int)response.StatusCode} Server Error (attempt {attempt + 1}/3)";
-                    continue;
-                }
-
-                response.EnsureSuccessStatusCode();
-
-                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-
-                if (!document.RootElement.TryGetProperty("chart", out var chart))
-                {
-                    lastError = "Missing 'chart' in response";
-                    continue;
-                }
-
-                if (chart.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null)
-                {
-                    lastError = $"Yahoo Finance error: {error.GetRawText()}";
-                    continue;
-                }
-
-                if (!chart.TryGetProperty("result", out var resultArray) || resultArray.ValueKind != JsonValueKind.Array || resultArray.GetArrayLength() == 0)
-                {
-                    lastError = "Empty chart result";
-                    continue;
-                }
-
-                var result = resultArray[0];
-                if (!result.TryGetProperty("timestamp", out var timestamps) || timestamps.ValueKind != JsonValueKind.Array)
-                {
-                    lastError = "Missing timestamps in chart result";
-                    continue;
-                }
-
-                var indicators = result.GetProperty("indicators");
-                var quotes = indicators.GetProperty("quote");
-                if (quotes.GetArrayLength() == 0)
-                {
-                    lastError = "Empty quote indicators";
-                    continue;
-                }
-
-                var quote = quotes[0];
-                var adjcloseList = indicators.TryGetProperty("adjclose", out var adjcloseArray) && adjcloseArray.GetArrayLength() > 0
-                    ? adjcloseArray[0].GetProperty("adjclose")
-                    : default;
-
-                var prices = new List<ImportedMarketPrice>();
-                var length = timestamps.GetArrayLength();
-
-                for (int i = 0; i < length; i++)
-                {
-                    var timestamp = timestamps[i].GetInt64();
-                    var date = DateOnly.FromDateTime(DateTimeOffset.FromUnixTimeSeconds(timestamp).DateTime.Date);
-
-                    if (date < from || date > to)
-                    {
-                        continue;
-                    }
-
-                    var open = ReadDecimal(quote, "open", i);
-                    var high = ReadDecimal(quote, "high", i);
-                    var low = ReadDecimal(quote, "low", i);
-                    var close = ReadDecimal(quote, "close", i);
-                    var volume = ReadLong(quote, "volume", i);
-                    var adjclose = adjcloseList.ValueKind != JsonValueKind.Undefined ? ReadDecimal(adjcloseList, i) : (decimal?)null;
-
-                    if (!open.HasValue || !high.HasValue || !low.HasValue || !close.HasValue)
-                    {
-                        continue;
-                    }
-
-                    prices.Add(new ImportedMarketPrice(
-                        date,
-                        open.Value,
-                        high.Value,
-                        low.Value,
-                        close.Value,
-                        adjclose,
-                        volume));
-                }
-
-                return prices.OrderBy(x => x.Date).ToList();
-            }
-            catch (HttpRequestException ex)
-            {
-                lastError = $"HTTP error: {ex.Message}";
-            }
-            catch (JsonException ex)
-            {
-                lastError = $"JSON parse error: {ex.Message}";
-            }
-            catch (InvalidOperationException ex)
-            {
-                lastError = $"Yahoo error: {ex.Message}";
             }
         }
+        return new(closes, actions, json, DateTime.UtcNow, true);
+    }
 
-        throw new InvalidOperationException($"Yahoo Finance: {lastError}");
+    private static JsonElement ChartResult(JsonElement root)
+    {
+        var chart = root.GetProperty("chart");
+        if (chart.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null)
+            throw new InvalidOperationException("Yahoo chart reports an error.");
+        var results = chart.GetProperty("result");
+        if (results.ValueKind != JsonValueKind.Array || results.GetArrayLength() != 1)
+            throw new InvalidOperationException("Yahoo chart must contain one result.");
+        return results[0];
+    }
+
+    private static DateOnly ChartDate(JsonElement result, long timestamp, string exchange)
+    {
+        var instant = DateTimeOffset.FromUnixTimeSeconds(timestamp);
+        var zone = exchange is "TWSE" or "TPEX" ? "Asia/Taipei" : null;
+        if (result.TryGetProperty("meta", out var meta) && meta.TryGetProperty("exchangeTimezoneName", out var timezone))
+            zone = timezone.GetString() ?? zone;
+        if (zone is not null)
+            return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, TimeZoneInfo.FindSystemTimeZoneById(zone)).DateTime);
+        return DateOnly.FromDateTime(instant.UtcDateTime);
+    }
+
+    private static void ValidateArrays(JsonElement quote, int length)
+    {
+        foreach (var name in new[] { "open", "high", "low", "close", "volume" })
+            if (quote.TryGetProperty(name, out var values) &&
+                (values.ValueKind != JsonValueKind.Array || values.GetArrayLength() != length))
+                throw new InvalidOperationException($"Yahoo {name}/timestamp lengths differ.");
     }
 
     private static string ToYahooSymbol(string ticker, string exchange)

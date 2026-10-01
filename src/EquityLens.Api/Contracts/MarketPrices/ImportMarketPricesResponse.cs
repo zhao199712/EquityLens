@@ -5,4 +5,9 @@ public sealed record ImportMarketPricesResponse(
     string Source,
     int ImportedCount,
     int InsertedCount,
-    int UpdatedCount);
+    int UpdatedCount,
+    string? AdjustmentSource = null,
+    Guid? AdjustmentVersion = null,
+    DateOnly? CoverageFrom = null,
+    DateOnly? CoverageTo = null,
+    DateOnly? VerifiedThrough = null);

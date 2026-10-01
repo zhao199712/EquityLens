@@ -27,7 +27,11 @@ public abstract class ApiControllerBase : ControllerBase
             ? NotFound(error)
             : result.ErrorCode.EndsWith("conflict", StringComparison.Ordinal)
                 ? Conflict(error)
-                : BadRequest(error);
+                : result.ErrorCode == "market_price.quality_error"
+                    ? UnprocessableEntity(error)
+                    : result.ErrorCode == "market_price.provider_error"
+                        ? StatusCode(502, error)
+                        : BadRequest(error);
     }
 
     /// <summary>
@@ -44,7 +48,11 @@ public abstract class ApiControllerBase : ControllerBase
             ? NotFound(error)
             : result.ErrorCode.EndsWith("conflict", StringComparison.Ordinal)
                 ? Conflict(error)
-                : BadRequest(error);
+                : result.ErrorCode == "market_price.quality_error"
+                    ? UnprocessableEntity(error)
+                    : result.ErrorCode == "market_price.provider_error"
+                        ? StatusCode(502, error)
+                        : BadRequest(error);
     }
 
 }

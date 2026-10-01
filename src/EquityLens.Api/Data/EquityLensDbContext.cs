@@ -22,6 +22,8 @@ public class EquityLensDbContext : DbContext
     public DbSet<RiskQualityEvaluation> RiskQualityEvaluations => Set<RiskQualityEvaluation>();
     public DbSet<RiskEngineComparison> RiskEngineComparisons => Set<RiskEngineComparison>();
 
+    public DbSet<PriceAdjustmentBatch> PriceAdjustmentBatches => Set<PriceAdjustmentBatch>();
+
     // Market Data
     public DbSet<MarketPrice> MarketPrices => Set<MarketPrice>();
     public DbSet<CashDividendEvent> CashDividendEvents => Set<CashDividendEvent>();

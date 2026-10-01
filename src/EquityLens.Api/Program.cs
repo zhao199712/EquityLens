@@ -118,7 +118,7 @@ builder.Logging.AddOpenTelemetry(logging =>
 });
 
 // Add services to the container.
-builder.Services.AddDbContext<EquityLensDbContext>(options =>
+builder.Services.AddDbContextFactory<EquityLensDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSQL"), o => o.UseVector()));
 
 builder.Services.Configure<AlphaVantageOptions>(builder.Configuration.GetSection("MarketData:AlphaVantage"));
@@ -172,6 +172,12 @@ builder.Services.AddHttpClient<IPortfolioBenchmarkService, FinMindPortfolioBench
 });
 builder.Services.AddScoped<IPortfolioDividendService, PortfolioDividendService>();
 builder.Services.AddScoped<IMarketPriceService, MarketPriceService>();
+builder.Services.AddScoped<TaiwanPriceImportCoordinator>();
+builder.Services.AddHttpClient<ITaiwanPriceEvidenceProvider, TaiwanPriceEvidenceProvider>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(60);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("EquityLens/1.0");
+});
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 builder.Services.AddScoped<IUploadedFileService, UploadedFileService>();
 builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();
