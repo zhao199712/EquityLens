@@ -56,14 +56,14 @@ API 回應 429（被限流）時，client 會依 `Retry-After` 等待後重試�
   "id": "2330-gross-margin-2025",
   "category": "numeric_lookup",
   "ticker": "2330",
-  "question": "台積電 2025 年全年毛利率是多少？",
+  "question": "台積電 2025 年全年合併毛利率是多少？請以營業毛利除以營業收入淨額計算，取小數點後一位。",
   "request": {"retrievalMode": "AnnualReportOnly", "sourcePolicy": "LocalOnly"},
   "expected_behavior": "answer",
-  "facts": [{"label": "2025 毛利率", "value": 59.1, "unit": "%"}],
+  "facts": [{"label": "2025 毛利率", "value": 59.9, "unit": "%", "tolerance": 0.05, "tolerance_type": "abs"}],
   "must_include": [["毛利率"]],
   "must_not_include": ["保證獲利"],
-  "sources": [{"document_type": "AnnualReport", "page": 45, "page_tolerance": 1, "title_contains": "2025"}],
-  "reference_answer": "2025 年毛利率為 59.1%。",
+  "sources": [{"document_type": "AnnualReport", "page": 9, "page_tolerance": 0, "title_contains": "2330 Annual Report 2025"}],
+  "reference_answer": "2025 年毛利率約為 59.9%，由第 9 頁營業毛利除以營業收入淨額計算。",
   "verified": true
 }
 ```
@@ -73,14 +73,18 @@ API 回應 429（被限流）時，client 會依 `Retry-After` 等待後重試�
 | `category` | `numeric_lookup`、`multi_doc_synthesis`、`qualitative`、`unanswerable`、`policy` |
 | `request` | 原樣併入 API 請求（`sourcePolicy`、`retrievalMode`、`documentType`、`topK`、`portfolioId`） |
 | `expected_behavior` | `answer` 或 `insufficient_evidence`（應該拒答） |
-| `facts` | 需要答對的數字。`unit` 支援 `%`、`元`、`億元`、`兆元`、`倍`；答案寫成「2.89 兆元」或「28,943 億元」都會被換算比對。`value: null` 代表尚未核對，這個 fact 不計分 |
+| `facts` | 需要答對的數字。`unit` 支援 `%`、`百分點`、`元`、`億元`、`兆元`、`倍`；答案寫成「2.89 兆元」或「28,943 億元」都會被換算比對。`value: null` 代表尚未核對，這個 fact 不計分 |
 | `must_include` | 每組至少命中一個同義詞，例如 `[["風險","不確定"]]` |
 | `must_not_include` | 出現就判定失敗，例如「保證獲利」 |
-| `sources` | 正確答案所在的文件和頁碼，用來區分是**檢索失敗**還是**生成失敗** |
+| `sources` | 正確答案所在的文件和頁碼，用來區分是**檢索失敗**還是**生成失敗**。頁碼使用 PDF 實體頁數，從 1 開始，可能不同於印刷頁碼；有多筆時每筆都必須命中 |
 | `reference_answer` | 給 LLM judge 的參考答案；沒填就不做 judge |
 | `verified` | 已經對照原始 PDF 核實過。**只有 verified 的題目會計入 `pass_rate` 和所有品質指標**；草稿題（`verified: false`）預設不會執行，加 `--include-unverified` 才會跑，結果只列在報告的「Draft cases」區塊 |
 
-**目前的考卷（13 題）**：`unanswerable` 和 `policy` 類共 5 題可以直接使用；其餘 8 題的數字和頁碼標了 `TODO`，要**你親自打開資料庫裡的那份 PDF 核對後填入**。這一步不能交給 AI 代勞：標準答案本身錯了，整份考卷就沒有意義。
+**目前的考卷（13 題，2026-10-01 核實）**：11 題 `verified: true`，其中 6 題新完成原始 PDF 核實、5 題沿用拒答與政策題；2 題保留草稿（台積電毛利率變動原因、聯發科主要營運風險）。詳見 [逐題核實報告](../docs/eval-verification/2026-10-01/report.md) 與 [證據、文件雜湊及計算](../docs/eval-verification/2026-10-01/verification.json)。
+
+新核實題中有 3 題的答案頁尚未進入目前索引：台積電毛利率（PDF 第 9 頁）、基本 EPS（第 58 頁），以及鴻海產品別收入（第 112 頁）。`verified` 表示標準答案有原件證據，不表示系統能答對；這些題仍保留在正式題庫以呈現檢索缺口。題庫核實階段未呼叫研究 API。後續已完成 [實際 API 評測](../docs/eval-verification/2026-10-01/live-api-results.md)：正式容器缺 embedding 設定，11 題皆 HTTP 500；相同映像與資料快照的隔離環境補入既有 embedding 金鑰後，取得 11 份 DeepSeek 回答，6/11 通過（54.5%），未啟用 LLM judge。
+
+核實須對照原始 PDF，保存來源身分、實體頁碼、摘錄和計算，並抽查頁面影像；不能只憑模型記憶或搜尋摘要填入答案。現有 `AnnualReport` 原件實際為合併財報，管理層章節不足的原題維持草稿。
 
 ### 出題原則
 
@@ -154,8 +158,29 @@ export EVAL_JUDGE_MODEL=deepseek-chat
 
 ---
 
+## 已知問題（Known issues）
+
+以下為 **2026-10-01 查核與實測時仍未修復**的問題。完整依據見 [題庫核實](../docs/eval-verification/2026-10-01/report.md)、[來源與計算](../docs/eval-verification/2026-10-01/verification.json) 及 [實際 API 評測](../docs/eval-verification/2026-10-01/live-api-results.md)。這些文件保留在專案中，供原始 `runs/` 資料之外的問題追蹤使用。
+
+| ID | 範圍／狀態 | 已確認現象 | 後續處理與驗收 |
+|---|---|---|---|
+| KI-001 | 正式服務設定／未修復 | 正式 `POST /api/research/ask` 的 11 次請求均 HTTP 500。日誌為 `OpenAI API key is not configured`；文件檢索在產生 embedding 時中斷，尚未進入 DeepSeek 回答階段 | 在正式環境安全配置 embedding 金鑰；實測研究端點成功回傳並產生查詢 embedding。隔離環境的成功不能當作正式服務已修復 |
+| KI-002 | 年度 PDF 解析與入庫／未修復 | 2330／2025 p.9（毛利率）、p.58（基本 EPS），以及 2317／2025 p.112（產品表）存在於原件，卻沒有對應索引頁；也未出現在既有 `annual-report-chunks.keep.jsonl` 中 | p.9 是無可抽取文字的影像頁，需 OCR。p.58、p.112 可抽取文字，需查核 PdfPig 抽取及分類／保留規則；不能直接認定是 chunk 大小或後續字數篩選造成。補齊後核對原件數值、頁碼、chunk 及 embedding，重跑三題 |
+| KI-003 | 檢索後證據取用／未定位 | `2454-revenue-2025` 正確 2025 p.10 在候選中 rank 15、trace 標記 selected，但回答引用其他年度並拒答；`retrieval_recall=1`、`source_hit=0` | 查最終格式化 context、完整表格是否送入模型及模型取用。selected 不能單獨證明模型看到了整頁；修復後應回答 5,959.65682 億元並引用 2025 p.10 |
+| KI-004 | 政策題評分／未修復 | `2330-no-guaranteed-profit` 實際拒答並否定必然獲利；題庫預期 answer，behavior 判 0；禁用詞又命中重述問題中的「一定會賺」，keywords 判 0 | 釐清允許的風險回答與拒答行為定義，處理禁用詞的引述及否定語境。驗證安全回答與真正承諾獲利的反例；不可只刪除禁用詞或把所有拒答改判通過 |
+| KI-005 | 題庫來源範圍／保留草稿 | `2330-gross-margin-yoy` 缺管理層對毛利率變動原因的說明；`2454-key-risks` 缺完整主要營運風險揭露。現有 AnnualReport 原件實際為合併財報 | 補足與原題範圍相符的官方來源並核實；完成前維持 `verified: false`，不計入正式品質指標 |
+
+年度 extractor 會丟棄 Review／未分類頁，還有頁面品質門檻及保留上限；後續 filter 另有去重與字數門檻。這些是需要查核的機制，不能僅由缺頁就斷言某一條規則是單一根因。上表 KI-002 是抽取／保留／入庫問題，KI-003 則是已有 chunk 的後續取用問題，須分開驗收。
+
+**目前基準的解讀**：正式首輪為 11/11 API error，無模型品質比較；使用相同映像及資料快照、補入既有 embedding 金鑰的隔離環境為 **6/11 通過（54.5%）**，財務數字題為 **2/6（33.3%）**，未啟用 LLM judge。這是既有 scorer 的結果，包含 KI-004 的行為定義與關鍵字限制。
+
+問題修復後，在此更新狀態、修復版本及新評測報告連結；保留舊答案及舊分數。若修改 scorer，使用 `rescore` 對保存的舊回答寫出新結果；若修改系統，使用同一凍結題庫重新 `run`，再 `compare`。供團隊長期比較的基準 run 應另外歸檔，README 與摘要報告不取代完整原始回答。
+
+---
+
 ## 已知限制
 
+- 數字評分以答案中出現的數值匹配，尚未綁定 fact 標籤與數字。產品別占比題即使數字和名稱均齊全，仍須透過答案抽查或 LLM judge 確認配對及最高成長類別。
 - 數字抽取依靠規則，極端寫法可能漏抓（例如「五成九」這種國字數字）。遇到時請補 `normalize.py` 並加測試。
 - 數字比對嚴格保留正負號，支援 `-`、全形負號與 `−`；相反正負號不會因容忍誤差而匹配。暫不從「下降」「虧損」等文字推斷負值，負數需帶明確負號。零值仍可在原有容忍範圍內匹配。
 - `sources` 靠頁碼比對，文件重新切 chunk 或頁碼偏移時要調整 `page_tolerance`。
