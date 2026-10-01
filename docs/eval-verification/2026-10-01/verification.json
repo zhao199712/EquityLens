@@ -1,0 +1,843 @@
+{
+  "schema_version": 1,
+  "verification_date": "2026-10-01",
+  "case_file": "evals/cases/research_v1.jsonl",
+  "case_file_sha256": "b2abf837cadf4def9d5b20afc8fa10c6600261454eb46c0d89c642ed3cb99c90",
+  "method": [
+    "既有原始PDF的pdftotext文字定位",
+    "相關原始PDF整頁渲染後影像核對",
+    "Decimal精確計算後四捨五入",
+    "唯讀查詢document、uploaded_file、document_chunk、embedding中繼資料"
+  ],
+  "scope": {
+    "draft_cases_reviewed": 8,
+    "new_verified_cases": 6,
+    "total_cases": 13,
+    "total_verified_cases": 11,
+    "remaining_drafts": 2,
+    "verified_cases_with_missing_index_pages": 3,
+    "research_api_called": false,
+    "external_sources_downloaded": false,
+    "database_or_index_mutated": false
+  },
+  "page_convention": "PDF physical 1-based page; printed page recorded separately; page_tolerance=0",
+  "sources": {
+    "2330-2025": {
+      "local_path": "/home/ymsh20220/EquityLens/exports/financial-reports/2330/2330_114_annual.pdf",
+      "file_name": "2330_114_annual.pdf",
+      "sha256": "68daa6d9ba02d71efe0838f2a9b0e135af26a2d1bddbaa62a06d3eb3501dacb2",
+      "pdf_page_count": 85,
+      "actual_document_kind": "合併財務報告暨會計師查核報告",
+      "database_document_id": "bbefd357-8e17-4a8d-a3da-e9b85a6780bc",
+      "database_title": "2330 Annual Report 2025",
+      "database_document_type": "AnnualReport",
+      "database_object_key": "financial-reports/twse/2330/2025/annual-report.pdf",
+      "database_sha256": "68daa6d9ba02d71efe0838f2a9b0e135af26a2d1bddbaa62a06d3eb3501dacb2",
+      "identity_check": "database_sha256_match",
+      "database_parse_status": "Pending",
+      "indexed_pages": [
+        33,
+        35,
+        36,
+        47,
+        49,
+        50,
+        51,
+        52,
+        54,
+        64,
+        65,
+        66,
+        67,
+        72,
+        73,
+        74,
+        77,
+        79,
+        82,
+        83,
+        84,
+        85
+      ],
+      "chunk_count": 22,
+      "embedding_count": 22
+    },
+    "2330-2024": {
+      "local_path": "/home/ymsh20220/EquityLens/exports/financial-reports/2330/2330_113_annual.pdf",
+      "file_name": "2330_113_annual.pdf",
+      "sha256": "6ed0ee9be5beb71bf7be4aa63eb4dd48357e9729421d930ce119373a8d00f88a",
+      "pdf_page_count": 124,
+      "actual_document_kind": "合併財務報告暨會計師查核報告",
+      "database_document_id": "a939a962-28b6-49d5-826b-b6953761cc1d",
+      "database_title": "2330 Annual Report 2024",
+      "database_document_type": "AnnualReport",
+      "database_object_key": "financial-reports/twse/2330/2024/annual-report.pdf",
+      "database_sha256": "6ed0ee9be5beb71bf7be4aa63eb4dd48357e9729421d930ce119373a8d00f88a",
+      "identity_check": "database_sha256_match",
+      "database_parse_status": "Pending",
+      "indexed_pages": [
+        5,
+        19,
+        20,
+        37,
+        39,
+        40,
+        42,
+        48,
+        53,
+        55,
+        57,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        74,
+        76,
+        77,
+        78,
+        80,
+        83,
+        107,
+        119,
+        120,
+        121,
+        122,
+        123
+      ],
+      "chunk_count": 29,
+      "embedding_count": 29
+    },
+    "2454-2025": {
+      "local_path": "/home/ymsh20220/EquityLens/exports/financial-reports/2454/2454_114_annual.pdf",
+      "file_name": "2454_114_annual.pdf",
+      "sha256": "8c436717b2898a17b244756cec1f6f9b4342246bb83790df8d4fbe0fa9a71e21",
+      "pdf_page_count": 125,
+      "actual_document_kind": "合併財務報告暨會計師查核報告",
+      "database_document_id": "6909e000-8542-48aa-9392-8d2101aacc5d",
+      "database_title": "2454 Annual Report 2025",
+      "database_document_type": "AnnualReport",
+      "database_object_key": "financial-reports/twse/2454/2025/annual-report.pdf",
+      "database_sha256": "8c436717b2898a17b244756cec1f6f9b4342246bb83790df8d4fbe0fa9a71e21",
+      "identity_check": "database_sha256_match",
+      "database_parse_status": "Pending",
+      "indexed_pages": [
+        8,
+        10,
+        11,
+        26,
+        27,
+        40,
+        45,
+        46,
+        48,
+        53,
+        54,
+        60,
+        65,
+        66,
+        71,
+        74,
+        75,
+        81,
+        86,
+        87,
+        88,
+        89,
+        90,
+        101,
+        103,
+        104,
+        105,
+        106,
+        108,
+        109,
+        110,
+        111,
+        116,
+        118,
+        119
+      ],
+      "chunk_count": 35,
+      "embedding_count": 35
+    },
+    "2412-2025": {
+      "local_path": "/home/ymsh20220/EquityLens/exports/financial-reports/2412/2412_114_annual.pdf",
+      "file_name": "2412_114_annual.pdf",
+      "sha256": "bf1be5942f6c714d0c215c5b9237d5bf09960b778dfa9ca018bd2b41ad5d419e",
+      "pdf_page_count": 124,
+      "actual_document_kind": "合併財務報告暨會計師查核報告",
+      "database_document_id": "35d8a272-0a8b-4816-872a-a18ed0e52758",
+      "database_title": "2412 Annual Report 2025",
+      "database_document_type": "AnnualReport",
+      "database_object_key": "financial-reports/twse/2412/2025/annual-report.pdf",
+      "database_sha256": "bf1be5942f6c714d0c215c5b9237d5bf09960b778dfa9ca018bd2b41ad5d419e",
+      "identity_check": "database_sha256_match",
+      "database_parse_status": "Pending",
+      "indexed_pages": [
+        8,
+        9,
+        12,
+        13,
+        15,
+        19,
+        27,
+        42,
+        47,
+        49,
+        50,
+        54,
+        63,
+        64,
+        69,
+        71,
+        72,
+        73,
+        77,
+        81,
+        87,
+        90,
+        93,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        106,
+        109,
+        115,
+        117,
+        118,
+        119,
+        120,
+        121,
+        122,
+        123,
+        124
+      ],
+      "chunk_count": 42,
+      "embedding_count": 42
+    },
+    "2317-2025": {
+      "local_path": "/home/ymsh20220/EquityLens/exports/financial-reports/2317/2317_114_annual.pdf",
+      "file_name": "2317_114_annual.pdf",
+      "sha256": "e2c6a9e7b48014ab0139753e6e2f916c8f0129cf8b70c33fc1551d855154461d",
+      "pdf_page_count": 201,
+      "actual_document_kind": "合併財務報告暨會計師查核報告",
+      "database_document_id": "f6759e1c-7788-4603-a94e-05e1bc0c4a86",
+      "database_title": "2317 Annual Report 2025",
+      "database_document_type": "AnnualReport",
+      "database_object_key": "financial-reports/twse/2317/2025/annual-report.pdf",
+      "database_sha256": "e2c6a9e7b48014ab0139753e6e2f916c8f0129cf8b70c33fc1551d855154461d",
+      "identity_check": "database_sha256_match",
+      "database_parse_status": "Pending",
+      "indexed_pages": [
+        12,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20,
+        23,
+        24,
+        25,
+        28,
+        36,
+        40,
+        42,
+        47,
+        50,
+        53,
+        61,
+        65,
+        66,
+        67,
+        73,
+        74,
+        82,
+        85,
+        87,
+        88,
+        92,
+        93,
+        94,
+        96,
+        100,
+        104,
+        111,
+        124,
+        126,
+        127,
+        134,
+        141,
+        156,
+        157,
+        175,
+        192,
+        195
+      ],
+      "chunk_count": 44,
+      "embedding_count": 44
+    },
+    "2330-20260416-M": {
+      "local_path": "/home/ymsh20220/EquityLens/法說會/2330_台積電/233020260416M001.pdf",
+      "file_name": "233020260416M001.pdf",
+      "sha256": "1bb54a45df7bb7b1fb2ba5f1bb3fdedc59bfc4a205b47f76641497d3bf7bb6e3",
+      "pdf_page_count": 12,
+      "actual_document_kind": "法說會簡報",
+      "database_document_id": "6daca66b-bf7e-460c-891d-8fe130e9c46e",
+      "database_title": "2330 ca4e748c-2831-4e77-964e-ce660da68da9 233020260416M001.pdf",
+      "database_document_type": "EarningsPresentation",
+      "database_object_key": "investor-conferences/2330/233020260416M001.pdf",
+      "database_sha256": null,
+      "identity_check": "file_name_and_object_key_match; database_hash_unavailable",
+      "database_parse_status": "Completed",
+      "indexed_pages": [
+        1,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "chunk_count": 10,
+      "embedding_count": 10
+    }
+  },
+  "calculations": {
+    "tsmc_gross_margin_percent": {
+      "2025": "59.89134877309513955909316064",
+      "2024": "56.12235231800763696202986191",
+      "delta_percentage_points": "3.76899645508750259706329873"
+    },
+    "mediatek_revenue_億元": "5959.65682",
+    "hon_hai_products": [
+      {
+        "label": "消費智能產品",
+        "2025_million_ntd": 3081686,
+        "2024_million_ntd": 3169936,
+        "share_percent": "38.03092765057345301585009697",
+        "yoy_percent": "-2.783967878215837796094306000"
+      },
+      {
+        "label": "雲端網路產品",
+        "2025_million_ntd": 3255827,
+        "2024_million_ntd": 2001817,
+        "share_percent": "40.17999273118144217556109664",
+        "yoy_percent": "62.64358830002942326896014970"
+      },
+      {
+        "label": "電腦終端產品",
+        "2025_million_ntd": 1228391,
+        "2024_million_ntd": 1262891,
+        "share_percent": "15.15950984221480531228461189",
+        "yoy_percent": "-2.731827212324737447649876360"
+      },
+      {
+        "label": "元件及其他產品",
+        "2025_million_ntd": 537201,
+        "2024_million_ntd": 424971,
+        "share_percent": "6.629569776030299496304194503",
+        "yoy_percent": "26.40886083991613545394862240"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "2330-gross-margin-2025",
+      "verified": true,
+      "verdict": "verified",
+      "question": "台積電 2025 年全年合併毛利率是多少？請以營業毛利除以營業收入淨額計算，取小數點後一位。",
+      "evidence": [
+        {
+          "source_key": "2330-2025",
+          "pdf_page": 9,
+          "printed_page": 9,
+          "section": "合併綜合損益表",
+          "excerpt": "114年度：營業收入淨額 3,809,054,272；營業毛利 2,281,293,979；百分比欄 60。",
+          "values": {
+            "currency": "TWD",
+            "unit": "仟元",
+            "revenue": 3809054272,
+            "gross_profit": 2281293979,
+            "displayed_integer_margin_percent": 60
+          },
+          "indexed": false
+        }
+      ],
+      "confirmed_facts": [
+        {
+          "label": "2025 毛利率",
+          "value": 59.9,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        }
+      ],
+      "expected_sources": [
+        {
+          "document_type": "AnnualReport",
+          "page": 9,
+          "page_tolerance": 0,
+          "title_contains": "2330 Annual Report 2025"
+        }
+      ],
+      "missing_evidence": [],
+      "expected_source_index_gaps": [
+        {
+          "title": "2330 Annual Report 2025",
+          "pdf_page": 9
+        }
+      ]
+    },
+    {
+      "case_id": "2330-eps-2025",
+      "verified": true,
+      "verdict": "verified",
+      "question": "台積電 2025 年的基本每股盈餘（EPS）是多少元？",
+      "evidence": [
+        {
+          "source_key": "2330-2025",
+          "pdf_page": 58,
+          "printed_page": 58,
+          "section": "二六、每股盈餘",
+          "excerpt": "114年度：基本每股盈餘 $66.26；稀釋每股盈餘 $66.25。",
+          "values": {
+            "unit": "元",
+            "basic_eps": 66.26,
+            "diluted_eps": 66.25
+          },
+          "indexed": false
+        }
+      ],
+      "confirmed_facts": [
+        {
+          "label": "2025 基本 EPS",
+          "value": 66.26,
+          "unit": "元",
+          "tolerance": 0.001,
+          "tolerance_type": "abs"
+        }
+      ],
+      "expected_sources": [
+        {
+          "document_type": "AnnualReport",
+          "page": 58,
+          "page_tolerance": 0,
+          "title_contains": "2330 Annual Report 2025"
+        }
+      ],
+      "missing_evidence": [],
+      "expected_source_index_gaps": [
+        {
+          "title": "2330 Annual Report 2025",
+          "pdf_page": 58
+        }
+      ]
+    },
+    {
+      "case_id": "2454-revenue-2025",
+      "verified": true,
+      "verdict": "verified",
+      "question": "聯發科 2025 年合併營收是多少？",
+      "evidence": [
+        {
+          "source_key": "2454-2025",
+          "pdf_page": 10,
+          "printed_page": 10,
+          "section": "合併綜合損益表",
+          "excerpt": "114年度營業收入 595,965,682；金額以新台幣仟元為單位。",
+          "values": {
+            "unit": "仟元",
+            "revenue": 595965682
+          },
+          "indexed": true
+        }
+      ],
+      "confirmed_facts": [
+        {
+          "label": "2025 合併營收",
+          "value": 5959.65682,
+          "unit": "億元"
+        }
+      ],
+      "expected_sources": [
+        {
+          "document_type": "AnnualReport",
+          "page": 10,
+          "page_tolerance": 0,
+          "title_contains": "2454 Annual Report 2025"
+        }
+      ],
+      "missing_evidence": [],
+      "expected_source_index_gaps": []
+    },
+    {
+      "case_id": "2412-cash-dividend-2025",
+      "verified": true,
+      "verdict": "verified",
+      "question": "依 2025 年度合併財務報告，中華電信董事會擬議的 2025 年度盈餘分配案每股現金股利是多少？",
+      "evidence": [
+        {
+          "source_key": "2412-2025",
+          "pdf_page": 72,
+          "printed_page": 72,
+          "section": "盈餘分配及每股股利",
+          "excerpt": "115年2月26日董事會擬議114年度盈餘分配案：現金股利每股 $5.200；尚待115年5月29日股東常會決議。",
+          "values": {
+            "proposal_date": "2026-02-26",
+            "earnings_year": 2025,
+            "cash_dividend_per_share_ntd": 5.2,
+            "status_as_disclosed": "proposed; pending shareholders resolution",
+            "2025_resolution_for_2024_earnings_per_share_ntd": 5.0
+          },
+          "indexed": true
+        }
+      ],
+      "confirmed_facts": [
+        {
+          "label": "2025 年度盈餘分配案擬議每股現金股利",
+          "value": 5.2,
+          "unit": "元",
+          "tolerance": 0.01,
+          "tolerance_type": "abs"
+        }
+      ],
+      "expected_sources": [
+        {
+          "document_type": "AnnualReport",
+          "page": 72,
+          "page_tolerance": 0,
+          "title_contains": "2412 Annual Report 2025"
+        }
+      ],
+      "missing_evidence": [],
+      "expected_source_index_gaps": []
+    },
+    {
+      "case_id": "2330-q-guidance-gross-margin",
+      "verified": true,
+      "verdict": "verified",
+      "question": "台積電 2026 年 4 月 16 日法說會給出的 2026 年第二季毛利率指引區間是多少？",
+      "evidence": [
+        {
+          "source_key": "2330-20260416-M",
+          "pdf_page": 9,
+          "printed_page": 8,
+          "section": "2026年第二季業績展望",
+          "excerpt": "基於平均匯率31.7的假設；營業毛利率約介於百分之65.5到百分之67.5之間。",
+          "values": {
+            "conference_date": "2026-04-16",
+            "guidance_period": "2026Q2",
+            "gross_margin_low_percent": 65.5,
+            "gross_margin_high_percent": 67.5,
+            "exchange_rate_assumption": 31.7,
+            "operating_margin_low_percent": 56.5,
+            "operating_margin_high_percent": 58.5
+          },
+          "indexed": true
+        }
+      ],
+      "confirmed_facts": [
+        {
+          "label": "2026Q2 毛利率指引下緣",
+          "value": 65.5,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        },
+        {
+          "label": "2026Q2 毛利率指引上緣",
+          "value": 67.5,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        }
+      ],
+      "expected_sources": [
+        {
+          "document_type": "EarningsPresentation",
+          "page": 9,
+          "page_tolerance": 0,
+          "title_contains": "233020260416M001.pdf"
+        }
+      ],
+      "missing_evidence": [],
+      "expected_source_index_gaps": []
+    },
+    {
+      "case_id": "2330-gross-margin-yoy",
+      "verified": false,
+      "verdict": "partial_evidence_keep_draft",
+      "question": "比較台積電 2024 與 2025 年的毛利率，變化多少個百分點？年報怎麼解釋這個變化？",
+      "evidence": [
+        {
+          "source_key": "2330-2024",
+          "pdf_page": 9,
+          "printed_page": 9,
+          "section": "合併綜合損益表",
+          "excerpt": "113年度：營業收入淨額 2,894,307,699；營業毛利 1,624,353,564；百分比欄 56。",
+          "values": {
+            "currency": "TWD",
+            "unit": "仟元",
+            "revenue": 2894307699,
+            "gross_profit": 1624353564,
+            "displayed_integer_margin_percent": 56
+          },
+          "indexed": false
+        },
+        {
+          "source_key": "2330-2025",
+          "pdf_page": 9,
+          "printed_page": 9,
+          "section": "合併綜合損益表",
+          "excerpt": "114年度：營業收入淨額 3,809,054,272；營業毛利 2,281,293,979；百分比欄 60。",
+          "values": {
+            "currency": "TWD",
+            "unit": "仟元",
+            "revenue": 3809054272,
+            "gross_profit": 2281293979,
+            "displayed_integer_margin_percent": 60
+          },
+          "indexed": false
+        },
+        {
+          "source_key": "2330-2025",
+          "pdf_page": 52,
+          "printed_page": 52,
+          "section": "二一、營業收入",
+          "excerpt": "收入按產品、地區、技術平台及製程細分；此表沒有毛利率變動原因的敘述。",
+          "values": {},
+          "indexed": true
+        }
+      ],
+      "confirmed_facts": [
+        {
+          "label": "2024 毛利率",
+          "value": 56.1,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        },
+        {
+          "label": "2025 毛利率",
+          "value": 59.9,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        },
+        {
+          "label": "毛利率增加",
+          "value": 3.8,
+          "unit": "百分點",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        }
+      ],
+      "expected_sources": [
+        {
+          "document_type": "AnnualReport",
+          "page": 9,
+          "page_tolerance": 0,
+          "title_contains": "2330 Annual Report 2024"
+        },
+        {
+          "document_type": "AnnualReport",
+          "page": 9,
+          "page_tolerance": 0,
+          "title_contains": "2330 Annual Report 2025"
+        }
+      ],
+      "missing_evidence": [
+        "現有合併財報中未找到對2024–2025年度毛利率變動原因的管理層解釋；須另核對支持原題的完整年報或管理層說明。"
+      ],
+      "expected_source_index_gaps": [
+        {
+          "title": "2330 Annual Report 2024",
+          "pdf_page": 9
+        },
+        {
+          "title": "2330 Annual Report 2025",
+          "pdf_page": 9
+        }
+      ]
+    },
+    {
+      "case_id": "2317-segment-mix",
+      "verified": true,
+      "verdict": "verified",
+      "question": "根據 2025 年度合併財務報告的產品別外部收入，鴻海各產品線 2025 年營收占比如何？與 2024 年相比，哪類產品營收年增率最高？",
+      "evidence": [
+        {
+          "source_key": "2317-2025",
+          "pdf_page": 112,
+          "printed_page": 112,
+          "section": "十四(四)產品別資訊",
+          "excerpt": "本集團民國114年及113年度來自外部收入之產品別資訊；收入（百萬元）。",
+          "values": {
+            "unit": "新台幣百萬元",
+            "2025_total": 8103105,
+            "2024_total": 6859615,
+            "products": [
+              {
+                "label": "消費智能產品",
+                "2025_million_ntd": 3081686,
+                "2024_million_ntd": 3169936
+              },
+              {
+                "label": "雲端網路產品",
+                "2025_million_ntd": 3255827,
+                "2024_million_ntd": 2001817
+              },
+              {
+                "label": "電腦終端產品",
+                "2025_million_ntd": 1228391,
+                "2024_million_ntd": 1262891
+              },
+              {
+                "label": "元件及其他產品",
+                "2025_million_ntd": 537201,
+                "2024_million_ntd": 424971
+              }
+            ]
+          },
+          "indexed": false
+        }
+      ],
+      "confirmed_facts": [
+        {
+          "label": "消費智能產品營收占比",
+          "value": 38.03,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        },
+        {
+          "label": "雲端網路產品營收占比",
+          "value": 40.18,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        },
+        {
+          "label": "電腦終端產品營收占比",
+          "value": 15.16,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        },
+        {
+          "label": "元件及其他產品營收占比",
+          "value": 6.63,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        },
+        {
+          "label": "雲端網路產品營收年增率",
+          "value": 62.64,
+          "unit": "%",
+          "tolerance": 0.05,
+          "tolerance_type": "abs"
+        }
+      ],
+      "expected_sources": [
+        {
+          "document_type": "AnnualReport",
+          "page": 112,
+          "page_tolerance": 0,
+          "title_contains": "2317 Annual Report 2025"
+        }
+      ],
+      "missing_evidence": [],
+      "expected_source_index_gaps": [
+        {
+          "title": "2317 Annual Report 2025",
+          "pdf_page": 112
+        }
+      ]
+    },
+    {
+      "case_id": "2454-key-risks",
+      "verified": false,
+      "verdict": "partial_evidence_keep_draft",
+      "question": "聯發科 2025 年報中提到的主要營運風險有哪些？",
+      "evidence": [
+        {
+          "source_key": "2454-2025",
+          "pdf_page": 100,
+          "printed_page": 100,
+          "section": "財務風險管理目的與政策",
+          "excerpt": "管理營運活動相關之市場風險、信用風險及流動性風險；市場風險包括匯率、利率及其他價格風險。",
+          "values": {},
+          "indexed": false
+        },
+        {
+          "source_key": "2454-2025",
+          "pdf_page": 86,
+          "printed_page": 86,
+          "section": "重大或有負債及未認列之合約承諾",
+          "excerpt": "供應商代工合約、長期能源購買合約及專利訴訟；屬附註中的個別事項。",
+          "values": {},
+          "indexed": true
+        }
+      ],
+      "confirmed_facts": [],
+      "expected_sources": [],
+      "missing_evidence": [
+        "缺少完整企業年報的主要營運風險章節；現有財務風險及訴訟附註不證明主要營運風險清單的完整性。"
+      ],
+      "expected_source_index_gaps": []
+    }
+  ],
+  "limitations": [
+    "五題既有拒答與政策題沿用，未在本次重新實測。",
+    "索引頁存在不保證研究API會檢索或引用成功；本次沒有實測端到端通過率。",
+    "年度文件DB標為AnnualReport，但原件是合併財務報告，不能推定包含完整企業年報管理層章節。",
+    "年度文件parse_status為Pending但已有chunk及embedding，頁面覆蓋依實際chunk查核。",
+    "法說會DB未保存SHA256，只能以檔名、title及object_key關聯；本紀錄固定本機原件SHA256。",
+    "確定性數字評分未把數值與產品名稱／fact標籤綁定；關鍵字與數字齊全仍不足以驗證配對或最高成長類別，須檢視答案或使用LLM judge。",
+    "股利答案僅描述原始財報揭露的提案狀態，不對其後股東會及發放情形作結論。"
+  ],
+  "validation": {
+    "case_validation": {
+      "case_count": 13,
+      "problem_count": 0,
+      "unverified_count": 2
+    },
+    "offline_harness_tests": {
+      "passed": 60,
+      "failed": 0
+    },
+    "consistency_checks": {
+      "passed": true,
+      "checks": [
+        "stable_case_ids",
+        "five_existing_verified_rows_unchanged",
+        "six_local_pdf_sha256_matches",
+        "five_annual_database_sha256_matches",
+        "case_file_sha256_match",
+        "confirmed_facts_match_cases",
+        "expected_pages_within_pdf_bounds",
+        "decimal_formula_recalculation",
+        "reference_answer_numeric_and_keyword_matches",
+        "diluted_eps_negative",
+        "prior_earnings_dividend_negative",
+        "operating_margin_guidance_negative",
+        "physical_vs_printed_page_negative",
+        "three_verified_cases_with_index_gaps"
+      ]
+    },
+    "research_api_run": false,
+    "llm_judge_run": false
+  }
+}
