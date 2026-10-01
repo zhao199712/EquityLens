@@ -12,6 +12,12 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// 協調器期限比 planner 自身逾時多出的秒數。平常由 planner 內部逾時處理，
+    /// 協調器期限只是 planner 忽略取消時的安全網。
+    /// </summary>
+    internal const int PlannerDeadlineGraceSeconds = 5;
+
     private readonly EquityLensDbContext _dbContext;
     private readonly IWorkflowGraphTopologyService _topology;
     private readonly IAgentRunGraphValidator _runGraphValidator;
@@ -377,25 +383,34 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         DynamicPlanProposal proposal;
         try
         {
-            DynamicPlanProposal? planned = null; Exception? planningError = null;
-            var completed = new ManualResetEventSlim(false);
-            var plannerThread = new Thread(() =>
+            var orchestratorDeadline = TimeSpan.FromSeconds(planningTimeoutSeconds + PlannerDeadlineGraceSeconds);
+            var invocation = await PlannerInvocation.InvokeAsync(planner, context, orchestratorDeadline, cancellationToken);
+            plannerCall.CompletedAtUtc = DateTime.UtcNow;
+            plannerCall.DurationMs = (long)(plannerCall.CompletedAtUtc.Value - started).TotalMilliseconds;
+            if (invocation.TimedOut)
             {
-                try { planned = planner.PlanAsync(context, cancellationToken).GetAwaiter().GetResult(); }
-                catch (Exception exception) { planningError = exception; }
-                finally { completed.Set(); }
-            }) { IsBackground = true, Name = $"workflow-planner-{run.Id:N}" };
-            plannerThread.Start();
-            var deadline = Stopwatch.StartNew();
-            while (!completed.IsSet && deadline.Elapsed < TimeSpan.FromSeconds(planningTimeoutSeconds))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                Thread.Sleep(100);
+                var reason = $"Workflow planner exceeded the orchestrator {orchestratorDeadline.TotalSeconds:0} second deadline.";
+                proposal = DeterministicDynamicWorkflowPlanner.Create(context, reason);
+                plannerCall.Status = AgentToolCallStatuses.Failed;
+                plannerCall.ErrorMessage = reason;
+                plannerCall.ResultJson = Serialize(proposal);
+                AddEvent(run, last, AgentEventTypes.ToolCallFailed, "Tool workflowPlannerLLM timed out; using deterministic fallback plan.",
+                    new { error = reason, plannerCall.DurationMs, fallbackMode = proposal.Mode });
             }
-            if (!completed.IsSet) proposal = DeterministicDynamicWorkflowPlanner.Create(context, $"Workflow planner exceeded the orchestrator {planningTimeoutSeconds} second deadline.");
-            else if (planningError is not null) throw planningError;
-            else proposal = planned ?? throw new InvalidOperationException("Workflow planner returned no proposal.");
-            plannerCall.Status = AgentToolCallStatuses.Succeeded; plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180); plannerCall.ResultJson = Serialize(proposal); plannerCall.CompletedAtUtc = DateTime.UtcNow; plannerCall.DurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds; AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
+            else
+            {
+                proposal = invocation.Proposal ?? throw new InvalidOperationException("Workflow planner returned no proposal.");
+                var outcome = PlannerInvocation.ClassifyToolCall(proposal);
+                plannerCall.Status = outcome.Status;
+                plannerCall.ErrorMessage = outcome.ErrorMessage;
+                plannerCall.ResultPreview = AgentNodeJson.Trim(proposal.Reason, 180);
+                plannerCall.ResultJson = Serialize(proposal);
+                if (outcome.UsedFallback)
+                    AddEvent(run, last, AgentEventTypes.ToolCallFailed, "Tool workflowPlannerLLM fell back to the deterministic plan.",
+                        new { error = outcome.ErrorMessage, plannerCall.DurationMs, fallbackMode = proposal.Mode });
+                else
+                    AddEvent(run, last, AgentEventTypes.ToolCallCompleted, "Tool workflowPlannerLLM completed.", new { plannerCall.DurationMs, proposal.Mode });
+            }
         }
         catch (Exception exception)
         {
