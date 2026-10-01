@@ -12,6 +12,27 @@ namespace EquityLens.Api.Tests.Services.Agents;
 public sealed class AgentRunExecutorLoopPlanningTests
 {
     [Fact]
+    public async Task ExecuteAsync_LoopPlanBypassesLlmAndRecordsSuccessfulToolCall()
+    {
+        await using var db = CreateDb();
+        var run = CreateCompletedInitialReview();
+        db.AgentRuns.Add(run);
+        await db.SaveChangesAsync();
+        var planner = new UnexpectedPlanner();
+        var executor = CreateExecutor(db, new RejectThenAcceptValidator(), planner);
+
+        await executor.ExecuteAsync(run.Id, run.UserId);
+
+        Assert.Equal(0, planner.CallCount);
+        var call = Assert.Single(await db.AgentToolCalls.Where(x => x.AgentRunId == run.Id).ToListAsync());
+        Assert.Equal("loopPlanBuilder", call.ToolName);
+        Assert.Equal(AgentToolCallStatuses.Succeeded, call.Status);
+        Assert.Null(call.ErrorMessage);
+        Assert.Contains(await db.AgentRunEvents.Where(x => x.AgentRunId == run.Id).ToListAsync(),
+            x => x.EventType == AgentEventTypes.ToolCallCompleted && x.Message == "Tool loopPlanBuilder completed.");
+    }
+
+    [Fact]
     public async Task ExecuteAsync_FirstPlanRejection_RepairsOnceAndMaterializesPlan()
     {
         await using var db = CreateDb();
@@ -55,7 +76,8 @@ public sealed class AgentRunExecutorLoopPlanningTests
         Assert.Single(await db.AgentRunEvents.Where(x => x.AgentRunId == run.Id && x.EventType == AgentEventTypes.LoopStopped).ToListAsync());
     }
 
-    private static AgentRunExecutor CreateExecutor(EquityLensDbContext db, IDynamicPlanValidator validator) => new(
+    private static AgentRunExecutor CreateExecutor(EquityLensDbContext db, IDynamicPlanValidator validator,
+        IAgentWorkflowPlanner? planner = null) => new(
         db,
         new WorkflowGraphTopologyService(),
         new AgentRunGraphValidator(),
@@ -64,6 +86,7 @@ public sealed class AgentRunExecutorLoopPlanningTests
         Array.Empty<IAgentNodeHandler>(),
         NullLogger<AgentRunExecutor>.Instance,
         catalog: new AgentWorkflowCatalog(),
+        dynamicPlanner: planner,
         dynamicPlanValidator: validator,
         graphMaterializer: new GraphMaterializer(db, new AgentWorkflowCatalog()),
         loopController: new AgentLoopController([new ResearchQualityReviewLoopPolicy()]));
@@ -111,6 +134,17 @@ public sealed class AgentRunExecutorLoopPlanningTests
             CallCount++;
             if (CallCount == 1) throw new InvalidOperationException("Synthetic first-plan rejection.");
             return new ValidatedDynamicPlan(proposal, proposal.Actions);
+        }
+    }
+
+    private sealed class UnexpectedPlanner : IAgentWorkflowPlanner
+    {
+        public int CallCount { get; private set; }
+
+        public Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            throw new InvalidOperationException("The loop controller must build its own deterministic plan.");
         }
     }
 
