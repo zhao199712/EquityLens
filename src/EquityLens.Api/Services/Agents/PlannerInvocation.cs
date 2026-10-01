@@ -41,11 +41,19 @@ public static class PlannerInvocation
                 UsedFallback: true)
             : new PlannerToolCallOutcome(AgentToolCallStatuses.Succeeded, null, UsedFallback: false);
 
-    public static async Task<PlannerInvocationResult> InvokeAsync(
+    public static Task<PlannerInvocationResult> InvokeAsync(
         IAgentWorkflowPlanner planner,
         WorkflowPlanningContext context,
         TimeSpan deadline,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) =>
+        InvokeAsync(planner, context, deadline, cancellationToken, TimeProvider.System);
+
+    internal static async Task<PlannerInvocationResult> InvokeAsync(
+        IAgentWorkflowPlanner planner,
+        WorkflowPlanningContext context,
+        TimeSpan deadline,
+        CancellationToken cancellationToken,
+        TimeProvider timeProvider)
     {
         var plannerCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -68,7 +76,7 @@ public static class PlannerInvocation
 
         try
         {
-            var proposal = await planning.WaitAsync(deadline, cancellationToken).ConfigureAwait(false);
+            var proposal = await planning.WaitAsync(deadline, timeProvider, cancellationToken).ConfigureAwait(false);
             return new PlannerInvocationResult(proposal, TimedOut: false);
         }
         catch (TimeoutException)
