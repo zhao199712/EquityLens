@@ -53,7 +53,7 @@ public sealed class AgentApprovalServiceTests
         db.AgentRuns.Add(run);
         await db.SaveChangesAsync();
         var handler = new CountingNodeHandler();
-        var executor = new AgentRunExecutor(
+        var executor = AgentExecutorTestFactory.Create(
             db, new WorkflowGraphTopologyService(), new AgentRunGraphValidator(),
             new AgentRunStateMachine(), new AgentNodeStateMachine(), [handler],
             NullLogger<AgentRunExecutor>.Instance, new AgentWorkflowCatalog());

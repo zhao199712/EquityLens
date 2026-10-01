@@ -199,7 +199,7 @@ public sealed class HumanApprovalWorkflowTests
         return new TestEquityLensDbContext(options);
     }
 
-    private static AgentRunExecutor CreateExecutor(EquityLensDbContext db) => new(
+    private static AgentRunExecutor CreateExecutor(EquityLensDbContext db) => AgentExecutorTestFactory.Create(
         db,
         new AgentWorkflowPlanner(),
         new AgentRunGraphValidator(),

@@ -103,7 +103,7 @@ public sealed class PortfolioDiagnosisApprovalWorkflowTests
         throw new InvalidOperationException("Portfolio diagnosis loop exceeded 30 orchestration wakes.");
     }
 
-    private static AgentRunExecutor CreateExecutor(EquityLensDbContext db, bool cacheHit = false) => new(
+    private static AgentRunExecutor CreateExecutor(EquityLensDbContext db, bool cacheHit = false) => AgentExecutorTestFactory.Create(
         db,
         new WorkflowGraphTopologyService(),
         new AgentRunGraphValidator(),

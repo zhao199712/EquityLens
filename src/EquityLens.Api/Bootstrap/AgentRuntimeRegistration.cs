@@ -114,6 +114,9 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<IAgentNodeHandler, ValidateFeedbackRevisionContextNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, WaitForHumanApprovalNodeHandler>();
         if (e2eTestMode) builder.Services.AddScoped<IAgentNodeHandler, E2EApprovalGateNodeHandler>();
+        builder.Services.AddScoped<AgentWorkflowPolicyReader>();
+        builder.Services.AddScoped<IAgentNodeRunner, AgentNodeRunner>();
+        builder.Services.AddScoped<IAgentDynamicPlanCoordinator, AgentDynamicPlanCoordinator>();
         builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
         builder.Services.AddScoped<IAgentRunService, AgentRunService>();
         builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();

@@ -55,7 +55,7 @@ public sealed class AgentRunExecutorLoopPlanningTests
         Assert.Single(await db.AgentRunEvents.Where(x => x.AgentRunId == run.Id && x.EventType == AgentEventTypes.LoopStopped).ToListAsync());
     }
 
-    private static AgentRunExecutor CreateExecutor(EquityLensDbContext db, IDynamicPlanValidator validator) => new(
+    private static AgentRunExecutor CreateExecutor(EquityLensDbContext db, IDynamicPlanValidator validator) => AgentExecutorTestFactory.Create(
         db,
         new WorkflowGraphTopologyService(),
         new AgentRunGraphValidator(),

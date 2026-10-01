@@ -1432,7 +1432,7 @@ public sealed class AgentRunServiceTests
             IAgentNodeStateMachine nodeStateMachine)
         {
             _db = db;
-            _executor = new AgentRunExecutor(
+            _executor = AgentExecutorTestFactory.Create(
                 db,
                 new AgentWorkflowPlanner(),
                 new AgentRunGraphValidator(),
