@@ -52,10 +52,10 @@ def _fact_matches(mention: n.NumberMention, expected_base: float, kind: str, sca
     else:
         return False
     for value in candidates:
+        # A tolerance may allow rounding to zero, but never turn a loss into a profit.
+        if value != 0 and expected_base != 0 and (value < 0) != (expected_base < 0):
+            continue
         if n.within_tolerance(value, expected_base, tolerance, tolerance_type):
-            return True
-        # sign-insensitive: "下降 1.2 個百分點" vs expected -1.2
-        if n.within_tolerance(abs(value), abs(expected_base), tolerance, tolerance_type):
             return True
     return False
 
@@ -195,7 +195,7 @@ def case_passed(case: EvalCase, items: list[ScoreItem]) -> bool | None:
     count toward pass_rate, otherwise an answer to an unchecked question can "pass" by citing anything.
     A verified case passes only when behaviour is right, every applicable deterministic score is 1.0
     (all facts, all must_include groups, no forbidden text, no dangling citation) and, when the judge
-    ran, its scores clear JUDGE_MIN_SCORE.
+    ran, it succeeded and its scores clear JUDGE_MIN_SCORE.
     """
     if not case.verified:
         return None
@@ -208,6 +208,8 @@ def case_passed(case: EvalCase, items: list[ScoreItem]) -> bool | None:
             return False
     for name in JUDGE_SCORES:
         item = by_name.get(name)
+        if item and item.details.get("error"):
+            return False
         if item and item.applicable and item.score < JUDGE_MIN_SCORE:
             return False
     return True

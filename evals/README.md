@@ -120,6 +120,7 @@ API 回應 429（被限流）時，client 會依 `Retry-After` 等待後重試�
 - `behavior` 正確；
 - 所有適用的確定性分數都是滿分：每個 fact 都答對、`must_include` 每一組都命中、沒有禁用詞、沒有懸空引用；
 - 有跑 LLM judge 時，`judge_correctness` 與 `judge_groundedness` 都至少 0.5（評分標準的 3/5）。「引用格式正確但內容錯誤」的答案不會通過。
+- LLM judge 呼叫失敗或回傳無效內容時，已核實題目一律判定未通過，仍計入通過率分母；分數保留 `null`，每題的 `judge_error` 與摘要的 `judge_error_count` 分別記錄原因與出錯題數。這與研究 API 本身的 `error` 分開呈現。
 
 草稿題的 `passed` 是 `null`，不算通過也不算失敗。`validate` 也會要求：verified 的作答題至少要有一個已核實的 fact 或 `must_include`，只有 `reference_answer` 的題目在沒開 judge 時無法用程式驗證。
 
@@ -156,6 +157,7 @@ export EVAL_JUDGE_MODEL=deepseek-chat
 ## 已知限制
 
 - 數字抽取依靠規則，極端寫法可能漏抓（例如「五成九」這種國字數字）。遇到時請補 `normalize.py` 並加測試。
+- 數字比對嚴格保留正負號，支援 `-`、全形負號與 `−`；相反正負號不會因容忍誤差而匹配。暫不從「下降」「虧損」等文字推斷負值，負數需帶明確負號。零值仍可在原有容忍範圍內匹配。
 - `sources` 靠頁碼比對，文件重新切 chunk 或頁碼偏移時要調整 `page_tolerance`。
 - LLM judge 本身也會出錯，它的分數只能當趨勢參考，不能取代人工判斷。
 - 題數少時，分數差 5% 以內可能只是雜訊，不要過度解讀。

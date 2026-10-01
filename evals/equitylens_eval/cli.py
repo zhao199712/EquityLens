@@ -24,7 +24,7 @@ from typing import Iterable
 from .judge import JudgeConfig, LlmJudge
 from .report import compare, render_markdown, summarize
 from .schema import MODES, EvalCase, RunOutput, load_cases, validate_case
-from .scorers import case_passed, detected_behavior, score_case
+from .scorers import JUDGE_SCORES, case_passed, detected_behavior, score_case
 
 
 def _git_commit() -> str | None:
@@ -67,6 +67,8 @@ def build_record(case: EvalCase, output: RunOutput, judge: LlmJudge | None) -> d
         "cost_usd": output.cost_usd,
         "run_id": output.run_id,
         "error": output.error,
+        "judge_error": next((item.details["error"] for item in items
+                             if item.name in JUDGE_SCORES and item.details.get("error")), None),
         "answer_preview": output.answer[:200],
     }
 

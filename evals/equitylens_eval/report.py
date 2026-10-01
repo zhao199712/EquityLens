@@ -22,7 +22,7 @@ METRIC_ORDER = (
     "judge_groundedness",
 )
 LOWER_IS_BETTER = {"hallucination_rate", "over_refusal_rate", "error_rate", "latency_p50_ms",
-                   "latency_p95_ms", "mean_total_tokens", "total_cost_usd"}
+                   "latency_p95_ms", "mean_total_tokens", "total_cost_usd", "judge_error_count"}
 
 
 def _percentile(values: list[float], pct: float) -> float | None:
@@ -62,6 +62,7 @@ def summarize(records: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, 
     costs = [r["cost_usd"] for r in records if r.get("cost_usd") is not None]
 
     operational = {
+        "judge_error_count": sum(bool(r.get("judge_error")) for r in records),
         # answered although the corpus has no answer: the metric that matters most in finance
         "hallucination_rate": round(sum(r["detected_behavior"] == "answer" for r in should_decline)
                                     / len(should_decline), 4) if should_decline else None,
@@ -133,12 +134,15 @@ def render_markdown(summary: dict[str, Any], records: list[dict[str, Any]]) -> s
         lines += ["", "## Failed cases", ""]
         for record in failed:
             reasons = ", ".join(f"{k}={_fmt(v)}" for k, v in record["scores"].items() if v is not None and v < 1)
+            if record.get("judge_error"):
+                reasons = "; ".join(filter(None, (reasons, f"judge error: {record['judge_error']}")))
             lines.append(f"- **{record['case_id']}** ({record['category']}, detected `{record['detected_behavior']}`)"
                          f": {reasons or record.get('error') or 'see results.jsonl'}")
     drafts = [r for r in records if r["passed"] is None]
     if drafts:
         lines += ["", "## Draft cases (not verified, excluded from pass_rate)", ""]
-        lines += [f"- {r['case_id']} (detected `{r['detected_behavior']}`)" for r in drafts]
+        lines += [f"- {r['case_id']} (detected `{r['detected_behavior']}`)"
+                  + (f": judge error: {r['judge_error']}" if r.get("judge_error") else "") for r in drafts]
     return "\n".join(lines) + "\n"
 
 
@@ -178,8 +182,9 @@ def compare(baseline_dir: str | Path, candidate_dir: str | Path) -> str:
 
     for name in METRIC_ORDER:
         row(name, base_summary["metrics"].get(name, {}).get("mean"), cand_summary["metrics"].get(name, {}).get("mean"))
-    for name in base_summary["operational"]:
-        row(name, base_summary["operational"].get(name), cand_summary["operational"].get(name))
+    for name in dict.fromkeys([*base_summary["operational"], *cand_summary["operational"]]):
+        default = 0 if name == "judge_error_count" else None
+        row(name, base_summary["operational"].get(name, default), cand_summary["operational"].get(name, default))
 
     shared = sorted(set(base_records) & set(cand_records))
     regressions = [c for c in shared if base_records[c]["passed"] is True and cand_records[c]["passed"] is False]

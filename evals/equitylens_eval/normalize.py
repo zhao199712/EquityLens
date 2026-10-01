@@ -49,7 +49,7 @@ def normalize_text(text: str) -> str:
 
 
 def extract_numbers(text: str) -> list[NumberMention]:
-    text = normalize_text(text)
+    text = normalize_text(text).replace("−", "-")
     mentions: list[NumberMention] = []
     for match in _NUMBER.finditer(text):
         raw_num = match.group("num")

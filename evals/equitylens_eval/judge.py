@@ -113,7 +113,7 @@ class LlmJudge:
             })
             response.raise_for_status()
             verdict = parse_judgement(response.json()["choices"][0]["message"]["content"])
-        except (httpx.HTTPError, ValueError, KeyError, json.JSONDecodeError) as exc:
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError) as exc:
             error = {"error": f"{type(exc).__name__}: {exc}"}
             return [ScoreItem("judge_correctness", None, error), ScoreItem("judge_groundedness", None, error)]
         meta = {"model": self.config.model, "prompt_version": JUDGE_PROMPT_VERSION,
