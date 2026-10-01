@@ -19,10 +19,8 @@ public static class RiskMath
     /// 公式：R = (V_end - V_start) / V_start。
     /// 適用於單期報酬計算，例如個股日報酬或投資組合單期績效。
     /// </remarks>
-    public static decimal CalculateReturn(decimal endValue, decimal startValue)
-    {
-        return startValue == 0 ? 0 : (endValue - startValue) / startValue;
-    }
+    public static decimal CalculateReturn(decimal endValue, decimal startValue) =>
+        RiskStatistics.CalculateReturn(endValue, startValue);
 
     /// <summary>
     /// 計算投資組合加權報酬率（Portfolio Weighted Return）。
@@ -37,35 +35,16 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculatePortfolioReturn(
         IReadOnlyList<decimal> weights,
-        IReadOnlyList<decimal> returns)
-    {
-        if (weights.Count != returns.Count || weights.Count == 0)
-            return 0;
-
-        var sum = 0m;
-        for (var i = 0; i < weights.Count; i++)
-            sum += weights[i] * returns[i];
-        return sum;
-    }
+        IReadOnlyList<decimal> returns) =>
+        RiskStatistics.CalculatePortfolioReturn(weights, returns);
 
     /// <summary>
     /// 計算持倉集中度，包含 Herfindahl-Hirschman Index（HHI）與最大單一持倉權重。
     /// 權重會先正規化，因此輸入可為市值或未正規化權重。
     /// </summary>
     public static (decimal Hhi, decimal LargestWeight) CalculateConcentration(
-        IReadOnlyList<decimal> weights)
-    {
-        if (weights is null || weights.Count == 0)
-            return (0, 0);
-
-        var positiveWeights = weights.Where(weight => weight > 0).ToList();
-        var total = positiveWeights.Sum();
-        if (total <= 0)
-            return (0, 0);
-
-        var normalized = positiveWeights.Select(weight => weight / total).ToList();
-        return (normalized.Sum(weight => weight * weight), normalized.Max());
-    }
+        IReadOnlyList<decimal> weights) =>
+        RiskStatistics.CalculateConcentration(weights);
 
     /// <summary>
     /// 計算樣本變異數（Sample Variance）。
@@ -76,20 +55,8 @@ public static class RiskMath
     /// 模型：樣本變異數模型（Sample Variance, Bessel-corrected）。
     /// 使用 n-1 分母（貝塞爾校正），適合以樣本推估母體變異數。
     /// </remarks>
-    public static decimal CalculateVariance(IReadOnlyList<decimal> values)
-    {
-        if (values is null || values.Count < 2)
-            return 0;
-
-        var mean = CalculateMean(values);
-        var sumSquared = 0m;
-        for (var i = 0; i < values.Count; i++)
-        {
-            var diff = values[i] - mean;
-            sumSquared += diff * diff;
-        }
-        return sumSquared / (values.Count - 1);
-    }
+    public static decimal CalculateVariance(IReadOnlyList<decimal> values) =>
+        RiskStatistics.CalculateVariance(values);
 
     /// <summary>
     /// 計算波動率（Volatility），即報酬率的樣本標準差。
@@ -101,11 +68,8 @@ public static class RiskMath
     /// 公式：σ_sample = √(Σ(r_i - r̄)² / (n - 1))。
     /// 波動率為金融風險的核心衡量指標，數值越高代表報酬不確定性越大。
     /// </remarks>
-    public static decimal CalculateVolatility(IReadOnlyList<decimal> returns)
-    {
-        var variance = CalculateVariance(returns);
-        return variance <= 0 ? 0 : (decimal)Math.Sqrt((double)variance);
-    }
+    public static decimal CalculateVolatility(IReadOnlyList<decimal> returns) =>
+        RiskStatistics.CalculateVolatility(returns);
 
     /// <summary>
     /// 將日波動率年化為年化波動率（Annualized Volatility）。
@@ -121,10 +85,8 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculateAnnualizedVolatility(
         decimal dailyVolatility,
-        int tradingDays = DefaultTradingDays)
-    {
-        return dailyVolatility * (decimal)Math.Sqrt(tradingDays);
-    }
+        int tradingDays = DefaultTradingDays) =>
+        RiskStatistics.CalculateAnnualizedVolatility(dailyVolatility, tradingDays);
 
     /// <summary>
     /// 使用 EWMA（Exponentially Weighted Moving Average）估計條件日波動率。
@@ -139,22 +101,8 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculateEwmaVolatility(
         IReadOnlyList<decimal> returns,
-        decimal lambda = 0.94m)
-    {
-        if (returns is null || returns.Count < 2 || lambda <= 0 || lambda >= 1)
-            return 0;
-
-        var variance = CalculateVariance(returns);
-        if (variance <= 0)
-            return 0;
-
-        for (var i = 0; i < returns.Count; i++)
-        {
-            variance = lambda * variance + (1 - lambda) * returns[i] * returns[i];
-        }
-
-        return variance <= 0 ? 0 : (decimal)Math.Sqrt((double)variance);
-    }
+        decimal lambda = 0.94m) =>
+        RiskStatistics.CalculateEwmaVolatility(returns, lambda);
 
     /// <summary>
     /// 將每日對數報酬率聚合為滾動 N 日對數報酬率。
@@ -164,24 +112,8 @@ public static class RiskMath
     /// <returns>滾動 N 日對數報酬率序列。</returns>
     public static IReadOnlyList<decimal> CalculateRollingLogReturns(
         IReadOnlyList<decimal> returns,
-        int horizonDays)
-    {
-        if (returns is null || horizonDays <= 0 || returns.Count < horizonDays)
-            return Array.Empty<decimal>();
-
-        var rolling = new List<decimal>(returns.Count - horizonDays + 1);
-        var windowSum = 0m;
-        for (var i = 0; i < returns.Count; i++)
-        {
-            windowSum += returns[i];
-            if (i >= horizonDays)
-                windowSum -= returns[i - horizonDays];
-            if (i >= horizonDays - 1)
-                rolling.Add(windowSum);
-        }
-
-        return rolling;
-    }
+        int horizonDays) =>
+        RiskStatistics.CalculateRollingLogReturns(returns, horizonDays);
 
     /// <summary>
     /// 計算夏普比率（Sharpe Ratio）。
@@ -199,10 +131,8 @@ public static class RiskMath
     public static decimal CalculateSharpeRatio(
         decimal portfolioReturn,
         decimal riskFreeRate,
-        decimal volatility)
-    {
-        return volatility == 0 ? 0 : (portfolioReturn - riskFreeRate) / volatility;
-    }
+        decimal volatility) =>
+        RiskStatistics.CalculateSharpeRatio(portfolioReturn, riskFreeRate, volatility);
 
     /// <summary>
     /// 計算最大回撤（Maximum Drawdown）。
@@ -215,29 +145,8 @@ public static class RiskMath
     /// 回撤 0 表示無虧損；-0.2 表示從歷史最高點最多跌了 20%。
     /// 這是衡量投資組合極端虧損風險的重要指標。
     /// </remarks>
-    public static decimal CalculateMaxDrawdown(IReadOnlyList<decimal> values)
-    {
-        if (values is null || values.Count < 2)
-            return 0;
-
-        var peak = values[0];
-        var maxDrawdown = 0m;
-
-        for (var i = 1; i < values.Count; i++)
-        {
-            if (values[i] > peak)
-            {
-                peak = values[i];
-                continue;
-            }
-
-            var drawdown = peak == 0 ? 0 : (values[i] - peak) / peak;
-            if (drawdown < maxDrawdown)
-                maxDrawdown = drawdown;
-        }
-
-        return maxDrawdown;
-    }
+    public static decimal CalculateMaxDrawdown(IReadOnlyList<decimal> values) =>
+        RiskStatistics.CalculateMaxDrawdown(values);
 
     /// <summary>
     /// 計算歷史模擬法風險值（Historical Simulation VaR）。
@@ -254,16 +163,8 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculateHistoricalVaR(
         IReadOnlyList<decimal> returns,
-        decimal confidenceLevel = 0.95m)
-    {
-        if (returns is null || returns.Count == 0)
-            return 0;
-
-        var sorted = returns.OrderBy(x => x).ToList();
-        var index = (int)Math.Ceiling((1m - confidenceLevel) * sorted.Count) - 1;
-        index = Math.Max(0, Math.Min(index, sorted.Count - 1));
-        return sorted[index];
-    }
+        decimal confidenceLevel = 0.95m) =>
+        RiskStatistics.CalculateHistoricalVaR(returns, confidenceLevel);
 
     /// <summary>
     /// 計算預期短缺（Expected Shortfall, ES / CVaR）。
@@ -280,18 +181,8 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculateExpectedShortfall(
         IReadOnlyList<decimal> returns,
-        decimal confidenceLevel = 0.95m)
-    {
-        if (returns is null || returns.Count == 0)
-            return 0;
-
-        var var = CalculateHistoricalVaR(returns, confidenceLevel);
-        var tail = returns.Where(x => x <= var).ToList();
-        if (tail.Count == 0)
-            return var;
-
-        return tail.Average();
-    }
+        decimal confidenceLevel = 0.95m) =>
+        RiskStatistics.CalculateExpectedShortfall(returns, confidenceLevel);
 
     /// <summary>
     /// 執行 GBM 蒙地卡羅模擬（Geometric Brownian Motion Monte Carlo Simulation under Physical Measure）。
@@ -336,43 +227,8 @@ public static class RiskMath
         int simulations = 10000,
         decimal confidenceLevel = 0.95m,
         int tradingDays = 252,
-        int? randomSeed = null)
-    {
-        if (simulations <= 0 || days <= 0)
-            return new MonteCarloResult(initialValue, initialValue, initialValue, initialValue, 0, 0, confidenceLevel);
-
-        var random = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
-        var finalValues = new decimal[simulations];
-        var dt = 1.0 / tradingDays;
-        var sigma = (double)annualizedVolatility;
-        var drift = ((double)annualizedDrift - 0.5 * sigma * sigma) * dt;
-        var diffusionBase = sigma * Math.Sqrt(dt);
-
-        for (var s = 0; s < simulations; s++)
-        {
-            var price = (double)initialValue;
-            for (var d = 0; d < days; d++)
-            {
-                var z = NextGaussian(random);
-                price *= Math.Exp(drift + diffusionBase * z);
-            }
-            finalValues[s] = price > 0 ? (decimal)price : 0;
-        }
-
-        Array.Sort(finalValues);
-        var mean = finalValues.Average();
-        var median = finalValues[simulations / 2];
-        var upperIndex = (int)(confidenceLevel * simulations);
-        var lowerIndex = (int)((1m - confidenceLevel) * simulations);
-        var bestCase = finalValues[Math.Min(upperIndex, simulations - 1)];
-        var worstCase = finalValues[Math.Max(lowerIndex, 0)];
-
-        var returnDist = finalValues.Select(v => initialValue == 0 ? 0 : (v - initialValue) / initialValue).ToList();
-        var simulatedVar95 = CalculateHistoricalVaR(returnDist, confidenceLevel);
-        var simulatedEs95 = CalculateExpectedShortfall(returnDist, confidenceLevel);
-
-        return new MonteCarloResult(mean, median, bestCase, worstCase, simulatedVar95, simulatedEs95, confidenceLevel);
-    }
+        int? randomSeed = null) =>
+        GbmRiskSimulation.RunMonteCarloSimulation(initialValue, annualizedDrift, annualizedVolatility, days, simulations, confidenceLevel, tradingDays, randomSeed);
 
     /// <summary>
     /// 計算皮爾森相關係數（Pearson Correlation Coefficient）。
@@ -389,33 +245,8 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculateCorrelation(
         IReadOnlyList<decimal> valuesX,
-        IReadOnlyList<decimal> valuesY)
-    {
-        if (valuesX is null || valuesY is null || valuesX.Count < 2 || valuesX.Count != valuesY.Count)
-            return 0;
-
-        var meanX = CalculateMean(valuesX);
-        var meanY = CalculateMean(valuesY);
-
-        var covSum = 0m;
-        var varXSum = 0m;
-        var varYSum = 0m;
-
-        for (var i = 0; i < valuesX.Count; i++)
-        {
-            var diffX = valuesX[i] - meanX;
-            var diffY = valuesY[i] - meanY;
-            covSum += diffX * diffY;
-            varXSum += diffX * diffX;
-            varYSum += diffY * diffY;
-        }
-
-        if (varXSum == 0 || varYSum == 0)
-            return 0;
-
-        var correlation = covSum / (decimal)(Math.Sqrt((double)varXSum) * Math.Sqrt((double)varYSum));
-        return Math.Clamp(correlation, -1, 1);
-    }
+        IReadOnlyList<decimal> valuesY) =>
+        RiskStatistics.CalculateCorrelation(valuesX, valuesY);
 
     /// <summary>
     /// 計算樣本共變異數（Sample Covariance）。
@@ -431,20 +262,8 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculateCovariance(
         IReadOnlyList<decimal> valuesX,
-        IReadOnlyList<decimal> valuesY)
-    {
-        if (valuesX is null || valuesY is null || valuesX.Count < 2 || valuesX.Count != valuesY.Count)
-            return 0;
-
-        var meanX = CalculateMean(valuesX);
-        var meanY = CalculateMean(valuesY);
-
-        var sum = 0m;
-        for (var i = 0; i < valuesX.Count; i++)
-            sum += (valuesX[i] - meanX) * (valuesY[i] - meanY);
-
-        return sum / (valuesX.Count - 1);
-    }
+        IReadOnlyList<decimal> valuesY) =>
+        RiskStatistics.CalculateCovariance(valuesX, valuesY);
 
     /// <summary>
     /// 計算 Beta 係數（CAPM Beta）。
@@ -462,16 +281,8 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculateBeta(
         IReadOnlyList<decimal> assetReturns,
-        IReadOnlyList<decimal> marketReturns)
-    {
-        if (assetReturns is null || marketReturns is null ||
-            assetReturns.Count < 2 || assetReturns.Count != marketReturns.Count)
-            return 0;
-
-        var covariance = CalculateCovariance(assetReturns, marketReturns);
-        var variance = CalculateVariance(marketReturns);
-        return variance == 0 ? 0 : covariance / variance;
-    }
+        IReadOnlyList<decimal> marketReturns) =>
+        RiskStatistics.CalculateBeta(assetReturns, marketReturns);
 
     /// <summary>
     /// 計算投資組合變異數（Portfolio Variance），基於權重向量與共變異數矩陣。
@@ -487,24 +298,8 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculatePortfolioVariance(
         IReadOnlyList<decimal> weights,
-        decimal[][] covarianceMatrix)
-    {
-        var n = weights.Count;
-        if (n == 0 || covarianceMatrix.Length != n)
-            return 0;
-
-        var variance = 0m;
-        for (var i = 0; i < n; i++)
-        {
-            if (covarianceMatrix[i].Length != n)
-                return 0;
-
-            for (var j = 0; j < n; j++)
-                variance += weights[i] * weights[j] * covarianceMatrix[i][j];
-        }
-
-        return variance;
-    }
+        decimal[][] covarianceMatrix) =>
+        RiskMatrixMath.CalculatePortfolioVariance(weights, covarianceMatrix);
 
     /// <summary>
     /// 計算投資組合波動率（Portfolio Volatility），即組合變異數的平方根。
@@ -519,11 +314,8 @@ public static class RiskMath
     /// </remarks>
     public static decimal CalculatePortfolioVolatility(
         IReadOnlyList<decimal> weights,
-        decimal[][] covarianceMatrix)
-    {
-        var variance = CalculatePortfolioVariance(weights, covarianceMatrix);
-        return variance <= 0 ? 0 : (decimal)Math.Sqrt((double)variance);
-    }
+        decimal[][] covarianceMatrix) =>
+        RiskMatrixMath.CalculatePortfolioVolatility(weights, covarianceMatrix);
 
     /// <summary>
     /// 以 covariance matrix 分解指定資產群組的年化波動率風險來源。
@@ -534,45 +326,8 @@ public static class RiskMath
         IReadOnlyList<decimal> weights,
         decimal[][] covarianceMatrix,
         IReadOnlyCollection<int> indices,
-        int tradingDays = 252)
-    {
-        var n = weights.Count;
-        if (n == 0 || indices.Count == 0 || covarianceMatrix.Length != n || tradingDays <= 0)
-            return VolatilityRiskContribution.Zero;
-
-        var selected = indices.Where(index => index >= 0 && index < n).Distinct().ToList();
-        if (selected.Count == 0 || covarianceMatrix.Any(row => row.Length != n))
-            return VolatilityRiskContribution.Zero;
-
-        var dailyVolatility = CalculatePortfolioVolatility(weights, covarianceMatrix);
-        if (dailyVolatility <= 0)
-            return VolatilityRiskContribution.Zero;
-
-        var covarianceWithPortfolio = new decimal[n];
-        for (var i = 0; i < n; i++)
-            for (var j = 0; j < n; j++)
-                covarianceWithPortfolio[i] += covarianceMatrix[i][j] * weights[j];
-
-        var componentDaily = selected.Sum(index =>
-            weights[index] * covarianceWithPortfolio[index] / dailyVolatility);
-        var marginalDaily = selected.Sum(index =>
-            covarianceWithPortfolio[index] / dailyVolatility);
-
-        var withoutGroup = weights.ToArray();
-        foreach (var index in selected)
-            withoutGroup[index] = 0;
-
-        var annualizationFactor = (decimal)Math.Sqrt(tradingDays);
-        var annualizedVolatility = dailyVolatility * annualizationFactor;
-        var remainingAnnualizedVolatility = CalculatePortfolioVolatility(withoutGroup, covarianceMatrix)
-            * annualizationFactor;
-
-        return new VolatilityRiskContribution(
-            componentDaily * annualizationFactor,
-            componentDaily / dailyVolatility,
-            marginalDaily * annualizationFactor,
-            annualizedVolatility - remainingAnnualizedVolatility);
-    }
+        int tradingDays = 252) =>
+        RiskMatrixMath.CalculateVolatilityRiskContribution(weights, covarianceMatrix, indices, tradingDays);
 
     /// <summary>
     /// 從歷史價格序列估計 GBM 參數（漂移項 μ 與波動率 σ）。
@@ -607,40 +362,8 @@ public static class RiskMath
     /// </remarks>
     public static GbmParameters? EstimateGbmParameters(
         IReadOnlyList<decimal> prices,
-        int tradingDays = 252)
-    {
-        if (prices is null || prices.Count < 2)
-            return null;
-
-        for (var i = 0; i < prices.Count; i++)
-        {
-            if (prices[i] <= 0)
-                return null;
-        }
-
-        var logReturns = new List<decimal>(prices.Count - 1);
-        for (var i = 1; i < prices.Count; i++)
-        {
-            var logReturn = (decimal)Math.Log((double)(prices[i] / prices[i - 1]));
-            logReturns.Add(logReturn);
-        }
-
-        if (logReturns.Count < 1)
-            return null;
-
-        var meanLogReturn = CalculateMean(logReturns);
-        var dailyVolatility = CalculateVolatility(logReturns);
-
-        var annualizedVolatility = dailyVolatility * (decimal)Math.Sqrt(tradingDays);
-        var annualizedDrift = meanLogReturn * tradingDays + 0.5m * annualizedVolatility * annualizedVolatility;
-
-        return new GbmParameters(
-            annualizedDrift,
-            annualizedVolatility,
-            prices.Count,
-            logReturns.Count,
-            tradingDays);
-    }
+        int tradingDays = 252) =>
+        GbmRiskSimulation.EstimateGbmParameters(prices, tradingDays);
 
     /// <summary>
     /// 計算相關係數矩陣（N×N Pearson Correlation Matrix）。
@@ -648,25 +371,8 @@ public static class RiskMath
     /// <param name="returnsMatrix">各資產報酬率序列集合，每個元素為一檔資產的 log return 序列。</param>
     /// <returns>N×N 相關係數矩陣。若輸入為空或長度不足則回傳空陣列。</returns>
     public static decimal[][] CalculateCorrelationMatrix(
-        IReadOnlyList<IReadOnlyList<decimal>> returnsMatrix)
-    {
-        var n = returnsMatrix.Count;
-        if (n == 0) return Array.Empty<decimal[]>();
-
-        var corr = new decimal[n][];
-        for (var i = 0; i < n; i++)
-        {
-            corr[i] = new decimal[n];
-            corr[i][i] = 1m;
-            for (var j = 0; j < i; j++)
-            {
-                var c = CalculateCorrelation(returnsMatrix[i], returnsMatrix[j]);
-                corr[i][j] = c;
-                corr[j][i] = c;
-            }
-        }
-        return corr;
-    }
+        IReadOnlyList<IReadOnlyList<decimal>> returnsMatrix) =>
+        RiskMatrixMath.CalculateCorrelationMatrix(returnsMatrix);
 
     /// <summary>
     /// Cholesky 分解，將正定矩陣分解為下三角矩陣 L（L × Lᵀ = A）。
@@ -678,36 +384,8 @@ public static class RiskMath
     /// 公式：A = L Lᵀ，其中 L 為下三角矩陣。
     /// 用於 Correlated Monte Carlo Simulation，將獨立常態亂數轉換為具有指定相關性的亂數。
     /// </remarks>
-    public static decimal[][]? CholeskyDecompose(decimal[][] matrix)
-    {
-        var n = matrix.Length;
-        if (n == 0) return null;
-
-        var L = new decimal[n][];
-        for (var i = 0; i < n; i++)
-        {
-            L[i] = new decimal[n];
-            for (var j = 0; j <= i; j++)
-            {
-                var sum = 0m;
-                for (var k = 0; k < j; k++)
-                    sum += L[i][k] * L[j][k];
-
-                if (i == j)
-                {
-                    var val = matrix[i][i] - sum;
-                    if (val <= 1e-15m) return null;
-                    L[i][i] = (decimal)Math.Sqrt((double)val);
-                }
-                else
-                {
-                    if (L[j][j] == 0) return null;
-                    L[i][j] = (matrix[i][j] - sum) / L[j][j];
-                }
-            }
-        }
-        return L;
-    }
+    public static decimal[][]? CholeskyDecompose(decimal[][] matrix) =>
+        RiskMatrixMath.CholeskyDecompose(matrix);
 
     /// <summary>
     /// 多資產相關 GBM 蒙地卡羅模擬（Correlated GBM Monte Carlo for Multi-Asset Portfolio）。
@@ -761,156 +439,14 @@ public static class RiskMath
         decimal? initialPortfolioValue = null,
         IReadOnlyList<decimal>? portfolioWeights = null,
         int tradingDays = 252,
-        int? randomSeed = null)
-    {
-        var n = initialValues.Count;
-
-        if (n == 0 || simulations <= 0 || days <= 0)
-            return new MonteCarloResult(0, 0, 0, 0, 0, 0, confidenceLevel);
-
-        var L = CholeskyDecompose(correlationMatrix);
-        if (L is null)
-            return new MonteCarloResult(0, 0, 0, 0, 0, 0, confidenceLevel);
-
-        var random = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
-        var finalValues = new decimal[simulations];
-        var dt = 1.0 / tradingDays;
-        var sqrtDt = Math.Sqrt(dt);
-
-        var drifts = new double[n];
-        var diffusions = new double[n];
-        for (var i = 0; i < n; i++)
-        {
-            var sigma = (double)annualizedVolatilities[i];
-            drifts[i] = ((double)annualizedDrifts[i] - 0.5 * sigma * sigma) * dt;
-            diffusions[i] = sigma * sqrtDt;
-        }
-
-        for (var s = 0; s < simulations; s++)
-        {
-            var prices = new double[n];
-            for (var i = 0; i < n; i++)
-                prices[i] = (double)initialValues[i];
-
-            for (var d = 0; d < days; d++)
-            {
-                var zIndep = new double[n];
-                for (var i = 0; i < n; i++)
-                    zIndep[i] = NextGaussian(random);
-
-                var zCorr = new double[n];
-                for (var i = 0; i < n; i++)
-                {
-                    var sum = 0.0;
-                    for (var j = 0; j <= i; j++)
-                        sum += (double)L[i][j] * zIndep[j];
-                    zCorr[i] = sum;
-                }
-
-                for (var i = 0; i < n; i++)
-                {
-                    if (prices[i] <= 0) continue;
-                    prices[i] *= Math.Exp(drifts[i] + diffusions[i] * zCorr[i]);
-                    if (prices[i] < 0) prices[i] = 0;
-                }
-            }
-
-            var portfolioScaleWeights = portfolioWeights;
-            var portfolioValue = 0m;
-            if (initialPortfolioValue is null || portfolioScaleWeights is null || portfolioScaleWeights.Count != n)
-            {
-                for (var i = 0; i < n; i++)
-                    portfolioValue += weights[i] * (decimal)prices[i];
-            }
-            else
-            {
-                var portfolioReturnMultiplier = 0m;
-                for (var i = 0; i < n; i++)
-                {
-                    var initialValue = initialValues[i];
-                    var assetMultiplier = initialValue == 0 ? 0 : (decimal)prices[i] / initialValue;
-                    portfolioReturnMultiplier += portfolioScaleWeights[i] * assetMultiplier;
-                }
-                portfolioValue = initialPortfolioValue.Value * portfolioReturnMultiplier;
-            }
-            finalValues[s] = portfolioValue;
-        }
-
-        Array.Sort(finalValues);
-        var mean = finalValues.Average();
-        var median = finalValues[simulations / 2];
-        var upperIndex = (int)(confidenceLevel * simulations);
-        var lowerIndex = (int)((1m - confidenceLevel) * simulations);
-        var bestCase = finalValues[Math.Min(upperIndex, simulations - 1)];
-        var worstCase = finalValues[Math.Max(lowerIndex, 0)];
-
-        var basePortfolioValue = initialPortfolioValue ?? 0m;
-        if (initialPortfolioValue is null)
-        {
-            for (var i = 0; i < n; i++)
-                basePortfolioValue += weights[i] * initialValues[i];
-        }
-
-        var returnDist = finalValues
-            .Select(v => basePortfolioValue == 0 ? 0 : (v - basePortfolioValue) / basePortfolioValue)
-            .ToList();
-        var simulatedVaR = CalculateHistoricalVaR(returnDist, confidenceLevel);
-        var simulatedES = CalculateExpectedShortfall(returnDist, confidenceLevel);
-
-        return new MonteCarloResult(mean, median, bestCase, worstCase, simulatedVaR, simulatedES, confidenceLevel);
-    }
-
-    /// <summary>
-    /// 計算序列平均值（算術平均數）。
-    /// </summary>
-    /// <param name="values">數值序列。</param>
-    /// <returns>平均值 = Σ x_i / n。若序列為 null 或空則回傳 0。</returns>
-    /// <remarks>模型：算術平均數模型（Arithmetic Mean）。為內部輔助函數。</remarks>
-    private static decimal CalculateMean(IReadOnlyList<decimal> values)
-    {
-        if (values is null || values.Count == 0)
-            return 0;
-
-        var sum = 0m;
-        for (var i = 0; i < values.Count; i++)
-            sum += values[i];
-        return sum / values.Count;
-    }
-
-    /// <summary>
-    /// 使用 Box-Muller 轉換產生標準常態分配亂數（N(0,1)）。
-    /// </summary>
-    /// <param name="random">亂數產生器實例。</param>
-    /// <returns>標準常態分配亂數。</returns>
-    /// <remarks>
-    /// 模型：Box-Muller Transform。
-    /// 公式：Z = √(-2 × ln(U₁)) × cos(2π × U₂)，其中 U₁, U₂ ~ Uniform(0,1)。
-    /// 用於蒙地卡羅模擬中生成常態分配日報酬。
-    /// </remarks>
-    private static double NextGaussian(Random random)
-    {
-        var u1 = 1.0 - random.NextDouble();
-        var u2 = 1.0 - random.NextDouble();
-        return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
-    }
+        int? randomSeed = null) =>
+        GbmRiskSimulation.RunCorrelatedGbmMonteCarloSimulation(initialValues, annualizedDrifts, annualizedVolatilities, weights, correlationMatrix, days, simulations, confidenceLevel, initialPortfolioValue, portfolioWeights, tradingDays, randomSeed);
 
     /// <summary>
     /// 根據資產數量與共同交易日數量，自動決定 shrinkage alpha。
     /// </summary>
-    public static decimal DetermineAutoShrinkageAlpha(int assetCount, int commonTradingDays)
-    {
-        if (assetCount <= 0 || commonTradingDays <= 0)
-            return 0.15m;
-
-        var p = assetCount * (assetCount + 1) / 2;
-        var ratio = (decimal)commonTradingDays / p;
-
-        if (assetCount <= 10 && commonTradingDays >= 500) return 0.03m;
-        if (assetCount <= 20 && ratio >= 3m) return 0.05m;
-        if (ratio >= 1.5m) return 0.08m;
-        if (ratio >= 1.0m) return 0.10m;
-        return 0.15m;
-    }
+    public static decimal DetermineAutoShrinkageAlpha(int assetCount, int commonTradingDays) =>
+        FhsRiskSimulation.DetermineAutoShrinkageAlpha(assetCount, commonTradingDays);
 
     /// <summary>
     /// 執行 Multivariate EWMA Filtered Historical Simulation（MVEWMA-FHS）。
@@ -927,12 +463,8 @@ public static class RiskMath
         decimal shrinkageAlpha = 0.10m,
         int tradingDays = 252,
         decimal residualCapQuantile = 0m,
-        int? randomSeed = null)
-    {
-        return RunMultivariateFhsSimulationForConfidenceLevels(
-            returnMatrix, weights, initialPortfolioValue, horizonDays, simulations,
-            [confidenceLevel], lambda, shrinkageAlpha, tradingDays, residualCapQuantile, randomSeed)[0];
-    }
+        int? randomSeed = null) =>
+        FhsRiskSimulation.RunMultivariateFhsSimulation(returnMatrix, weights, initialPortfolioValue, horizonDays, simulations, confidenceLevel, lambda, shrinkageAlpha, tradingDays, residualCapQuantile, randomSeed);
 
     /// <summary>
     /// 執行一次 MVEWMA-FHS 路徑模擬，並從同一個已排序的模擬分布計算多個信心水準。
@@ -949,106 +481,8 @@ public static class RiskMath
         decimal shrinkageAlpha = 0.10m,
         int tradingDays = 252,
         decimal residualCapQuantile = 0m,
-        int? randomSeed = null)
-    {
-        var n = returnMatrix.Count;
-        var levels = confidenceLevels.Count == 0 ? [0.95m] : confidenceLevels;
-        MvewmaFhsResult Empty(decimal confidence) => new(0, 0, 0, 0, 0, 0, confidence,
-            shrinkageAlpha, n, 0, lambda, shrinkageAlpha, residualCapQuantile, 0, true);
-
-        if (n == 0 || simulations <= 0 || horizonDays <= 0)
-            return levels.Select(Empty).ToArray();
-
-        var returnLengths = returnMatrix.Select(r => r.Count).ToList();
-        var t = returnLengths.Min();
-        if (t < 10) return levels.Select(Empty).ToArray();
-
-        // Step 1: Build list of N×N EWMA covariance matrices
-        var covList = CalculateMultivariateEwmaCovariances(returnMatrix, lambda);
-
-        // Step 2: Apply diagonal shrinkage
-        var shrunkList = ApplyDiagonalShrinkage(covList, shrinkageAlpha);
-
-        // Step 3: Add jitter for numerical stability
-        var finalList = AddJitter(shrunkList);
-
-        // Step 4: Decompose latest covariance
-        var latestCov = finalList[^1];
-        var L = CholeskyDecompose(latestCov);
-        if (L is null) return levels.Select(Empty).ToArray();
-
-        // Step 5: Build historical residual vectors
-        var residuals = BuildFilteredResidualVectors(returnMatrix, finalList);
-
-        if (residuals.Count < 10) return levels.Select(Empty).ToArray();
-        var residualNorms = residuals.Select(ResidualNorm).OrderBy(value => value).ToList();
-        var residualCap = residualCapQuantile > 0m ? Quantile(residualNorms, residualCapQuantile) : 0m;
-
-        // Step 6: Monte Carlo simulation
-        var random = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
-        var finalValues = new decimal[simulations];
-        var basePortfolioValue = initialPortfolioValue;
-        var residualCount = residuals.Count;
-        var cappedDraws = 0;
-
-        for (var s = 0; s < simulations; s++)
-        {
-            var cumulative = new double[n];
-
-            for (var d = 0; d < horizonDays; d++)
-            {
-                var zTau = residuals[random.Next(residualCount)];
-                if (residualCapQuantile > 0m && ResidualNorm(zTau) > residualCap)
-                {
-                    zTau = ScaleResidual(zTau, residualCap);
-                    cappedDraws++;
-                }
-
-                var rSim = new double[n];
-                for (var i = 0; i < n; i++)
-                {
-                    var sum = 0.0;
-                    for (var j = 0; j <= i; j++)
-                        sum += (double)L[i][j] * (double)zTau[j];
-                    rSim[i] = sum;
-                }
-
-                for (var i = 0; i < n; i++)
-                    cumulative[i] += rSim[i];
-            }
-
-            // Residual weight is cash (negative when the scenario uses financing).
-            // Cash has a one-period multiplier of 1, so the return stays anchored at 0%.
-            var portfolioReturnMultiplier = 1m - weights.Sum();
-            for (var i = 0; i < n; i++)
-            {
-                var assetMultiplier = (decimal)Math.Exp(cumulative[i]);
-                portfolioReturnMultiplier += weights[i] * assetMultiplier;
-            }
-            finalValues[s] = basePortfolioValue * portfolioReturnMultiplier;
-        }
-
-        // Step 7: Compute statistics
-        Array.Sort(finalValues);
-        var mean = finalValues.Average();
-        var median = finalValues[simulations / 2];
-        var returnDist = finalValues
-            .Select(v => basePortfolioValue == 0 ? 0 : (v - basePortfolioValue) / basePortfolioValue)
-            .ToList();
-        return levels.Select(confidence =>
-        {
-            var upperIndex = (int)(confidence * simulations);
-            var lowerIndex = (int)((1m - confidence) * simulations);
-            var bestCase = finalValues[Math.Min(upperIndex, simulations - 1)];
-            var worstCase = finalValues[Math.Max(lowerIndex, 0)];
-            var simulatedVaR = CalculateHistoricalVaR(returnDist, confidence);
-            var simulatedES = CalculateExpectedShortfall(returnDist, confidence);
-            return new MvewmaFhsResult(
-                mean, median, bestCase, worstCase, simulatedVaR, simulatedES, confidence,
-                shrinkageAlpha, n, t, lambda, shrinkageAlpha, residualCapQuantile,
-                (decimal)cappedDraws / (simulations * horizonDays), false);
-        }).ToArray();
-    }
+        int? randomSeed = null) =>
+        FhsRiskSimulation.RunMultivariateFhsSimulationForConfidenceLevels(returnMatrix, weights, initialPortfolioValue, horizonDays, simulations, confidenceLevels, lambda, shrinkageAlpha, tradingDays, residualCapQuantile, randomSeed);
 
     /// <summary>
     /// 執行可重現的 MVEWMA-FHS 路徑模擬，回傳每日投組累積報酬分位數與少量代表路徑。
@@ -1062,353 +496,41 @@ public static class RiskMath
         int randomSeed,
         decimal lambda = 0.94m,
         decimal shrinkageAlpha = 0.10m,
-        decimal residualCapQuantile = 0m)
-    {
-        var assetCount = returnMatrix.Count;
-        var empty = new MvewmaFhsPathResult(
-            Array.Empty<MvewmaFhsPathBand>(), Array.Empty<IReadOnlyList<decimal>>(),
-            0, 0, 0, 0, shrinkageAlpha, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, true);
-        if (assetCount == 0 || weights.Count != assetCount || horizonDays <= 0 || simulations <= 0)
-            return empty;
-
-        var commonTradingDays = returnMatrix.Min(series => series.Count);
-        if (commonTradingDays < 10) return empty;
-
-        var covariances = AddJitter(ApplyDiagonalShrinkage(
-            CalculateMultivariateEwmaCovariances(returnMatrix, lambda), shrinkageAlpha));
-        if (covariances.Count == 0) return empty;
-        var cholesky = CholeskyDecompose(covariances[^1]);
-        if (cholesky is null) return empty;
-        var residuals = BuildFilteredResidualVectors(returnMatrix, covariances);
-        if (residuals.Count < 10) return empty;
-        var residualNorms = residuals
-            .Select(ResidualNorm)
-            .OrderBy(value => value)
-            .ToList();
-        var residualCap = residualCapQuantile > 0m ? Quantile(residualNorms, residualCapQuantile) : 0m;
-
-        var allPaths = new decimal[simulations][];
-        var finalReturns = new decimal[simulations];
-        var random = new Random(randomSeed);
-        var cappedDraws = 0;
-        for (var simulation = 0; simulation < simulations; simulation++)
-        {
-            var assetLogReturns = new double[assetCount];
-            var cumulativeReturns = new decimal[horizonDays + 1];
-            for (var day = 1; day <= horizonDays; day++)
-            {
-                var residual = residuals[random.Next(residuals.Count)];
-                if (residualCapQuantile > 0m && ResidualNorm(residual) > residualCap)
-                {
-                    residual = ScaleResidual(residual, residualCap);
-                    cappedDraws++;
-                }
-                for (var asset = 0; asset < assetCount; asset++)
-                {
-                    var simulatedLogReturn = 0.0;
-                    for (var component = 0; component <= asset; component++)
-                        simulatedLogReturn += (double)cholesky[asset][component] * (double)residual[component];
-                    assetLogReturns[asset] += simulatedLogReturn;
-                }
-
-                var multiplier = 0m;
-                for (var asset = 0; asset < assetCount; asset++)
-                    multiplier += weights[asset] * (decimal)Math.Exp(assetLogReturns[asset]);
-                cumulativeReturns[day] = multiplier - 1m;
-            }
-            allPaths[simulation] = cumulativeReturns;
-            finalReturns[simulation] = cumulativeReturns[^1];
-        }
-
-        var bands = new List<MvewmaFhsPathBand>(horizonDays + 1);
-        for (var day = 0; day <= horizonDays; day++)
-        {
-            var dayReturns = new decimal[simulations];
-            for (var simulation = 0; simulation < simulations; simulation++)
-                dayReturns[simulation] = allPaths[simulation][day];
-            Array.Sort(dayReturns);
-            bands.Add(new MvewmaFhsPathBand(day,
-                Quantile(dayReturns, 0.01m), Quantile(dayReturns, 0.05m), Quantile(dayReturns, 0.50m),
-                Quantile(dayReturns, 0.95m), Quantile(dayReturns, 0.99m)));
-        }
-
-        Array.Sort(finalReturns);
-        var sampleCount = Math.Min(Math.Max(samplePathCount, 0), simulations);
-        var samples = Enumerable.Range(0, sampleCount)
-            .Select(index => (IReadOnlyList<decimal>)allPaths[(int)Math.Floor((decimal)index * simulations / sampleCount)])
-            .ToList();
-        var probabilityPositive = finalReturns.Count(value => value > 0) / (decimal)simulations;
-        var p50 = Quantile(finalReturns, 0.50m);
-        var p95 = Quantile(finalReturns, 0.95m);
-        var p99 = Quantile(finalReturns, 0.99m);
-        var annualizedVolatility = returnMatrix.All(series => series.All(value => value == 0m))
-            ? 0m
-            : CalculateAnnualizedVolatility(CalculatePortfolioVolatility(weights, covariances[^1]));
-        return new MvewmaFhsPathResult(bands, samples, probabilityPositive, finalReturns.Average(),
-            Quantile(finalReturns, 0.05m), Quantile(finalReturns, 0.01m), shrinkageAlpha,
-            commonTradingDays, annualizedVolatility, Quantile(residualNorms, 0.99m), residualNorms[^1],
-            p50, p95, p99, finalReturns.Average() - p50, residualCapQuantile,
-            (decimal)cappedDraws / (simulations * horizonDays), false);
-    }
-
-    private static decimal Quantile(IReadOnlyList<decimal> values, decimal probability)
-    {
-        if (values.Count == 0) return 0;
-        var index = Math.Clamp((int)Math.Ceiling(probability * values.Count) - 1, 0, values.Count - 1);
-        return values[index];
-    }
-
-    private static decimal ResidualNorm(IReadOnlyList<decimal> residual) =>
-        (decimal)Math.Sqrt(residual.Sum(value => (double)value * (double)value));
-
-    private static decimal[] ScaleResidual(IReadOnlyList<decimal> residual, decimal targetNorm)
-    {
-        var norm = ResidualNorm(residual);
-        if (norm <= 0 || targetNorm >= norm) return residual.ToArray();
-        var scale = targetNorm / norm;
-        return residual.Select(value => value * scale).ToArray();
-    }
+        decimal residualCapQuantile = 0m) =>
+        FhsRiskSimulation.RunMultivariateFhsPathSimulation(returnMatrix, weights, horizonDays, simulations, samplePathCount, randomSeed, lambda, shrinkageAlpha, residualCapQuantile);
 
     /// <summary>判定期望值是否受少數高報酬路徑顯著拉高。</summary>
     public static bool HasMaterialRightSkew(decimal expectedMedianGap, decimal threshold = 0.25m) =>
-        expectedMedianGap >= threshold;
+        FhsRiskSimulation.HasMaterialRightSkew(expectedMedianGap, threshold);
 
     /// <summary>
     /// 由多資產對數報酬序列建立多元 EWMA covariance 矩陣序列。
     /// </summary>
     public static IReadOnlyList<decimal[][]> CalculateMultivariateEwmaCovariances(
         IReadOnlyList<IReadOnlyList<decimal>> returnMatrix,
-        decimal lambda = 0.94m)
-    {
-        var n = returnMatrix.Count;
-        if (n == 0) return Array.Empty<decimal[][]>();
-
-        var t = returnMatrix[0].Count;
-
-        // Initial sample covariance
-        var initialCov = new decimal[n][];
-        for (var i = 0; i < n; i++)
-        {
-            initialCov[i] = new decimal[n];
-            for (var j = 0; j <= i; j++)
-            {
-                initialCov[i][j] = CalculateCovariance(returnMatrix[i], returnMatrix[j]);
-                if (j < i)
-                    initialCov[j][i] = initialCov[i][j];
-            }
-        }
-
-        var result = new List<decimal[][]>(t);
-        var currentCov = initialCov;
-
-        for (var timeIdx = 0; timeIdx < t; timeIdx++)
-        {
-            var r = new decimal[n];
-            for (var i = 0; i < n; i++)
-                r[i] = returnMatrix[i][timeIdx];
-
-            var newCov = new decimal[n][];
-            for (var i = 0; i < n; i++)
-            {
-                newCov[i] = new decimal[n];
-                for (var j = 0; j < n; j++)
-                    newCov[i][j] = lambda * currentCov[i][j] + (1 - lambda) * r[i] * r[j];
-            }
-
-            result.Add(newCov);
-            currentCov = newCov;
-        }
-
-        return result;
-    }
+        decimal lambda = 0.94m) =>
+        RiskMatrixMath.CalculateMultivariateEwmaCovariances(returnMatrix, lambda);
 
     /// <summary>
     /// 對 covariance 矩陣序列施加 diagonal shrinkage。
     /// </summary>
     public static IReadOnlyList<decimal[][]> ApplyDiagonalShrinkage(
         IReadOnlyList<decimal[][]> covariances,
-        decimal alpha)
-    {
-        if (alpha <= 0) return covariances;
-
-        var result = new List<decimal[][]>(covariances.Count);
-        foreach (var cov in covariances)
-        {
-            var n = cov.Length;
-            var shrunk = new decimal[n][];
-            for (var i = 0; i < n; i++)
-            {
-                shrunk[i] = new decimal[n];
-                for (var j = 0; j < n; j++)
-                {
-                    if (i == j)
-                        shrunk[i][j] = cov[i][j];
-                    else
-                        shrunk[i][j] = (1 - alpha) * cov[i][j];
-                }
-            }
-            result.Add(shrunk);
-        }
-        return result;
-    }
+        decimal alpha) =>
+        RiskMatrixMath.ApplyDiagonalShrinkage(covariances, alpha);
 
     /// <summary>
     /// 對 covariance 矩陣序列加入 jitter 以確保數值穩定性。
     /// </summary>
     public static IReadOnlyList<decimal[][]> AddJitter(
-        IReadOnlyList<decimal[][]> covariances)
-    {
-        var result = new List<decimal[][]>(covariances.Count);
-        foreach (var cov in covariances)
-        {
-            var n = cov.Length;
-            var diagSum = 0m;
-            for (var i = 0; i < n; i++)
-                diagSum += cov[i][i];
-            var epsilon = n > 0 ? Math.Max(1e-8m * diagSum / n, 1e-10m) : 1e-10m;
-
-            var jittered = new decimal[n][];
-            for (var i = 0; i < n; i++)
-            {
-                jittered[i] = new decimal[n];
-                for (var j = 0; j < n; j++)
-                {
-                    jittered[i][j] = cov[i][j];
-                    if (i == j) jittered[i][j] += epsilon;
-                }
-            }
-            result.Add(jittered);
-        }
-        return result;
-    }
+        IReadOnlyList<decimal[][]> covariances) =>
+        RiskMatrixMath.AddJitter(covariances);
 
     /// <summary>
     /// 由報酬序列與對應 covariance 矩陣計算標準化歷史殘差向量。
     /// </summary>
     public static IReadOnlyList<decimal[]> BuildFilteredResidualVectors(
         IReadOnlyList<IReadOnlyList<decimal>> returnMatrix,
-        IReadOnlyList<decimal[][]> covariances)
-    {
-        var n = returnMatrix.Count;
-        var t = returnMatrix[0].Count;
-        var result = new List<decimal[]>(t);
-
-        for (var timeIdx = 0; timeIdx < t && timeIdx < covariances.Count; timeIdx++)
-        {
-            var L = CholeskyDecompose(covariances[timeIdx]);
-            if (L is null) continue;
-
-            var r = new decimal[n];
-            for (var i = 0; i < n; i++)
-                r[i] = returnMatrix[i][timeIdx];
-
-            var z = SolveLowerTriangular(L, r);
-            if (z is not null)
-                result.Add(z);
-        }
-
-        return result;
-    }
-
-    private static decimal[]? SolveLowerTriangular(decimal[][] L, decimal[] b)
-    {
-        var n = L.Length;
-        var x = new decimal[n];
-        for (var i = 0; i < n; i++)
-        {
-            if (L[i][i] == 0) return null;
-            var sum = 0m;
-            for (var j = 0; j < i; j++)
-                sum += L[i][j] * x[j];
-            x[i] = (b[i] - sum) / L[i][i];
-        }
-        return x;
-    }
+        IReadOnlyList<decimal[][]> covariances) =>
+        RiskMatrixMath.BuildFilteredResidualVectors(returnMatrix, covariances);
 }
-
-/// <summary>投資組合波動率的 component、marginal 與 incremental 風險來源。</summary>
-public sealed record VolatilityRiskContribution(
-    decimal ComponentVolatility,
-    decimal ComponentRiskShare,
-    decimal MarginalVolatility,
-    decimal IncrementalVolatility)
-{
-    public static readonly VolatilityRiskContribution Zero = new(0, 0, 0, 0);
-}
-
-/// <summary>
-/// 蒙地卡羅模擬結果。
-/// </summary>
-/// <param name="MeanFinalValue">所有模擬路徑最終價格的平均值。</param>
-/// <param name="MedianFinalValue">所有模擬路徑最終價格的中位數。</param>
-/// <param name="BestCase95Percentile">指定信心水準下的最佳情境最終價格。</param>
-/// <param name="WorstCase95Percentile">指定信心水準下的最差情境最終價格。</param>
-/// <param name="SimulatedVaR">基於模擬報酬分布，給定信心水準下的 VaR。</param>
-/// <param name="SimulatedES">基於模擬報酬分布，給定信心水準下的 ES / CVaR。</param>
-/// <param name="ConfidenceLevel">用於計算 VaR/ES 的信心水準（例如 0.95 = 95%）。</param>
-public sealed record MonteCarloResult(
-    decimal MeanFinalValue,
-    decimal MedianFinalValue,
-    decimal BestCase95Percentile,
-    decimal WorstCase95Percentile,
-    decimal SimulatedVaR,
-    decimal SimulatedES,
-    decimal ConfidenceLevel);
-
-/// <summary>
-/// GBM 參數估計結果，包含漂移項與波動率。
-/// </summary>
-/// <param name="AnnualizedDrift">年化漂移項 μ（Physical measure expected return）。</param>
-/// <param name="AnnualizedVolatility">年化波動率 σ。</param>
-/// <param name="PriceCount">用於估計的歷史價格筆數。</param>
-/// <param name="ReturnCount">計算出的對數報酬率筆數（= PriceCount - 1）。</param>
-/// <param name="TradingDays">年交易日數，用於年化計算。</param>
-public sealed record GbmParameters(
-    decimal AnnualizedDrift,
-    decimal AnnualizedVolatility,
-    int PriceCount,
-    int ReturnCount,
-    int TradingDays);
-
-/// <summary>
-/// MVEWMA-FHS 模擬結果。
-/// </summary>
-public sealed record MvewmaFhsResult(
-    decimal MeanFinalValue,
-    decimal MedianFinalValue,
-    decimal BestCase95Percentile,
-    decimal WorstCase95Percentile,
-    decimal SimulatedVaR,
-    decimal SimulatedES,
-    decimal ConfidenceLevel,
-    decimal ShrinkageAlpha,
-    int AssetCount,
-    int CommonTradingDays,
-    decimal EwmaLambda,
-    decimal InputShrinkageAlpha,
-    decimal ResidualCapQuantile,
-    decimal CappedDrawRate,
-    bool DidFallback);
-
-/// <summary>一年期 MVEWMA-FHS 路徑模擬結果。</summary>
-public sealed record MvewmaFhsPathResult(
-    IReadOnlyList<MvewmaFhsPathBand> Bands,
-    IReadOnlyList<IReadOnlyList<decimal>> SamplePaths,
-    decimal PositiveReturnProbability,
-    decimal ExpectedReturn,
-    decimal P5FinalReturn,
-    decimal P1FinalReturn,
-    decimal ShrinkageAlpha,
-    int CommonTradingDays,
-    decimal AnnualizedPortfolioVolatility,
-    decimal ResidualNormP99,
-    decimal MaxResidualNorm,
-    decimal P50FinalReturn,
-    decimal P95FinalReturn,
-    decimal P99FinalReturn,
-    decimal ExpectedMedianGap,
-    decimal ResidualCapQuantile,
-    decimal CappedDrawRate,
-    bool DidFallback);
-
-public sealed record MvewmaFhsPathBand(int Day, decimal P1, decimal P5, decimal P50, decimal P95, decimal P99);
