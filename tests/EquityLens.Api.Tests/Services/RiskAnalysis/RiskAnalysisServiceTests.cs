@@ -362,7 +362,7 @@ public sealed class RiskAnalysisServiceTests
         IReadOnlyDictionary<Guid, LatestMarketPrice>? latestPrices,
         IReadOnlyDictionary<Guid, IReadOnlyList<MarketPriceResponse>>? historicalPricesBySecurity)
     {
-        return new RiskAnalysisService(
+        return RiskServiceTestFactory.Create(
             new TestSecurityRepository(true),
             new TestMultiMarketPriceRepository(latestPrices, historicalPricesBySecurity),
             new TestPortfolioRepository(portfolio),
@@ -372,7 +372,7 @@ public sealed class RiskAnalysisServiceTests
     private static RiskAnalysisService CreateService(
         bool activeExists, IReadOnlyList<MarketPriceResponse>? prices)
     {
-        return new RiskAnalysisService(
+        return RiskServiceTestFactory.Create(
             new TestSecurityRepository(activeExists),
             new TestMarketPriceRepository(prices ?? Array.Empty<MarketPriceResponse>()),
             new TestPortfolioRepository(),

@@ -88,7 +88,7 @@ public sealed class RiskObservabilityTests
             .Select(index => new MarketPriceResponse(Guid.NewGuid(), securityId, new DateTime(2025, 1, 1).AddDays(index),
                 "1d", 100 + index, 101 + index, 99 + index, 100 + index, null, 1000, "Test"))
             .ToList();
-        return new RiskAnalysisService(
+        return RiskServiceTestFactory.Create(
             new TestSecurityRepository(),
             new TestMarketPriceRepository(securityId, prices),
             new TestPortfolioRepository(portfolio),
