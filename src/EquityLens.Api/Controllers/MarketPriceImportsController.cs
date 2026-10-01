@@ -1,5 +1,6 @@
 using EquityLens.Api.Contracts.MarketPrices;
 using EquityLens.Api.Services.MarketPrices;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EquityLens.Api.Controllers;
@@ -8,6 +9,7 @@ namespace EquityLens.Api.Controllers;
 /// 市場價格導入控制器，提供依據股票代號與交易所導入每日價格的功能。
 /// </summary>
 [ApiController]
+[Authorize(Roles = "Admin")]
 [Route("api/market-prices")]
 public sealed class MarketPriceImportsController : ApiControllerBase
 {

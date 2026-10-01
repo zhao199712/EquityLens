@@ -4,6 +4,8 @@ using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.CurrentUser;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using EquityLens.Api.Controllers.Filters;
 
 namespace EquityLens.Api.Controllers;
 
@@ -13,6 +15,8 @@ namespace EquityLens.Api.Controllers;
 public sealed class AgentWorkflowQueriesController(IAgentWorkflowQueryService service, ICurrentUserContext currentUser) : ControllerBase
 {
     [HttpPost]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
+    [LimitActiveAgentRuns]
     public async Task<ActionResult<AgentWorkflowQueryCreatedResponse>> Create(CreateAgentWorkflowQueryRequest request, CancellationToken cancellationToken)
     {
         try

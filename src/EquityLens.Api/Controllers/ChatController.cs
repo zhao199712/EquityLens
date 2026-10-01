@@ -7,6 +7,9 @@ using EquityLens.Api.Services.Chat;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using EquityLens.Api.Common;
+using Microsoft.AspNetCore.RateLimiting;
+using EquityLens.Api.Controllers.Filters;
 
 namespace EquityLens.Api.Controllers;
 
@@ -85,6 +88,8 @@ public sealed class ChatController : ControllerBase
     }
 
     [HttpPost("sessions/{sessionId:guid}/messages")]
+    [EnableRateLimiting(RateLimitPolicies.Llm)]
+    [LimitActiveAgentRuns]
     public async Task SendMessage(
         Guid sessionId, SendMessageRequest request, CancellationToken ct)
     {

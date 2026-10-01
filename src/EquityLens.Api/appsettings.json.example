@@ -109,5 +109,23 @@
     "WebSearchMaxContentLength": 3000,
     "WebSearchFreshness": "month",
     "EnableJinaRerank": false
+  },
+  "RateLimiting": {
+    "Llm": {
+      "PermitLimit": 10,
+      "AdminPermitLimit": 120,
+      "GlobalPermitLimit": 60,
+      "WindowSeconds": 60
+    },
+    "Auth": {
+      "PermitLimit": 10,
+      "WindowSeconds": 60,
+      "RegisterPermitLimit": 3,
+      "RegisterWindowSeconds": 3600
+    },
+    "ActiveAgentRuns": {
+      "MaxActiveRunsPerUser": 2,
+      "ActiveWindowMinutes": 30
+    }
   }
 }
