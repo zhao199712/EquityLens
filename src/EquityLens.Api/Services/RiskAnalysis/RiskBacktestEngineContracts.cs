@@ -24,7 +24,12 @@ public sealed record RiskBacktestEngineInput(
     IReadOnlyList<DateOnly> ReturnDates,
     IReadOnlyList<decimal> PortfolioReturns,
     IReadOnlyList<IReadOnlyList<decimal>> AssetReturns,
-    IReadOnlyList<decimal> Weights);
+    IReadOnlyList<decimal> Weights,
+    IReadOnlyList<RiskAssetMetadata>? Assets = null);
+
+/// <summary>與資產報酬矩陣同序的持倉識別與產業快照。</summary>
+public sealed record RiskAssetMetadata(
+    Guid SecurityId, string Ticker, string Exchange, string SecurityName, string Industry);
 
 public sealed record RiskBacktestEngineResult(
     string Outcome,

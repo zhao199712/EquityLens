@@ -43,6 +43,43 @@ RiskPython__PrimaryEnabled=false
 New calculations then use the explicit C# MVEWMA-FHS fallback. Completed runs
 retain their selected model and fallback reason.
 
+## Conditional volatility decomposition
+
+Current-risk and Monte Carlo results include `conditionalRisk` with method
+version `vt-garch-residual-correlation-v1`. The existing GARCH fit is reused:
+`D = diag(sqrt(next_variances) / 100)`, `R` is the sample correlation of its
+standardized residual vectors, and `Sigma = D R D`. Correlation is fixed over
+the fitted window; this is not a DCC fit or the covariance of the FHS simulated
+simple returns. No extra random sampling, shrinkage, or refitting is used.
+
+`dailyVolatility = sqrt(w' Sigma w)` describes next-trading-day weighted log
+returns. `annualizedVolatility` and contribution values multiply this by
+`sqrt(252)`; this is a display scale, not a one-year forecast. Both holding and
+industry components sum to that annualized value; shares sum to one when risk
+is nonzero. Negative components are retained. Zero portfolio volatility yields
+null components, shares, and marginal derivatives (not fabricated zeros).
+
+A marginal derivative is per unit weight. For a +1 percentage-point position
+increase funded from cash, multiply by 0.01; to display that volatility change
+in percentage points, multiply again by 100. Industry marginals add a total
+one percentage point in the industry's existing proportions. A zero-weight
+industry has no such direction and returns null. Incremental volatility is
+the current value minus the value after moving the holding/industry to cash,
+without reweighting other assets; it remains defined at zero portfolio risk.
+
+The optional input `assets` array contains `securityId`, `ticker`, `exchange`,
+`securityName`, and `industry` in the exact order of `assetReturns` and
+`weights`. Metadata is snapshotted by the API when enqueueing, included in the
+existing payload hash, and echoed into the persisted result. Missing metadata
+is accepted for older jobs, with empty named holdings/industries. Supplied
+metadata must match dimensions and have unique security IDs.
+
+Roll out the compatible worker first, then the API and web client. No database
+migration or historical-result rewrite is required. Create a new risk run to
+verify the primary conditional volatility and both contribution tables; old
+Python results explicitly request recalculation and retain historical context.
+C# fallback results remain labelled as C# and keep their own model semantics.
+
 ## Research-only adjusted-close pipeline
 
 The adjustment pipeline is intentionally separate from the production

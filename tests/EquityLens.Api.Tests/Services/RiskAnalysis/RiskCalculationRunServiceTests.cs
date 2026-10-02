@@ -129,8 +129,10 @@ public sealed class RiskCalculationRunServiceTests
         Assert.True(list[0].CreatedAtUtc >= list[1].CreatedAtUtc);
     }
 
-    [Fact]
-    public async Task CompletePythonResultAsync_ValidVtGarch_CompletesWithModel()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompletePythonResultAsync_ValidVtGarch_CompletesWithModel(bool hasConditionalRisk)
     {
         await using var db = CreateDb();
         SeedPortfolio(db);
@@ -147,6 +149,12 @@ public sealed class RiskCalculationRunServiceTests
             {
                 portfolioId = PortfolioId.ToString(),
                 horizons = Array.Empty<object>(),
+                conditionalRisk = hasConditionalRisk ? new
+                {
+                    methodVersion = "vt-garch-residual-correlation-v1", horizonDays = 1,
+                    annualizationDays = 252, dailyVolatility = .01, annualizedVolatility = .158745,
+                    holdings = new[] { new { securityId = "snapshot-security", industry = "半導體", componentRiskShare = (decimal?)null } },
+                } : null,
                 fitHealth = new { healthy = true, warningCount = 0, nearUnitRate = 0.1, maxPersistence = 0.98, minNu = 5.0, optimizerAttempts = 2 },
             },
         }, JsonOptions);
@@ -161,6 +169,16 @@ public sealed class RiskCalculationRunServiceTests
         Assert.Equal(100, run.ProgressPercent);
         Assert.NotNull(run.FitHealthJson);
         Assert.NotNull(run.ResultJson);
+        var fetched = await service.GetAsync(PortfolioId, runId, UserId);
+        var conditional = fetched.Value!.Result!.Value.GetProperty("conditionalRisk");
+        if (hasConditionalRisk)
+        {
+            Assert.Equal("snapshot-security", conditional.GetProperty("holdings")[0].GetProperty("securityId").GetString());
+            Assert.Equal(JsonValueKind.Null, conditional.GetProperty("holdings")[0].GetProperty("componentRiskShare").ValueKind);
+            Assert.Equal(.158745, conditional.GetProperty("annualizedVolatility").GetDouble());
+        }
+        else Assert.Equal(JsonValueKind.Null, conditional.ValueKind);
+        Assert.False((await service.GetAsync(PortfolioId, runId, Guid.NewGuid())).IsSuccess);
     }
 
     [Fact]

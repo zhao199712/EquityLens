@@ -235,6 +235,7 @@ export interface VtGarchMonteCarloSummary {
   p50FinalReturn:number; p5FinalReturn:number; p1FinalReturn:number
 }
 export interface VtGarchRiskResult {
+  conditionalRisk?: ConditionalRisk | null
   portfolioId:string; dataAsOfDate:string; operation:string
   requestedModel:string; selectedModel:string; algorithmVersion:string; fallbackDepth:number
   simulations:number; lookbackDays:number
@@ -243,6 +244,39 @@ export interface VtGarchRiskResult {
   bands?:VtGarchBand[]; summary?:VtGarchMonteCarloSummary|null
   confidenceCurve?:VtGarchConfidencePoint[]; historical?:VtGarchHistoricalOneDay|null
   dailyLogReturns?:number[]
+}
+
+export interface ConditionalRiskContribution {
+  weight: number
+  componentVolatility: number | null
+  componentRiskShare: number | null
+  marginalVolatility: number | null
+  incrementalVolatility: number
+}
+
+export interface ConditionalHoldingRisk extends ConditionalRiskContribution {
+  securityId: string
+  ticker: string
+  exchange: string
+  securityName: string
+  industry: string
+  annualizedVolatility: number
+  dataPointCount: number
+}
+
+export interface ConditionalIndustryRisk extends ConditionalRiskContribution {
+  industry: string
+  holdingCount: number
+}
+
+export interface ConditionalRisk {
+  methodVersion: string
+  horizonDays: number
+  annualizationDays: number
+  dailyVolatility: number
+  annualizedVolatility: number
+  holdings: ConditionalHoldingRisk[]
+  industries: ConditionalIndustryRisk[]
 }
 
 export interface NormalizedHorizon {

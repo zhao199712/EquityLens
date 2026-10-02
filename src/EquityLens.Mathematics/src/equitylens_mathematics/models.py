@@ -5,6 +5,16 @@ from datetime import date
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+class RiskAsset(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    security_id: str = Field(alias="securityId", min_length=1)
+    ticker: str
+    exchange: str
+    security_name: str = Field(alias="securityName")
+    industry: str
+
+
 class RiskBacktestInput(BaseModel):
     model_config = ConfigDict(alias_generator=lambda value: value[0].lower() + value[1:], populate_by_name=True)
 
@@ -23,6 +33,7 @@ class RiskBacktestInput(BaseModel):
     portfolio_returns: list[float] = Field(alias="portfolioReturns")
     asset_returns: list[list[float]] = Field(alias="assetReturns", min_length=1)
     weights: list[float] = Field(min_length=1)
+    assets: list[RiskAsset] | None = None
 
     @field_validator("confidence_levels")
     @classmethod
@@ -38,6 +49,11 @@ class RiskBacktestInput(BaseModel):
             raise ValueError("return dates and portfolio returns must have equal lengths")
         if len(self.asset_returns) != len(self.weights):
             raise ValueError("asset return rows and weights must have equal lengths")
+        if self.assets is not None:
+            if len(self.assets) != len(self.weights):
+                raise ValueError("asset metadata and weights must have equal lengths")
+            if len({asset.security_id for asset in self.assets}) != len(self.assets):
+                raise ValueError("asset security IDs must be unique")
         if any(len(row) != count for row in self.asset_returns):
             raise ValueError("all asset return rows must have equal lengths")
         if count <= self.lookback_days:

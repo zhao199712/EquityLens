@@ -2,6 +2,8 @@
 import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
+import RiskSources from './RiskSources.vue'
+import { volatilityCard, riskPercent } from './riskPresentation'
 import Footer from '../../components/kimi/Footer.vue'
 import {
   getPortfolio,
@@ -149,8 +151,6 @@ const normalizedHorizons = computed<NormalizedHorizon[]>(() => {
   }
   return []
 })
-const annualizedVol = computed(() =>
-  vtGarchResult.value?.historicalAnnualizedVolatility ?? fallbackResult.value?.historicalAnnualizedVolatility ?? null)
 const maxDrawdown = computed(() =>
   vtGarchResult.value?.maxDrawdown ?? fallbackResult.value?.maxDrawdown ?? null)
 const totalMarketValue = computed(() =>
@@ -158,7 +158,6 @@ const totalMarketValue = computed(() =>
 const baseCurrency = computed(() => fallbackResult.value?.baseCurrency ?? portfolioCurrency.value)
 const hasHoldingsData = computed(() => !!fallbackResult.value?.holdings?.length)
 const holdingsRisk = computed(() => fallbackResult.value?.holdings ?? [])
-const industriesRisk = computed(() => fallbackResult.value?.industries ?? [])
 const dailyLogReturns = computed(() => vtGarchResult.value?.dailyLogReturns ?? fallbackResult.value?.dailyLogReturns ?? [])
 const garchOneDayComparison = computed(() => {
   const hist = vtGarchResult.value?.historical
@@ -301,11 +300,7 @@ const metrics = computed(() => {
       value: h1 ? `${(h1.es95 * 100).toFixed(2)}%` : '—',
       sub: 'Expected Shortfall',
     },
-    {
-      label: '年化波動率',
-      value: annualizedVol.value != null ? `${(annualizedVol.value * 100).toFixed(2)}%` : '—',
-      sub: 'Historical',
-    },
+    volatilityCard(isVtGarch.value, vtGarchResult.value, fallbackResult.value),
     {
       label: '最大回撤',
       value: maxDrawdown.value != null ? `${(maxDrawdown.value * 100).toFixed(2)}%` : '—',
@@ -492,7 +487,8 @@ const monteCarloDiagnostics = computed(() => {
       { label: '最大 persistence', value: fh.maxPersistence.toFixed(4) },
       { label: '最小 Student-ν', value: fh.minNu.toFixed(2) },
       { label: 'near-unit 比率', value: `${(fh.nearUnitRate * 100).toFixed(1)}%` },
-      { label: '年化投組波動率', value: percent(vt?.historicalAnnualizedVolatility ?? 0) },
+      { label: '條件波動率（年化）', value: riskPercent(vt?.conditionalRisk?.annualizedVolatility) },
+      { label: '歷史年化波動率', value: riskPercent(vt?.historicalAnnualizedVolatility) },
       { label: '期末 p95', value: lastBand ? percent(lastBand.p95) : '—' },
       { label: '期末 p99', value: lastBand ? percent(lastBand.p99) : '—' },
     ]
@@ -886,88 +882,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
           </section>
         </ScrollReveal>
 
-        <!-- Holdings Risk Contribution -->
-        <ScrollReveal v-if="hasHoldingsData" class="mt-20">
-          <div class="prestige-panel" style="margin-bottom: 40px">
-            <div class="section-head">
-              <h2 class="panel-title">持倉風險摘要</h2>
-              <span class="prestige-label">Holding Risk Summary — C# MVEWMA-FHS 回退資料</span>
-            </div>
-            <div class="section-body table-wrap">
-              <div class="holdings-headline">
-                風險來源模型年化波動率：<span class="prestige-mono hl">{{ ((fallbackResult?.riskSourceAnnualizedVolatility ?? 0) * 100).toFixed(2) }}%</span>
-              </div>
-              <table class="prestige-table">
-                <thead>
-                  <tr>
-                    <th>代號</th>
-                    <th>名稱</th>
-                    <th>產業</th>
-                    <th style="text-align: right">權重</th>
-                    <th style="text-align: right">年化波動率</th>
-                    <th style="text-align: right">Component</th>
-                    <th style="text-align: right">風險占比</th>
-                    <th style="text-align: right">Marginal（+1%）</th>
-                    <th style="text-align: right">Incremental</th>
-                    <th style="text-align: right">資料筆數</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="h in holdingsRisk" :key="h.securityId">
-                    <td>{{ h.ticker }}</td>
-                    <td>{{ h.securityName }}</td>
-                    <td class="td-muted">{{ h.industry }}</td>
-                    <td class="prestige-mono td-num">{{ (h.weight * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num" :class="{ 'td-warn': h.annualizedVolatility > 0.3 }">{{ (h.annualizedVolatility * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ (h.componentVolatility * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num" :class="h.componentRiskShare < 0 ? 'td-pos' : 'td-danger'">{{ (h.componentRiskShare * 100).toFixed(1) }}%</td>
-                    <td class="prestige-mono td-num">{{ h.marginalVolatility.toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ (h.incrementalVolatility * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ h.dataPointCount }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p class="table-note" style="padding: 0 24px 20px; margin-top: 0">
-              Component 可加總為上方的風險來源模型年化波動率；Marginal 為權重增加 1 個百分點的年化波動率變化；Incremental 假設移除部位後轉為現金。負值代表分散效果。
-            </p>
-          </div>
-        </ScrollReveal>
-
-        <ScrollReveal class="mt-20" v-if="industriesRisk.length">
-          <div class="prestige-panel" style="margin-bottom: 40px">
-            <div class="section-head">
-              <h2 class="panel-title">產業風險來源</h2>
-              <span class="prestige-label">Industry Risk Sources — 後端資料</span>
-            </div>
-            <div class="section-body table-wrap">
-              <table class="prestige-table">
-                <thead>
-                  <tr>
-                    <th>產業</th>
-                    <th style="text-align: right">持倉數</th>
-                    <th style="text-align: right">權重</th>
-                    <th style="text-align: right">Component</th>
-                    <th style="text-align: right">風險占比</th>
-                    <th style="text-align: right">Marginal（+1%）</th>
-                    <th style="text-align: right">Incremental</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="industry in industriesRisk" :key="industry.industry">
-                    <td>{{ industry.industry }}</td>
-                    <td class="prestige-mono td-num">{{ industry.holdingCount }}</td>
-                    <td class="prestige-mono td-num">{{ (industry.weight * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ (industry.componentVolatility * 100).toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num" :class="industry.componentRiskShare < 0 ? 'td-pos' : 'td-danger'">{{ (industry.componentRiskShare * 100).toFixed(1) }}%</td>
-                    <td class="prestige-mono td-num">{{ industry.marginalVolatility.toFixed(2) }}%</td>
-                    <td class="prestige-mono td-num">{{ (industry.incrementalVolatility * 100).toFixed(2) }}%</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </ScrollReveal>
+        <RiskSources :conditional="vtGarchResult?.conditionalRisk" :fallback="fallbackResult" />
 
         <!-- Run Info -->
         <ScrollReveal>

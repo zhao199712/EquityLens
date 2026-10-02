@@ -17,6 +17,7 @@ from .garch import (
     simulate_paths,
 )
 from .models import RiskBacktestInput
+from .conditional_risk import conditional_risk
 
 
 @dataclass(frozen=True)
@@ -315,6 +316,7 @@ def calculate_current_risk(
     portfolio_returns = np.asarray(input_data.portfolio_returns, dtype=np.float64)
     matrix = asset_returns[:, -input_data.lookback_days:]
     fit = fit_vt_garch(matrix)
+    risk_sources = conditional_risk(fit, weights, input_data.assets)
     if portfolio_returns.size >= 2:
         historical_annualized_volatility = float(
             np.std(portfolio_returns, ddof=1) * math.sqrt(252)
@@ -404,6 +406,7 @@ def calculate_current_risk(
             "simulations": simulations,
             "lookbackDays": input_data.lookback_days,
             "historicalAnnualizedVolatility": historical_annualized_volatility,
+            "conditionalRisk": risk_sources,
             "maxDrawdown": max_drawdown,
             "horizons": horizons,
             "confidenceCurve": confidence_curve,

@@ -301,7 +301,15 @@ public sealed class PortfolioRiskDataPreparer(
             commonDates.Skip(1).ToArray(),
             portfolioReturns,
             assetReturns,
-            weightList));
+            weightList,
+            assetIds.Select(id =>
+            {
+                var holding = holdings.Single(h => h.SecurityId == id);
+                var industry = string.IsNullOrWhiteSpace(holding.Industry)
+                    ? string.IsNullOrWhiteSpace(holding.Sector) ? "未分類" : holding.Sector
+                    : holding.Industry;
+                return new RiskAssetMetadata(id, holding.Ticker, holding.Exchange, holding.SecurityName, industry);
+            }).ToArray()));
     }
 
     public async Task<Result<PortfolioMonteCarloPreparedData>> PrepareMonteCarloAsync(

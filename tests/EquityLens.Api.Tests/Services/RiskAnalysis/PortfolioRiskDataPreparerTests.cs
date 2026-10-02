@@ -5,6 +5,8 @@ using EquityLens.Api.Repositories.Portfolios;
 using EquityLens.Api.Services.ExchangeRates;
 using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Tests.Infrastructure;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace EquityLens.Api.Tests.Services.RiskAnalysis;
 
@@ -97,6 +99,40 @@ public sealed class PortfolioRiskDataPreparerTests
         var expectedSecondReturn = (decimal)Math.Log((double)(200.6m / 200.5m));
         Assert.Equal(expectedSecondReturn, input.AssetReturns[0][0]);
         Assert.Equal(input.AssetReturns[0][0] * input.Weights[0] + input.AssetReturns[1][0] * input.Weights[1], input.PortfolioReturns[0]);
+        Assert.NotNull(input.Assets);
+        Assert.Equal(new[] { SecondSecurity, FirstSecurity }, input.Assets.Select(asset => asset.SecurityId));
+        Assert.Equal(new[] { "B", "A" }, input.Assets.Select(asset => asset.Ticker));
+        Assert.Equal(new[] { "金融", "半導體" }, input.Assets.Select(asset => asset.Industry));
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var json = JsonSerializer.Serialize(input, options);
+        var restored = JsonSerializer.Deserialize<RiskBacktestEngineInput>(json, options)!;
+        Assert.NotNull(restored.Assets);
+        Assert.Equal(input.Assets.ToArray(), restored.Assets.ToArray());
+        Assert.Equal(input.Weights, restored.Weights);
+        Assert.Equal(input.AssetReturns[0], restored.AssetReturns[0]);
+        db.Securities.Single(x => x.Id == FirstSecurity).Industry = "已變更";
+        await db.SaveChangesAsync();
+        Assert.Equal("半導體", input.Assets[1].Industry);
+        Assert.Equal("半導體", restored.Assets[1].Industry);
+
+        var legacy = JsonNode.Parse(json)!;
+        legacy.AsObject().Remove("assets");
+        Assert.Null(JsonSerializer.Deserialize<RiskBacktestEngineInput>(legacy.ToJsonString(), options)!.Assets);
+    }
+
+    [Fact]
+    public async Task Backtest_BlankClassificationUsesUnclassified()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var portfolio = await SeedAsync(db, 360);
+        var security = db.Securities.Single(x => x.Id == FirstSecurity);
+        security.Industry = " ";
+        security.Sector = null;
+        await db.SaveChangesAsync();
+        var result = await CreatePreparer(db).PreparePortfolioRiskBacktestInputAsync(
+            portfolio.Id, From, From.AddDays(360), portfolio.OwnerUserId, default);
+        Assert.Equal("未分類", result.Value!.Assets!.Single(x => x.SecurityId == FirstSecurity).Industry);
     }
 
     [Fact]
@@ -121,8 +157,8 @@ public sealed class PortfolioRiskDataPreparerTests
 
     private static async Task<Portfolio> SeedAsync(EquityLensDbContext db, int priceCount)
     {
-        var first = new Security { Id = FirstSecurity, Ticker = "A", Name = "First", Currency = "TWD" };
-        var second = new Security { Id = SecondSecurity, Ticker = "B", Name = "Second", Currency = "TWD" };
+        var first = new Security { Id = FirstSecurity, Ticker = "A", Name = "First", Currency = "TWD", Industry = "半導體", Sector = "科技" };
+        var second = new Security { Id = SecondSecurity, Ticker = "B", Name = "Second", Currency = "TWD", Industry = " ", Sector = "金融" };
         var portfolio = new Portfolio
         {
             Id = Guid.NewGuid(), OwnerUserId = Guid.NewGuid(), Name = "Fixture", BaseCurrency = "TWD",
