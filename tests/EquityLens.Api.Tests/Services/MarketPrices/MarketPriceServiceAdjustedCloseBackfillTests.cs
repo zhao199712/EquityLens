@@ -100,6 +100,89 @@ public sealed class MarketPriceServiceAdjustedCloseBackfillTests
     }
 
     [Fact]
+    public async Task ImportByTicker_YahooFails_KeepsExistingAdjustedClose()
+    {
+        var db = CreateDb();
+        db.Securities.Add(BuildSecurity("TWSE"));
+        db.MarketPrices.AddRange(BuildExisting(From, 1000m, 980m), BuildExisting(To, 1010m, 989.8m));
+        await db.SaveChangesAsync();
+
+        // FinMind 不提供還原價，Yahoo 整個失敗：既有還原價不能被洗成空值
+        var finmind = new FakeProvider("FinMind", [BuildPrice(From, 1000m, null), BuildPrice(To, 1010m, null)]);
+        var yahoo = new FakeProvider("YahooFinance", null);
+        var service = CreateService(db, finmind, yahoo);
+
+        var result = await service.ImportDailyPricesByTickerAsync(
+            new ImportMarketPricesByTickerRequest("2330", "TWSE", From, To, null, null, null, null, null, null), default);
+
+        Assert.True(result.IsSuccess);
+        var rows = await db.MarketPrices.OrderBy(x => x.PriceTime).ToListAsync();
+        Assert.Equal([980m, 989.8m], rows.Select(x => x.AdjustedClose!.Value));
+    }
+
+    [Fact]
+    public async Task ImportByTicker_YahooMissingDayWithStaleFactor_RepairsFromNeighbours()
+    {
+        var db = CreateDb();
+        db.Securities.Add(BuildSecurity("TWSE"));
+        var d1 = new DateOnly(2025, 7, 31);
+        var d2 = new DateOnly(2025, 8, 1);
+        var d3 = new DateOnly(2025, 8, 4);
+        // d2 保留的是除息前的舊因子 0.99；之後的除息讓 Yahoo 把整段改成 0.98，但 Yahoo 缺 d2
+        db.MarketPrices.Add(BuildExisting(d2, 1010m, 999.9m));
+        await db.SaveChangesAsync();
+
+        var finmind = new FakeProvider("FinMind", [BuildPrice(d1, 1000m, null), BuildPrice(d2, 1010m, null), BuildPrice(d3, 1020m, null)]);
+        var yahoo = new FakeProvider("YahooFinance", [BuildPrice(d1, 1000m, 980m), BuildPrice(d3, 1020m, 999.6m)]);
+        var service = CreateService(db, finmind, yahoo);
+
+        var result = await service.ImportDailyPricesByTickerAsync(
+            new ImportMarketPricesByTickerRequest("2330", "TWSE", d1, d3, null, null, null, null, null, null), default);
+
+        Assert.True(result.IsSuccess);
+        var rows = await db.MarketPrices.OrderBy(x => x.PriceTime).ToListAsync();
+        Assert.Equal([980m, 989.8m, 999.6m], rows.Select(x => x.AdjustedClose!.Value));
+    }
+
+    [Fact]
+    public async Task ImportByTicker_ExistingValueAcrossDividend_IsKept()
+    {
+        var db = CreateDb();
+        db.Securities.Add(BuildSecurity("TWSE"));
+        var d1 = new DateOnly(2025, 7, 31);
+        var d2 = new DateOnly(2025, 8, 1);
+        var d3 = new DateOnly(2025, 8, 4);
+        db.MarketPrices.Add(BuildExisting(d2, 1010m, 994.85m));
+        await db.SaveChangesAsync();
+
+        // 前後因子不同（0.98 vs 0.985）代表期間有除權息，無法判斷 d2 該用哪個因子，維持既有值
+        var finmind = new FakeProvider("FinMind", [BuildPrice(d1, 1000m, null), BuildPrice(d2, 1010m, null), BuildPrice(d3, 1020m, null)]);
+        var yahoo = new FakeProvider("YahooFinance", [BuildPrice(d1, 1000m, 980m), BuildPrice(d3, 1020m, 1004.7m)]);
+        var service = CreateService(db, finmind, yahoo);
+
+        var result = await service.ImportDailyPricesByTickerAsync(
+            new ImportMarketPricesByTickerRequest("2330", "TWSE", d1, d3, null, null, null, null, null, null), default);
+
+        Assert.True(result.IsSuccess);
+        var gap = await db.MarketPrices.SingleAsync(x => x.PriceTime == d2.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        Assert.Equal(994.85m, gap.AdjustedClose);
+    }
+
+    private static MarketPrice BuildExisting(DateOnly date, decimal close, decimal adjustedClose) => new()
+    {
+        SecurityId = SecurityId,
+        PriceTime = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+        Interval = "1d",
+        Open = close,
+        High = close,
+        Low = close,
+        Close = close,
+        AdjustedClose = adjustedClose,
+        Volume = 1000,
+        DataSource = "FinMind"
+    };
+
+    [Fact]
     public async Task ImportByTicker_GapAcrossDividend_LeavesAdjustedCloseNull()
     {
         var db = CreateDb();

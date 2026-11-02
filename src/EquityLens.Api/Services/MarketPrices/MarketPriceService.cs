@@ -375,7 +375,7 @@ public sealed class MarketPriceService : IMarketPriceService
             await _marketPriceRepository.UpdateAdjustedCloseAsync(
                 security.Id, adjustedCloseByDate, cancellationToken);
 
-            await FillAdjustedCloseGapsAsync(security, from, to, cancellationToken);
+            await FillAdjustedCloseGapsAsync(security, from, to, adjustedCloseByDate.Keys.ToHashSet(), cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -384,14 +384,16 @@ public sealed class MarketPriceService : IMarketPriceService
     }
 
     /// <summary>
-    /// 補齊 Yahoo 缺漏的單日還原收盤價。
-    /// 僅在缺漏日前後兩個交易日的還原因子（還原價 ÷ 收盤價）一致時，才以該因子乘上當日收盤價推算；
-    /// 因子不一致代表期間可能有除權息，維持空值，不以原始收盤價代替。
+    /// 補齊或校正 Yahoo 這次沒有提供的單日還原收盤價。
+    /// 僅在該日前後兩個交易日的還原因子（還原價 ÷ 收盤價）一致時，才以該因子乘上當日收盤價推算：
+    /// 該日為空值時補值；該日保留了舊值但因子與前後不一致（之後有新的除權息、舊因子已過期）時重算。
+    /// 前後因子不一致代表期間可能有除權息，維持原狀，不以原始收盤價代替。
     /// </summary>
     private async Task FillAdjustedCloseGapsAsync(
         Security security,
         DateOnly from,
         DateOnly to,
+        IReadOnlySet<DateOnly> providerDates,
         CancellationToken cancellationToken)
     {
         var rows = (await _marketPriceRepository.GetBySecurityAsync(security.Id, from, to, cancellationToken))
@@ -403,7 +405,8 @@ public sealed class MarketPriceService : IMarketPriceService
         for (var i = 1; i < rows.Count - 1; i++)
         {
             var current = rows[i];
-            if (current.AdjustedClose.HasValue || current.Close <= 0)
+            var date = DateOnly.FromDateTime(current.PriceTime);
+            if (providerDates.Contains(date) || current.Close <= 0)
             {
                 continue;
             }
@@ -416,14 +419,21 @@ public sealed class MarketPriceService : IMarketPriceService
                 continue;
             }
 
-            filled[DateOnly.FromDateTime(current.PriceTime)] = Math.Round(current.Close * previousFactor.Value, 6);
+            var currentFactor = AdjustmentFactor(current);
+            if (currentFactor is not null &&
+                Math.Abs(currentFactor.Value - previousFactor.Value) <= previousFactor.Value * AdjustmentFactorTolerance)
+            {
+                continue;
+            }
+
+            filled[date] = Math.Round(current.Close * previousFactor.Value, 6);
         }
 
         if (filled.Count > 0)
         {
             await _marketPriceRepository.UpdateAdjustedCloseAsync(security.Id, filled, cancellationToken);
             _logger.LogInformation(
-                "Filled {Count} adjusted-close gap(s) for {Ticker} ({Exchange}) from neighbouring adjustment factors.",
+                "Filled or repaired {Count} adjusted-close value(s) for {Ticker} ({Exchange}) from neighbouring adjustment factors.",
                 filled.Count, security.Ticker, security.Exchange);
         }
     }

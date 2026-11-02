@@ -107,7 +107,8 @@ public sealed class MarketPriceRepository : IMarketPriceRepository
                 existing.High = price.High;
                 existing.Low = price.Low;
                 existing.Close = price.Close;
-                existing.AdjustedClose = price.AdjustedClose;
+                // 來源沒給還原價（例如 FinMind 台股）時保留既有值，避免後續回補失敗時把歷史還原價洗成空值
+                existing.AdjustedClose = price.AdjustedClose ?? existing.AdjustedClose;
                 existing.Volume = price.Volume;
                 existing.DataSource = price.DataSource;
                 existing.UpdatedAtUtc = now;
