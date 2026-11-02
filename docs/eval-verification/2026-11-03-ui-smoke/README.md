@@ -88,3 +88,17 @@
 重整時也確認正式站已更新移除 Reports / Dashboard 的導覽入口（`faca94a` 的修改已可在瀏覽器看到）。
 
 ![Ask Agent 追問結果](ask-agent-followup.jpg)
+
+## AgentLoop UI 改版驗收（01:36）
+
+正式前端：`f684b20` + `46d697d`，Cloudflare Pages main 部署成功；GitHub 前端、後端、Mathematics、eval harness checks 全部成功。此次沒有部署後端或修改 DB schema。前端本地 18 files / 121 tests 通過。
+
+- 既有成功 run `e95c1787-e9f7-41ef-bb20-68a3d20f4633`：五階段、修訂不需要、EPS 66.26／66.25、第 58／10 頁引用、OutputGate 與 Critic 通過；LLM 2 turns、5995 tokens、US$0.006934（僅迴圈 LLM 記錄）。不再顯示 16/16。
+- 新問答 run `8dcbb37b-a2a6-454f-9071-681fedef9bce`：18.3 秒，完成研究及修訂，但 OutputGate `UntraceableNumbers` 拒絕。頁面正確區分 Succeeded 與 CitationValidationFailed；最終回覆資料不足、無引用。警告包含 money 1717882627000、shares 25928262000 的數值追溯問題。**此題答案驗收失敗，不算成財報正確性通過。** 此次只改前端，不放寬 gate。
+- 同對話追問 run `14973665-9c40-4131-8236-483c8707165e`：5.9 秒，稀釋 EPS 66.25 元，第 58／10 頁，OutputGate／Critic 通過；Ask Agent 與詳細頁答案一致。
+- 新兩次執行的迴圈 LLM 估算合計 US$0.031819（0.024918 + 0.006901），不含 Router/Critic/embedding/reranker，仍沿用既有 US$10 總預算保留額，不宣稱此為完整 API 帳單。
+- Ask Agent 執行中無暫存草稿或節點百分比；完成後顯示正式答案。卡片 API 沒有時間欄位，耗時導向詳情查閱。
+- 390×844 手機版五階段垂直排列，DOM scrollWidth/clientWidth 皆 390；已還原 viewport。ResearchAgent／WaitingForFeedback 篩選選項可見，ResearchAgent 篩選可用。
+- 本次未實際觸發取消、重試、人工批准；這些沿用既有功能並由前端回歸測試保障，不宣稱新增實機驗證。
+
+截圖：[成功摘要](agent-loop-summary.jpg)、[手機版](agent-loop-mobile.jpg)、[品質拒絕](agent-loop-refusal.jpg)、[新問答與追問](agent-loop-chat.jpg)。
