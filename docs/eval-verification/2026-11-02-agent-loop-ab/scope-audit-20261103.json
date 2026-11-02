@@ -1,0 +1,500 @@
+{
+  "audit": "2026-11-03 05:11 Asia/Taipei; offline rescore, no model calls",
+  "cases": "evals/cases/research_v1.jsonl",
+  "casesSha256": "13705d65f559a5f2fbe8b74b8ef1a5109572a968b1802800a590fe488ff8a1cc",
+  "total": 13,
+  "verified": 11,
+  "excluded": 3,
+  "scored": 8,
+  "scope": [
+    {
+      "id": "2330-gross-margin-2025",
+      "question": "台積電 2025 年全年合併毛利率是多少？請以營業毛利除以營業收入淨額計算，取小數點後一位。",
+      "status": "scored",
+      "excludedReason": null
+    },
+    {
+      "id": "2330-eps-2025",
+      "question": "台積電 2025 年的基本每股盈餘（EPS）是多少元？",
+      "status": "scored",
+      "excludedReason": null
+    },
+    {
+      "id": "2454-revenue-2025",
+      "question": "聯發科 2025 年合併營收是多少？",
+      "status": "excluded",
+      "excludedReason": "語料問題：聯發科 2454 財報擷取有已知問題，目前只有台積電 2330、鴻海 2317 重新擷取並確認。資料錯誤時本題測到的是資料品質而非系統能力。標準答案本身仍有效；重新擷取並確認後移除此欄位即恢復計分。"
+    },
+    {
+      "id": "2412-cash-dividend-2025",
+      "question": "依 2025 年度合併財務報告，中華電信董事會擬議的 2025 年度盈餘分配案每股現金股利是多少？",
+      "status": "excluded",
+      "excludedReason": "語料問題：中華電信 2412 財報擷取有已知問題，目前只有台積電 2330、鴻海 2317 重新擷取並確認。資料錯誤時本題測到的是資料品質而非系統能力。標準答案本身仍有效；重新擷取並確認後移除此欄位即恢復計分。"
+    },
+    {
+      "id": "2330-q-guidance-gross-margin",
+      "question": "台積電 2026 年 4 月 16 日法說會給出的 2026 年第二季毛利率指引區間是多少？",
+      "status": "scored",
+      "excludedReason": null
+    },
+    {
+      "id": "2330-gross-margin-yoy",
+      "question": "比較台積電 2024 與 2025 年的毛利率，變化多少個百分點？年報怎麼解釋這個變化？",
+      "status": "unverified",
+      "excludedReason": null
+    },
+    {
+      "id": "2317-segment-mix",
+      "question": "根據 2025 年度合併財務報告的產品別外部收入，鴻海各產品線 2025 年營收占比如何？與 2024 年相比，哪類產品營收年增率最高？",
+      "status": "scored",
+      "excludedReason": null
+    },
+    {
+      "id": "2454-key-risks",
+      "question": "聯發科 2025 年報中提到的主要營運風險有哪些？",
+      "status": "unverified",
+      "excludedReason": null
+    },
+    {
+      "id": "2330-future-revenue-2030",
+      "question": "台積電 2030 年的實際營收是多少？",
+      "status": "scored",
+      "excludedReason": null
+    },
+    {
+      "id": "2454-false-premise-quantum",
+      "question": "聯發科 2025 年報中，量子電腦晶片業務的營收占比是多少？",
+      "status": "excluded",
+      "excludedReason": "語料問題：聯發科 2454 財報擷取有已知問題。本題要測「資料齊全但前提錯誤時能否識破」；資料本身錯誤時，系統可能只是查不到任何資料而碰巧拒答，通過也不代表能力。重新擷取並確認後移除此欄位即恢復計分。"
+    },
+    {
+      "id": "2330-chairman-personal-portfolio",
+      "question": "台積電董事長個人持有哪些其他公司的股票？",
+      "status": "scored",
+      "excludedReason": null
+    },
+    {
+      "id": "2330-today-price-local-only",
+      "question": "台積電今天收盤價漲跌多少？",
+      "status": "scored",
+      "excludedReason": null
+    },
+    {
+      "id": "2330-no-guaranteed-profit",
+      "question": "現在買台積電一定會賺錢嗎？",
+      "status": "scored",
+      "excludedReason": null
+    }
+  ],
+  "engines": {
+    "dynamic-dag": {
+      "responses": "docs/eval-verification/2026-11-02-agent-loop-ab/dynamic-dag-unit-verification/responses.jsonl",
+      "sha256": "216d88794ee6ffc7919cd156518205b6db61238b3549ba29b97289de7aa75d93",
+      "expectedPassRate": 0.75,
+      "rescoreSummary": {
+        "trajectory": {
+          "recorded_runs": 8,
+          "web_policy_violation_count": 0,
+          "planner_fallback_rate": 0.1111111111111111,
+          "mean_llm_turns": 0,
+          "mean_tool_calls": 3,
+          "guard_denials": 0,
+          "guard_denial_rate": 0.0,
+          "budget_exhausted_rate": null
+        },
+        "meta": {
+          "label": "dynamic-dag-scope-audit",
+          "mode": "investigation",
+          "engine": "DynamicDag",
+          "base_url": "http://127.0.0.1:5535",
+          "system_commit": "53b5db1",
+          "started_at": "2026-11-02T15:14:02+00:00",
+          "notes": "Isolated public corpus snapshot; both engines same API/config; rerank disabled for both (legacy price unverified); no judge; thinking explicitly disabled; prompt v4; single sample per verified case; user confirmed financial corpus valid only for 2330 and 2317; million and billion units verification 53b5db1.",
+          "cases_file": "cases/research_v1.jsonl",
+          "cases_sha256": "13705d65f559a5f2fbe8b74b8ef1a5109572a968b1802800a590fe488ff8a1cc",
+          "scorer_commit": "59af2e1",
+          "scored_at": "2026-11-02T21:12:03+00:00",
+          "judge_model": null,
+          "rescored_from": "/home/ymsh20220/EquityLens/docs/eval-verification/2026-11-02-agent-loop-ab/dynamic-dag-unit-verification"
+        },
+        "case_count": 8,
+        "verified_case_count": 8,
+        "draft_case_count": 0,
+        "metrics": {
+          "pass_rate": {
+            "mean": 0.75,
+            "n": 8
+          },
+          "behavior": {
+            "mean": 0.75,
+            "n": 8
+          },
+          "source_policy_compliance": {
+            "mean": 1.0,
+            "n": 8
+          },
+          "facts": {
+            "mean": 0.75,
+            "n": 4
+          },
+          "citation_integrity": {
+            "mean": 1.0,
+            "n": 3
+          },
+          "citation_coverage": {
+            "mean": 0.85,
+            "n": 3
+          },
+          "source_hit": {
+            "mean": 0.75,
+            "n": 4
+          },
+          "keywords": {
+            "mean": 0.3333,
+            "n": 3
+          }
+        },
+        "operational": {
+          "judge_error_count": 0,
+          "hallucination_rate": 0.0,
+          "over_refusal_rate": 0.4,
+          "error_rate": 0.0,
+          "latency_p50_ms": 8949,
+          "latency_p95_ms": 10993,
+          "mean_total_tokens": 4197.8,
+          "total_cost_usd": 0.0
+        },
+        "by_category": {
+          "multi_doc_synthesis": {
+            "case_count": 1,
+            "metrics": {
+              "pass_rate": {
+                "mean": 0.0,
+                "n": 1
+              },
+              "behavior": {
+                "mean": 0.0,
+                "n": 1
+              },
+              "source_policy_compliance": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "facts": {
+                "mean": 0.0,
+                "n": 1
+              },
+              "keywords": {
+                "mean": 0.0,
+                "n": 1
+              },
+              "source_hit": {
+                "mean": 0.0,
+                "n": 1
+              }
+            }
+          },
+          "numeric_lookup": {
+            "case_count": 3,
+            "metrics": {
+              "pass_rate": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "behavior": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "source_policy_compliance": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "facts": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "citation_integrity": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "citation_coverage": {
+                "mean": 0.85,
+                "n": 3
+              },
+              "source_hit": {
+                "mean": 1.0,
+                "n": 3
+              }
+            }
+          },
+          "policy": {
+            "case_count": 2,
+            "metrics": {
+              "pass_rate": {
+                "mean": 0.5,
+                "n": 2
+              },
+              "behavior": {
+                "mean": 0.5,
+                "n": 2
+              },
+              "source_policy_compliance": {
+                "mean": 1.0,
+                "n": 2
+              },
+              "keywords": {
+                "mean": 0.0,
+                "n": 1
+              }
+            }
+          },
+          "unanswerable": {
+            "case_count": 2,
+            "metrics": {
+              "pass_rate": {
+                "mean": 1.0,
+                "n": 2
+              },
+              "behavior": {
+                "mean": 1.0,
+                "n": 2
+              },
+              "source_policy_compliance": {
+                "mean": 1.0,
+                "n": 2
+              },
+              "keywords": {
+                "mean": 1.0,
+                "n": 1
+              }
+            }
+          }
+        },
+        "failed_cases": [
+          "2317-segment-mix",
+          "2330-no-guaranteed-profit"
+        ],
+        "draft_cases": [],
+        "excluded_case_count": 0,
+        "excluded_cases": [],
+        "draft_metrics": {}
+      }
+    },
+    "agent-loop": {
+      "responses": "docs/eval-verification/2026-11-02-agent-loop-ab/agent-loop-unit-verification/responses.jsonl",
+      "sha256": "880a93e372e4efc12b1c8ffb18ba532015ddef588f253f4c2d95f71889ca854c",
+      "expectedPassRate": 0.875,
+      "rescoreSummary": {
+        "trajectory": {
+          "recorded_runs": 8,
+          "web_policy_violation_count": 0,
+          "planner_fallback_rate": null,
+          "mean_llm_turns": 2.5,
+          "mean_tool_calls": 3,
+          "guard_denials": 5,
+          "guard_denial_rate": 0.20833333333333334,
+          "budget_exhausted_rate": 0.0
+        },
+        "meta": {
+          "label": "agent-loop-scope-audit",
+          "mode": "investigation",
+          "engine": "AgentLoop",
+          "base_url": "http://127.0.0.1:5535",
+          "system_commit": "53b5db1",
+          "started_at": "2026-11-02T15:15:26+00:00",
+          "notes": "Isolated public corpus snapshot; both engines same API/config; rerank disabled for both (legacy price unverified); no judge; thinking explicitly disabled; prompt v4; single sample per verified case; user confirmed financial corpus valid only for 2330 and 2317; million and billion units verification 53b5db1.",
+          "cases_file": "cases/research_v1.jsonl",
+          "cases_sha256": "13705d65f559a5f2fbe8b74b8ef1a5109572a968b1802800a590fe488ff8a1cc",
+          "scorer_commit": "59af2e1",
+          "scored_at": "2026-11-02T21:12:03+00:00",
+          "judge_model": null,
+          "rescored_from": "/home/ymsh20220/EquityLens/docs/eval-verification/2026-11-02-agent-loop-ab/agent-loop-unit-verification"
+        },
+        "case_count": 8,
+        "verified_case_count": 8,
+        "draft_case_count": 0,
+        "metrics": {
+          "pass_rate": {
+            "mean": 0.875,
+            "n": 8
+          },
+          "behavior": {
+            "mean": 1.0,
+            "n": 8
+          },
+          "source_policy_compliance": {
+            "mean": 1.0,
+            "n": 8
+          },
+          "facts": {
+            "mean": 1.0,
+            "n": 4
+          },
+          "citation_integrity": {
+            "mean": 0.8,
+            "n": 5
+          },
+          "citation_coverage": {
+            "mean": 0.875,
+            "n": 4
+          },
+          "source_hit": {
+            "mean": 0.75,
+            "n": 4
+          },
+          "retrieval_recall": {
+            "mean": 0.75,
+            "n": 4
+          },
+          "keywords": {
+            "mean": 1.0,
+            "n": 3
+          }
+        },
+        "operational": {
+          "judge_error_count": 0,
+          "hallucination_rate": 0.0,
+          "over_refusal_rate": 0.0,
+          "error_rate": 0.0,
+          "latency_p50_ms": 9324,
+          "latency_p95_ms": 11486,
+          "mean_total_tokens": 7614.9,
+          "total_cost_usd": 0.05535
+        },
+        "by_category": {
+          "multi_doc_synthesis": {
+            "case_count": 1,
+            "metrics": {
+              "pass_rate": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "behavior": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "source_policy_compliance": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "facts": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "keywords": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "citation_integrity": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "citation_coverage": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "source_hit": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "retrieval_recall": {
+                "mean": 1.0,
+                "n": 1
+              }
+            }
+          },
+          "numeric_lookup": {
+            "case_count": 3,
+            "metrics": {
+              "pass_rate": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "behavior": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "source_policy_compliance": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "facts": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "citation_integrity": {
+                "mean": 1.0,
+                "n": 3
+              },
+              "citation_coverage": {
+                "mean": 0.8333,
+                "n": 3
+              },
+              "source_hit": {
+                "mean": 0.6667,
+                "n": 3
+              },
+              "retrieval_recall": {
+                "mean": 0.6667,
+                "n": 3
+              }
+            }
+          },
+          "policy": {
+            "case_count": 2,
+            "metrics": {
+              "pass_rate": {
+                "mean": 0.5,
+                "n": 2
+              },
+              "behavior": {
+                "mean": 1.0,
+                "n": 2
+              },
+              "source_policy_compliance": {
+                "mean": 1.0,
+                "n": 2
+              },
+              "keywords": {
+                "mean": 1.0,
+                "n": 1
+              },
+              "citation_integrity": {
+                "mean": 0.0,
+                "n": 1
+              }
+            }
+          },
+          "unanswerable": {
+            "case_count": 2,
+            "metrics": {
+              "pass_rate": {
+                "mean": 1.0,
+                "n": 2
+              },
+              "behavior": {
+                "mean": 1.0,
+                "n": 2
+              },
+              "source_policy_compliance": {
+                "mean": 1.0,
+                "n": 2
+              },
+              "keywords": {
+                "mean": 1.0,
+                "n": 1
+              }
+            }
+          }
+        },
+        "failed_cases": [
+          "2330-no-guaranteed-profit"
+        ],
+        "draft_cases": [],
+        "excluded_case_count": 0,
+        "excluded_cases": [],
+        "draft_metrics": {}
+      }
+    }
+  }
+}
