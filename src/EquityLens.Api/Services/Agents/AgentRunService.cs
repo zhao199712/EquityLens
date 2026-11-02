@@ -181,9 +181,12 @@ public sealed class AgentRunService : IAgentRunService
         if (!isOwner) throw new InvalidOperationException("Portfolio was not found.");
         var provider = _portfolioDiagnosisProvider ?? throw new InvalidOperationException("PortfolioDiagnosis workflow provider is not registered.");
         var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var start = from ?? end.AddMonths(-1);
+        var start = from ?? end.AddYears(-1);
         if (start >= end) throw new InvalidOperationException("Diagnosis start date must be before end date.");
+        if (routingContext?.ParentAgentRunId is Guid parentId && !await _dbContext.AgentRuns.AnyAsync(x => x.Id == parentId && x.UserId == userId && x.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis && x.Status == AgentRunStatuses.Succeeded, cancellationToken))
+            throw new InvalidOperationException("Parent portfolio diagnosis was not found or is not complete.");
         var run = provider.CreateRun(userId, portfolioId, start, end, routingContext);
+        run.ParentAgentRunId = routingContext?.ParentAgentRunId;
         await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.AgentRuns.Add(run);
         AddEvent(run, null, AgentEventTypes.RunCreated, "PortfolioDiagnosis run created.", new { portfolioId, from = start, to = end });
