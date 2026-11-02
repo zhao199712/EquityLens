@@ -1,0 +1,8 @@
+{
+  "label": "isolated-retrieval-policy-final",
+  "mode": "ask",
+  "base_url": "http://127.0.0.1:5039",
+  "system_commit": "dda2e55f21212ea7f3cbab2548c8237457989a53",
+  "started_at": "2026-11-02T10:07:34+00:00",
+  "notes": "Isolated API with public imported corpus only (241 documents, 8363 chunks/embeddings); prompt hashes verified equal to production; local provider config deepseek-v4-flash (response model deepseek-flash), Hybrid+Cohere; default topK=8 and temperature=0.2; ordinary test user; no judge; no production deployment."
+}
