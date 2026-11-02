@@ -32,8 +32,9 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
 
         try
         {
-            var apiKey = _configuration["OpenAI:ApiKey"]
-                ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
+            // compose 未設定變數時會傳入空字串，空白值一律視為未設定
+            var apiKey = new[] { _configuration["OpenAI:ApiKey"], Environment.GetEnvironmentVariable("OPENAI_API_KEY") }
+                .FirstOrDefault(key => !string.IsNullOrWhiteSpace(key))
                 ?? throw new InvalidOperationException("OpenAI API key is not configured. Set OpenAI:ApiKey or OPENAI_API_KEY.");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, EmbeddingsEndpoint);

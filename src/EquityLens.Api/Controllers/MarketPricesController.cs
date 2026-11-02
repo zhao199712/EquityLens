@@ -1,5 +1,6 @@
 using EquityLens.Api.Contracts.MarketPrices;
 using EquityLens.Api.Services.MarketPrices;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EquityLens.Api.Controllers;
@@ -49,6 +50,7 @@ public sealed class MarketPricesController : ApiControllerBase
     /// <param name="cancellationToken">取消權杖。</param>
     /// <returns>導入結果；若證券不存在、交易所不支援或資料提供者發生錯誤則返回對應錯誤。</returns>
     [HttpPost("import")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ImportMarketPricesResponse>> ImportPrices(
         Guid securityId,
         ImportMarketPricesRequest request,
@@ -64,20 +66,27 @@ public sealed class MarketPricesController : ApiControllerBase
     /// </summary>
     /// <param name="securityId">證券的唯一識別碼。</param>
     /// <param name="days">拉取最近幾天的日線資料（預設 365）。</param>
-    /// <param name="force">是否強制同步，忽略今日已同步的檢查（預設 false）。</param>
+    /// <param name="force">是否強制同步，忽略今日已同步的檢查（預設 false）；僅限管理員。</param>
     /// <param name="cancellationToken">取消權杖。</param>
     /// <returns>
     /// 同步結果，包含是否實際觸發同步；
-    /// 若證券不存在則返回 404；
+    /// 若證券不存在則返回 404；非管理員要求強制同步則返回 403；
     /// 若交易所不支援則返回對應錯誤。
     /// </returns>
     [HttpPost("sync")]
+    [Authorize]
     public async Task<ActionResult<SyncMarketPricesResponse>> SyncPrices(
         Guid securityId,
         [FromQuery] int days = 365,
         [FromQuery] bool force = false,
         CancellationToken cancellationToken = default)
     {
+        // 強制同步會略過「今日已同步」檢查、必定呼叫外部 API，僅限管理員使用。
+        if (force && !User.IsInRole("Admin"))
+        {
+            return Forbid();
+        }
+
         var result = await _marketPriceService.SyncDailyPricesAsync(securityId, days, force, cancellationToken);
         return ToActionResult(result);
     }

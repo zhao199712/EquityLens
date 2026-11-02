@@ -2,6 +2,7 @@ using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Securities;
 using EquityLens.Api.Services.MarketPrices;
 using EquityLens.Api.Services.Securities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EquityLens.Api.Controllers;
@@ -83,6 +84,7 @@ public class SecuritiesController : ApiControllerBase
     /// 若證券不存在於本地與外部則返回錯誤碼 <c>security.not_found</c>。
     /// </returns>
     [HttpPost("resolve")]
+    [Authorize]
     public async Task<ActionResult<ResolveSecurityResponse>> ResolveSecurity(
         ResolveSecurityRequest request,
         CancellationToken cancellationToken)
@@ -99,6 +101,7 @@ public class SecuritiesController : ApiControllerBase
     /// <param name="cancellationToken">取消權杖。</param>
     /// <returns>刷新結果統計。</returns>
     [HttpPost("refresh-all")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<RefreshSecuritiesResponse>> RefreshAllSecurities(
         [FromQuery] bool force = false,
         [FromQuery] int limit = 100,
@@ -118,6 +121,7 @@ public class SecuritiesController : ApiControllerBase
     /// <param name="cancellationToken">取消權杖。</param>
     /// <returns>批次刷新結果統計。</returns>
     [HttpPost("refresh-all-prices")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<RefreshSecuritiesPricesResponse>> RefreshAllPrices(
         [FromQuery] int days = 365,
         [FromQuery] bool force = false,

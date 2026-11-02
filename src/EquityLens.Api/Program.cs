@@ -32,9 +32,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseForwardedHeaders(); // 必須最先執行：讓後面的限流與日誌拿到 Caddy 轉發的真實 IP
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter(); // 放在授權之後：未登入的請求先被 401 擋下，限流才能依使用者分區
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 app.MapControllers();
 if (e2eTestMode) app.MapEquityLensE2E();

@@ -17,6 +17,9 @@ public sealed class MarketPriceService : IMarketPriceService
 {
     private const string DailyInterval = "1d";
 
+    // 前後還原因子相對差距容忍值；最小的除權息約 0.1% 以上，0.01% 足以吸收 Yahoo 小數進位誤差。
+    private const decimal AdjustmentFactorTolerance = 0.0001m;
+
     private readonly EquityLensDbContext _dbContext;
     private readonly ISecurityRepository _securityRepository;
     private readonly IMarketPriceRepository _marketPriceRepository;
@@ -371,12 +374,64 @@ public sealed class MarketPriceService : IMarketPriceService
 
             await _marketPriceRepository.UpdateAdjustedCloseAsync(
                 security.Id, adjustedCloseByDate, cancellationToken);
+
+            await FillAdjustedCloseGapsAsync(security, from, to, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "Adjusted-close backfill failed for {Ticker} ({Exchange}).", security.Ticker, security.Exchange);
         }
     }
+
+    /// <summary>
+    /// 補齊 Yahoo 缺漏的單日還原收盤價。
+    /// 僅在缺漏日前後兩個交易日的還原因子（還原價 ÷ 收盤價）一致時，才以該因子乘上當日收盤價推算；
+    /// 因子不一致代表期間可能有除權息，維持空值，不以原始收盤價代替。
+    /// </summary>
+    private async Task FillAdjustedCloseGapsAsync(
+        Security security,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken)
+    {
+        var rows = (await _marketPriceRepository.GetBySecurityAsync(security.Id, from, to, cancellationToken))
+            .Where(x => x.Interval == DailyInterval)
+            .OrderBy(x => x.PriceTime)
+            .ToList();
+
+        var filled = new Dictionary<DateOnly, decimal>();
+        for (var i = 1; i < rows.Count - 1; i++)
+        {
+            var current = rows[i];
+            if (current.AdjustedClose.HasValue || current.Close <= 0)
+            {
+                continue;
+            }
+
+            var previousFactor = AdjustmentFactor(rows[i - 1]);
+            var nextFactor = AdjustmentFactor(rows[i + 1]);
+            if (previousFactor is null || nextFactor is null ||
+                Math.Abs(previousFactor.Value - nextFactor.Value) > nextFactor.Value * AdjustmentFactorTolerance)
+            {
+                continue;
+            }
+
+            filled[DateOnly.FromDateTime(current.PriceTime)] = Math.Round(current.Close * previousFactor.Value, 6);
+        }
+
+        if (filled.Count > 0)
+        {
+            await _marketPriceRepository.UpdateAdjustedCloseAsync(security.Id, filled, cancellationToken);
+            _logger.LogInformation(
+                "Filled {Count} adjusted-close gap(s) for {Ticker} ({Exchange}) from neighbouring adjustment factors.",
+                filled.Count, security.Ticker, security.Exchange);
+        }
+    }
+
+    private static decimal? AdjustmentFactor(MarketPriceResponse price) =>
+        price.AdjustedClose is { } adjusted && adjusted > 0 && price.Close > 0
+            ? adjusted / price.Close
+            : null;
 
     private IReadOnlyList<IMarketDataProvider> GetOrderedPriceProviders(string exchange)
     {

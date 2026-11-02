@@ -1,3 +1,4 @@
+using EquityLens.Api.Common;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Auth;
 using EquityLens.Api.Services.CurrentUser;
@@ -74,6 +75,10 @@ public static class HttpRegistration
                       .AllowCredentials();
             });
         });
+
+        // 付費 LLM 端點的速率限制
+        builder.Services.AddEquityLensRateLimiting(builder.Configuration);
+        builder.Services.AddEquityLensForwardedHeaders();
 
         // CurrentUser context
         builder.Services.AddHttpContextAccessor();

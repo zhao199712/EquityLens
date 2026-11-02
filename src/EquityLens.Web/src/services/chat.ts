@@ -80,7 +80,15 @@ export function sendMessageStream(
     body: JSON.stringify({ content, requestId: crypto.randomUUID() }),
   }).then(async (response) => {
     if (!response.ok) {
-      onError(`HTTP ${response.status}`)
+      // 429 (rate / active-run limits) and other API errors carry a readable ApiError message
+      let message = `HTTP ${response.status}`
+      try {
+        const body = (await response.json()) as { message?: string }
+        if (body?.message) message = body.message
+      } catch {
+        // non-JSON error body: keep the status text
+      }
+      onError(message)
       return
     }
 

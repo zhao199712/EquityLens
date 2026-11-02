@@ -1,0 +1,1 @@
+"""EquityLens research eval harness."""

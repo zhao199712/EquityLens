@@ -77,6 +77,74 @@ public sealed class MarketPriceServiceAdjustedCloseBackfillTests
         Assert.Equal(1, yahoo.GetDailyPricesCallCount);
     }
 
+    [Fact]
+    public async Task ImportByTicker_YahooMissingOneDay_FillsGapFromMatchingNeighbourFactors()
+    {
+        var db = CreateDb();
+        db.Securities.Add(BuildSecurity("TWSE"));
+        await db.SaveChangesAsync();
+
+        var d1 = new DateOnly(2025, 7, 31);
+        var d2 = new DateOnly(2025, 8, 1);
+        var d3 = new DateOnly(2025, 8, 4);
+        var finmind = new FakeProvider("FinMind", [BuildPrice(d1, 1000m, null), BuildPrice(d2, 1010m, null), BuildPrice(d3, 1020m, null)]);
+        var yahoo = new FakeProvider("YahooFinance", [BuildPrice(d1, 1000m, 980m), BuildPrice(d3, 1020m, 999.6m)]);
+        var service = CreateService(db, finmind, yahoo);
+
+        var result = await service.ImportDailyPricesByTickerAsync(
+            new ImportMarketPricesByTickerRequest("2330", "TWSE", d1, d3, null, null, null, null, null, null), default);
+
+        Assert.True(result.IsSuccess);
+        var rows = await db.MarketPrices.OrderBy(x => x.PriceTime).ToListAsync();
+        Assert.Equal([980m, 989.8m, 999.6m], rows.Select(x => x.AdjustedClose!.Value));
+    }
+
+    [Fact]
+    public async Task ImportByTicker_GapAcrossDividend_LeavesAdjustedCloseNull()
+    {
+        var db = CreateDb();
+        db.Securities.Add(BuildSecurity("TWSE"));
+        await db.SaveChangesAsync();
+
+        var d1 = new DateOnly(2025, 7, 31);
+        var d2 = new DateOnly(2025, 8, 1);
+        var d3 = new DateOnly(2025, 8, 4);
+        // d1 與 d3 的還原因子不同（0.98 vs 0.985），代表期間有除權息
+        var finmind = new FakeProvider("FinMind", [BuildPrice(d1, 1000m, null), BuildPrice(d2, 1010m, null), BuildPrice(d3, 1020m, null)]);
+        var yahoo = new FakeProvider("YahooFinance", [BuildPrice(d1, 1000m, 980m), BuildPrice(d3, 1020m, 1004.7m)]);
+        var service = CreateService(db, finmind, yahoo);
+
+        var result = await service.ImportDailyPricesByTickerAsync(
+            new ImportMarketPricesByTickerRequest("2330", "TWSE", d1, d3, null, null, null, null, null, null), default);
+
+        Assert.True(result.IsSuccess);
+        var gap = await db.MarketPrices.SingleAsync(x => x.PriceTime == d2.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        Assert.Null(gap.AdjustedClose);
+    }
+
+    [Fact]
+    public async Task ImportByTicker_GapAtWindowEdge_LeavesAdjustedCloseNull()
+    {
+        var db = CreateDb();
+        db.Securities.Add(BuildSecurity("TWSE"));
+        await db.SaveChangesAsync();
+
+        var finmind = new FakeProvider("FinMind", [BuildPrice(From, 1000m, null), BuildPrice(To, 1010m, null)]);
+        var yahoo = new FakeProvider("YahooFinance", [BuildPrice(From, 1000m, 980m)]);
+        var service = CreateService(db, finmind, yahoo);
+
+        var result = await service.ImportDailyPricesByTickerAsync(
+            new ImportMarketPricesByTickerRequest("2330", "TWSE", From, To, null, null, null, null, null, null), default);
+
+        Assert.True(result.IsSuccess);
+        var rows = await db.MarketPrices.OrderBy(x => x.PriceTime).ToListAsync();
+        Assert.Equal(980m, rows[0].AdjustedClose);
+        Assert.Null(rows[1].AdjustedClose);
+    }
+
+    private static ImportedMarketPrice BuildPrice(DateOnly date, decimal close, decimal? adjustedClose) =>
+        new(date, close, close, close, close, adjustedClose, 1000);
+
     private static Security BuildSecurity(string exchange) => new()
     {
         Id = SecurityId,
