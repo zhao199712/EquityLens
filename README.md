@@ -58,19 +58,11 @@ AI 研究與證據驗證
 
 ### AI Research Workflow
 
-研究流程採用 **固定 DAG＋Agent Loop**：LLM 決定搜尋工具、查詢內容與回答，程式控制權限、預算與品質驗收。
+- 以自然語言提出財報與投資研究問題
+- 搜尋研究資料，產生附來源引用的回答
+- 查看研究紀錄、證據與執行結果
 
-```text
-問題 → Agent Loop 搜尋與起草 → 品質檢查 → 最終答案
-                                 ↓ 未通過
-                              修訂並重新檢查
-```
-
-- 引用與數值由 Output Gate 檢查，證據是否支持結論由 Critic 檢查。
-- 最多修訂一次，仍未通過則拒答。
-- 決策與工具結果持久化，支援執行追蹤與中斷恢復。
-
-詳見[架構設計](docs/architecture/research-agent-runtime.md)與[A/B 實測](docs/eval-verification/2026-11-02-agent-loop-ab/README.md)。
+[研究功能文件](docs/architecture/research-agent-runtime.md) · [A/B 實測](docs/eval-verification/2026-11-02-agent-loop-ab/README.md)
 
 ---
 
@@ -106,9 +98,6 @@ AI 研究與證據驗證
 
 - **進階風險模型**  
   除了常見 VaR / ES，也整合 EWMA、Monte Carlo 與 MVEWMA-FHS。
-
-- **受限制的 Agent 架構**  
-  固定 DAG 管理執行階段，LLM 在有界工具迴圈內決定研究步驟；程式控制權限、預算與品質檢查。
 
 - **可追蹤的研究流程**  
   Node 執行、證據、Tool Call、成本與最終輸出皆可保存與稽核。
