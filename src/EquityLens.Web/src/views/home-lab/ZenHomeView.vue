@@ -257,8 +257,8 @@ const feedStatusLabel: Record<string, string> = {
           讓每一個投資決策都有證據可循
         </p>
         <div class="hero-cta hero-fade">
-          <button class="zen-btn zen-btn-solid" @click="router.push({ name: 'dashboard' })">
-            進入儀表板
+          <button class="zen-btn zen-btn-solid" @click="router.push({ name: 'portfolios' })">
+            查看投資組合
           </button>
           <button class="zen-btn zen-btn-ghost" @click="router.push({ name: 'research' })">
             查看 AI 研究

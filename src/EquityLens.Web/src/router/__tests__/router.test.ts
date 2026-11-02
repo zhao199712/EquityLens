@@ -22,7 +22,7 @@ describe('router guard', () => {
       expect(store.isAuthenticated).toBe(false)
 
       // 模擬 router guard 邏輯
-      const to = { meta: { requiresAuth: true }, name: 'dashboard' }
+      const to = { meta: { requiresAuth: true }, name: 'portfolios' }
       if (to.meta.requiresAuth !== false && !store.isAuthenticated) {
         expect(true).toBe(true) // 應該導向 login
       }
@@ -56,8 +56,8 @@ describe('router guard', () => {
 
       const to = { meta: { requiresAuth: false }, name: 'login' }
       const isAuthPage = to.name === 'login' || to.name === 'register'
-      const shouldRedirectToDashboard = isAuthPage && store.isAuthenticated
-      expect(shouldRedirectToDashboard).toBe(true)
+      const shouldRedirectToPortfolios = isAuthPage && store.isAuthenticated
+      expect(shouldRedirectToPortfolios).toBe(true)
     })
 
     it('已登入時不應停留在 register 頁', async () => {
@@ -67,8 +67,8 @@ describe('router guard', () => {
 
       const to = { meta: { requiresAuth: false }, name: 'register' }
       const isAuthPage = to.name === 'login' || to.name === 'register'
-      const shouldRedirectToDashboard = isAuthPage && store.isAuthenticated
-      expect(shouldRedirectToDashboard).toBe(true)
+      const shouldRedirectToPortfolios = isAuthPage && store.isAuthenticated
+      expect(shouldRedirectToPortfolios).toBe(true)
     })
 
     it('已登入時可正常訪問需認證的頁面', () => {
@@ -76,7 +76,7 @@ describe('router guard', () => {
       sessionStorage.setItem('auth_token', 'some-token')
       store.token = 'some-token'
 
-      const to = { meta: { requiresAuth: true }, name: 'dashboard' }
+      const to = { meta: { requiresAuth: true }, name: 'portfolios' }
       const shouldRedirectToLogin = to.meta.requiresAuth !== false && !store.isAuthenticated
       expect(shouldRedirectToLogin).toBe(false)
     })

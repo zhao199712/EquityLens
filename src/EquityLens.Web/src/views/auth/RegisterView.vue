@@ -20,7 +20,7 @@ const loading = ref(false)
 const error = ref('')
 
 function redirectAfterLogin() {
-  router.push({ name: authStore.user?.role === 'Admin' ? 'admin-agent-runs' : 'dashboard' })
+  router.push({ name: authStore.user?.role === 'Admin' ? 'admin-agent-runs' : 'portfolios' })
 }
 
 async function handleRegister() {
@@ -44,7 +44,7 @@ async function handleRegister() {
 
   try {
     await authStore.register(email.value, password.value, displayName.value || undefined)
-    router.push({ name: 'dashboard' })
+    router.push({ name: 'portfolios' })
   } catch (e: any) {
     const msg = e?.response?.data?.message
     if (e?.response?.status === 409) {

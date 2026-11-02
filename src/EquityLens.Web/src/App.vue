@@ -91,10 +91,9 @@ const themeOverrides = {
 }
 
 const activeMenuKey = computed(() => {
-  const name = String(route.name ?? 'dashboard')
+  const name = String(route.name ?? 'home')
   if (name.startsWith('portfolio')) return 'portfolios'
   if (name.startsWith('risk-run')) return 'risk-runs'
-  if (name.startsWith('financial-report')) return 'financial-reports'
   if (name.startsWith('admin-')) return 'admin-agent-runs'
   if (name.startsWith('research')) return 'research'
   if (name.startsWith('agent-run')) return 'agent-runs'
@@ -127,12 +126,6 @@ function handleMenuSelect(key: string) {
             {{ t('nav.home') }}
           </button>
           <button
-            :class="['kimi-nav-item', activeMenuKey === 'dashboard' && 'active']"
-            @click="handleMenuSelect('dashboard')"
-          >
-            {{ t('nav.dashboard') }}
-          </button>
-          <button
             :class="['kimi-nav-item', activeMenuKey === 'portfolios' && 'active']"
             @click="handleMenuSelect('portfolios')"
           >
@@ -143,12 +136,6 @@ function handleMenuSelect(key: string) {
             @click="handleMenuSelect('risk-runs')"
           >
             {{ t('nav.riskRuns') }}
-          </button>
-          <button
-            :class="['kimi-nav-item', activeMenuKey === 'financial-reports' && 'active']"
-            @click="handleMenuSelect('financial-reports')"
-          >
-            {{ t('nav.reports') }}
           </button>
           <button
             :class="['kimi-nav-item', activeMenuKey === 'research' && 'active']"

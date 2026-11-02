@@ -18,7 +18,7 @@ const loading = ref(false)
 const error = ref('')
 
 function redirectAfterLogin() {
-  router.push({ name: authStore.user?.role === 'Admin' ? 'admin-agent-runs' : 'dashboard' })
+  router.push({ name: authStore.user?.role === 'Admin' ? 'admin-agent-runs' : 'portfolios' })
 }
 
 async function handleLogin() {

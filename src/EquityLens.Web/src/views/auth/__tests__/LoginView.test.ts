@@ -33,7 +33,7 @@ function createTestRouter() {
     routes: [
       { path: '/login', name: 'login', component: { template: '<div />' } },
       { path: '/register', name: 'register', component: { template: '<div />' } },
-      { path: '/', name: 'dashboard', component: { template: '<div />' } },
+      { path: '/', name: 'portfolios', component: { template: '<div />' } },
       { path: '/admin/agent-runs', name: 'admin-agent-runs', component: { template: '<div />' } },
     ],
   })
@@ -106,7 +106,7 @@ describe('LoginView', () => {
     expect(wrapper.find('.prestige-error').text()).toBe('Please fill in all fields')
   })
 
-  it('redirects users to dashboard on successful login', async () => {
+  it('redirects users to portfolios on successful login', async () => {
     mockedHttp.post.mockResolvedValueOnce({
       data: {
         accessToken: 'token',
@@ -129,7 +129,7 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit')
 
     await vi.waitFor(() => {
-      expect(pushSpy).toHaveBeenCalledWith({ name: 'dashboard' })
+      expect(pushSpy).toHaveBeenCalledWith({ name: 'portfolios' })
     })
   })
 
@@ -240,7 +240,7 @@ describe('LoginView', () => {
       expect(googleLogin.props('clientId')).toBe('test-client-id')
     })
 
-    it('calls loginWithGoogle and redirects to dashboard on Google callback', async () => {
+    it('calls loginWithGoogle and redirects to portfolios on Google callback', async () => {
       vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id')
       mockedHttp.post.mockResolvedValueOnce({
         data: {
@@ -265,7 +265,7 @@ describe('LoginView', () => {
         expect(mockedHttp.post).toHaveBeenCalledWith('/auth/google', {
           idToken: 'google-id-token',
         })
-        expect(pushSpy).toHaveBeenCalledWith({ name: 'dashboard' })
+        expect(pushSpy).toHaveBeenCalledWith({ name: 'portfolios' })
       })
     })
 
