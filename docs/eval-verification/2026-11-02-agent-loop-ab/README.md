@@ -1,6 +1,6 @@
 # Research Agent Runtime v4 — 隔離 A/B 驗證
 
-目前結論：**保留 DynamicDag 預設，AgentLoop 僅 opt-in**。最新 `c4e0d85` 限定公司 A/B 為 v1 6/8、v4 7/8；本輪品質、延遲與記錄成本達到比較門檻，但僅一次抽樣，仍需確認單位補強後的穩定性。政策題依既有 scorer 仍 FAIL。
+目前部署狀態（2026-11-03 更新）：**正式環境已經使用者授權啟用 AgentLoop 預設**，見[部署紀錄](../../architecture/research-agent-runtime-deployment.md)。最新 `53b5db1` 重跑為 v1 6/8、v4 7/8，p95 10.993s / 11.486s；與前輪同分，仍是重複使用的 8 題開發集，政策題依既有 scorer 仍 FAIL。下文「保留 v1 預設」記錄各輪當時決策，不是目前部署設定。
 
 ## 實驗範圍
 

@@ -112,14 +112,23 @@ public sealed class ConversationService(
                         ?? throw new ConversationException("previous_run_required", "找不到可修正的上一份研究結果。");
                     var parent = await db.AgentRuns.AsNoTracking()
                         .FirstOrDefaultAsync(x => x.Id == parentId && x.UserId == userId, cancellationToken);
-                    if (parent is null || parent.Status != AgentRunStatuses.Succeeded || parent.ResearchRunId is null)
+                    if (parent is null || parent.Status != AgentRunStatuses.Succeeded || (parent.ResearchRunId is null && parent.WorkflowType != AgentWorkflowTypes.PortfolioDiagnosis))
                         throw new ConversationException("previous_run_not_ready", "上一份研究尚未完成或不支援修正。");
-                    var feedback = await agentRuns.SubmitFeedbackAsync(parentId, userId,
-                        new(Guid.NewGuid(), "NeedsCorrection", decision.StandaloneQuery), cancellationToken);
-                    if (feedback.FollowUpAgentRun is null)
-                        throw new ConversationException("revision_not_created", "無法建立修正 Run。");
-                    turn.AgentRunId = feedback.FollowUpAgentRun.Id;
-                    turn.ResearchRunId = feedback.FollowUpResearchRunId;
+                    if (parent.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
+                    {
+                        created = await workflowQueries.CreateAsync(userId, new(decision.StandaloneQuery!, parentId), cancellationToken);
+                        turn.AgentRunId = created.AgentRunId;
+                        turn.ResearchRunId = null;
+                    }
+                    else
+                    {
+                        var feedback = await agentRuns.SubmitFeedbackAsync(parentId, userId,
+                            new(Guid.NewGuid(), "NeedsCorrection", decision.StandaloneQuery), cancellationToken);
+                        if (feedback.FollowUpAgentRun is null)
+                            throw new ConversationException("revision_not_created", "無法建立修正 Run。");
+                        turn.AgentRunId = feedback.FollowUpAgentRun.Id;
+                        turn.ResearchRunId = feedback.FollowUpResearchRunId;
+                    }
                 }
             }
             catch (AgentWorkflowQueryException exception)
@@ -139,6 +148,7 @@ public sealed class ConversationService(
             if (!string.IsNullOrWhiteSpace(decision.Summary)) nextContext["summary"] = decision.Summary;
             if (turn.AgentRunId is { } agentRunId) nextContext["lastAgentRunId"] = agentRunId.ToString();
             if (turn.ResearchRunId is { } researchRunId) nextContext["lastResearchRunId"] = researchRunId.ToString();
+            else if (turn.AgentRunId is not null) nextContext.Remove("lastResearchRunId");
 
             session.ContextVersion++;
             session.ContextJson = nextContext.ToJsonString(Json);

@@ -216,7 +216,7 @@ internal static class PortfolioRiskRunResultAdapter
             if (root["holdings"] is JsonArray holdings && holdings.OfType<JsonObject>().Any())
             {
                 var share = holdings.OfType<JsonObject>().Sum(x => Decimal(x["componentRiskShare"]) ?? 0m);
-                Add(adapted, "calculate-volatility-risk-contribution", new JsonObject { ["componentRiskShare"] = share }, run);
+                Add(adapted, "calculate-volatility-risk-contribution", new JsonObject { ["componentRiskShare"] = share, ["holdings"] = new JsonArray(holdings.OfType<JsonObject>().Select(x => (JsonNode)new JsonObject { ["ticker"] = x["ticker"]?.DeepClone(), ["weight"] = x["weight"]?.DeepClone(), ["componentVolatility"] = x["componentVolatility"]?.DeepClone(), ["componentRiskShare"] = x["componentRiskShare"]?.DeepClone() }).ToArray()) }, run);
             }
             if (adapted.Count == 0) return false;
             results = adapted;

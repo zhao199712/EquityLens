@@ -27,7 +27,7 @@ public sealed class InvestmentResearchRouter(
     IWorkflowSkillCatalog skillCatalog) : IInvestmentResearchRouter
 {
     public const string PromptTemplateId = "investment-research-question-router";
-    public const int PromptVersion = 2;
+    public const int PromptVersion = 3;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly TimeSpan RoutingTimeout = TimeSpan.FromSeconds(15);
     private static readonly HashSet<string> ConfidenceValues = new(StringComparer.OrdinalIgnoreCase) { "high", "medium", "low" };
@@ -63,7 +63,7 @@ public sealed class InvestmentResearchRouter(
                     })
                 }, Json),
                 0,
-                700,
+                1200,
                 ChatResponseFormat.JsonObject), timeout.Token);
             output = JsonSerializer.Deserialize<RouterOutput>(result.Content, Json)
                 ?? throw new JsonException("Empty routing decision.");
@@ -121,7 +121,7 @@ public sealed class InvestmentResearchRouter(
             PromptVersion,
             result.PromptTokens,
             result.CompletionTokens,
-            stopwatch.ElapsedMilliseconds);
+            stopwatch.ElapsedMilliseconds, output.Scenarios);
         return new(output.WorkflowType, output.PortfolioId, Trim(output.SecurityQuery), routing);
     }
 
@@ -137,8 +137,14 @@ public sealed class InvestmentResearchRouter(
         For ResearchInvestigation, securityQuery MUST be either a ticker copied verbatim from the question or a company name copied verbatim from the question. Never translate, simplify, normalize, rewrite, or invent it.
         The objective MUST preserve every company name, ticker, explicit year, and quarter from the user question verbatim. Never substitute a different year or reporting period.
         All Chinese strings MUST use Traditional Chinese. inferredFields must disclose every inference. Return at most three clarifyingQuestions.
+        For explicit hypothetical portfolio weight comparisons, extract scenarios as an array of at most 3 objects:
+        {"name":"國巨30%","targetWeights":{"2327":0.30},"remainderPolicy":"cash","preserveOtherHoldings":true}.
+        Include only requested target weights, never the current weight as another target. This is a read-only reduction-to-cash tool.
+        Do not invent securities, percentages, currencies, or policies. If the requested comparison lacks targets, is ambiguous,
+        requires increased positions, leverage, new securities, or another allocation policy, return clarifyingQuestions in Traditional Chinese.
+        If no hypothetical allocation is requested, scenarios must be null. Preserve explicit stock identifiers in objective.
         Return JSON only:
-        {"workflowType":"PortfolioDiagnosis|ResearchInvestigation","portfolioId":null,"securityQuery":null,"leadSkill":"allowed-id","objective":"one precise Traditional Chinese objective","contextEnvelope":{"market":"TW|CN-A|HK|US|Global|unknown","asset":"equity|ETF|index|sector|theme|bond|convertible|option|portfolio|unknown","depth":"quick|standard|deep|monitoring","horizon":null,"currency":null,"language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"routingReason":"short Traditional Chinese reason","confidence":"high|medium|low"}.
+        {"workflowType":"PortfolioDiagnosis|ResearchInvestigation","portfolioId":null,"securityQuery":null,"leadSkill":"allowed-id","objective":"one precise Traditional Chinese objective","contextEnvelope":{"market":"TW|CN-A|HK|US|Global|unknown","asset":"equity|ETF|index|sector|theme|bond|convertible|option|portfolio|unknown","depth":"quick|standard|deep|monitoring","horizon":null,"currency":null,"language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"scenarios":null,"routingReason":"short Traditional Chinese reason","confidence":"high|medium|low"}.
         """;
 
     private static string Required(string? value, string field) =>
@@ -211,7 +217,8 @@ public sealed class InvestmentResearchRouter(
         IReadOnlyList<string>? DownstreamIntents,
         IReadOnlyList<string>? ClarifyingQuestions,
         string? RoutingReason,
-        string? Confidence);
+        string? Confidence,
+        IReadOnlyList<PortfolioScenarioRequest>? Scenarios = null);
 }
 
 public static class InvestmentResearchSkillPrompts

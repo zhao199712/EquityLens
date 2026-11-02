@@ -13,6 +13,24 @@ namespace EquityLens.Api.Tests.Services.Chat;
 public sealed class ConversationServiceTests
 {
     [Fact]
+    public async Task RevisePortfolio_UsesLinkedWorkflowInsteadOfResearchFeedback()
+    {
+        await using var db = CreateDb();
+        var user = Guid.NewGuid(); var parentId = Guid.NewGuid();
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = user,
+            ContextJson = new JsonObject { ["lastAgentRunId"] = parentId, ["lastResearchRunId"] = Guid.NewGuid() }.ToJsonString() };
+        db.ChatSessions.Add(session);
+        db.AgentRuns.Add(new AgentRun { Id = parentId, UserId = user, WorkflowType = AgentWorkflowTypes.PortfolioDiagnosis, Status = AgentRunStatuses.Succeeded });
+        await db.SaveChangesAsync();
+        var workflows = new FakeWorkflowQueries();
+        var service = new ConversationService(db, Agent(ConversationActions.RevisePreviousRun, "重新診斷", "國巨降至30%", new JsonObject()), workflows, new FakeAgentRuns(), new AgentWorkflowCatalog());
+        await service.ProcessAsync(user, session.Id, new("請修正投組分析", Guid.NewGuid()));
+        Assert.Equal(parentId, workflows.ParentId);
+        Assert.Equal(1, workflows.Calls);
+        Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("lastResearchRunId"));
+    }
+
+    [Fact]
     public async Task DirectResponse_PersistsTurnAndDoesNotCreateWorkflow()
     {
         await using var db = CreateDb();
@@ -184,9 +202,10 @@ public sealed class ConversationServiceTests
     {
         public int Calls { get; private set; }
         public string? Question { get; private set; }
+        public Guid? ParentId { get; private set; }
         public Task<AgentWorkflowQueryCreatedResponse> CreateAsync(Guid userId, CreateAgentWorkflowQueryRequest request, CancellationToken cancellationToken = default)
         {
-            Calls++; Question = request.Question;
+            Calls++; Question = request.Question; ParentId = request.ParentAgentRunId;
             if (failure is not null) throw failure;
             return Task.FromResult(new AgentWorkflowQueryCreatedResponse(runId ?? Guid.NewGuid(), Guid.NewGuid(),
                 AgentWorkflowTypes.ResearchInvestigation, AgentRunStatuses.Pending, "test", "test",

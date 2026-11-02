@@ -133,7 +133,12 @@ public sealed class PortfolioRiskMathExecutor : IPortfolioRiskMathExecutor
             "calculate-beta" => RiskMath.CalculateBeta(matrix[0], matrix.Count > 1 ? matrix[1] : matrix[0]),
             "calculate-portfolio-variance" => RiskMath.CalculatePortfolioVariance(weights, input.CovarianceMatrix),
             "calculate-portfolio-volatility" => RiskMath.CalculatePortfolioVolatility(weights, input.CovarianceMatrix),
-            "calculate-volatility-risk-contribution" => RiskMath.CalculateVolatilityRiskContribution(weights, input.CovarianceMatrix, Enumerable.Range(0, weights.Count).ToArray()),
+            "calculate-volatility-risk-contribution" => new {
+                componentRiskShare = RiskMath.CalculateVolatilityRiskContribution(weights, input.CovarianceMatrix, Enumerable.Range(0, weights.Count).ToArray()).ComponentRiskShare,
+                holdings = input.Assets.Select((asset, index) => new PortfolioHoldingRiskContribution(asset.Ticker, weights[index],
+                    RiskMath.CalculateVolatilityRiskContribution(weights, input.CovarianceMatrix, [index]).ComponentVolatility,
+                    RiskMath.CalculateVolatilityRiskContribution(weights, input.CovarianceMatrix, [index]).ComponentRiskShare)).ToList()
+            },
             "estimate-gbm-parameters" => RiskMath.EstimateGbmParameters(a.Prices),
             "calculate-correlation-matrix" => RiskMath.CalculateCorrelationMatrix(matrix),
             "cholesky-decompose" => RiskMath.CholeskyDecompose(input.CovarianceMatrix),

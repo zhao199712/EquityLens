@@ -21,8 +21,14 @@ public sealed record PortfolioRiskMetrics(
     decimal? PortfolioVolatility,
     decimal? ConcentrationHhi,
     decimal? LargestWeight,
-    decimal? VolatilityRiskShare);
-public sealed record PortfolioDiagnosisOutput(string Summary, decimal? PortfolioReturn, decimal? BenchmarkReturn, decimal? ActiveReturn, IReadOnlyList<AttributionItem> MainDrags, IReadOnlyList<AttributionItem> MainContributors, IReadOnlyList<RiskAnalysisPriority> RecommendedAnalyses, string EvidenceStatus, PortfolioRiskMetrics RiskMetrics, string? Interpretation);
+    decimal? VolatilityRiskShare,
+    IReadOnlyList<PortfolioHoldingRiskContribution>? Contributions = null);
+public sealed record PortfolioDiagnosisOutput(string Summary, decimal? PortfolioReturn, decimal? BenchmarkReturn, decimal? ActiveReturn, IReadOnlyList<AttributionItem> MainDrags, IReadOnlyList<AttributionItem> MainContributors, IReadOnlyList<RiskAnalysisPriority> RecommendedAnalyses, string EvidenceStatus, PortfolioRiskMetrics RiskMetrics, string? Interpretation,
+    PortfolioScenarioComparison? ScenarioComparison = null,
+    PortfolioDiagnosisContext? AnalysisPeriod = null,
+    string ModelQuality = "Unvalidated",
+    int? ObservationCount = null,
+    string? Method = null);
 public sealed record PortfolioDiagnosisGap(string Code, bool Resolvable, string? RequiredCapability, string Reason);
 public sealed record PortfolioDiagnosisQualityResult(
     string Status,
@@ -44,6 +50,7 @@ internal static class PortfolioRiskMetricsReader
     public static PortfolioRiskMetrics FromMathResults(JsonNode? mathResults)
     {
         decimal? annualizedVolatility = null, maxDrawdown = null, historicalVaR = null, expectedShortfall = null, portfolioVolatility = null, hhi = null, largestWeight = null, riskShare = null;
+        IReadOnlyList<PortfolioHoldingRiskContribution>? contributions = null;
         if (mathResults is JsonArray array)
         {
             foreach (var node in array)
@@ -58,11 +65,14 @@ internal static class PortfolioRiskMetricsReader
                     case "calculate-expected-shortfall": expectedShortfall = AsDecimal(value); break;
                     case "calculate-portfolio-volatility": portfolioVolatility = AsDecimal(value); break;
                     case "calculate-concentration": hhi = Field(value, "hhi"); largestWeight = Field(value, "largestWeight"); break;
-                    case "calculate-volatility-risk-contribution": riskShare = Field(value, "componentRiskShare"); break;
+                    case "calculate-volatility-risk-contribution":
+                        riskShare = Field(value, "componentRiskShare");
+                        contributions = value?["holdings"]?.Deserialize<List<PortfolioHoldingRiskContribution>>(AgentNodeJson.SerializerOptions);
+                        break;
                 }
             }
         }
-        return new(annualizedVolatility, maxDrawdown, historicalVaR, expectedShortfall, portfolioVolatility, hhi, largestWeight, riskShare);
+        return new(annualizedVolatility, maxDrawdown, historicalVaR, expectedShortfall, portfolioVolatility, hhi, largestWeight, riskShare, contributions);
     }
 
     private static decimal? Field(JsonNode? node, string name) => node is JsonObject obj ? AsDecimal(obj[name]) : null;
@@ -93,7 +103,7 @@ public sealed class LoadPortfolioDiagnosisContextNodeHandler : IAgentNodeHandler
         var from = DateOnly.Parse(root.GetProperty("from").GetString()!);
         var to = DateOnly.Parse(root.GetProperty("to").GetString()!);
         var portfolio = await context.DbContext.Portfolios.Include(x => x.Holdings).AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == portfolioId, cancellationToken)
+            .FirstOrDefaultAsync(x => x.Id == portfolioId && x.OwnerUserId == context.Run.UserId && x.IsActive, cancellationToken)
             ?? throw new AgentNodeException("portfolio_not_found", AgentNodeErrorCategories.PermanentFailure, "Portfolio was not found.", retryable: false);
         var output = new PortfolioDiagnosisContext(portfolio.Id, portfolio.Name, portfolio.BaseCurrency, from, to, portfolio.Holdings.Count);
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
@@ -263,7 +273,7 @@ public sealed class BuildPortfolioEvidencePacketNodeHandler : IAgentNodeHandler
     public string NodeType => PortfolioDiagnosisNodeTypes.BuildEvidencePacket;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var packet = new { context = PortfolioDiagnosisBlackboard.Context(board), attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution), riskProfile = board[AgentBlackboardKeys.RiskProfile]?.DeepClone(), riskEvidence = board[AgentBlackboardKeys.PortfolioRiskEvidence]?.DeepClone(), priorities = PortfolioDiagnosisBlackboard.Required<List<RiskAnalysisPriority>>(board, AgentBlackboardKeys.RiskAnalysisPriorities), quality = board[AgentBlackboardKeys.PortfolioDiagnosisQuality]?.DeepClone(), gaps = board[AgentBlackboardKeys.PortfolioDiagnosisGaps]?.DeepClone(), mathResults = board[AgentBlackboardKeys.MathResults]?.DeepClone() };
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var packet = new { context = PortfolioDiagnosisBlackboard.Context(board), attribution = PortfolioDiagnosisBlackboard.Required<PortfolioPerformanceAttribution>(board, AgentBlackboardKeys.PerformanceAttribution), riskProfile = board[AgentBlackboardKeys.RiskProfile]?.DeepClone(), riskEvidence = board[AgentBlackboardKeys.PortfolioRiskEvidence]?.DeepClone(), priorities = PortfolioDiagnosisBlackboard.Required<List<RiskAnalysisPriority>>(board, AgentBlackboardKeys.RiskAnalysisPriorities), quality = board[AgentBlackboardKeys.PortfolioDiagnosisQuality]?.DeepClone(), gaps = board[AgentBlackboardKeys.PortfolioDiagnosisGaps]?.DeepClone(), mathResults = board[AgentBlackboardKeys.MathResults]?.DeepClone(), scenarios = board[PortfolioScenarioCalculator.ResultKey]?.DeepClone() };
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioEvidencePacket, packet); context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(packet); context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Portfolio evidence packet snapshot written.", null); return Task.CompletedTask;
     }
 }
@@ -277,8 +287,15 @@ public sealed class DraftPortfolioDiagnosisNodeHandler(IPortfolioDiagnosisNarrat
         var drags = attribution.Holdings.Take(3).ToList(); var gains = attribution.Holdings.OrderByDescending(x => x.Contribution).Take(3).ToList();
         var metrics = PortfolioRiskMetricsReader.FromMathResults(board[AgentBlackboardKeys.MathResults]);
         var summary = (attribution.ActiveReturn is null ? "基準或投組報酬資料不足，無法判定相對大盤表現。" : $"本期投組相對基準報酬為 {attribution.ActiveReturn:P2}。主要拖累與貢獻依可取得價格的持倉近似計算，資料覆蓋狀態為 {attribution.CoverageStatus}。") + BuildRiskSummary(metrics);
+        var comparison = board[PortfolioScenarioCalculator.ResultKey]?.Deserialize<PortfolioScenarioComparison>(AgentNodeJson.SerializerOptions);
+        if (comparison is not null)
+            summary += comparison.Status == "Calculated"
+                ? " 唯讀情境比較（固定權重歷史假設）：" + string.Join("；", comparison.Scenarios.Select(s => $"{s.Name}：現金 {s.CashWeight:P2}、股票 HHI {s.EquityHhi:0.0000}、年化波動率 {s.Metrics?.AnnualizedVolatility:P2}"))
+                : " 情境風險未完成計算：" + string.Join("；", comparison.Warnings);
         var interpretation = await GenerateInterpretationAsync(diagnosis, attribution, metrics, priorities, board, cancellationToken);
-        var output = new PortfolioDiagnosisOutput(summary, attribution.PortfolioReturn, attribution.BenchmarkReturn, attribution.ActiveReturn, drags, gains, priorities, attribution.CoverageStatus, metrics, interpretation);
+        var output = new PortfolioDiagnosisOutput(summary, attribution.PortfolioReturn, attribution.BenchmarkReturn, attribution.ActiveReturn, drags, gains, priorities,
+            attribution.PortfolioReturn is null || attribution.ActiveReturn is null ? "Limited" : attribution.CoverageStatus, metrics, interpretation,
+            comparison, diagnosis, "Unvalidated", board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>(), "既有持股歷史重建；情境比較使用獨立固定權重基準");
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioDiagnosisDraft, output); context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Node.OutputJson = AgentNodeJson.Serialize(output); context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Portfolio diagnosis draft written from evidence packet.", new { dragCount = drags.Count, priorityCount = priorities.Count });
     }
 
@@ -294,7 +311,7 @@ public sealed class DraftPortfolioDiagnosisNodeHandler(IPortfolioDiagnosisNarrat
         {
             var objective = board[AgentBlackboardKeys.RoutingContext]?["objective"]?.GetValue<string>();
             var text = await narrative.GenerateAsync(
-                new PortfolioDiagnosisNarrativeInput(diagnosis.PortfolioName, diagnosis.From, diagnosis.To, objective, attribution, metrics, priorities),
+                new PortfolioDiagnosisNarrativeInput(diagnosis.PortfolioName, diagnosis.From, diagnosis.To, objective, attribution, metrics, priorities, board[PortfolioScenarioCalculator.ResultKey]?.Deserialize<PortfolioScenarioComparison>(AgentNodeJson.SerializerOptions)),
                 cancellationToken);
             return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
         }
