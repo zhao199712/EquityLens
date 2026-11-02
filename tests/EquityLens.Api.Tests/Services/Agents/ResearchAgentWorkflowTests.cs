@@ -155,6 +155,9 @@ public sealed class ResearchAgentWorkflowTests
     [InlineData("毛利 600 元 ÷ 營收 1000 元 ≈ 60%，毛利率 60%[1]", "毛利 600 元、營收 1000 元", false)]
     [InlineData("毛利 600 元 ÷ 營收 1000 元 ≈ 80%[1]", "毛利 600 元、營收 1000 元", true)]
     [InlineData("毛利 600 元 ÷ 營收 1000 元 ≈ 60%[1]", "毛利 500 元、營收 1000 元", true)]
+    [InlineData("金額 3,255,827 百萬元 ÷ 金額 8,103,105 百萬元 ≈ 40.18%[1]", "單位：新台幣百萬元；3,255,827、8,103,105", false)]
+    [InlineData("金額 3,255,827 百萬元 ÷ 金額 8,103,105 百萬元 ≈ 90%[1]", "單位：新台幣百萬元；3,255,827、8,103,105", true)]
+    [InlineData("金額 1.1341 十億元[1]", "金額 11.341 億元", false)]
     [InlineData("營收增加[1]", "營收增加", false)]
     public void NumberGate_ChecksCitedQuote_WithNormalizationAndUnits(string answer, string quote, bool blocking)
     {

@@ -107,7 +107,7 @@ internal static partial class ResearchNumberTraceability
             var mult = m.Groups[2].Value; var unit = m.Groups[3].Value;
             var kind = unit is "%" or "百分點" or "個百分點" ? "percent" : unit == "倍" ? "multiple"
                 : unit == "股" ? "shares" : unit is "元" or "美元" || mult.Length > 0 ? "money" : "plain";
-            var scale = mult switch { "兆" => 1_000_000_000_000m, "億" => 100_000_000m, "萬" => 10_000m, "千" or "仟" => 1000m, _ => 1m };
+            var scale = mult switch { "兆" => 1_000_000_000_000m, "十億" => 1_000_000_000m, "百萬" => 1_000_000m, "億" => 100_000_000m, "萬" => 10_000m, "千" or "仟" => 1000m, _ => 1m };
             try { result.Add(new(kind == "percent" ? value : value * scale, kind)); }
             catch (OverflowException) { /* 超出 decimal 範圍不進入計算。 */ }
         }
@@ -115,11 +115,11 @@ internal static partial class ResearchNumberTraceability
     }
 
     // 數字後允許單位；除號後只允許短標籤，必須有等號及百分比結果。
-    [GeneratedRegex(@"(?<left>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:÷|除以|/)\s*[^\d\r\n=≈]{0,40}?(?<right>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:(?:×|\*)\s*100\s*)?(?:=|≈|約為|等於)\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)")]
+    [GeneratedRegex(@"(?<left>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:÷|除以|/)\s*[^\d\r\n=≈]{0,40}?(?<right>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:(?:×|\*)\s*100\s*)?(?:=|≈|約為|等於)\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)")]
     private static partial Regex RatioExpression();
 
     [GeneratedRegex(@"\[(\d+)\]")]
     private static partial Regex Reference();
-    [GeneratedRegex(@"([-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)\s*(兆|億|萬|千|仟)?\s*(%|個百分點|百分點|美元|元|倍|股)?")]
+    [GeneratedRegex(@"([-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)\s*(十億|百萬|兆|億|萬|千|仟)?\s*(%|個百分點|百分點|美元|元|倍|股)?")]
     private static partial Regex Numeric();
 }

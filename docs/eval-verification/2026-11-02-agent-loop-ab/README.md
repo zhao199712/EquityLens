@@ -1,6 +1,6 @@
 # Research Agent Runtime v4 — 隔離 A/B 驗證
 
-目前結論：**保留 DynamicDag 預設，AgentLoop 僅 opt-in**。最新正式驗收限定台積電（2330）與鴻海（2317）；8 題中舊引擎通過 6 題、新引擎通過 5 題，且有原本通過題退步，延遲也未達門檻。
+目前結論：**保留 DynamicDag 預設，AgentLoop 僅 opt-in**。最新 `c4e0d85` 限定公司 A/B 為 v1 6/8、v4 7/8；本輪品質、延遲與記錄成本達到比較門檻，但僅一次抽樣，仍需確認單位補強後的穩定性。政策題依既有 scorer 仍 FAIL。
 
 ## 實驗範圍
 
@@ -58,3 +58,21 @@ provider_usage.jsonl 從各題執行期間的 provider 日誌收集呼叫量，�
 ## 工具契約修正後完整 A/B
 
 原有 8 題保持不變，[v1](dynamic-dag-tool-contract/report.md) 6/8、[v4](agent-loop-tool-contract/report.md) 5/8。v4 EPS 恢復 PASS，但鴻海營收組成此輪 FAIL；毛利率與政策題仍 FAIL。p95 為 14.913s 對 10.215s（1.46 倍），仍保留 v1 預設。不同輪的逐題波動不能用挑選最佳回答消除。
+
+## 與既有報告的關係
+
+標準答案以 [2026-10-01 核實報告](../2026-10-01/report.md) 與 verification.json 為依據。既有 [檢索修正實驗](../2026-11-02-retrieval-policy/README.md) 採 ask 模式且啟用 Cohere，本次採 investigation 且兩邊停用 reranker；不能把舊 10/11 與本次 8 題結果直接相減。政策題已有 KI-004：原 scorer 要求引用、無法完整判定否定語意，先前政策評分修訂已撤回。本次固定風險回覆是產品行為改善，不宣稱修復 scorer；無引用仍依原規則 FAIL。
+
+## 明示算式與風險回覆（c4e0d85）
+
+| 指標 | [DynamicDag](dynamic-dag-ratio-policy/report.md) | [AgentLoop](agent-loop-ratio-policy/report.md) |
+|---|---:|---:|
+| 通過題數 | 6/8 | 7/8 |
+| p50 | 9.598s | 9.338s |
+| p95 | 12.021s | 11.617s |
+| 完整已記錄 provider LLM 未快取費用上界 | US$0.047930 | US$0.027647 |
+| runtime error / Web policy violation | 0 / 0 | 0 / 0 |
+
+本輪沒有 PASS→FAIL，毛利率與 EPS 通過，鴻海營收組成比舊引擎改善。政策題現在回答固定風險說明，behavior 與 keywords 均通過；citation_integrity 因無引用為 0，總結果仍 FAIL，未修改 scorer。這不是拒答不足，也不是保證報酬的回答。
+
+人工抽查補強：鴻海使用百萬元，原 numeric parser 未完整識別這個倍率；後續補入百萬／十億解析與錯誤比例回歸。本表仍是補強前版本，不將單元測試當作補強後 live A/B。保持 v1 預設，單次開發集改善不視為全面勝出。
