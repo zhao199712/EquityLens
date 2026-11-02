@@ -1,0 +1,172 @@
+{
+  "meta": {
+    "label": "prod-2026-11-02-reembed",
+    "mode": "ask",
+    "base_url": "https://equitylens.duckdns.org",
+    "system_commit": "0b97463",
+    "started_at": "2026-11-02T09:19:23+00:00",
+    "notes": "2330/2317 年報重新抽取（保留 Review 頁）+ 44 張影像頁 vision 轉錄後重跑",
+    "cases_file": "cases/research_v1.jsonl",
+    "cases_sha256": "b2abf837cadf4def9d5b20afc8fa10c6600261454eb46c0d89c642ed3cb99c90",
+    "scorer_commit": "0b97463",
+    "scored_at": "2026-11-02T09:21:39+00:00",
+    "judge_model": null
+  },
+  "case_count": 11,
+  "verified_case_count": 11,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 0.6364,
+      "n": 11
+    },
+    "behavior": {
+      "mean": 0.6364,
+      "n": 11
+    },
+    "facts": {
+      "mean": 0.5,
+      "n": 6
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 3
+    },
+    "citation_coverage": {
+      "mean": 0.6,
+      "n": 3
+    },
+    "source_hit": {
+      "mean": 0.5,
+      "n": 6
+    },
+    "retrieval_recall": {
+      "mean": 0.8333,
+      "n": 6
+    },
+    "keywords": {
+      "mean": 0.5,
+      "n": 4
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "hallucination_rate": 0.0,
+    "over_refusal_rate": 0.5714,
+    "error_rate": 0.0,
+    "latency_p50_ms": 4690,
+    "latency_p95_ms": 18035,
+    "mean_total_tokens": 5200.8,
+    "total_cost_usd": null
+  },
+  "by_category": {
+    "multi_doc_synthesis": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "retrieval_recall": {
+          "mean": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "numeric_lookup": {
+      "case_count": 5,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.6,
+          "n": 5
+        },
+        "behavior": {
+          "mean": 0.6,
+          "n": 5
+        },
+        "facts": {
+          "mean": 0.6,
+          "n": 5
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "citation_coverage": {
+          "mean": 0.6,
+          "n": 3
+        },
+        "source_hit": {
+          "mean": 0.6,
+          "n": 5
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "policy": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "unanswerable": {
+      "case_count": 3,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [
+    "2330-eps-2025",
+    "2454-revenue-2025",
+    "2317-segment-mix",
+    "2330-no-guaranteed-profit"
+  ],
+  "draft_cases": [],
+  "draft_metrics": {}
+}

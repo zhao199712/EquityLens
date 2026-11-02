@@ -1,0 +1,8 @@
+{
+  "label": "prod-2026-11-02-reembed",
+  "mode": "ask",
+  "base_url": "https://equitylens.duckdns.org",
+  "system_commit": "0b97463",
+  "started_at": "2026-11-02T09:19:23+00:00",
+  "notes": "2330/2317 年報重新抽取（保留 Review 頁）+ 44 張影像頁 vision 轉錄後重跑"
+}
