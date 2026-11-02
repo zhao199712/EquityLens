@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-02",
+  "timezone": "Asia/Taipei",
+  "corpus": {
+    "securities": 74,
+    "documents": 241,
+    "chunks": 8363,
+    "embeddings": 8363,
+    "chunk_content_fingerprint": "1446b24a123e0f97542cbfe37fab3f60",
+    "embedding_dimensions": 1536
+  },
+  "database_image": "paradedb/paradedb:0.24.1-pg18",
+  "cases_sha256": "b2abf837cadf4def9d5b20afc8fa10c6600261454eb46c0d89c642ed3cb99c90",
+  "verified_cases": 11,
+  "judge_enabled": false,
+  "reranker": "None (same for both engines)",
+  "configured_chat_model": "deepseek-v4-flash",
+  "initial_thinking_setting": "provider default",
+  "bounded_and_final_thinking_enabled": false,
+  "provider_pricing_upper_usd_per_million": {
+    "input_uncached": 0.3,
+    "output": 1.2
+  },
+  "pricing_sources": [
+    "https://api-docs.deepseek.com/quick_start/pricing/",
+    "https://api-docs.deepseek.com/guides/thinking_mode/",
+    "https://developers.openai.com/api/docs/models/text-embedding-3-small"
+  ],
+  "isolation": "Fresh DB and Redis. Only public securities/document metadata/chunks/embeddings copied; uploader IDs cleared. No production users, portfolios, queues or runs copied.",
+  "limitations": [
+    "11-case development set, single sample per condition, reused during fixes; no holdout/generalization claim.",
+    "Legacy run token and cost fields omit some provider calls. Use provider_usage.jsonl for measured provider upper estimates in bounded/final rounds.",
+    "Initial round had no complete provider usage logging; retain separate conservative reserve.",
+    "Reranker disabled because legacy model tariff was not confirmed; not comparable with prior reranked reports.",
+    "User confirmed financial corpus valid only for 2330 and 2317; earlier mixed-company aggregates are diagnostic only."
+  ],
+  "acceptance_cases_file": "evals/cases/research_runtime_verified_companies.jsonl",
+  "acceptance_verified_cases": 8,
+  "acceptance_tickers": [
+    "2330",
+    "2317"
+  ]
+}

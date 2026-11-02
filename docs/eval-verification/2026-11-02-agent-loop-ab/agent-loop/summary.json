@@ -1,0 +1,203 @@
+{
+  "trajectory": {
+    "recorded_runs": 11,
+    "web_policy_violation_count": 0,
+    "planner_fallback_rate": null,
+    "mean_llm_turns": 2.909090909090909,
+    "mean_tool_calls": 6.7272727272727275,
+    "guard_denials": 3
+  },
+  "meta": {
+    "label": "agent-loop",
+    "mode": "investigation",
+    "engine": "AgentLoop",
+    "base_url": "http://127.0.0.1:5535",
+    "system_commit": "352eca9",
+    "started_at": "2026-11-02T14:10:07+00:00",
+    "notes": "Isolated public corpus snapshot; both engines same API/config; rerank disabled for both (legacy price unverified); no judge; single sample per verified case.",
+    "cases_file": "evals/cases/research_v1.jsonl",
+    "cases_sha256": "b2abf837cadf4def9d5b20afc8fa10c6600261454eb46c0d89c642ed3cb99c90",
+    "scorer_commit": "352eca9",
+    "scored_at": "2026-11-02T14:17:13+00:00",
+    "judge_model": null
+  },
+  "case_count": 11,
+  "verified_case_count": 11,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 0.4545,
+      "n": 11
+    },
+    "behavior": {
+      "mean": 0.4545,
+      "n": 11
+    },
+    "source_policy_compliance": {
+      "mean": 1.0,
+      "n": 11
+    },
+    "facts": {
+      "mean": 0.5,
+      "n": 6
+    },
+    "source_hit": {
+      "mean": 0.5,
+      "n": 6
+    },
+    "retrieval_recall": {
+      "mean": 0.8333,
+      "n": 6
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 3
+    },
+    "citation_coverage": {
+      "mean": 1.0,
+      "n": 3
+    },
+    "keywords": {
+      "mean": 0.25,
+      "n": 4
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "hallucination_rate": 0.0,
+    "over_refusal_rate": 0.2857,
+    "error_rate": 0.3636,
+    "latency_p50_ms": 39858,
+    "latency_p95_ms": 67155,
+    "mean_total_tokens": 24310.8,
+    "total_cost_usd": 0.356264
+  },
+  "by_category": {
+    "multi_doc_synthesis": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "numeric_lookup": {
+      "case_count": 5,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.6,
+          "n": 5
+        },
+        "behavior": {
+          "mean": 0.6,
+          "n": 5
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "facts": {
+          "mean": 0.6,
+          "n": 5
+        },
+        "source_hit": {
+          "mean": 0.6,
+          "n": 5
+        },
+        "retrieval_recall": {
+          "mean": 0.8,
+          "n": 5
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "citation_coverage": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "policy": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.0,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 0.0,
+          "n": 2
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "unanswerable": {
+      "case_count": 3,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.6667,
+          "n": 3
+        },
+        "behavior": {
+          "mean": 0.6667,
+          "n": 3
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [
+    "2330-gross-margin-2025",
+    "2412-cash-dividend-2025",
+    "2317-segment-mix",
+    "2330-future-revenue-2030",
+    "2330-today-price-local-only",
+    "2330-no-guaranteed-profit"
+  ],
+  "draft_cases": [],
+  "draft_metrics": {}
+}

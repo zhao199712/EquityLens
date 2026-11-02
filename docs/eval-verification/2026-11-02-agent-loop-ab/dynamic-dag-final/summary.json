@@ -1,0 +1,190 @@
+{
+  "trajectory": {
+    "recorded_runs": 11,
+    "web_policy_violation_count": 0,
+    "planner_fallback_rate": 0.0,
+    "mean_llm_turns": 0,
+    "mean_tool_calls": 3,
+    "guard_denials": 0,
+    "guard_denial_rate": 0.0,
+    "budget_exhausted_rate": null
+  },
+  "meta": {
+    "label": "dynamic-dag-final",
+    "mode": "investigation",
+    "engine": "DynamicDag",
+    "base_url": "http://127.0.0.1:5535",
+    "system_commit": "691a4f4",
+    "started_at": "2026-11-02T14:29:18+00:00",
+    "notes": "Isolated public corpus snapshot; both engines same API/config; rerank disabled for both (legacy price unverified); no judge; thinking explicitly disabled; prompt v3; single sample per verified case.",
+    "cases_file": "evals/cases/research_v1.jsonl",
+    "cases_sha256": "b2abf837cadf4def9d5b20afc8fa10c6600261454eb46c0d89c642ed3cb99c90",
+    "scorer_commit": "691a4f4",
+    "scored_at": "2026-11-02T14:31:30+00:00",
+    "judge_model": null
+  },
+  "case_count": 11,
+  "verified_case_count": 11,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 0.7273,
+      "n": 11
+    },
+    "behavior": {
+      "mean": 0.7273,
+      "n": 11
+    },
+    "source_policy_compliance": {
+      "mean": 1.0,
+      "n": 11
+    },
+    "facts": {
+      "mean": 0.6667,
+      "n": 6
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 4
+    },
+    "citation_coverage": {
+      "mean": 0.8929,
+      "n": 4
+    },
+    "source_hit": {
+      "mean": 0.6667,
+      "n": 6
+    },
+    "keywords": {
+      "mean": 0.75,
+      "n": 4
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "hallucination_rate": 0.0,
+    "over_refusal_rate": 0.4286,
+    "error_rate": 0.0,
+    "latency_p50_ms": 9777,
+    "latency_p95_ms": 14019,
+    "mean_total_tokens": 4673.4,
+    "total_cost_usd": 0.0
+  },
+  "by_category": {
+    "multi_doc_synthesis": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "numeric_lookup": {
+      "case_count": 5,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.8,
+          "n": 5
+        },
+        "behavior": {
+          "mean": 0.8,
+          "n": 5
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "facts": {
+          "mean": 0.8,
+          "n": 5
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 4
+        },
+        "citation_coverage": {
+          "mean": 0.8929,
+          "n": 4
+        },
+        "source_hit": {
+          "mean": 0.8,
+          "n": 5
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "policy": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "unanswerable": {
+      "case_count": 3,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [
+    "2412-cash-dividend-2025",
+    "2317-segment-mix",
+    "2330-no-guaranteed-profit"
+  ],
+  "draft_cases": [],
+  "draft_metrics": {}
+}

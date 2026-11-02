@@ -1,0 +1,21 @@
+Agent run: fe13e18a-72a0-4538-82f5-488939e1cdbb
+Status: Pending completed nodes: 0
+Status: Running completed nodes: 2
+Status: Running completed nodes: 6
+Status: Running completed nodes: 8
+Status: Running completed nodes: 12
+Status: Running completed nodes: 13
+Status: Succeeded completed nodes: 16
+  Research turn 1: call_tools
+  Research turn 2: submit_answer
+  Revise turn 1: submit_answer
+  tool search_local: Succeeded (Allow)
+  tool criticReviewLLM: Succeeded (legacy)
+  tool criticReviewLLM: Succeeded (legacy)
+
+Research status: Answered
+台積電（2330）2025 年（民國114年度）基本每股盈餘為 **66.26 元**。[1][2]
+
+References:
+  [1] 2330 Annual Report 2025 page 10
+  [2] 2330 Annual Report 2025 page 58

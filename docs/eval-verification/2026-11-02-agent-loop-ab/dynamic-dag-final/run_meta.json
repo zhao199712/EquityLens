@@ -1,0 +1,9 @@
+{
+  "label": "dynamic-dag-final",
+  "mode": "investigation",
+  "engine": "DynamicDag",
+  "base_url": "http://127.0.0.1:5535",
+  "system_commit": "691a4f4",
+  "started_at": "2026-11-02T14:29:18+00:00",
+  "notes": "Isolated public corpus snapshot; both engines same API/config; rerank disabled for both (legacy price unverified); no judge; thinking explicitly disabled; prompt v3; single sample per verified case."
+}

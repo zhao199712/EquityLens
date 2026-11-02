@@ -33,9 +33,9 @@
 | A13 | 副作用工具審批（參數綁定、冪等、Reject 附理由） | SHOULD | ✅ | ToolApprovalTests / ToolApprovalPostgresTests | Phase 4 | 測試工具；正式工具仍唯讀 |
 | A14 | OTel span 與 metrics | SHOULD | ✅ | Telemetry_ParentsParallelToolsToTurn | Phase 2–4 | |
 | A15 | 依風險觸發人工審閱 | COULD | ⬜ | | | |
-| A16 | 實際 A/B 報告 | COULD | ⬜ | | | |
+| A16 | 實際 A/B 報告 | COULD | ✅ | 限定公司 8 題與完整原始結果 | docs 階段 | 未達預設切換門檻 |
 | — | 合併為單一 `QualityGate`、DAG 縮為約 6 節點 | COULD | ⬜ | | | |
-| A17 | build / test / migration / pytest 全綠 | 每次 commit | ⬜ | | | |
+| A17 | build / test / migration / pytest 全綠 | 每次 commit | ✅ | 942 backend / 70 pytest / 無 pending model | c953970 | 後續修改仍需再驗證 |
 
 ## 每次 commit 的驗證紀錄
 
@@ -72,7 +72,7 @@
 
 ## 早上給 Reviewer 的摘要
 
-（實作結束前填寫：完成了什麼、沒完成什麼、已知風險、建議下一步）
+核心 A1–A14 已完成；固定 DAG + Agent Loop 保留 v1 預設。最新限定公司 A/B 為 v1 6/8、v4 5/8，延遲與退步題未達門檻。展示腳本實跑 EPS 66.26 元成功，面試稿與完整實驗報告已備妥。尚待可信計算依據以處理推導比例、修正後完整 A/B；風險人工審閱與 Critic 節點合併仍是 COULD。不可把展示成功當作整體品質已通過。
 
 ## 執行紀錄（2026-11-02 夜間）
 
@@ -111,3 +111,5 @@
 - 限定公司首輪（f50dcb5，8 verified 題）：v1 6/8、v4 5/8。v4 改善鴻海 segment mix，但台積電 EPS／毛利率退步，兩者皆仍未通過保證獲利 policy 題；p95 20.404s 對 11.313s，維持 v1 預設。
 - EPS 診斷：模型填入中文 documentType 導致工具失敗；工具 schema 補 enum 並在 dispatch 前回饋合法值。數字解析新增 shares 維度，仟股不可當仟元。942/942 後端測試通過。
 - 毛利率診斷：來源金額推導的 59.9% 不直接出現在引用中，且首句未帶引用，數值追溯關卡拒絕。尚未建立可信計算 ledger，不能藉放寬 gate 宣稱解決。
+
+- `c953970` 驗證：942/942 後端（含真實 PostgreSQL）、70 pytest；EF 無 pending model。展示腳本實跑成功，回答 EPS 66.26 元，引用第 10／58 頁。單次展示不替代 A/B。面試稿：`research-agent-runtime-interview.md`；報告：`../eval-verification/2026-11-02-agent-loop-ab/README.md`。

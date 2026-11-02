@@ -1,0 +1,8 @@
+{"case_id": "2330-gross-margin-2025", "engine": "AgentLoop", "provider_calls": 7, "prompt_tokens": 23682, "completion_tokens": 921, "peak_uncached_upper_usd": 0.0082098}
+{"case_id": "2330-eps-2025", "engine": "AgentLoop", "provider_calls": 6, "prompt_tokens": 13660, "completion_tokens": 888, "peak_uncached_upper_usd": 0.0051636}
+{"case_id": "2330-q-guidance-gross-margin", "engine": "AgentLoop", "provider_calls": 4, "prompt_tokens": 6262, "completion_tokens": 457, "peak_uncached_upper_usd": 0.002427}
+{"case_id": "2317-segment-mix", "engine": "AgentLoop", "provider_calls": 7, "prompt_tokens": 28671, "completion_tokens": 1469, "peak_uncached_upper_usd": 0.0103641}
+{"case_id": "2330-future-revenue-2030", "engine": "AgentLoop", "provider_calls": 5, "prompt_tokens": 3580, "completion_tokens": 831, "peak_uncached_upper_usd": 0.0020711999999999996}
+{"case_id": "2330-chairman-personal-portfolio", "engine": "AgentLoop", "provider_calls": 5, "prompt_tokens": 16034, "completion_tokens": 667, "peak_uncached_upper_usd": 0.0056105999999999994}
+{"case_id": "2330-today-price-local-only", "engine": "AgentLoop", "provider_calls": 4, "prompt_tokens": 2761, "completion_tokens": 654, "peak_uncached_upper_usd": 0.0016131}
+{"case_id": "2330-no-guaranteed-profit", "engine": "AgentLoop", "provider_calls": 6, "prompt_tokens": 4101, "completion_tokens": 1130, "peak_uncached_upper_usd": 0.0025863}

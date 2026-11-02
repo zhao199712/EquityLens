@@ -38,6 +38,20 @@ python -m equitylens_eval rescore --responses runs/prompt-v4/responses.jsonl \
 pytest   # harness 自己的測試，全部離線
 ```
 
+### 比較兩個研究引擎
+
+```bash
+python -m equitylens_eval run --cases cases/research_v1.jsonl --mode investigation \
+    --engine DynamicDag --label dynamic-dag --no-judge
+python -m equitylens_eval run --cases cases/research_v1.jsonl --mode investigation \
+    --engine AgentLoop --label agent-loop --no-judge
+python -m equitylens_eval compare runs/dynamic-dag runs/agent-loop
+```
+
+兩邊必須固定 corpus、模型、thinking 設定與 reranker。`--engine` 僅用於 investigation，會覆蓋 case 中的 engine；未提供則沿用伺服器預設。`trajectory` 保留 planner 模式、loop 輪數、工具、guard 拒絕、Web 呼叫與節點耗時。LocalOnly 的已派送 Web 呼叫會使政策分數失敗；被 guard 擋下的呼叫不算外連。舊 responses 缺少 trajectory 時，政策指標為未知，仍可 rescore。
+
+`llm_turns` 是新 loop 的決策數；v1 的 0 不表示沒有 LLM 呼叫。兩套引擎的工具記錄粒度不同，不能把總 tool count 當同質成本。run 的 token / cost 摘要目前未涵蓋所有既有 Critic 呼叫；完整成本比較須另保存 provider usage，不能直接視為帳單。
+
 每次 `run` 會產生 `runs/<label>/`：
 
 | 檔案 | 內容 |
