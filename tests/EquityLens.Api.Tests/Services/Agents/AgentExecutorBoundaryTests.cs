@@ -41,6 +41,24 @@ public sealed class AgentExecutorBoundaryTests
     }
 
     [Fact]
+    public async Task InterruptedNonIdempotentNode_IsNotRepeated()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var run = CreateRun(1);
+        run.Status = AgentRunStatuses.Running;
+        run.Nodes.Single().Status = AgentNodeStatuses.Running;
+        var definition = JsonNode.Parse(run.WorkflowDefinitionJson)!;
+        definition["nodes"]![0]!["contract"] = new JsonObject { ["isIdempotent"] = false };
+        run.WorkflowDefinitionJson = definition.ToJsonString();
+        db.Add(run); await db.SaveChangesAsync();
+        var handler = new StampHandler();
+        await CreateExecutor(db, handler).ExecuteAsync(run.Id, run.UserId);
+        Assert.Equal(0, handler.Calls);
+        Assert.Equal(AgentRunStatuses.Failed, run.Status);
+        Assert.Contains("non-idempotent", run.Nodes.Single().ErrorMessage);
+    }
+
+    [Fact]
     public async Task ActiveLease_DoesNotExecuteOrMutateTheRun()
     {
         await using var db = RefactorTestDbContext.Create();
@@ -108,6 +126,46 @@ public sealed class AgentExecutorBoundaryTests
         Assert.Equal(1, handler.Calls);
         Assert.Null(run.LeaseOwner);
         Assert.Empty(await db.AgentRunWakeOutbox.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(AgentNodeStatuses.Running)]
+    [InlineData(AgentNodeStatuses.Ready)]
+    [InlineData(AgentNodeStatuses.Queued)]
+    public async Task ExpiredLease_RecoversInterruptedNode(string status)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var run = CreateRun(1);
+        run.Status = AgentRunStatuses.Running;
+        run.LeaseOwner = "crashed-worker";
+        run.LeaseExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        run.Nodes.Single().Status = status;
+        db.Add(run);
+        await db.SaveChangesAsync();
+        var handler = new StampHandler();
+        var result = await CreateExecutor(db, handler).ExecuteAsync(run.Id, run.UserId);
+        Assert.Equal(AgentRunExecutionOutcome.Executed, result);
+        Assert.Equal(AgentRunStatuses.Succeeded, run.Status);
+        Assert.Equal(1, run.Nodes.Single().InterruptionCount);
+        Assert.Equal(1, handler.Calls);
+        Assert.Contains(run.Events, x => x.EventType == "NodeInterrupted");
+    }
+
+    [Fact]
+    public async Task RepeatedInterruption_StopsAtBudget()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var run = CreateRun(1);
+        run.Status = AgentRunStatuses.Running;
+        run.Nodes.Single().Status = AgentNodeStatuses.Running;
+        run.Nodes.Single().InterruptionCount = 1;
+        db.Add(run);
+        await db.SaveChangesAsync();
+        var handler = new StampHandler();
+        await CreateExecutor(db, handler).ExecuteAsync(run.Id, run.UserId);
+        Assert.Equal(AgentRunStatuses.Failed, run.Status);
+        Assert.Contains("interruption budget", run.ErrorMessage);
+        Assert.Equal(0, handler.Calls);
     }
 
     private static AgentRunExecutor CreateExecutor(RefactorTestDbContext db, IAgentNodeHandler handler) =>

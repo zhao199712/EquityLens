@@ -1,0 +1,9 @@
+{
+  "label": "agent-loop-tool-contract",
+  "mode": "investigation",
+  "engine": "AgentLoop",
+  "base_url": "http://127.0.0.1:5535",
+  "system_commit": "1910da2",
+  "started_at": "2026-11-02T15:02:35+00:00",
+  "notes": "Isolated public corpus snapshot; both engines same API/config; rerank disabled for both (legacy price unverified); no judge; thinking explicitly disabled; prompt v3; single sample per verified case; user confirmed financial corpus valid only for 2330 and 2317; tool enum and shares fix c953970."
+}

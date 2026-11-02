@@ -4,6 +4,8 @@
 
 單元測試證明的是「流程照規則走」（非法計畫會被擋）；eval 證明的是「答案是對的」。兩者互補。
 
+**2026-11 計分題數調整：11 → 8**：聯發科 2454、中華電信 2412 的財報擷取有已知問題，目前只有台積電 2330、鴻海 2317 重新擷取並確認。資料錯誤時，這些題目測到的是資料品質而非系統能力（應拒答題甚至可能因為查不到資料而碰巧通過），因此 `2454-revenue-2025`、`2412-cash-dividend-2025`、`2454-false-premise-quantum` 已加上 `excluded_reason`，預設不執行、永遠不計分（`rescore` 舊回答時同樣不計）。標準答案本身仍有效，重新擷取並確認後刪除該欄位即恢復。**以下歷史的「/11」分數保留原樣，但這三題的結果保守視為無效**（在確認正式資料庫的這兩家公司資料未受同一擷取問題影響之前）。以目前規則離線重算的 8 題分數見 [Agent Loop A/B 報告的「題目範圍」一節](../docs/eval-verification/2026-11-02-agent-loop-ab/README.md#題目範圍為什麼是-8-題)。
+
 **2026-11-02 政策評分器撤回**：已恢復原始題庫、behavior、引用檢查及 over_refusal 定義；KI-004 保留為未修復。鴻海檢索修正與 DeepSeek `deepseek-flash` 修改保留。以下新 scorer 分數僅為已撤回實驗的歷史紀錄，不代表目前評分規則。
 
 **目前規則重評**：以恢復後的相同原始 scorer 重評保存答案，舊基準 [9/11](../docs/eval-verification/2026-11-02-retrieval-policy/baseline-restored-scorer/report.md)，檢索修正後 [10/11](../docs/eval-verification/2026-11-02-retrieval-policy/restored-scorer/report.md)。僅鴻海題由失敗轉通過；政策題仍失敗。這是離線重評，未新增 API 實測。
@@ -37,6 +39,20 @@ python -m equitylens_eval rescore --responses runs/prompt-v4/responses.jsonl \
 
 pytest   # harness 自己的測試，全部離線
 ```
+
+### 比較兩個研究引擎
+
+```bash
+python -m equitylens_eval run --cases cases/research_v1.jsonl --mode investigation \
+    --engine DynamicDag --label dynamic-dag --no-judge
+python -m equitylens_eval run --cases cases/research_v1.jsonl --mode investigation \
+    --engine AgentLoop --label agent-loop --no-judge
+python -m equitylens_eval compare runs/dynamic-dag runs/agent-loop
+```
+
+兩邊必須固定 corpus、模型、thinking 設定與 reranker。`--engine` 僅用於 investigation，會覆蓋 case 中的 engine；未提供則沿用伺服器預設。`trajectory` 保留 planner 模式、loop 輪數、工具、guard 拒絕、Web 呼叫與節點耗時。LocalOnly 的已派送 Web 呼叫會使政策分數失敗；被 guard 擋下的呼叫不算外連。舊 responses 缺少 trajectory 時，政策指標為未知，仍可 rescore。
+
+`llm_turns` 是新 loop 的決策數；v1 的 0 不表示沒有 LLM 呼叫。兩套引擎的工具記錄粒度不同，不能把總 tool count 當同質成本。run 的 token / cost 摘要目前未涵蓋所有既有 Critic 呼叫；完整成本比較須另保存 provider usage，不能直接視為帳單。
 
 每次 `run` 會產生 `runs/<label>/`：
 
@@ -84,9 +100,10 @@ API 回應 429（被限流）時，client 會依 `Retry-After` 等待後重試�
 | `must_not_include` | 出現就判定失敗，例如「保證獲利」 |
 | `sources` | 正確答案所在的文件和頁碼，用來區分是**檢索失敗**還是**生成失敗**。頁碼使用 PDF 實體頁數，從 1 開始，可能不同於印刷頁碼；有多筆時每筆都必須命中 |
 | `reference_answer` | 給 LLM judge 的參考答案；沒填就不做 judge |
+| `excluded_reason` | 選填。非空代表**標準答案沒問題，但語料已知有誤**（例如擷取失敗、尚未重新擷取）。這類題目測到的是資料品質而非系統能力：預設不執行，加 `--include-excluded` 才會跑，結果只列在報告的「Excluded cases」區塊，**永遠不計入 `pass_rate`**（包含 `rescore`）。語料修好並確認後刪除此欄位 |
 | `verified` | 已經對照原始 PDF 核實過。**只有 verified 的題目會計入 `pass_rate` 和所有品質指標**；草稿題（`verified: false`）預設不會執行，加 `--include-unverified` 才會跑，結果只列在報告的「Draft cases」區塊 |
 
-**目前的考卷（13 題，2026-10-01 核實）**：11 題 `verified: true`，其中 6 題新完成原始 PDF 核實、5 題沿用拒答與政策題；2 題保留草稿（台積電毛利率變動原因、聯發科主要營運風險）。詳見 [逐題核實報告](../docs/eval-verification/2026-10-01/report.md) 與 [證據、文件雜湊及計算](../docs/eval-verification/2026-10-01/verification.json)。
+**目前的考卷（13 題，2026-10-01 核實；2026-11 起計分 8 題）**：11 題 `verified: true`，其中 3 題因語料問題加上 `excluded_reason`（見本文開頭說明），實際計分 8 題：台積電 7 題、鴻海 1 題。11 題 verified 中，6 題新完成原始 PDF 核實、5 題沿用拒答與政策題；2 題保留草稿（台積電毛利率變動原因、聯發科主要營運風險）。詳見 [逐題核實報告](../docs/eval-verification/2026-10-01/report.md) 與 [證據、文件雜湊及計算](../docs/eval-verification/2026-10-01/verification.json)。
 
 新核實題中有 3 題的答案頁尚未進入目前索引：台積電毛利率（PDF 第 9 頁）、基本 EPS（第 58 頁），以及鴻海產品別收入（第 112 頁）。`verified` 表示標準答案有原件證據，不表示系統能答對；這些題仍保留在正式題庫以呈現檢索缺口。題庫核實階段未呼叫研究 API。後續已完成 [實際 API 評測](../docs/eval-verification/2026-10-01/live-api-results.md)：正式容器缺 embedding 設定，11 題皆 HTTP 500；相同映像與資料快照的隔離環境補入既有 embedding 金鑰後，取得 11 份 DeepSeek 回答，6/11 通過（54.5%），未啟用 LLM judge。
 

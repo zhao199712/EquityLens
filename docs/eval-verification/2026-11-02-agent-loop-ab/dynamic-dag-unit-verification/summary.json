@@ -1,0 +1,185 @@
+{
+  "trajectory": {
+    "recorded_runs": 8,
+    "web_policy_violation_count": 0,
+    "planner_fallback_rate": 0.1111111111111111,
+    "mean_llm_turns": 0,
+    "mean_tool_calls": 3,
+    "guard_denials": 0,
+    "guard_denial_rate": 0.0,
+    "budget_exhausted_rate": null
+  },
+  "meta": {
+    "label": "dynamic-dag-unit-verification",
+    "mode": "investigation",
+    "engine": "DynamicDag",
+    "base_url": "http://127.0.0.1:5535",
+    "system_commit": "53b5db1",
+    "started_at": "2026-11-02T15:14:02+00:00",
+    "notes": "Isolated public corpus snapshot; both engines same API/config; rerank disabled for both (legacy price unverified); no judge; thinking explicitly disabled; prompt v4; single sample per verified case; user confirmed financial corpus valid only for 2330 and 2317; million and billion units verification 53b5db1.",
+    "cases_file": "evals/cases/research_runtime_verified_companies.jsonl",
+    "cases_sha256": "969049d01ff826c593f4561ab67578ce104538e031729d0812cbfa25f69902ae",
+    "scorer_commit": "53b5db1",
+    "scored_at": "2026-11-02T15:15:26+00:00",
+    "judge_model": null
+  },
+  "case_count": 8,
+  "verified_case_count": 8,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 0.75,
+      "n": 8
+    },
+    "behavior": {
+      "mean": 0.75,
+      "n": 8
+    },
+    "source_policy_compliance": {
+      "mean": 1.0,
+      "n": 8
+    },
+    "facts": {
+      "mean": 0.75,
+      "n": 4
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 3
+    },
+    "citation_coverage": {
+      "mean": 0.85,
+      "n": 3
+    },
+    "source_hit": {
+      "mean": 0.75,
+      "n": 4
+    },
+    "keywords": {
+      "mean": 0.3333,
+      "n": 3
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "hallucination_rate": 0.0,
+    "over_refusal_rate": 0.4,
+    "error_rate": 0.0,
+    "latency_p50_ms": 8949,
+    "latency_p95_ms": 10993,
+    "mean_total_tokens": 4197.8,
+    "total_cost_usd": 0.0
+  },
+  "by_category": {
+    "multi_doc_synthesis": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "numeric_lookup": {
+      "case_count": 3,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "citation_coverage": {
+          "mean": 0.85,
+          "n": 3
+        },
+        "source_hit": {
+          "mean": 1.0,
+          "n": 3
+        }
+      }
+    },
+    "policy": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "unanswerable": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [
+    "2317-segment-mix",
+    "2330-no-guaranteed-profit"
+  ],
+  "draft_cases": [],
+  "draft_metrics": {}
+}

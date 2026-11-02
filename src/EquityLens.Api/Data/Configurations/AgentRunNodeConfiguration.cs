@@ -10,6 +10,7 @@ public class AgentRunNodeConfiguration : IEntityTypeConfiguration<AgentRunNode>
     {
         builder.ToTable("agent_run_node");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.InterruptionCount).HasColumnName("interruption_count");
         builder.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
         builder.Property(x => x.AgentRunId).HasColumnName("agent_run_id").IsRequired();
         builder.Property(x => x.NodeKey).HasColumnName("node_key").HasMaxLength(128).IsRequired();

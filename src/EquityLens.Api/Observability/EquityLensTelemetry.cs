@@ -56,6 +56,17 @@ public static class EquityLensTelemetry
         unit: "ms",
         description: "Time agent nodes spend waiting for human approval.");
 
+    // Loop metrics only carry bounded mode/action/outcome tags, never user data or run IDs.
+    public static readonly Counter<long> AgentLeaseLost = Meter.CreateCounter<long>("equitylens.agent.lease.lost");
+    public static readonly Counter<long> AgentNodeInterrupted = Meter.CreateCounter<long>("equitylens.agent.node.interrupted");
+    public static readonly Counter<long> AgentToolCalls = Meter.CreateCounter<long>("equitylens.agent.tool.calls");
+    public static readonly Counter<long> AgentLoopTurns = Meter.CreateCounter<long>("equitylens.agent.loop.turns");
+    public static readonly Counter<long> AgentLoopTokens = Meter.CreateCounter<long>("equitylens.agent.loop.tokens", "tokens");
+    public static readonly Counter<long> AgentLoopGuardDenials = Meter.CreateCounter<long>("equitylens.agent.loop.guard.denials");
+    public static readonly Counter<long> AgentLoopStops = Meter.CreateCounter<long>("equitylens.agent.loop.stops");
+    public static readonly Histogram<double> AgentLoopLlmDuration = Meter.CreateHistogram<double>("equitylens.agent.loop.llm.duration", "ms");
+    public static readonly Histogram<double> AgentLoopToolDuration = Meter.CreateHistogram<double>("equitylens.agent.loop.tool.duration", "ms");
+
     // Risk analysis. Tags are deliberately limited to operation/model/confidence/outcome;
     // portfolio identifiers, securities and monetary amounts must not enter metrics.
     public static readonly Counter<long> RiskOperations = Meter.CreateCounter<long>(

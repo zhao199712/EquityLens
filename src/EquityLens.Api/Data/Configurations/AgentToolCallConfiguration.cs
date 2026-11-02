@@ -10,6 +10,12 @@ public class AgentToolCallConfiguration : IEntityTypeConfiguration<AgentToolCall
     {
         builder.ToTable("agent_tool_call");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.AgentLlmTurnId).HasColumnName("agent_llm_turn_id");
+        builder.Property(x => x.ToolCallKey).HasColumnName("tool_call_key");
+        builder.Property(x => x.GuardDecision).HasColumnName("guard_decision");
+        builder.Property(x => x.GuardReason).HasColumnName("guard_reason");
+        builder.HasIndex(x => new { x.AgentLlmTurnId, x.ToolCallKey }).IsUnique();
+        builder.HasOne<AgentLlmTurn>().WithMany().HasForeignKey(x => x.AgentLlmTurnId).OnDelete(DeleteBehavior.Cascade);
         builder.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
         builder.Property(x => x.AgentRunId).HasColumnName("agent_run_id").IsRequired();
         builder.Property(x => x.AgentRunNodeId).HasColumnName("agent_run_node_id");

@@ -9,4 +9,5 @@ public sealed record ResearchAskRequest(
     int TopK = 8,
     double Temperature = 0.2,
     bool Debug = false,
-    Guid? PortfolioId = null);
+    Guid? PortfolioId = null,
+    string? Engine = null);

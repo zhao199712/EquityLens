@@ -2,6 +2,8 @@ namespace EquityLens.Api.Services.Agents;
 
 public static class AgentWorkflowTypes
 {
+    public const string ResearchAgent = "ResearchAgent";
+    public static bool OwnsResearchArtifact(string type) => type is ResearchInvestigation or FeedbackRevision or ResearchAgent;
     public const string CriticReview = "CriticReview";
     public const string DraftRevision = "DraftRevision";
     public const string ResearchQualityReview = "ResearchQualityReview";

@@ -1,3 +1,5 @@
+using EquityLens.Api.Services.Agents.Loop;
+
 namespace EquityLens.Api.Services.Agents;
 
 public sealed record AgentNodeExecutionPolicy(int TimeoutSeconds, int MaxRetryCount);
@@ -48,6 +50,13 @@ public sealed class AgentWorkflowCatalog : IAgentWorkflowCatalog
 {
     public IReadOnlyList<AgentNodeCatalogEntry> Nodes { get; } =
     [
+        new(new AgentNodeContract(ResearchAgentNodes.Loop, 1, "自主研究迴圈", "在政策與預算內選工具並持久化每輪決策。", "Research", "ExternalLlmRead",
+            "ResearchAgentLoopInput", "ResearchAgentLoopOutput", [AgentBlackboardKeys.ResearchRequest], [],
+            [AgentBlackboardKeys.Answer, AgentBlackboardKeys.Citations, AgentBlackboardKeys.Candidates, AgentBlackboardKeys.ResearchRun, AgentBlackboardKeys.SelectedEvidence],
+            [], [ResearchAgentNodes.OutputGate], new(300, 0), true, true, false)),
+        N(ResearchAgentNodes.OutputGate, "研究輸出檢查", "驗證來源政策與引用完整性。", "Validation", "ReadOnly", [AgentBlackboardKeys.Answer], ["outputGate"], [CriticReviewNodeTypes.BuildEvidencePacket]),
+        N(ResearchAgentNodes.Route, "研究品質路由", "依確定性檢查與評論決定接受或修訂一次。", "Decision", "ReadOnly", ["outputGate", AgentBlackboardKeys.CriticReview], ["qualityRoute"], [ResearchAgentNodes.Loop, ResearchAgentNodes.Finalize]),
+        N(ResearchAgentNodes.Finalize, "提交研究結果", "修訂再驗收仍不合格時拒答。", "Finalization", "WritesAgentTrace", ["outputGate", AgentBlackboardKeys.CriticReview], [AgentBlackboardKeys.FinalOutput], []),
         N(FeedbackRevisionNodeTypes.LoadContext, "載入使用者修正內容", "載入父研究、原答案、引用、Critic 與使用者 feedback。", "Input", "ReadOnly", [AgentBlackboardKeys.ParentAgentRunId], [AgentBlackboardKeys.ParentResearchRunId, AgentBlackboardKeys.ResearchRunId, AgentBlackboardKeys.ResearchRequest, AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question, AgentBlackboardKeys.Answer, AgentBlackboardKeys.OriginalAnswer, AgentBlackboardKeys.ResearchIntent, AgentBlackboardKeys.InitialEvidence, AgentBlackboardKeys.SelectedEvidence, AgentBlackboardKeys.Citations, AgentBlackboardKeys.Candidates, AgentBlackboardKeys.FeedbackComment, AgentBlackboardKeys.FeedbackIntent, AgentBlackboardKeys.RevisionContext], [FeedbackRevisionNodeTypes.ValidateContext]),
         N(FeedbackRevisionNodeTypes.ValidateContext, "驗證修正內容", "驗證 feedback 與父子研究關聯後交由 Planner 動態組 DAG。", "Planning", "ReadOnly", [AgentBlackboardKeys.RevisionContext, AgentBlackboardKeys.FeedbackComment], [], [ResearchInvestigationNodeTypes.PlanRetrieval, ResearchInvestigationNodeTypes.DraftAnswer]),
         N(CriticReviewNodeTypes.LoadResearchRun, "載入研究結果", "載入既有 Research Run。", "Load", "ReadOnly", [AgentBlackboardKeys.ResearchRunId], [AgentBlackboardKeys.Ticker, AgentBlackboardKeys.Question, AgentBlackboardKeys.ResearchRun, AgentBlackboardKeys.Answer, AgentBlackboardKeys.Citations, AgentBlackboardKeys.Steps, AgentBlackboardKeys.Candidates], [CriticReviewNodeTypes.BuildEvidencePacket]),
@@ -101,6 +110,9 @@ public sealed class AgentWorkflowCatalog : IAgentWorkflowCatalog
 
     public IReadOnlyList<AgentWorkflowCatalogEntry> Workflows { get; } =
     [
+        new(AgentWorkflowTypes.ResearchAgent, "Research Agent", "固定 DAG 外框與有界工具研究迴圈。", AgentTypes.Research,
+            ResearchAgentWorkflowDefinitionProvider.Steps.Select(x => x.Type).Distinct().ToList(),
+            ResearchAgentWorkflowDefinitionProvider.Steps.Zip(ResearchAgentWorkflowDefinitionProvider.Steps.Skip(1), (a, b) => (a.Type, b.Type)).Distinct().ToList()),
         new(AgentWorkflowTypes.CriticReview, "Critic Review", "檢查研究答案與證據品質。", AgentTypes.Critic, [CriticReviewNodeTypes.LoadResearchRun, CriticReviewNodeTypes.BuildEvidencePacket, CriticReviewNodeTypes.CheckEvidence, CriticReviewNodeTypes.CritiqueAnswer, CriticReviewNodeTypes.FinalizeCriticReport], [(CriticReviewNodeTypes.LoadResearchRun, CriticReviewNodeTypes.BuildEvidencePacket), (CriticReviewNodeTypes.BuildEvidencePacket, CriticReviewNodeTypes.CheckEvidence), (CriticReviewNodeTypes.CheckEvidence, CriticReviewNodeTypes.CritiqueAnswer), (CriticReviewNodeTypes.CritiqueAnswer, CriticReviewNodeTypes.FinalizeCriticReport)]),
         new(AgentWorkflowTypes.DraftRevision, "Draft Revision", "根據評論產生修正版研究答案。", AgentTypes.Draft, [DraftRevisionNodeTypes.LoadCriticReviewRun, DraftRevisionNodeTypes.DraftRevisedAnswer, DraftRevisionNodeTypes.FinalizeRevision], [(DraftRevisionNodeTypes.LoadCriticReviewRun, DraftRevisionNodeTypes.DraftRevisedAnswer), (DraftRevisionNodeTypes.DraftRevisedAnswer, DraftRevisionNodeTypes.FinalizeRevision)]),
         new(AgentWorkflowTypes.ResearchQualityReview, "研究品質審查", "檢查研究答案與證據品質後產生修正版。", AgentTypes.Critic, [ResearchQualityReviewNodeTypes.LoadResearchRun, ResearchQualityReviewNodeTypes.BuildEvidencePacket, ResearchQualityReviewNodeTypes.CheckEvidence, ResearchQualityReviewNodeTypes.CritiqueAnswer, ResearchQualityReviewNodeTypes.FinalizeCriticReport, ResearchQualityReviewNodeTypes.DraftRevisedAnswer, ResearchQualityReviewNodeTypes.FinalizeRevision], [(ResearchQualityReviewNodeTypes.LoadResearchRun, ResearchQualityReviewNodeTypes.BuildEvidencePacket), (ResearchQualityReviewNodeTypes.BuildEvidencePacket, ResearchQualityReviewNodeTypes.CheckEvidence), (ResearchQualityReviewNodeTypes.CheckEvidence, ResearchQualityReviewNodeTypes.CritiqueAnswer), (ResearchQualityReviewNodeTypes.CritiqueAnswer, ResearchQualityReviewNodeTypes.FinalizeCriticReport), (ResearchQualityReviewNodeTypes.FinalizeCriticReport, ResearchQualityReviewNodeTypes.DraftRevisedAnswer), (ResearchQualityReviewNodeTypes.DraftRevisedAnswer, ResearchQualityReviewNodeTypes.FinalizeRevision)])

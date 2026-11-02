@@ -1,3 +1,4 @@
+using EquityLens.Api.Services.Agents.Loop;
 using EquityLens.Api.Services.AdminJobs;
 using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.BackgroundWorkers;
@@ -9,6 +10,20 @@ public static class AgentRuntimeRegistration
 {
     public static void AddEquityLensAgents(this WebApplicationBuilder builder, bool e2eTestMode)
     {
+        builder.Services.AddOptions<ResearchAgentLoopOptions>().Bind(builder.Configuration.GetSection(ResearchAgentLoopOptions.SectionName))
+            .PostConfigure(x => x.DefaultEngine = builder.Configuration["AgentRuntime:ResearchEngine"] ?? x.DefaultEngine)
+            .Validate(x => x.MaxTurns >= 2 && x.MaxRevisionTurns >= 2 && x.MaxToolCalls > 0 && x.MaxToolCallsPerTurn > 0
+                && x.MaxWallClockSeconds > 0 && x.ToolTimeoutSeconds > 0 && x.ApprovalExpiryHours > 0 && x.MaxCostUsd > 0
+                && x.InputUsdPerMillion > 0 && x.OutputUsdPerMillion > 0 && x.MaxOutputTokens > 0
+                && x.DefaultEngine is "DynamicDag" or "AgentLoop", "Invalid research loop limits.");
+        builder.Services.AddScoped<IResearchLoopTools, ResearchLoopTools>();
+        builder.Services.AddScoped<ResearchAgentLoop>();
+        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchAgentWorkflowDefinitionProvider>();
+        builder.Services.AddScoped<IWorkflowPolicyEvaluator, ResearchAgentPolicyEvaluator>();
+        builder.Services.AddScoped<IAgentNodeHandler, ResearchAgentLoopNodeHandler>();
+        builder.Services.AddScoped<IAgentNodeHandler, ResearchOutputGateNodeHandler>();
+        builder.Services.AddScoped<IAgentNodeHandler, RouteResearchAgentQualityNodeHandler>();
+        builder.Services.AddScoped<IAgentNodeHandler, FinalizeResearchAgentNodeHandler>();
         builder.Services.AddScoped<ICriticReviewAgent, LlmCriticReviewAgent>();
         if (e2eTestMode) builder.Services.AddSingleton<IAgentWorkflowCatalog, E2EAgentWorkflowCatalog>();
         else builder.Services.AddSingleton<IAgentWorkflowCatalog, AgentWorkflowCatalog>();
@@ -117,6 +132,8 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<AgentWorkflowPolicyReader>();
         builder.Services.AddScoped<IAgentNodeRunner, AgentNodeRunner>();
         builder.Services.AddScoped<IAgentDynamicPlanCoordinator, AgentDynamicPlanCoordinator>();
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddScoped<AgentRunLeaseHeartbeat>();
         builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
         builder.Services.AddScoped<IAgentRunService, AgentRunService>();
         builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();

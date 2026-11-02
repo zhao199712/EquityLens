@@ -92,6 +92,18 @@ public sealed class AgentRunWorkerTests
         Assert.Equal(TimeSpan.FromSeconds(42), read.MinIdleTime);
     }
 
+    [Theory]
+    [InlineData(AgentRunExecutionOutcome.LeaseHeldByOther, false)]
+    [InlineData(AgentRunExecutionOutcome.LeaseLostDuringExecution, false)]
+    [InlineData(AgentRunExecutionOutcome.SkippedTerminalOrWaiting, true)]
+    public async Task ProcessNextAsync_AcknowledgesOnlyDurableOutcomes(AgentRunExecutionOutcome outcome, bool ack)
+    {
+        var message = new AgentRunQueueMessage(Guid.NewGuid(), Guid.NewGuid(), AgentWorkflowTypes.CriticReview, DateTime.UtcNow);
+        var queue = new FakeAgentRunQueue(newMessage: new AgentRunQueueItem("lease", message));
+        await CreateWorker(queue, new FakeAgentRunExecutor { Outcome = outcome }).ProcessNextAsync(CancellationToken.None);
+        Assert.Equal(ack ? 1 : 0, queue.AcknowledgedStreamIds.Count);
+    }
+
     private static AgentRunWorker CreateWorker(
         IAgentRunQueue queue,
         IAgentRunExecutor executor,
@@ -154,9 +166,10 @@ public sealed class AgentRunWorkerTests
     private sealed class FakeAgentRunExecutor : IAgentRunExecutor
     {
         public List<(Guid RunId, Guid UserId)> Executions { get; } = [];
+        public AgentRunExecutionOutcome Outcome { get; set; } = AgentRunExecutionOutcome.Executed;
         public Exception? ExceptionToThrow { get; set; }
 
-        public Task ExecuteAsync(Guid runId, Guid userId, CancellationToken cancellationToken = default)
+        public Task<AgentRunExecutionOutcome> ExecuteAsync(Guid runId, Guid userId, CancellationToken cancellationToken = default)
         {
             Executions.Add((runId, userId));
             if (ExceptionToThrow is not null)
@@ -164,7 +177,7 @@ public sealed class AgentRunWorkerTests
                 throw ExceptionToThrow;
             }
 
-            return Task.CompletedTask;
+            return Task.FromResult(Outcome);
         }
     }
 }

@@ -60,6 +60,15 @@ class EvalCase:
     verified: bool = False
     tags: tuple[str, ...] = ()
     notes: str = ""
+    # Non-empty = the answer key is fine but the corpus behind this case is known to be wrong
+    # (e.g. a broken extraction). Such a case measures data quality, not the system, so it is
+    # skipped by default and never counted in pass_rate, even when rescoring old responses.
+    excluded_reason: str = ""
+
+    @property
+    def counted(self) -> bool:
+        """True when the case contributes to pass_rate and quality metrics."""
+        return self.verified and not self.excluded_reason
 
     @staticmethod
     def from_dict(raw: dict[str, Any]) -> "EvalCase":
@@ -80,6 +89,7 @@ class EvalCase:
             verified=bool(raw.get("verified", False)),
             tags=tuple(raw.get("tags") or []),
             notes=raw.get("notes", ""),
+            excluded_reason=raw.get("excluded_reason") or "",
         )
 
 
@@ -167,6 +177,7 @@ class RunOutput:
     model: str | None = None
     run_id: str | None = None
     error: str | None = None
+    trajectory: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

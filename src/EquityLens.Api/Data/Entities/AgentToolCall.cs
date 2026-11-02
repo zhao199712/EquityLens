@@ -14,6 +14,10 @@ public class AgentToolCall
     public DateTime StartedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAtUtc { get; set; }
     public long? DurationMs { get; set; }
+    public Guid? AgentLlmTurnId { get; set; }
+    public string? ToolCallKey { get; set; }
+    public string? GuardDecision { get; set; }
+    public string? GuardReason { get; set; }
     public Guid? PromptSnapshotId { get; set; }
     public string? RenderedPromptHash { get; set; }
 

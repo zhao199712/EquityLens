@@ -1,0 +1,9 @@
+{
+  "label": "agent-loop-bounded",
+  "mode": "investigation",
+  "engine": "AgentLoop",
+  "base_url": "http://127.0.0.1:5535",
+  "system_commit": "11ce402",
+  "started_at": "2026-11-02T14:21:31+00:00",
+  "notes": "Isolated public corpus snapshot; both engines same API/config; rerank disabled for both (legacy price unverified); no judge; thinking explicitly disabled; prompt v2; single sample per verified case."
+}

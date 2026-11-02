@@ -70,6 +70,23 @@ public sealed class DeepSeekChatCompletionServiceTests
         Assert.False(document.RootElement.TryGetProperty("response_format", out _));
     }
 
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(false, "disabled")]
+    [InlineData(true, "enabled")]
+    public async Task ThinkingMode_IsExplicitOnlyWhenConfigured(bool? enabled, string? expected)
+    {
+        var handler = new CaptureHttpMessageHandler("""{"model":"test","choices":[{"message":{"content":"{}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":4}}""");
+        var service = new DeepSeekChatCompletionService(new HttpClient(handler), Options.Create(new DeepSeekOptions
+            { ApiKey = "test-key", BaseUrl = "https://api.deepseek.test", ThinkingEnabled = enabled }));
+        var result = await service.CompleteAsync(new("system json", "user", ResponseFormat: ChatResponseFormat.JsonObject));
+        using var body = JsonDocument.Parse(handler.RequestBody!);
+        if (expected is null) Assert.False(body.RootElement.TryGetProperty("thinking", out _));
+        else Assert.Equal(expected, body.RootElement.GetProperty("thinking").GetProperty("type").GetString());
+        Assert.Equal(3, result.PromptTokens);
+        Assert.Equal(4, result.CompletionTokens);
+    }
+
     private sealed class CaptureHttpMessageHandler : HttpMessageHandler
     {
         private readonly string _responseBody;

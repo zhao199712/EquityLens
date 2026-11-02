@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using EquityLens.Api.Contracts.MarketPrices;
@@ -17,7 +18,7 @@ public sealed class RiskObservabilityTests
     [Fact]
     public async Task PortfolioRisk_EmitsOperationAndCalculationStageSpans()
     {
-        var activities = new List<Activity>();
+        var activities = new ConcurrentBag<Activity>();
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == EquityLensTelemetry.ActivitySourceName,
@@ -47,7 +48,7 @@ public sealed class RiskObservabilityTests
     [Fact]
     public async Task PortfolioRisk_InvalidModel_EmitsFailureMetricWithoutPortfolioData()
     {
-        var measurements = new List<(long Value, string? Operation, string? Outcome)>();
+        var measurements = new ConcurrentBag<(long Value, string? Operation, string? Outcome)>();
         using var listener = new MeterListener();
         listener.InstrumentPublished = (instrument, meterListener) =>
         {

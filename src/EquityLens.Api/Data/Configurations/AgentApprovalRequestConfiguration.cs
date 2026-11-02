@@ -13,6 +13,14 @@ public sealed class AgentApprovalRequestConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
         builder.Property(x => x.AgentRunId).HasColumnName("agent_run_id");
         builder.Property(x => x.AgentRunNodeId).HasColumnName("agent_run_node_id");
+        builder.Property(x => x.Scope).HasColumnName("scope").HasMaxLength(32).HasDefaultValue("Node");
+        builder.Property(x => x.AgentToolCallId).HasColumnName("agent_tool_call_id");
+        builder.Property(x => x.ToolName).HasColumnName("tool_name").HasMaxLength(128);
+        builder.Property(x => x.ArgumentsHash).HasColumnName("arguments_hash").HasMaxLength(64);
+        builder.Property(x => x.ArgumentsJson).HasColumnName("arguments_json").HasColumnType("jsonb");
+        builder.Property(x => x.IdempotencyKey).HasColumnName("idempotency_key").HasMaxLength(128);
+        builder.Property(x => x.LeaseVersionAtRequest).HasColumnName("lease_version_at_request");
+        builder.HasOne<AgentToolCall>().WithMany().HasForeignKey(x => x.AgentToolCallId).OnDelete(DeleteBehavior.Cascade);
         builder.Property(x => x.NodeKey).HasColumnName("node_key").HasMaxLength(128).IsRequired();
         builder.Property(x => x.NodeType).HasColumnName("node_type").HasMaxLength(128).IsRequired();
         builder.Property(x => x.Status).HasColumnName("status").HasMaxLength(32).IsRequired().IsConcurrencyToken();

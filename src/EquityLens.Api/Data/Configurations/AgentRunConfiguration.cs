@@ -26,6 +26,7 @@ public class AgentRunConfiguration : IEntityTypeConfiguration<AgentRun>
         builder.Property(x => x.StartedAtUtc).HasColumnName("started_at_utc");
         builder.Property(x => x.CompletedAtUtc).HasColumnName("completed_at_utc");
         builder.Property(x => x.OrchestrationVersion).HasColumnName("orchestration_version").IsConcurrencyToken();
+        builder.Property(x => x.LeaseVersion).HasColumnName("lease_version").IsConcurrencyToken();
         builder.Property(x => x.LeaseOwner).HasColumnName("lease_owner").HasMaxLength(128);
         builder.Property(x => x.LeaseExpiresAtUtc).HasColumnName("lease_expires_at_utc");
         builder.Property(x => x.ExecutionAttempt).HasColumnName("execution_attempt");
