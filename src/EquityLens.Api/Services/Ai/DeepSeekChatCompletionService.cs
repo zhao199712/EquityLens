@@ -10,11 +10,13 @@ public sealed class DeepSeekChatCompletionService : IChatCompletionService
 {
     private readonly HttpClient _httpClient;
     private readonly DeepSeekOptions _options;
+    private readonly ILogger<DeepSeekChatCompletionService>? _logger;
 
-    public DeepSeekChatCompletionService(HttpClient httpClient, IOptions<DeepSeekOptions> options)
+    public DeepSeekChatCompletionService(HttpClient httpClient, IOptions<DeepSeekOptions> options, ILogger<DeepSeekChatCompletionService>? logger = null)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _logger = logger;
         _httpClient.BaseAddress = new Uri(_options.BaseUrl.TrimEnd('/') + "/");
     }
 
@@ -45,6 +47,8 @@ public sealed class DeepSeekChatCompletionService : IChatCompletionService
             ["temperature"] = request.Temperature,
             ["max_tokens"] = request.MaxTokens
         };
+        if (_options.ThinkingEnabled is bool thinking)
+            payload["thinking"] = new { type = thinking ? "enabled" : "disabled" };
         if (request.ResponseFormat == ChatResponseFormat.JsonObject)
         {
             payload["response_format"] = new { type = "json_object" };
@@ -72,6 +76,8 @@ public sealed class DeepSeekChatCompletionService : IChatCompletionService
             throw new InvalidOperationException($"DeepSeek API unexpected response: {responseBody}");
         }
 
+        _logger?.LogInformation("LLM usage prompt_tokens={PromptTokens} completion_tokens={CompletionTokens} finish_reason={FinishReason}",
+            result.Usage.PromptTokens, result.Usage.CompletionTokens, result.Choices[0].FinishReason);
         return new ChatCompletionResult(
             result.Choices[0].Message.Content,
             result.Model ?? _options.Model,
@@ -90,7 +96,7 @@ public sealed class DeepSeekChatCompletionService : IChatCompletionService
         IReadOnlyList<DeepSeekChoice>? Choices,
         DeepSeekUsage? Usage);
 
-    private sealed record DeepSeekChoice(DeepSeekMessage Message);
+    private sealed record DeepSeekChoice(DeepSeekMessage Message, string? FinishReason);
     private sealed record DeepSeekMessage(string Content);
     private sealed record DeepSeekUsage(
         [property: JsonPropertyName("prompt_tokens")] int PromptTokens,

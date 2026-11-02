@@ -41,6 +41,24 @@ public sealed class AgentExecutorBoundaryTests
     }
 
     [Fact]
+    public async Task InterruptedNonIdempotentNode_IsNotRepeated()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var run = CreateRun(1);
+        run.Status = AgentRunStatuses.Running;
+        run.Nodes.Single().Status = AgentNodeStatuses.Running;
+        var definition = JsonNode.Parse(run.WorkflowDefinitionJson)!;
+        definition["nodes"]![0]!["contract"] = new JsonObject { ["isIdempotent"] = false };
+        run.WorkflowDefinitionJson = definition.ToJsonString();
+        db.Add(run); await db.SaveChangesAsync();
+        var handler = new StampHandler();
+        await CreateExecutor(db, handler).ExecuteAsync(run.Id, run.UserId);
+        Assert.Equal(0, handler.Calls);
+        Assert.Equal(AgentRunStatuses.Failed, run.Status);
+        Assert.Contains("non-idempotent", run.Nodes.Single().ErrorMessage);
+    }
+
+    [Fact]
     public async Task ActiveLease_DoesNotExecuteOrMutateTheRun()
     {
         await using var db = RefactorTestDbContext.Create();

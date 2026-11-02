@@ -74,6 +74,24 @@ public sealed class ResearchAgentLoopTests
     }
 
     [Fact]
+    public async Task Revision_PreservesSuccessfulEmptyLocalSearch_ForLocalThenWeb()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
+        board["researchRequest"] = JsonSerializer.SerializeToNode(new ResearchAskRequest("2330", "test", SourcePolicy: SourcePolicy.LocalThenWeb), AgentNodeJson.SerializerOptions);
+        board["researchAgentLedger"] = new JsonArray();
+        board["researchAgentLocalSearchCompleted"] = true;
+        context.Run.BlackboardJson = board.ToJsonString();
+        await db.SaveChangesAsync();
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var tools = new ResearchLoopTools(services.GetRequiredService<IServiceScopeFactory>(), Options.Create(new ResearchAgentLoopOptions()));
+        var chat = new FakeChat("{\"action\":\"give_up\"}");
+        await new ResearchAgentLoop(chat, tools, Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System).RunAsync(context, "Revise", default);
+        Assert.Contains("search_web", chat.Prompts.Single());
+    }
+
+    [Fact]
     public async Task CrashAfterCommittedTurn_ResumesWithoutRepeatingTool()
     {
         await using var db = RefactorTestDbContext.Create();
@@ -144,6 +162,22 @@ public sealed class ResearchAgentLoopTests
         Assert.Equal("ProtocolFailure", state.StopReason);
         Assert.Equal(ResearchAgentLoop.Refusal, state.Answer!.Markdown);
         Assert.Equal(2, await db.AgentLlmTurns.CountAsync(x => x.Action == "parse_error"));
+    }
+
+    [Fact]
+    public async Task LargeEvidenceLedger_IsWindowedBeforeBudgetCheck_InsteadOfPrematureRefusal()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var chat = new FakeChat(Search, Submit);
+        var tools = new FakeTools { Results = Enumerable.Range(0, 30).Select(_ => Evidence() with
+            { Result = Evidence().Result with { DocumentChunkId = Guid.NewGuid(), Content = "營收 100 元。" + new string('證', 3000) } }).ToList() };
+        var result = await Loop(chat, tools, new() { MaxPromptTokens = 9000 }).RunAsync(await Context(db), "Research", default);
+        Assert.Equal("AnswerSubmitted", result.StopReason);
+        Assert.Equal(30, result.Ledger.Count);
+        var prompt = JsonNode.Parse(chat.Prompts[1])!;
+        Assert.InRange(prompt["evidence"]!.AsArray().Count, 1, 29);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(chat.Prompts[1]) < 9000);
+        Assert.Contains("營收", chat.Prompts[1]); // 避免中文變成六字元的 Unicode escape。
     }
 
     [Fact]
@@ -220,6 +254,7 @@ public sealed class ResearchAgentLoopTests
 
     private sealed class FakeTools : IResearchLoopTools
     {
+        public IReadOnlyList<RetrievedDocumentChunk>? Results;
         public int Calls;
         public int MaxConcurrent;
         private int _active;
@@ -235,7 +270,7 @@ public sealed class ResearchAgentLoopTests
             if (active == 2) _two.TrySetResult();
             if (WaitForTwo) await _two.Task.WaitAsync(TimeSpan.FromSeconds(3), ct);
             Interlocked.Decrement(ref _active);
-            return new([Evidence()], "Found evidence");
+            return new(Results ?? [Evidence()], "Found evidence");
         }
     }
 }

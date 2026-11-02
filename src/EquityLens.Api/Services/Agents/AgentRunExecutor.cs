@@ -238,8 +238,12 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             EquityLensTelemetry.AgentNodeInterrupted.Add(1);
             AddEvent(run, node, "NodeInterrupted", "Interrupted node recovered under a new lease.", new { previousStatus, node.InterruptionCount, run.LeaseVersion });
             var policy = _policies.GetExecutionPolicy(run.WorkflowDefinitionJson, node.NodeKey, node.NodeType);
-            // 一次接手是最低恢復保證；後續中斷受節點 retry budget 限制。
-            if (node.InterruptionCount > Math.Max(1, policy.MaxRetryCount + 1))
+            var definition = JsonNode.Parse(run.WorkflowDefinitionJson)?["nodes"]?.AsArray().OfType<JsonObject>()
+                .SingleOrDefault(x => x["id"]?.GetValue<string>() == node.NodeKey);
+            var unsafeToRepeat = previousStatus == AgentNodeStatuses.Running
+                && definition?["contract"]?["isIdempotent"]?.GetValue<bool>() == false;
+            // 執行過的非冪等節點必須人工處理；尚未執行的 Ready / Queued 可安全排程。
+            if (unsafeToRepeat || node.InterruptionCount > Math.Max(1, policy.MaxRetryCount + 1))
             {
                 if (node.Status != AgentNodeStatuses.Running)
                 {
@@ -251,7 +255,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 node.ErrorCode = "interrupted";
                 node.ErrorCategory = "Interrupted";
                 node.ErrorRetryable = false;
-                node.ErrorMessage = "Node interruption budget exhausted.";
+                node.ErrorMessage = unsafeToRepeat ? "Interrupted non-idempotent node cannot be automatically repeated." : "Node interruption budget exhausted.";
                 node.CompletedAtUtc = _clock.GetUtcNow().UtcDateTime;
                 throw new AgentNodeException("interrupted", "Interrupted", node.ErrorMessage, false);
             }

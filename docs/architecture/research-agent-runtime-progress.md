@@ -93,3 +93,10 @@
 - 故障注入：副作用成功但結果尚未落盤就取消；接手後重用相同 idempotency key，測試下游只產生一次效果。這是下游冪等合約，不是跨系統 exactly-once 承諾。
 - 真實 PostgreSQL 雙 reviewer 競爭：只有一個決策成功且只有一筆 wake outbox。
 - 首筆實測 runtime 成功，但數字關卡誤擋正確 EPS；已修復句號後引用與表格單位欄名，新增回歸。首筆保守估算約 US$0.02（非供應商帳單）。
+
+- 第一輪 A/B（commit `352eca9`）：DynamicDag 8/11，AgentLoop 5/11。結果保留在 `docs/eval-verification/2026-11-02-agent-loop-ab/{dynamic-dag,agent-loop}`；新引擎未達切換條件。
+- 發現：24 筆證據片段導致 UTF-8 保守預留過大，起草前就拒答；改為依剩餘預算縮小 evidence window，保留完整 ledger，prompt version 升為 2。
+- 發現：既有 Critic 的 JSON 被截斷，四題因此 runtime failure。供應商目前預設 thinking；加入 nullable `DeepSeek:ThinkingEnabled`，預設不改舊行為，第二輪隔離 A/B 兩邊都明確設 false。Critic handler 未改。
+- 加入 provider 層 token / finish_reason 日誌以涵蓋 Critic 等未納入 run totals 的呼叫；不得把 run totals 當完整帳單。
+- 額外邊界：明確非冪等 Running 節點不自動重跑；LocalThenWeb 修訂保留已完成但無結果的 local search 狀態。
+- 此階段驗證：930/930 後端測試全通過；舊 11 題 responses 離線 rescore 仍為 9/11，未改舊題評分結果。
