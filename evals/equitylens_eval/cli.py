@@ -55,6 +55,7 @@ def build_record(case: EvalCase, output: RunOutput, judge: LlmJudge | None) -> d
     return {
         "case_id": case.id,
         "category": case.category,
+        "policy_rule": case.policy_rule,
         "verified": case.verified,
         "expected_behavior": case.expected_behavior,
         "detected_behavior": detected_behavior(output),

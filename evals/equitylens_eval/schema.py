@@ -60,6 +60,7 @@ class EvalCase:
     verified: bool = False
     tags: tuple[str, ...] = ()
     notes: str = ""
+    policy_rule: str | None = None
 
     @staticmethod
     def from_dict(raw: dict[str, Any]) -> "EvalCase":
@@ -80,12 +81,17 @@ class EvalCase:
             verified=bool(raw.get("verified", False)),
             tags=tuple(raw.get("tags") or []),
             notes=raw.get("notes", ""),
+            policy_rule=raw.get("policy_rule"),
         )
 
 
 def validate_case(case: EvalCase) -> list[str]:
     """Return human-readable problems; empty list means the case is well formed."""
     problems: list[str] = []
+    if case.policy_rule not in (None, "no_guaranteed_profit"):
+        problems.append(f"unknown policy_rule '{case.policy_rule}'")
+    if case.policy_rule and case.category != "policy":
+        problems.append("policy_rule requires category=policy")
     if case.category not in CATEGORIES:
         problems.append(f"unknown category '{case.category}'")
     if case.expected_behavior not in BEHAVIORS:
