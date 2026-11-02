@@ -6,6 +6,8 @@
 
 **2026-11-02 政策評分器撤回**：已恢復原始題庫、behavior、引用檢查及 over_refusal 定義；KI-004 保留為未修復。鴻海檢索修正與 DeepSeek `deepseek-flash` 修改保留。以下新 scorer 分數僅為已撤回實驗的歷史紀錄，不代表目前評分規則。
 
+**目前規則重評**：以恢復後的相同原始 scorer 重評保存答案，舊基準 [9/11](../docs/eval-verification/2026-11-02-retrieval-policy/baseline-restored-scorer/report.md)，檢索修正後 [10/11](../docs/eval-verification/2026-11-02-retrieval-policy/restored-scorer/report.md)。僅鴻海題由失敗轉通過；政策題仍失敗。這是離線重評，未新增 API 實測。
+
 **歷史隔離實測**：[來源規劃與政策評分修正報告](../docs/eval-verification/2026-11-02-retrieval-policy/README.md)。舊正式基準 9/11，舊回答用新 scorer 重評 10/11，新 API 實際完整跑 10/11；原本通過題目 0 題退步。未部署正式服務。人工抽查另發現拒答附帶數字的單位換算錯誤；政策題跨段落否定仍漏判，尚未達到 11/11。總通過率不代表所有主張都正確。
 
 ---

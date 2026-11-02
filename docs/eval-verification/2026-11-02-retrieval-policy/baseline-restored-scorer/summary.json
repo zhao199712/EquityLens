@@ -1,0 +1,171 @@
+{
+  "meta": {
+    "label": "baseline-restored-scorer",
+    "mode": "ask",
+    "base_url": "https://equitylens.duckdns.org",
+    "system_commit": "9e03582",
+    "started_at": "2026-11-02T09:35:45+00:00",
+    "notes": "",
+    "cases_file": "evals/cases/research_v1.jsonl",
+    "cases_sha256": "b2abf837cadf4def9d5b20afc8fa10c6600261454eb46c0d89c642ed3cb99c90",
+    "scorer_commit": "1a720a5",
+    "scored_at": "2026-11-02T10:40:16+00:00",
+    "judge_model": null,
+    "rescored_from": "/home/ymsh20220/.codex/worktrees/7f57/EquityLens/docs/eval-verification/2026-11-02-yearfilter/run"
+  },
+  "case_count": 11,
+  "verified_case_count": 11,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 0.8182,
+      "n": 11
+    },
+    "behavior": {
+      "mean": 0.8182,
+      "n": 11
+    },
+    "facts": {
+      "mean": 0.8333,
+      "n": 6
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 5
+    },
+    "citation_coverage": {
+      "mean": 0.8533,
+      "n": 5
+    },
+    "source_hit": {
+      "mean": 0.6667,
+      "n": 6
+    },
+    "retrieval_recall": {
+      "mean": 0.8333,
+      "n": 6
+    },
+    "keywords": {
+      "mean": 0.75,
+      "n": 4
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "hallucination_rate": 0.0,
+    "over_refusal_rate": 0.2857,
+    "error_rate": 0.0,
+    "latency_p50_ms": 4686,
+    "latency_p95_ms": 16346,
+    "mean_total_tokens": 4613.8,
+    "total_cost_usd": null
+  },
+  "by_category": {
+    "multi_doc_synthesis": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "retrieval_recall": {
+          "mean": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "numeric_lookup": {
+      "case_count": 5,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "citation_coverage": {
+          "mean": 0.8533,
+          "n": 5
+        },
+        "source_hit": {
+          "mean": 0.8,
+          "n": 5
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "policy": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "unanswerable": {
+      "case_count": 3,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [
+    "2317-segment-mix",
+    "2330-no-guaranteed-profit"
+  ],
+  "draft_cases": [],
+  "draft_metrics": {}
+}
