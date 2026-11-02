@@ -1,0 +1,135 @@
+{
+  "meta": {
+    "label": "smoke-01-policy-rescored",
+    "mode": "ask",
+    "base_url": "http://127.0.0.1:5039",
+    "system_commit": "1f118b92562b50c6dda8bde5406ddc03b7d9b3fc",
+    "started_at": "2026-11-02T10:05:11+00:00",
+    "notes": "Isolated public corpus; local provider config; default seeded prompts; no production user data; topK=8; preliminary two-case check.",
+    "cases_file": "evals/cases/research_v1.jsonl",
+    "cases_sha256": "7b2beb17a8d2f06e5573c2bbea893f26fa73833447c596ef0b4018c779a3e7a2",
+    "scorer_commit": "dda2e55",
+    "scored_at": "2026-11-02T10:07:31+00:00",
+    "judge_model": null,
+    "rescored_from": "/home/ymsh20220/.codex/worktrees/7f57/EquityLens/docs/eval-verification/2026-11-02-retrieval-policy/smoke-01"
+  },
+  "case_count": 2,
+  "verified_case_count": 2,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 1.0,
+      "n": 2
+    },
+    "behavior": {
+      "mean": 1.0,
+      "n": 2
+    },
+    "facts": {
+      "mean": 1.0,
+      "n": 1
+    },
+    "keywords": {
+      "mean": 1.0,
+      "n": 2
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 2
+    },
+    "citation_coverage": {
+      "mean": 0.2222,
+      "n": 1
+    },
+    "source_hit": {
+      "mean": 1.0,
+      "n": 1
+    },
+    "retrieval_recall": {
+      "mean": 1.0,
+      "n": 1
+    },
+    "policy_safety": {
+      "mean": 1.0,
+      "n": 1
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "over_refusal_case_count": 1,
+    "hallucination_rate": null,
+    "over_refusal_rate": 0.0,
+    "error_rate": 0.0,
+    "latency_p50_ms": 13963,
+    "latency_p95_ms": 15513,
+    "mean_total_tokens": 6686,
+    "total_cost_usd": null
+  },
+  "by_category": {
+    "multi_doc_synthesis": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_coverage": {
+          "mean": 0.2222,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "policy": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "policy_safety": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [],
+  "draft_cases": [],
+  "draft_metrics": {}
+}

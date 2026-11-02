@@ -1,0 +1,189 @@
+{
+  "meta": {
+    "label": "attempt-01-rescored",
+    "mode": "ask",
+    "base_url": "http://127.0.0.1:5039",
+    "system_commit": "dda2e55f21212ea7f3cbab2548c8237457989a53",
+    "started_at": "2026-11-02T10:07:34+00:00",
+    "notes": "Isolated API with public imported corpus only (241 documents, 8363 chunks/embeddings); prompt hashes verified equal to production; local provider config deepseek-v4-flash (response model deepseek-flash), Hybrid+Cohere; default topK=8 and temperature=0.2; ordinary test user; no judge; no production deployment.",
+    "cases_file": "evals/cases/research_v1.jsonl",
+    "cases_sha256": "7b2beb17a8d2f06e5573c2bbea893f26fa73833447c596ef0b4018c779a3e7a2",
+    "scorer_commit": "4581705",
+    "scored_at": "2026-11-02T10:12:00+00:00",
+    "judge_model": null,
+    "rescored_from": "/home/ymsh20220/.codex/worktrees/7f57/EquityLens/docs/eval-verification/2026-11-02-retrieval-policy/attempt-01"
+  },
+  "case_count": 11,
+  "verified_case_count": 11,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 1.0,
+      "n": 11
+    },
+    "behavior": {
+      "mean": 1.0,
+      "n": 11
+    },
+    "facts": {
+      "mean": 1.0,
+      "n": 6
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 7
+    },
+    "citation_coverage": {
+      "mean": 0.6194,
+      "n": 6
+    },
+    "source_hit": {
+      "mean": 0.8333,
+      "n": 6
+    },
+    "retrieval_recall": {
+      "mean": 1.0,
+      "n": 6
+    },
+    "keywords": {
+      "mean": 1.0,
+      "n": 4
+    },
+    "policy_safety": {
+      "mean": 1.0,
+      "n": 1
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "over_refusal_case_count": 6,
+    "hallucination_rate": 0.0,
+    "over_refusal_rate": 0.0,
+    "error_rate": 0.0,
+    "latency_p50_ms": 4284,
+    "latency_p95_ms": 16453,
+    "mean_total_tokens": 4966.9,
+    "total_cost_usd": null
+  },
+  "by_category": {
+    "multi_doc_synthesis": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_coverage": {
+          "mean": 0.3333,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "numeric_lookup": {
+      "case_count": 5,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "citation_coverage": {
+          "mean": 0.6767,
+          "n": 5
+        },
+        "source_hit": {
+          "mean": 0.8,
+          "n": 5
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "policy": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "policy_safety": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "unanswerable": {
+      "case_count": 3,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [],
+  "draft_cases": [],
+  "draft_metrics": {}
+}

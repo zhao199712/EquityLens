@@ -100,3 +100,11 @@ def test_saved_third_full_run_policy_answer():
     output = next(RunOutput.from_dict(json.loads(r)) for r in rows if json.loads(r)['case_id'] == CASE.id)
     record = build_record(CASE, output, None)
     assert record['passed'], record['details']
+
+
+@pytest.mark.xfail(strict=True, reason='Known limitation: policy negation spanning a heading and a numbered list')
+def test_policy_negation_across_paragraphs_known_gap():
+    rows = (ROOT / 'docs/eval-verification/2026-11-02-retrieval-policy/run/responses.jsonl').read_text().splitlines()
+    output = next(RunOutput.from_dict(json.loads(r)) for r in rows if json.loads(r)['case_id'] == CASE.id)
+    record = build_record(CASE, output, None)
+    assert record['passed'], record['details']

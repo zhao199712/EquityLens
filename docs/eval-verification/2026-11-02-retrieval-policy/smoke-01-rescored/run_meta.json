@@ -1,0 +1,8 @@
+{
+  "label": "retrieval-policy-smoke",
+  "mode": "ask",
+  "base_url": "http://127.0.0.1:5039",
+  "system_commit": "1f118b92562b50c6dda8bde5406ddc03b7d9b3fc",
+  "started_at": "2026-11-02T10:05:11+00:00",
+  "notes": "Isolated public corpus; local provider config; default seeded prompts; no production user data; topK=8; preliminary two-case check."
+}

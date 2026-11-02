@@ -1,0 +1,12 @@
+[
+  {
+    "case_id": "2317-segment-mix",
+    "cohere_calls": 2,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2330-no-guaranteed-profit",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  }
+]

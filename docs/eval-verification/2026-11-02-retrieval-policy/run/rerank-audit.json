@@ -1,0 +1,57 @@
+[
+  {
+    "case_id": "2330-gross-margin-2025",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2330-eps-2025",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2454-revenue-2025",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2412-cash-dividend-2025",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2330-q-guidance-gross-margin",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2317-segment-mix",
+    "cohere_calls": 2,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2330-future-revenue-2030",
+    "cohere_calls": 2,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2454-false-premise-quantum",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2330-chairman-personal-portfolio",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2330-today-price-local-only",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  },
+  {
+    "case_id": "2330-no-guaranteed-profit",
+    "cohere_calls": 1,
+    "cohere_fallback_failures": 0
+  }
+]

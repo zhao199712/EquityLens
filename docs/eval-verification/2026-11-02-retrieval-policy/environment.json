@@ -1,0 +1,67 @@
+{
+  "prompt_hashes_match_production": true,
+  "test_prompt_hashes": [
+    "agent.capability.web-request|a61103add5f769f1eebd46fd054708bb497c922bc6cc24c21cd04dee3dd0b643",
+    "agent.critic.review|e42677294d1fb94bab07a3938de204e9e2cd2ca44920d78710e42380c612b074",
+    "agent.evidence.assessor|acb7a3fe540cf72c4e22b98a6596de0466746db75570538d39dd69de0374340d",
+    "agent.evidence.claim-extraction|4e9325ded1b40e6b8b4f9a770b6de02d3f76a8d1b02f9cb82fd4e3743f75f423",
+    "agent.evidence.reanalysis|25d48df09b7686c1d7c93b015a7064322cec03f8fa26234e5934d8f727d0a57a",
+    "agent.evidence.retrieval-plan|f3ab36d32864617c6eeed0719bd64b12e20822fd8b7cfc3d4262738844e4b3d6",
+    "agent.evidence.revision|2217254979d2286da53dec95e66a8f7fffb70ffe7ffd7104d69c28c9d66ad323",
+    "agent.planner.dynamic-workflow|7374fc00309640688d59b72fc010be59f4e6238a58f6a2f699fbbac998987d81",
+    "agent.portfolio.narrative|aed1daae4691063a08877cf22352e18c11ec62e2a914f5f2a1206e33a492abc9",
+    "agent.research.answer|557b13bcde2f0eb343b44226f4d9c54a65f67f9ab7eedef8c9d5594be9093fe4",
+    "agent.revision.draft|8637dd402a118a4b957fcb1d388bcf31c3e32797ae69c7fb999216509c1290a9",
+    "agent.router.investment-research|ae8909453c4c7c95fcd860ec9ca688edcdb5bf3431675ab3b3cbbbf4947d3351",
+    "agent.skill.conference-call-takeaways|bb7529115e845fa9ef83e3887be621ec28badea9431ec308f786f8ece0afe7b8"
+  ],
+  "production_prompt_hashes": [
+    "agent.capability.web-request|a61103add5f769f1eebd46fd054708bb497c922bc6cc24c21cd04dee3dd0b643",
+    "agent.critic.review|e42677294d1fb94bab07a3938de204e9e2cd2ca44920d78710e42380c612b074",
+    "agent.evidence.assessor|acb7a3fe540cf72c4e22b98a6596de0466746db75570538d39dd69de0374340d",
+    "agent.evidence.claim-extraction|4e9325ded1b40e6b8b4f9a770b6de02d3f76a8d1b02f9cb82fd4e3743f75f423",
+    "agent.evidence.reanalysis|25d48df09b7686c1d7c93b015a7064322cec03f8fa26234e5934d8f727d0a57a",
+    "agent.evidence.retrieval-plan|f3ab36d32864617c6eeed0719bd64b12e20822fd8b7cfc3d4262738844e4b3d6",
+    "agent.evidence.revision|2217254979d2286da53dec95e66a8f7fffb70ffe7ffd7104d69c28c9d66ad323",
+    "agent.planner.dynamic-workflow|7374fc00309640688d59b72fc010be59f4e6238a58f6a2f699fbbac998987d81",
+    "agent.portfolio.narrative|aed1daae4691063a08877cf22352e18c11ec62e2a914f5f2a1206e33a492abc9",
+    "agent.research.answer|557b13bcde2f0eb343b44226f4d9c54a65f67f9ab7eedef8c9d5594be9093fe4",
+    "agent.revision.draft|8637dd402a118a4b957fcb1d388bcf31c3e32797ae69c7fb999216509c1290a9",
+    "agent.router.investment-research|ae8909453c4c7c95fcd860ec9ca688edcdb5bf3431675ab3b3cbbbf4947d3351",
+    "agent.skill.conference-call-takeaways|bb7529115e845fa9ef83e3887be621ec28badea9431ec308f786f8ece0afe7b8"
+  ],
+  "public_corpus_counts": {
+    "security": 74,
+    "uploaded_file": 241,
+    "document": 241,
+    "financial_filing": 147,
+    "investor_conference": 94,
+    "document_chunk": 8363,
+    "document_embedding": 8363
+  },
+  "backend_assembly_sha256": "c6af40929ad74a3c56c3c7d016a4f97ffe8c5fa6f13e457836dbda92c6ea87f5",
+  "provider_settings": {
+    "DeepSeek__BaseUrl": "https://api.deepseek.com",
+    "DeepSeek__Model": "deepseek-v4-flash",
+    "Retrieval__LocalCandidateCountForRerank": "30",
+    "Retrieval__RerankProvider": "Cohere",
+    "Retrieval__RetrievalMode": "Hybrid",
+    "Cohere__RerankModel": "rerank-v4.0-fast"
+  },
+  "embedding_model": "text-embedding-3-small",
+  "test_api_settings": {
+    "topK": 8,
+    "temperature": 0.2,
+    "inter_case_delay_seconds": 15
+  },
+  "corpus_fingerprints": {
+    "algorithm": "md5 over ordered UUID + per-row md5, for reproducibility only",
+    "chunks": "ca4139eb8500068d19117c20688ecd1b",
+    "embeddings": "ba05d1c6190724c948e762aaab4017ef"
+  },
+  "cleanup": {
+    "isolated_api_stopped": true,
+    "isolated_containers_and_volumes_removed": true,
+    "temporary_provider_settings_and_jwt_removed": true
+  }
+}
