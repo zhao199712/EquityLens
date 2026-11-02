@@ -107,3 +107,13 @@
 - Eval harness：139 項通過、1 項已知失敗（strict xfail，最終政策回答的跨段落否定）；包含原始基準、兩題實測及前三輪完整實測的政策回答回歸案例。
 - 題庫 validate：13 題、0 格式錯誤、2 題草稿；草稿沒有計入實測分母。
 - `git diff --check` 通過。歸檔前以實際測試環境中的敏感值掃描輸出，確認沒有 JWT、API key 或資料庫連線字串。
+
+## 合併 main 驗證（2026-11-02）
+
+整合 Claude 的 `ebcafa7`（DeepSeek 預設名稱與 judge 範例改為 `deepseek-flash`）與本次 eval 修改，合併提交為 `a04a5dc`，無衝突。此驗證不改寫上面的實際 API 評測結果或執行版本。
+
+- Eval harness：139 passed、1 strict xfailed（上述已知跨段落政策否定案例）。
+- 後端預設平行測試：860 passed、12 skipped、1 failed；失敗為 `RiskObservabilityTests.PortfolioRisk_EmitsOperationAndCalculationStageSpans`。該類別單獨重跑 2/2 通過。
+- 關閉測試集合平行執行後，全套為 **861 passed、12 skipped、0 failed**。命令：`dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj --no-build --no-restore --verbosity quiet -- xUnit.ParallelizeTestCollections=false`。
+- 遙測測試使用全域 ActivityListener；上述結果顯示可能有平行執行干擾，本次未修改該測試，也不宣稱預設平行測試全過。
+- 本次合併未重新呼叫 DeepSeek API，未部署正式環境。
