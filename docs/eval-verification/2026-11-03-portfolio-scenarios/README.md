@@ -54,4 +54,4 @@
 - Router 的自然語言抽取與模型解讀仍有生成波動；參數合法性、數學及權限由程式驗證，文字語義目前是 prompt 規則與人工抽查，沒有宣稱通用語義 gate。
 - 當期持倉、價格與現金讀取後持久化為同一比較快照；不是歷史帳戶重建或跨表 serializable 快照。
 - 兩輪六次 provider 呼叫合計 input 15,338 / output 3,698 tokens。按既有隔離設定 US$0.3／1.2 每百萬 token 估算 US$0.009039（非帳單），沒有 embedding 呼叫。
-- 所有修改保留在 `feat/portfolio-scenario-analysis`，未自動部署正式服務。
+- 驗收完成時修改保留在 `feat/portfolio-scenario-analysis`。其後使用者明確要求部署，已合併 main `d8af5ef` 並於 2026-11-03 02:12 部署前後端，見[部署紀錄](../../architecture/research-agent-runtime-deployment.md)；不是排程自行發布。
