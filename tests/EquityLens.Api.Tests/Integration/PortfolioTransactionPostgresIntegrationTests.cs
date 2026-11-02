@@ -33,7 +33,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         _fixture = fixture;
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task CleanPostgresDatabase_AppliesAllMigrations()
     {
         RequirePostgres();
@@ -43,7 +43,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.True(await db.Database.CanConnectAsync());
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task MissingIdempotencyKey_IsRejectedByApi()
     {
         RequirePostgres();
@@ -62,7 +62,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.Empty(await verify.PortfolioTransactions.Where(x => x.PortfolioId == seeded.PortfolioId).ToListAsync());
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task SameKeyAndPayload_ReturnsOriginalTransactionWithoutCreatingSecondRow()
     {
         RequirePostgres();
@@ -84,7 +84,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.Matches("^[0-9a-f]{64}$", row.RequestHash!);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task SameKeyAndDifferentPayload_ReturnsConflict()
     {
         RequirePostgres();
@@ -112,7 +112,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.Single(await db.PortfolioTransactions.Where(x => x.PortfolioId == seeded.PortfolioId).ToListAsync());
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task ConcurrentSameKey_CreatesExactlyOneTransaction()
     {
         RequirePostgres();
@@ -132,7 +132,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.Single(await db.PortfolioTransactions.Where(x => x.PortfolioId == seeded.PortfolioId).ToListAsync());
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task Create_ReconcilesHoldingDividendAndImplicitFunding()
     {
         RequirePostgres();
@@ -163,7 +163,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.Equal(1000m, funding.Amount);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task DividendReconcile_UpdatesAutomaticFlowAndPreservesUserAdjustedFlow()
     {
         RequirePostgres();
@@ -198,7 +198,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.Equal(20m / 3m, holding.AverageCost, precision: 5);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task FundingFailure_RollsBackAllRowsAndAllowsSameKeyRetry()
     {
         RequirePostgres();
@@ -220,7 +220,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.False(retry.Value!.WasIdempotentReplay);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task DeleteFailure_RollsBackAndPreservesOriginalDerivedRows()
     {
         RequirePostgres();
@@ -243,7 +243,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.Equal(1000m, (await verify.PortfolioCashFlows.SingleAsync(x => x.PortfolioId == seeded.PortfolioId && x.Note == "系統推導：買入資金")).Amount);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task DeleteAllBySecurity_ReconcilesHoldingDividendAndFunding()
     {
         RequirePostgres();
@@ -274,7 +274,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         Assert.Equal(100m, remainingFunding.Amount);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task ApiValidationRejectsInvalidTypeQuantityPriceAndFee()
     {
         RequirePostgres();
@@ -301,7 +301,7 @@ public sealed class PortfolioTransactionPostgresIntegrationTests
         }
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task DatabaseConstraintsRejectInvalidTransactionValues()
     {
         RequirePostgres();
