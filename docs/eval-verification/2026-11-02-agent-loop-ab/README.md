@@ -54,3 +54,7 @@ provider_usage.jsonl 從各題執行期間的 provider 日誌收集呼叫量，�
 ## 修正後展示
 
 `c953970` 的 [demo 執行紀錄](demo-c953970.txt) 完整完成 16 個節點，EPS 回答 66.26 元並引用年報第 10、58 頁。這是展示腳本的單次 smoke test，問句與完整 eval 不完全相同，不能替代新的 A/B 或覆寫先前 FAIL。
+
+## 工具契約修正後完整 A/B
+
+原有 8 題保持不變，[v1](dynamic-dag-tool-contract/report.md) 6/8、[v4](agent-loop-tool-contract/report.md) 5/8。v4 EPS 恢復 PASS，但鴻海營收組成此輪 FAIL；毛利率與政策題仍 FAIL。p95 為 14.913s 對 10.215s（1.46 倍），仍保留 v1 預設。不同輪的逐題波動不能用挑選最佳回答消除。

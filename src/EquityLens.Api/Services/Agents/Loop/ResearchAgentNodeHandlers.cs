@@ -147,11 +147,15 @@ public sealed class FinalizeResearchAgentNodeHandler : IAgentNodeHandler
         var passed = board["outputGate"]?["passed"]?.GetValue<bool>() == true;
         var accepted = board[AgentBlackboardKeys.CriticReview]?[CriticReviewFields.RecommendedNextAction]?.GetValue<string>() == "AcceptAnswer";
         var refusal = !passed || !accepted || board[AgentBlackboardKeys.Answer]?.GetValue<string>() == ResearchAgentLoop.Refusal;
-        var answer = refusal ? ResearchAgentLoop.Refusal : board[AgentBlackboardKeys.Answer]!.GetValue<string>();
+        // 這是系統固定的風險說明，不把未通過驗收的模型答案升級為成功。
+        var policyAnswer = refusal ? GuaranteedReturnResponse(board[AgentBlackboardKeys.Question]?.GetValue<string>() ?? "") : null;
+        var answer = policyAnswer ?? (refusal ? ResearchAgentLoop.Refusal : board[AgentBlackboardKeys.Answer]!.GetValue<string>());
+        board["researchAgentPolicyResponse"] = policyAnswer is not null;
         board[AgentBlackboardKeys.Answer] = answer;
         if (board[AgentBlackboardKeys.RevisedAnswer] is not null) board[AgentBlackboardKeys.RevisedAnswer] = answer;
-        board["researchAgentFinalStatus"] = refusal ? (passed ? "InsufficientEvidence" : "CitationValidationFailed") : "Answered";
+        board["researchAgentFinalStatus"] = policyAnswer is not null ? "Answered" : refusal ? (passed ? "InsufficientEvidence" : "CitationValidationFailed") : "Answered";
         board[AgentBlackboardKeys.FinalOutput] = new JsonObject { ["answer"] = answer, ["status"] = board["researchAgentFinalStatus"]!.DeepClone(),
+            ["policyResponse"] = policyAnswer is not null,
             ["criticReview"] = board[AgentBlackboardKeys.CriticReview]?.DeepClone(), ["outputGate"] = board["outputGate"]?.DeepClone() };
         if (refusal)
         {
@@ -171,4 +175,11 @@ public sealed class FinalizeResearchAgentNodeHandler : IAgentNodeHandler
         context.Run.OutputJson = board[AgentBlackboardKeys.FinalOutput]!.ToJsonString();
         context.Node.OutputJson = context.Run.OutputJson;
     }
+    internal static string? GuaranteedReturnResponse(string question)
+    {
+        // 僅辨識要求投資報酬承諾的問句；保證金／保固等一般文件問題不適用。
+        if (!Regex.IsMatch(question, @"(?:一定|必定|肯定).{0,8}(?:賺錢|賺|獲利)|(?:保證|穩賺).{0,8}(?:獲利|報酬|賺錢|不賠)|guaranteed?\s+(?:profit|return)", RegexOptions.IgnoreCase)) return null;
+        return "投資有風險，未來報酬存在不確定性，無法保證買進後能獲利。請依自身風險承受能力評估，歷史績效不代表未來結果。";
+    }
+
 }

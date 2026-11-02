@@ -13,7 +13,7 @@ internal static partial class ResearchNumberTraceability
 
     internal static Result Check(string answer, IReadOnlyList<JsonObject> citations)
     {
-        var total = 0; var missing = 0; var missingMoney = false;
+        var total = 0; var missing = 0; var missingMoney = false; var invalidRatio = false;
         var warnings = new HashSet<string>();
         // 常見「句子。[1]」格式仍屬同句引用。
         answer = Regex.Replace(answer.Normalize(NormalizationForm.FormKC), @"([。！？!?；;])\s*((?:\[\d+\])+)", "$2$1");
@@ -30,6 +30,32 @@ internal static partial class ResearchNumberTraceability
             var quotes = citations.Where(x => ids.Contains(x["citationIndex"]?.GetValue<int>() ?? -1))
                 .SelectMany(x => ExtractQuote(x["quoteText"]?.GetValue<string>() ?? "")
                     .Concat(Extract(x["title"]?.GetValue<string>() ?? "").Select(n => n with { AllowUnitlessMoney = false }))).ToList();
+            // 只驗證明示的百分比除法；兩個運算元必須來自同句引用，不能用任意模型數值造出依據。
+            foreach (Match expression in RatioExpression().Matches(sentence))
+            {
+                var verified = false;
+                var left = Extract(expression.Groups["left"].Value).SingleOrDefault();
+                var right = Extract(expression.Groups["right"].Value).SingleOrDefault();
+                if (left is null || right is null || left.Kind != right.Kind || right.Value == 0)
+                { invalidRatio = true; warnings.Add("InvalidRatioExpression"); continue; }
+                // 運算元採精確比對，結果才容許既有的四捨五入誤差；單位不可用裸數字替代。
+                if (!quotes.Any(q => q.Kind == left.Kind && q.Value == left.Value) ||
+                    !quotes.Any(q => q.Kind == right.Kind && q.Value == right.Value))
+                { invalidRatio = true; warnings.Add("UntraceableRatioOperands"); continue; }
+                try
+                {
+                    var calculated = left.Value / right.Value * 100m;
+                    var claimed = Extract(expression.Groups["result"].Value).Single();
+                    verified = Math.Abs(calculated - claimed.Value) <= Math.Abs(calculated) * .005m;
+                    if (verified)
+                    {
+                        quotes.Add(new(calculated, "percent"));
+                        warnings.Add("VerifiedRatioExpression");
+                    }
+                }
+                catch (OverflowException) { }
+                if (!verified) { invalidRatio = true; warnings.Add("InvalidRatioExpression"); }
+            }
             foreach (var number in numbers)
             {
                 total++;
@@ -43,7 +69,7 @@ internal static partial class ResearchNumberTraceability
                 warnings.Add($"CheckNumber: {number.Value.ToString(CultureInfo.InvariantCulture)} ({number.Kind})");
             }
         }
-        return new(missingMoney || (total > 0 && missing * 2 > total), warnings.ToArray());
+        return new(invalidRatio || missingMoney || (total > 0 && missing * 2 > total), warnings.ToArray());
     }
 
     private static IReadOnlyList<Number> ExtractQuote(string text)
@@ -87,6 +113,10 @@ internal static partial class ResearchNumberTraceability
         }
         return result;
     }
+
+    // 數字後允許單位；除號後只允許短標籤，必須有等號及百分比結果。
+    [GeneratedRegex(@"(?<left>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:÷|除以|/)\s*[^\d\r\n=≈]{0,40}?(?<right>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:(?:×|\*)\s*100\s*)?(?:=|≈|約為|等於)\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)")]
+    private static partial Regex RatioExpression();
 
     [GeneratedRegex(@"\[(\d+)\]")]
     private static partial Regex Reference();

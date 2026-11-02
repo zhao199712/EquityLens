@@ -113,3 +113,8 @@
 - 毛利率診斷：來源金額推導的 59.9% 不直接出現在引用中，且首句未帶引用，數值追溯關卡拒絕。尚未建立可信計算 ledger，不能藉放寬 gate 宣稱解決。
 
 - `c953970` 驗證：942/942 後端（含真實 PostgreSQL）、70 pytest；EF 無 pending model。展示腳本實跑成功，回答 EPS 66.26 元，引用第 10／58 頁。單次展示不替代 A/B。面試稿：`research-agent-runtime-interview.md`；報告：`../eval-verification/2026-11-02-agent-loop-ab/README.md`。
+
+- 工具契約修正後完整 A/B：v1 6/8、v4 5/8；EPS 恢復 PASS，鴻海 segment mix 此輪 FAIL（前輪 PASS），仍有生成波動。v4 p95 14.913s，v1 10.215s，仍未達 1.3 倍門檻。資料保留於 `*-tool-contract`。
+- 新增明示百分比除法的確定性驗證：運算元必須精確出現在同句引用、維度相同、分母非零，程式重算後才能將比例視為可追溯；計算錯誤或來源不符 blocking。這是 OutputGate 算式驗證，並非新增接受 LLM 原始數值的計算工具，也不代表具備通用結構化 metric ledger。語義仍交 Critic。
+- 報酬承諾問句若模型答案遭拒，改由系統固定風險說明回覆，清除引用並記錄 policyResponse；原 Critic / gate 結果不改，未通過模型文字不會被發布。一般資料不足仍用既有拒答。
+- Prompt v4 明確要求摘要也帶同句引用及百分比明示算式；955/955 後端、70 pytest 通過。下一輪驗證限定原有 2330 / 2317 題目，不改 scorer。

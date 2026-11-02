@@ -70,6 +70,46 @@ public sealed class ResearchAgentWorkflowTests
     }
 
     [Fact]
+    public async Task Finalize_ReplacesBlockedReturnPromiseWithAuditableSystemResponse()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var created = await Service(db).CreateResearchInvestigationAsync(Guid.NewGuid(), new("2330", "買進一定會賺錢嗎？", Engine: "AgentLoop"));
+        var run = await db.AgentRuns.Include(x => x.Nodes).SingleAsync();
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board["answer"] = "保證獲利 999 元[1]";
+        board["outputGate"] = new JsonObject { ["passed"] = false };
+        board["citations"] = new JsonArray(new JsonObject { ["citationIndex"] = 1 });
+        run.BlackboardJson = board.ToJsonString();
+        var node = run.Nodes.Single(x => x.NodeKey == "finalizeResearch");
+        await new FinalizeResearchAgentNodeHandler().ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
+        var output = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        Assert.True(output["researchAgentPolicyResponse"]!.GetValue<bool>());
+        Assert.Equal("Answered", output["researchAgentFinalStatus"]!.GetValue<string>());
+        Assert.DoesNotContain("999", output["answer"]!.GetValue<string>());
+        Assert.Contains("風險", output["answer"]!.GetValue<string>());
+        Assert.Empty(output["citations"]!.AsArray());
+        Assert.False(output["outputGate"]!["passed"]!.GetValue<bool>());
+    }
+
+    [Theory]
+    [InlineData("現在買台積電一定會賺錢嗎？", true)]
+    [InlineData("投資這個產品能保證報酬嗎？", true)]
+    [InlineData("Does this investment have guaranteed returns?", true)]
+    [InlineData("財報中的保證金金額是多少？", false)]
+    [InlineData("台積電基本每股盈餘多少？", false)]
+    public void GuaranteedReturnResponse_IsSpecificToReturnPromises(string question, bool expected)
+    {
+        var answer = FinalizeResearchAgentNodeHandler.GuaranteedReturnResponse(question);
+        Assert.Equal(expected, answer is not null);
+        if (answer is not null)
+        {
+            Assert.Contains("風險", answer);
+            Assert.Contains("無法保證", answer);
+            Assert.DoesNotContain("保證獲利", answer);
+        }
+    }
+
+    [Fact]
     public void Definition_HasCompleteStaticGraphAndRegisteredContracts()
     {
         var run = new ResearchAgentWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid(), new("2330", "營收"));
@@ -111,12 +151,27 @@ public sealed class ResearchAgentWorkflowTests
     [InlineData("EPS 66.26 元。[1]", "基本每股盈餘（元） 66.26", false)]
     [InlineData("股數 25,928,262 仟股[1]", "股數 25,928,262 仟股", false)]
     [InlineData("金額 25,928,262 仟元[1]", "股數 25,928,262 仟股", true)]
+    [InlineData("毛利 2,281,293,979 仟元 ÷ 營收 3,809,054,272 仟元 ≈ 59.89%，約 59.9%[1]", "新台幣仟元：毛利 2,281,293,979、營收 3,809,054,272", false)]
+    [InlineData("毛利 600 元 ÷ 營收 1000 元 ≈ 60%，毛利率 60%[1]", "毛利 600 元、營收 1000 元", false)]
+    [InlineData("毛利 600 元 ÷ 營收 1000 元 ≈ 80%[1]", "毛利 600 元、營收 1000 元", true)]
+    [InlineData("毛利 600 元 ÷ 營收 1000 元 ≈ 60%[1]", "毛利 500 元、營收 1000 元", true)]
     [InlineData("營收增加[1]", "營收增加", false)]
     public void NumberGate_ChecksCitedQuote_WithNormalizationAndUnits(string answer, string quote, bool blocking)
     {
         var result = ResearchNumberTraceability.Check(answer,
             [new JsonObject { ["citationIndex"] = 1, ["quoteText"] = quote }]);
         Assert.Equal(blocking, result.Blocking);
+    }
+
+    [Theory]
+    [InlineData("600 元 ÷ 0 元 ≈ 60%[1]", "600 元、0 元")]
+    [InlineData("600 元 ÷ 1000 股 ≈ 60%[1]", "600 元、1000 股")]
+    [InlineData("600 元 ÷ 1000 元 ≈ 60%[1]", "600、1000")]
+    public void NumberGate_DoesNotVerifyInvalidOrUnitlessRatio(string answer, string quote)
+    {
+        var result = ResearchNumberTraceability.Check(answer, [new JsonObject { ["citationIndex"] = 1, ["quoteText"] = quote }]);
+        Assert.DoesNotContain("VerifiedRatioExpression", result.Warnings);
+        Assert.True(result.Blocking);
     }
 
     [Fact]
