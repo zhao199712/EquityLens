@@ -57,3 +57,20 @@
 
 ![五檔計算完成](five-stock-completed.jpg)
 ![五檔蒙地卡羅路徑](five-stock-monte-carlo.jpg)
+
+## 台積電 Reports 財報功能：未通過
+
+依使用者要求，從導覽 Reports 進入 `/financial-reports`，建立 ticker `2330`、公司「台積電 2330 UI 財報驗收」、類型 Financial Report。列表短暫新增 ID 5，但點開 `/financial-reports/5` 後仍顯示固定的「TSMC 2025 Q1 財報分析 / AI MEMO」。返回列表後，新增項目消失，恢復四筆預設卡片。
+
+原始碼核對：`FinancialReportListView.vue` 的 `reports` 是硬編碼陣列，`createReport` 只 push 前端 ref，沒有 API 或持久化；`FinancialReportDetailView.vue` 的指標、AI Memo、引用、Critic Notes 與 Portfolio Impact 均為固定內容，未依路由 ID 載入真實報告。
+
+具體問題：
+
+- 同頁 KPI 營收 NT$85.2B，AI Memo 與引用卻寫 NT$25.8B，展示數值互相矛盾。
+- 建立時選 Financial Report，明細仍顯示 AI MEMO，未反映輸入。
+- Citations 的頁碼與「高可信度」也是硬編碼，不能當成檢索或驗證成功的證據。
+- 返回列表即遺失新增項目，無法完成真實財報建立、保存及讀取驗收。
+
+本結果與前述 Research 頁的台積電 EPS 真實 AgentLoop smoke 分開計算。Reports 尚未接通後端，不可因 Research 已成功而宣稱財報管理功能完成。本次未修改產品程式或部署。
+
+![台積電財報靜態內容與數值矛盾](tsmc-report-static.jpg)

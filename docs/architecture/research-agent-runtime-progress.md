@@ -9,6 +9,8 @@
 
 ### 2026-11-03 01:05 正式 UI 驗收
 
+台積電 Reports 財報管理另行實測未通過：列表建立僅存前端記憶體，返回即消失；明細、引用與 Critic 均為硬編碼，營收 KPI 與內文不一致。此頁尚未串接後端，與已通過的 Research AgentLoop 分開看待。證據見同份瀏覽器驗收紀錄。
+
 後續依使用者指定，以台積電、聯發科、台達電、富邦金、鴻海另建五檔組合重跑：risk 與 monte-carlo 均 Completed，採 VT-GARCH-t + Joint-Vector FHS，無 fallback，路徑圖已顯示。1 日 VaR 95% -2.51%、ES 95% -3.51%；台積電權重 81.77%。模型統計驗證仍 Unvalidated，詳細參數與證據見下方驗收紀錄。
 
 獨立帳號研究 smoke 通過（ResearchAgent 8.4 秒、EPS 66.26、兩項引用）；0050 全部 50 檔模擬持倉建立完成。Risk Run 建立遭資料門檻拒絕：6446 只有 241 筆，低於實際 352 共同日要求；沒有產生風險結果。另發現新增持股競態、門檻錯誤文案及無 run 仍顯示 QUEUED。詳見 [瀏覽器驗收紀錄](../eval-verification/2026-11-03-ui-smoke/README.md)，此三項尚待修補。
