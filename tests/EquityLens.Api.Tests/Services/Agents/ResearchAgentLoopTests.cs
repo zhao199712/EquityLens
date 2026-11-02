@@ -221,6 +221,20 @@ public sealed class ResearchAgentLoopTests
         if (policy == SourcePolicy.WebOnly) Assert.DoesNotContain(tools.Visible(scope), x => x.Name == "search_local");
     }
 
+    [Theory]
+    [InlineData("AnnualReport", true)]
+    [InlineData("EarningsPresentation", true)]
+    [InlineData("財報", false)]
+    public void DocumentType_IsEnumeratedAndGuardedBeforeDispatch(string type, bool allowed)
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var tools = new ResearchLoopTools(services.GetRequiredService<IServiceScopeFactory>(), Options.Create(new ResearchAgentLoopOptions()));
+        var scope = new LoopToolScope(Guid.NewGuid(), new("2330", "test", SourcePolicy: SourcePolicy.LocalOnly), [], false);
+        var definition = tools.Visible(scope).Single(x => x.Name == "search_local");
+        Assert.Equal(new[] { "AnnualReport", "EarningsPresentation" }, definition.Parameters["properties"]!["documentType"]!["enum"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Equal(allowed, tools.Validate(scope, new("c", "search_local", new JsonObject { ["query"] = "EPS", ["documentType"] = type })) is null);
+    }
+
     private static ResearchAgentLoop Loop(FakeChat chat, FakeTools tools, ResearchAgentLoopOptions? options = null) =>
         new(chat, tools, Options.Create(options ?? new ResearchAgentLoopOptions()), TimeProvider.System);
 

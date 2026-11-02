@@ -14,7 +14,7 @@ public sealed class ResearchLoopTools(IServiceScopeFactory scopes, IOptions<Rese
     {
         var tools = new List<LoopToolDefinition>();
         if (scope.Request.SourcePolicy != SourcePolicy.WebOnly)
-            tools.Add(new("search_local", "搜尋指定公司的本地公開文件，query 必填，可指定 documentType、year、topK。",
+            tools.Add(new("search_local", "搜尋指定公司的本地公開文件，query 必填，可指定 year、topK；documentType 僅接受 AnnualReport 或 EarningsPresentation，不確定時省略。",
                 Schema("query", ("query", "string"), ("documentType", "string"), ("year", "integer"), ("topK", "integer")), options.Value.ToolCostReserveUsd));
         if (scope.Request.SourcePolicy != SourcePolicy.LocalOnly &&
             (scope.Request.SourcePolicy != SourcePolicy.LocalThenWeb || scope.LocalSearchCompleted))
@@ -45,7 +45,7 @@ public sealed class ResearchLoopTools(IServiceScopeFactory scopes, IOptions<Rese
                 if (string.IsNullOrWhiteSpace(query) || query.Length > 1000) return "InvalidQuery";
                 if (call.Arguments["topK"] is { } topK && (topK.GetValue<int>() < 1 || topK.GetValue<int>() > 10)) return "InvalidTopK";
                 if (call.Arguments["year"] is { } year && (year.GetValue<int>() < 1900 || year.GetValue<int>() > 2100)) return "InvalidYear";
-                if (call.Arguments["documentType"] is { } type && (type.GetValue<string>().Length > 64 || string.IsNullOrWhiteSpace(type.GetValue<string>()))) return "InvalidDocumentType";
+                if (call.Arguments["documentType"] is { } type && type.GetValue<string>() is not ("AnnualReport" or "EarningsPresentation")) return "InvalidDocumentType: use AnnualReport or EarningsPresentation, or omit";
             }
             else
             {
@@ -99,6 +99,6 @@ public sealed class ResearchLoopTools(IServiceScopeFactory scopes, IOptions<Rese
     private static JsonObject Schema(string required, params (string Name, string Type)[] properties) => new()
     {
         ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JsonArray(required),
-        ["properties"] = new JsonObject(properties.Select(x => new KeyValuePair<string, JsonNode?>(x.Name, new JsonObject { ["type"] = x.Type })))
+        ["properties"] = new JsonObject(properties.Select(x => new KeyValuePair<string, JsonNode?>(x.Name, x.Name == "documentType" ? new JsonObject { ["type"] = x.Type, ["enum"] = new JsonArray("AnnualReport", "EarningsPresentation") } : new JsonObject { ["type"] = x.Type })))
     };
 }

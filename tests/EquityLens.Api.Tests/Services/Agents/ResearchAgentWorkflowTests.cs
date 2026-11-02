@@ -109,6 +109,8 @@ public sealed class ResearchAgentWorkflowTests
     [InlineData("營收 5,959.66 億元[1]", "營收 595,965,682 仟元", false)]
     [InlineData("2026 年毛利率 65.5% 至 67.5%，營收 1,134.10 億元 [1]", "2026 年毛利率 65.5% 至 67.5%，營收 1,134.10（新台幣十億元）", true)]
     [InlineData("EPS 66.26 元。[1]", "基本每股盈餘（元） 66.26", false)]
+    [InlineData("股數 25,928,262 仟股[1]", "股數 25,928,262 仟股", false)]
+    [InlineData("金額 25,928,262 仟元[1]", "股數 25,928,262 仟股", true)]
     [InlineData("營收增加[1]", "營收增加", false)]
     public void NumberGate_ChecksCitedQuote_WithNormalizationAndUnits(string answer, string quote, bool blocking)
     {

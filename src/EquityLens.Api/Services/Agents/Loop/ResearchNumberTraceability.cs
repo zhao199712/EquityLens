@@ -80,7 +80,7 @@ internal static partial class ResearchNumberTraceability
                 CultureInfo.InvariantCulture, out var value)) continue;
             var mult = m.Groups[2].Value; var unit = m.Groups[3].Value;
             var kind = unit is "%" or "百分點" or "個百分點" ? "percent" : unit == "倍" ? "multiple"
-                : unit is "元" or "美元" || mult.Length > 0 ? "money" : "plain";
+                : unit == "股" ? "shares" : unit is "元" or "美元" || mult.Length > 0 ? "money" : "plain";
             var scale = mult switch { "兆" => 1_000_000_000_000m, "億" => 100_000_000m, "萬" => 10_000m, "千" or "仟" => 1000m, _ => 1m };
             try { result.Add(new(kind == "percent" ? value : value * scale, kind)); }
             catch (OverflowException) { /* 超出 decimal 範圍不進入計算。 */ }
@@ -90,6 +90,6 @@ internal static partial class ResearchNumberTraceability
 
     [GeneratedRegex(@"\[(\d+)\]")]
     private static partial Regex Reference();
-    [GeneratedRegex(@"([-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)\s*(兆|億|萬|千|仟)?\s*(%|個百分點|百分點|美元|元|倍)?")]
+    [GeneratedRegex(@"([-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)\s*(兆|億|萬|千|仟)?\s*(%|個百分點|百分點|美元|元|倍|股)?")]
     private static partial Regex Numeric();
 }
