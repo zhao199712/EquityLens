@@ -54,7 +54,7 @@ public sealed class RetrievalPlanner : IRetrievalPlanner
         var intent = DetectIntent(question);
         var normalized = question.ToLowerInvariant();
         var mentionsConference = ContainsAny(normalized, ["法說", "conference", "earnings", "presentation", "management", "guidance", "展望"]);
-        var mentionsAnnualReport = ContainsAny(normalized, ["年報", "annual report", "財報", "financial statement", "現金流", "資產負債", "損益"]);
+        var mentionsAnnualReport = ContainsAny(normalized, ["年報", "annual report", "財報", "財務報告", "財務報表", "financial report", "financial statement", "現金流", "資產負債", "損益"]);
         if (mentionsConference || (intent is ResearchQuestionIntent.Risk or ResearchQuestionIntent.Financial && !mentionsAnnualReport))
         {
             var (conferenceK, annualK) = SplitTopK(topK, _options.AutoPrimaryRatio);
@@ -121,6 +121,10 @@ public sealed class RetrievalPlanner : IRetrievalPlanner
     private static string ExpandConferenceQuery(string question, ResearchQuestionIntent intent)
     {
         var baseQuery = question;
+        if (IsProductRevenueQuestion(question))
+        {
+            return $"{question} 產品別收入 外部客戶收入 產品線 營收占比 product revenue external customer revenue revenue by product";
+        }
         return intent switch
         {
             ResearchQuestionIntent.Financial => $"{baseQuery} 法說會 財務表現 營收 毛利率 營業利益率 每股盈餘 現金流 revenue gross margin operating margin EPS income statement balance sheet cash flow",
@@ -132,6 +136,10 @@ public sealed class RetrievalPlanner : IRetrievalPlanner
     private static string ExpandAnnualReportQuery(string question, ResearchQuestionIntent intent)
     {
         var baseQuery = question;
+        if (IsProductRevenueQuestion(question))
+        {
+            return $"{question} 產品別收入 外部客戶收入 產品線 營收占比 product revenue external customer revenue revenue by product";
+        }
         return intent switch
         {
             ResearchQuestionIntent.Financial => $"{baseQuery} 財務報表 營收 毛利率 營業利益率 資產負債 現金流 每股盈餘 財務比率 financial statements balance sheet income statement cash flow EPS",
@@ -139,6 +147,9 @@ public sealed class RetrievalPlanner : IRetrievalPlanner
             _ => $"{baseQuery} 風險因素 營運風險 市場風險 信用風險 匯率風險 利率風險 流動性風險 地緣政治 出口管制 客戶集中 供應鏈 不確定性 risk factors credit risk market risk liquidity risk foreign exchange risk"
         };
     }
+
+    private static bool IsProductRevenueQuestion(string question) =>
+        ContainsAny(question, ["產品別", "產品線", "外部收入", "營收占比", "product revenue", "product line", "external revenue", "external customer revenue", "revenue by product"]);
 
     private static bool ContainsAny(string value, IReadOnlyList<string> candidates)
     {

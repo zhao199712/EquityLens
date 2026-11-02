@@ -64,6 +64,42 @@ public sealed class RetrievalPipelineComponentTests
             Assert.Equal("AnnualReport", plan.Searches[0].DocumentType);
         }
 
+        [Theory]
+        [InlineData("根據 2025 年度合併財務報告的產品別外部收入，鴻海各產品線 2025 年營收占比如何？與 2024 年相比，哪類產品營收年增率最高？")]
+        [InlineData("合併財務報表的產品別收入")]
+        [InlineData("財務報告的產品線收入")]
+        [InlineData("Financial report revenue by product")]
+        [InlineData("Consolidated financial statements external customer revenue")]
+        public void BuildPlan_ProductRevenue_UsesAnnualPrimaryAndFocusedQuery(string question)
+        {
+            var plan = _planner.BuildPlan(question, null, null, 8);
+            Assert.Equal("AnnualReport", plan.Searches[0].DocumentType);
+            Assert.Equal("Primary", plan.Searches[0].SourceRole);
+            Assert.Equal(8, plan.Searches.Sum(search => search.TopK));
+            Assert.All(plan.Searches, search =>
+            {
+                Assert.Contains(question, search.Query);
+                Assert.Contains("external customer revenue", search.Query);
+                Assert.DoesNotContain("EPS", search.Query);
+                Assert.DoesNotContain("gross margin", search.Query);
+            });
+        }
+
+        [Fact]
+        public void BuildPlan_ConferenceGuidance_RemainsConferencePrimary()
+        {
+            var plan = _planner.BuildPlan("台積電法說會第二季毛利率指引", null, null, 8);
+            Assert.Equal("EarningsPresentation", plan.Searches[0].DocumentType);
+        }
+
+        [Fact]
+        public void BuildPlan_ExplicitConference_OverridesFinancialReportWords()
+        {
+            var plan = _planner.BuildPlan("財務報告產品別收入", RetrievalMode.ConferenceOnly, null, 8);
+            Assert.Single(plan.Searches);
+            Assert.Equal("EarningsPresentation", plan.Searches[0].DocumentType);
+        }
+
         [Fact]
         public void BuildPlan_AutoRiskQuestion_SplitsTopKBetweenConferenceAndAnnualReport()
         {
