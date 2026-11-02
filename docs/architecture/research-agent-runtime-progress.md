@@ -33,9 +33,9 @@
 | A13 | 副作用工具審批（參數綁定、冪等、Reject 附理由） | SHOULD | ✅ | ToolApprovalTests / ToolApprovalPostgresTests | Phase 4 | 測試工具；正式工具仍唯讀 |
 | A14 | OTel span 與 metrics | SHOULD | ✅ | Telemetry_ParentsParallelToolsToTurn | Phase 2–4 | |
 | A15 | 依風險觸發人工審閱 | COULD | ⬜ | | | |
-| A16 | 實際 A/B 報告 | COULD | ✅ | 限定公司 8 題與完整原始結果 | docs 階段 | 未達預設切換門檻 |
+| A16 | 實際 A/B 報告 | COULD | ✅ | 限定公司 8 題與完整原始結果 | docs 階段 | 最新兩輪數值門檻達標；仍保留舊引擎預設 |
 | — | 合併為單一 `QualityGate`、DAG 縮為約 6 節點 | COULD | ⬜ | | | |
-| A17 | build / test / migration / pytest 全綠 | 每次 commit | ✅ | 942 backend / 70 pytest / 無 pending model | c953970 | 後續修改仍需再驗證 |
+| A17 | build / test / migration / pytest 全綠 | 每次 commit | ✅ | 958 backend / 75 pytest / 無 pending model | 53b5db1 / 379022b | 後續修改仍需再驗證 |
 
 ## 每次 commit 的驗證紀錄
 
@@ -44,6 +44,8 @@
 | 2026-11-02 | A1–A3 | 通過 | 885 / 885，0 skipped | 無 pending | 60 通過 |
 | 2026-11-02 | A4–A12、A14 | 通過（test build） | 915 / 915，0 skipped | 無 pending；隔離 DB migration 成功 | 69 通過 |
 | 2026-11-02 | A13 / 數字 gate 實測修正 | 通過 | 924 / 924，0 skipped | 無 pending；隔離 DB migration 成功 | 69 通過 |
+
+| 2026-11-02 | 明示算式、單位與風險回覆；同步 exclusions | 通過（test build） | 958 / 958，0 skipped | 無 pending（無模型修改） | 75 通過 |
 
 ## Migration 清單
 
@@ -72,7 +74,7 @@
 
 ## 早上給 Reviewer 的摘要
 
-核心 A1–A14 已完成；固定 DAG + Agent Loop 保留 v1 預設。最新 c4e0d85 限定公司 A/B 為 v1 6/8、v4 7/8，本輪比較門檻達標；仍需確認百萬元補強後穩定性，依指示維持 v1 預設。展示腳本實跑 EPS 66.26 元成功，面試稿與完整實驗報告已備妥。已補明示百分比除法驗證，尚待補強後重複 A/B；風險人工審閱與 Critic 節點合併仍是 COULD。不可把展示成功當作整體品質已通過。
+核心 A1–A14 已完成；固定 DAG + Agent Loop 保留 v1 預設。最新兩輪限定公司 A/B 均為 DynamicDag 6/8、AgentLoop 7/8，延遲與成本比較門檻達標；依指示維持舊引擎預設。展示腳本實跑 EPS 66.26 元成功，面試稿與完整實驗報告已備妥。已補明示百分比除法驗證與百萬元補強後重複 A/B；風險人工審閱與 Critic 節點合併仍是 COULD。不可把展示成功當作整體品質已通過。
 
 ## 執行紀錄（2026-11-02 夜間）
 
@@ -125,3 +127,5 @@
 - 已快轉同步 Claude `379022b`；原始題庫的 excluded_reason 決定計分，75 項 harness 測試通過。使用者再次確認只有鴻海、台積電財報正確，維持三題排除。舊 subset 檔僅保留重現歷史，新執行改用原始題庫。
 - `53b5db1` 補強後完整重跑仍為 DynamicDag 6/8、AgentLoop 7/8，無原通過題退步。p95 10.993s / 11.486s；provider 未快取上界 US$0.047583 / US$0.027497（不含 embedding）。原始結果保留於 `*-unit-verification`。
 - 為補錯誤前提覆蓋，另建單題 supplemental：將已核實的稀釋 EPS 66.25 誤稱基本 EPS，要求更正；使用同份原件第 58 頁證據，不增加原 8 題分母。規則測試不足以辨識數字角色顛倒，實測後另人工核對。
+
+- 錯誤前提 supplemental 實測：兩引擎規則均 1/1，人工確認基本 66.26／稀釋 66.25 角色正確。DynamicDag 附帶淨利「元」與股數「仟股」算式有千倍單位不一致，另記人工缺陷，不掩蓋在 PASS 分數下。這是可更正的錯誤前提，仍不代表覆蓋不存在業務的拒答情境。原 8 題分數不變。

@@ -1,0 +1,1 @@
+{"case_id": "2330-false-premise-basic-vs-diluted-eps", "engine": "DynamicDag", "provider_calls": 3, "prompt_tokens": 19413, "completion_tokens": 958, "peak_uncached_upper_usd": 0.0069735}

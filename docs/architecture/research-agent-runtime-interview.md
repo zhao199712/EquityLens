@@ -65,7 +65,7 @@ Critic 負責語義上的過度主張、證據是否真的支持結論。修訂�
 | 新路徑不用動態 planner | 注入一個被呼叫就失敗的 planner，完整 workflow 仍可完成 |
 | 實際回答品質和延遲 | 同一公開 corpus、同一題庫、同設定的 A/B，保留原始回答 |
 
-`c4e0d85` 的驗證為 955 項後端測試與 70 項 eval 測試通過。完整 PostgreSQL 測試已啟用；不是把整合測試 skip 後報全綠。A/B 數字、每題退步、provider usage 和預設切換門檻見[實測報告](../eval-verification/2026-11-02-agent-loop-ab/README.md)。
+後端 `53b5db1` 通過 958 項測試；同步 Claude `379022b` 後，eval harness 通過 75 項測試。完整 PostgreSQL 測試已啟用；不是把整合測試 skip 後報全綠。A/B 數字、每題退步、provider usage 和預設切換門檻見[實測報告](../eval-verification/2026-11-02-agent-loop-ab/README.md)。
 
 ## 三分鐘示範
 
@@ -109,3 +109,5 @@ dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj \
 題目與標準答案沿用 [2026-10-01 原件核實](../eval-verification/2026-10-01/report.md)，沒有為新引擎另編答案。原有 [2026-11-02 檢索實驗](../eval-verification/2026-11-02-retrieval-policy/README.md) 的 ask 模式、reranker 設定與本次 investigation 不同，分數不可直接相比。該報告已記錄政策評分 KI-004；本次仍沿用原 scorer，不因固定風險說明沒有引用而放寬通過條件。
 
 最新 `c4e0d85` A/B：原 scorer 下 v1 6/8、v4 7/8，p95 12.021s 對 11.617s。政策題因固定風險說明無引用而 FAIL，未改 scorer。這是單次開發集結果，尚不宣稱普遍勝出，v1 預設不變。
+
+另以已核實 EPS 設計獨立錯誤前提補充題，兩引擎均能指出基本／稀釋值混淆；不併入 8 題分母。人工抽查仍找到舊引擎附帶計算基礎的千倍單位不一致，規則 PASS 不能代替整份回答的人工品質判斷。不存在業務的拒答題仍未補齊。

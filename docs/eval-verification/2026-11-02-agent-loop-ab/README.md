@@ -117,3 +117,16 @@ provider_usage.jsonl 從各題執行期間的 provider 日誌收集呼叫量，�
 [DynamicDag](dynamic-dag-unit-verification/report.md) 6/8，[AgentLoop](agent-loop-unit-verification/report.md) 7/8，沒有原通過題退步。p95 10.993s / 11.486s（1.045 倍），完整 provider LLM 未快取上界 US$0.047583 / US$0.027497。兩輪均為 6/8 對 7/8，但只有 8 題且使用同一開發集，不是獨立 holdout。政策題仍因無引用 FAIL。
 
 Claude 的 `excluded_reason` 已同步，後續使用原題庫統一排除；使用者再確認僅鴻海、台積電資料可信。上列執行使用較早的兩家公司 subset，計分題 ID 已核對與原題庫新規則完全一致，保留原 run_meta 和 hash，不偽裝成新規則下的 API 重跑。
+
+## 獨立錯誤前提補充題
+
+`evals/cases/research_runtime_false_premise.jsonl` 使用既有已核實的 2025 財報第 58 頁：故意把稀釋 EPS 66.25 元稱為基本 EPS，要求更正。題目在這次執行前固定，不併入原有 8 題的 pass_rate。後端版本明確指定 `53b5db1`，scorer 為同步 exclusions 後版本。
+
+| 引擎 | 規則分數 | 時間 | provider LLM 未快取上界 |
+|---|---:|---:|---:|
+| [DynamicDag](dynamic-dag-premise-supplement/report.md) | 1/1 | 12.482s | US$0.006974 |
+| [AgentLoop](agent-loop-premise-supplement/report.md) | 1/1 | 7.049s | US$0.003209 |
+
+人工核對：兩者都明確否定錯誤前提，基本 66.26／稀釋 66.25 沒有顛倒，均引用第 58 頁。這是有來源可更正的錯誤前提，不等同於不存在業務的拒答測試，後者仍有覆蓋缺口。
+
+額外發現：DynamicDag 附帶計算基礎寫「淨利 1,717,882,627 元」與「股數 25,928,262 仟股」，兩者相除約為 0.06626 元，與所列 66.26 元相差千倍。這段附帶單位錯誤未被既有 scorer 捕捉，因此不能把規則 PASS 當作整份回答均正確。AgentLoop 此次只更正 EPS，未附帶該段計算基礎。原始回答均保留，未為此修改評分器。
