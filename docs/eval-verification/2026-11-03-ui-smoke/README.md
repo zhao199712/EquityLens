@@ -74,3 +74,17 @@
 本結果與前述 Research 頁的台積電 EPS 真實 AgentLoop smoke 分開計算。Reports 尚未接通後端，不可因 Research 已成功而宣稱財報管理功能完成。本次未修改產品程式或部署。
 
 ![台積電財報靜態內容與數值矛盾](tsmc-report-static.jpg)
+
+## Ask Agent 與 Agent Runs：主要流程通過
+
+從 Ask Agent 提問台積電 2025 年基本／稀釋 EPS，建立 `e95c1787-e9f7-41ef-bb20-68a3d20f4633`，ResearchAgent Succeeded，8.7 秒。對話顯示進度與 Agent Run 連結，完成後回填 66.26／66.25 元及第 58、10 頁。
+
+接著省略公司名稱追問「那 2024 年呢？同樣列出基本與稀釋每股盈餘，並附來源頁碼。」路由目標正確延續台積電 2330，建立 `f930b78a-d629-4cd3-9f54-ff9f0c447a09`，最後 Succeeded，回填基本／稀釋 EPS 均為 45.25 元，答案標註第 11 頁。此輪以 UI 串接與上下文驗收為主，未另外核對 2024 原始 PDF。
+
+已驗證：Agent Runs 列表顯示新 run、輸入 run ID 可篩選到單筆、詳情顯示路由目標與狀態、進度及略過節點、除錯資訊可展開並看到 RunSucceeded 事件。重新整理 Ask Agent 後，側欄仍保存四則訊息，點選可載入完整對話與兩筆結果。
+
+待改善：Workflow 篩選選單只有 CriticReview / DraftRevision，未提供 ResearchAgent；Ask Agent 重整後先新增空白對話，而非恢復原本選取的對話。本次未測取消、重試或審批流程。
+
+重整時也確認正式站已更新移除 Reports / Dashboard 的導覽入口（`faca94a` 的修改已可在瀏覽器看到）。
+
+![Ask Agent 追問結果](ask-agent-followup.jpg)

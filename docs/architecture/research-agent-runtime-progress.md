@@ -9,6 +9,8 @@
 
 ### 2026-11-03 移除靜態頁面
 
+後續正式站重整已確認導覽生效。Ask Agent 的台積電 EPS 提問與「那 2024 年呢」追問皆建立 ResearchAgent 並 Succeeded，結果回填與對話保存正常；Agent Runs 列表、ID 搜尋、詳情及除錯事件正常。Workflow 篩選缺少 ResearchAgent、重整先開空白對話仍待改善。詳見 [UI 驗收紀錄](../eval-verification/2026-11-03-ui-smoke/README.md)。
+
 依使用者要求刪除 Dashboard、Financial Reports 列表與明細元件及導覽。一般登入／註冊與首頁 CTA 改到 Portfolios；舊網址分別重新導向 Portfolios / Research。移除已刪頁面的測試，更新登入與路由測試；前端 build 成功、17 個測試檔案共 110 項通過。Research、風險頁與管理端報表管理保留。
 
 ### 2026-11-03 01:05 正式 UI 驗收
