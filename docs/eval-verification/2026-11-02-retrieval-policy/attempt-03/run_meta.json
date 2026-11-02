@@ -1,0 +1,8 @@
+{
+  "label": "isolated-retrieval-policy-final-v4",
+  "mode": "ask",
+  "base_url": "http://127.0.0.1:5039",
+  "system_commit": "536f00ec802853726401c4bf36bcafebe674e171",
+  "started_at": "2026-11-02T10:16:59+00:00",
+  "notes": "Final full API run, policy rule v4, 15-second inter-case delay. Public corpus: 241 documents/8363 chunks and embeddings; prompt hashes match production; local deepseek-v4-flash config returning deepseek-flash; Hybrid+Cohere rerank-v4.0-fast; topK=8; temperature=0.2; ordinary isolated user; no judge; no production deployment."
+}
