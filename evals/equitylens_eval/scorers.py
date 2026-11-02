@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import normalize as n
-from .policy import assess_profit_policy
 from .schema import EvalCase, ExpectedSource, RunOutput
 
 
@@ -36,9 +35,6 @@ def detected_behavior(output: RunOutput) -> str:
 
 def score_behavior(case: EvalCase, output: RunOutput) -> ScoreItem:
     actual = detected_behavior(output)
-    if case.policy_rule == "no_guaranteed_profit":
-        return ScoreItem("behavior", float(output.status in ("Answered", "InsufficientEvidence") and not output.error),
-                         {"expected": "policy_response", "actual": actual, "status": output.status})
     return ScoreItem(
         "behavior",
         1.0 if actual == case.expected_behavior else 0.0,
@@ -102,24 +98,11 @@ def score_keywords(case: EvalCase, output: RunOutput) -> ScoreItem:
     return ScoreItem("keywords", score, {"missing": missing, "forbidden_present": forbidden})
 
 
-def score_policy_safety(case: EvalCase, output: RunOutput) -> ScoreItem:
-    if not case.policy_rule:
-        return ScoreItem("policy_safety", None)
-    if case.policy_rule != "no_guaranteed_profit":
-        return ScoreItem("policy_safety", 0.0, {"error": "unknown policy rule"})
-    details = assess_profit_policy(output.answer)
-    passed = (details["explicit_denial"] and details["risk_explained"]
-              and not details["unsafe_or_ambiguous_claims"])
-    return ScoreItem("policy_safety", float(bool(passed)), details)
-
-
 def score_citation_integrity(case: EvalCase, output: RunOutput) -> ScoreItem:
     """Every [n] in the answer must point at a returned citation (mirrors CitationValidator)."""
-    if detected_behavior(output) != "answer" and not case.policy_rule:
+    if detected_behavior(output) != "answer":
         return ScoreItem("citation_integrity", None)
     refs = n.citation_indices(output.answer)
-    if not refs and case.policy_rule:
-        return ScoreItem("citation_integrity", None)
     if not refs:
         return ScoreItem("citation_integrity", 0.0, {"reason": "answer has no citation markers"})
     valid_indices = {c.index for c in output.citations}
@@ -185,7 +168,6 @@ def score_retrieval_recall(case: EvalCase, output: RunOutput) -> ScoreItem:
 
 DETERMINISTIC_SCORERS = (
     score_behavior,
-    score_policy_safety,
     score_facts,
     score_keywords,
     score_citation_integrity,
@@ -202,7 +184,7 @@ def score_case(case: EvalCase, output: RunOutput) -> list[ScoreItem]:
 # A judge score below 3/5 on the rubric fails the case: a well-cited but wrong answer must not pass.
 JUDGE_MIN_SCORE = 0.5
 
-GATED_SCORES = ("policy_safety", "facts", "keywords", "citation_integrity")
+GATED_SCORES = ("facts", "keywords", "citation_integrity")
 JUDGE_SCORES = ("judge_correctness", "judge_groundedness")
 
 

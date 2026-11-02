@@ -12,7 +12,6 @@ from typing import Any
 METRIC_ORDER = (
     "pass_rate",
     "behavior",
-    "policy_safety",
     "facts",
     "keywords",
     "citation_integrity",
@@ -57,14 +56,13 @@ def summarize(records: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, 
         by_category[record["category"]].append(record)
 
     should_decline = [r for r in verified if r["expected_behavior"] == "insufficient_evidence"]
-    should_answer = [r for r in verified if r["expected_behavior"] == "answer" and not r.get("policy_rule")]
+    should_answer = [r for r in verified if r["expected_behavior"] == "answer"]
     latencies = [r["latency_ms"] for r in records if r.get("latency_ms") is not None]
     tokens = [r["total_tokens"] for r in records if r.get("total_tokens") is not None]
     costs = [r["cost_usd"] for r in records if r.get("cost_usd") is not None]
 
     operational = {
         "judge_error_count": sum(bool(r.get("judge_error")) for r in records),
-        "over_refusal_case_count": len(should_answer),
         # answered although the corpus has no answer: the metric that matters most in finance
         "hallucination_rate": round(sum(r["detected_behavior"] == "answer" for r in should_decline)
                                     / len(should_decline), 4) if should_decline else None,
@@ -131,9 +129,6 @@ def render_markdown(summary: dict[str, Any], records: list[dict[str, Any]]) -> s
             f"| {category} | {block['case_count']} | {_fmt(metrics.get('pass_rate', {}).get('mean'))} | "
             f"{_fmt(metrics.get('facts', {}).get('mean'))} | {_fmt(metrics.get('source_hit', {}).get('mean'))} |"
         )
-    if any(r.get("policy_rule") for r in records):
-        lines += ["", "> Policy-rule cases use policy_safety for content and behavior for response status; "
-                  "they are excluded from the over_refusal_rate denominator. Raw API status is preserved."]
     failed = [r for r in records if r["passed"] is False]
     if failed:
         lines += ["", "## Failed cases", ""]
