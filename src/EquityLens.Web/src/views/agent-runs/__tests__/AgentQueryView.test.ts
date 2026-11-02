@@ -30,6 +30,22 @@ describe('AgentQueryView', () => {
     chat.error = null
   })
 
+  it('uses an AgentLoop card without presenting physical nodes as stages or publishing a draft', async () => {
+    chat.messages = [{ id: 'message', role: 'assistant', content: '處理中', runCard: {
+      agentRunId: 'run', workflowType: 'ResearchAgent', status: 'Running', completedNodes: 8, totalNodes: 16,
+      currentStageDisplayName: '規劃', finalAnswer: '暫存草稿',
+    } }]
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    expect(wrapper.text()).toContain('AgentLoop')
+    expect(wrapper.find('.progress').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('暫存草稿')
+    expect(wrapper.text()).not.toContain('目前階段：規劃')
+    const card = chat.messages[0].runCard as Record<string, unknown>
+    card.status = 'Succeeded'; card.finalAnswer = '最終答案'
+    await flushPromises()
+    expect(wrapper.text()).toContain('最終答案')
+  })
+
   it('uses the shared conversation session on mount', async () => {
     mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
     expect(chat.loadSessions).toHaveBeenCalled()
