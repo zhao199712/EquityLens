@@ -111,3 +111,9 @@ provider_usage.jsonl 從各題執行期間的 provider 日誌收集呼叫量，�
 本輪沒有 PASS→FAIL，毛利率與 EPS 通過，鴻海營收組成比舊引擎改善。政策題現在回答固定風險說明，behavior 與 keywords 均通過；citation_integrity 因無引用為 0，總結果仍 FAIL，未修改 scorer。這不是拒答不足，也不是保證報酬的回答。
 
 人工抽查補強：鴻海使用百萬元，原 numeric parser 未完整識別這個倍率；後續補入百萬／十億解析與錯誤比例回歸。本表仍是補強前版本，不將單元測試當作補強後 live A/B。保持 v1 預設，單次開發集改善不視為全面勝出。
+
+## 百萬元補強後重跑（53b5db1）
+
+[DynamicDag](dynamic-dag-unit-verification/report.md) 6/8，[AgentLoop](agent-loop-unit-verification/report.md) 7/8，沒有原通過題退步。p95 10.993s / 11.486s（1.045 倍），完整 provider LLM 未快取上界 US$0.047583 / US$0.027497。兩輪均為 6/8 對 7/8，但只有 8 題且使用同一開發集，不是獨立 holdout。政策題仍因無引用 FAIL。
+
+Claude 的 `excluded_reason` 已同步，後續使用原題庫統一排除；使用者再確認僅鴻海、台積電資料可信。上列執行使用較早的兩家公司 subset，計分題 ID 已核對與原題庫新規則完全一致，保留原 run_meta 和 hash，不偽裝成新規則下的 API 重跑。
