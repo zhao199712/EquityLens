@@ -160,19 +160,21 @@ export EVAL_JUDGE_MODEL=deepseek-chat
 
 ## 已知問題（Known issues）
 
-以下為 **2026-10-01 查核與實測時仍未修復**的問題。完整依據見 [題庫核實](../docs/eval-verification/2026-10-01/report.md)、[來源與計算](../docs/eval-verification/2026-10-01/verification.json) 及 [實際 API 評測](../docs/eval-verification/2026-10-01/live-api-results.md)。這些文件保留在專案中，供原始 `runs/` 資料之外的問題追蹤使用。
+以下為 2026-10-01 查核與實測時發現的問題，狀態更新至 2026-11-02（[年報重新索引](../docs/eval-verification/2026-11-02-reembed/README.md)、[年度過濾](../docs/eval-verification/2026-11-02-yearfilter/README.md)）。完整依據見 [題庫核實](../docs/eval-verification/2026-10-01/report.md)、[來源與計算](../docs/eval-verification/2026-10-01/verification.json) 及 [實際 API 評測](../docs/eval-verification/2026-10-01/live-api-results.md)。這些文件保留在專案中，供原始 `runs/` 資料之外的問題追蹤使用。
 
 | ID | 範圍／狀態 | 已確認現象 | 後續處理與驗收 |
 |---|---|---|---|
-| KI-001 | 正式服務設定／未修復 | 正式 `POST /api/research/ask` 的 11 次請求均 HTTP 500。日誌為 `OpenAI API key is not configured`；文件檢索在產生 embedding 時中斷，尚未進入 DeepSeek 回答階段 | 在正式環境安全配置 embedding 金鑰；實測研究端點成功回傳並產生查詢 embedding。隔離環境的成功不能當作正式服務已修復 |
-| KI-002 | 年度 PDF 解析與入庫／未修復 | 2330／2025 p.9（毛利率）、p.58（基本 EPS），以及 2317／2025 p.112（產品表）存在於原件，卻沒有對應索引頁；也未出現在既有 `annual-report-chunks.keep.jsonl` 中 | p.9 是無可抽取文字的影像頁，需 OCR。p.58、p.112 可抽取文字，需查核 PdfPig 抽取及分類／保留規則；不能直接認定是 chunk 大小或後續字數篩選造成。補齊後核對原件數值、頁碼、chunk 及 embedding，重跑三題 |
-| KI-003 | 檢索後證據取用／未定位 | `2454-revenue-2025` 正確 2025 p.10 在候選中 rank 15、trace 標記 selected，但回答引用其他年度並拒答；`retrieval_recall=1`、`source_hit=0` | 查最終格式化 context、完整表格是否送入模型及模型取用。selected 不能單獨證明模型看到了整頁；修復後應回答 5,959.65682 億元並引用 2025 p.10 |
+| KI-001 | 正式服務設定／**已修復（`a72a808`）** | 正式 `POST /api/research/ask` 的 11 次請求均 HTTP 500。日誌為 `OpenAI API key is not configured`；文件檢索在產生 embedding 時中斷，尚未進入 DeepSeek 回答階段 | 在正式環境安全配置 embedding 金鑰；實測研究端點成功回傳並產生查詢 embedding。隔離環境的成功不能當作正式服務已修復 |
+| KI-002 | 年度 PDF 解析與入庫／**部分修復：僅 2330、2317 重建索引** | 2330／2025 p.9（毛利率）、p.58（基本 EPS），以及 2317／2025 p.112（產品表）存在於原件，卻沒有對應索引頁；也未出現在既有 `annual-report-chunks.keep.jsonl` 中 | p.9 是無可抽取文字的影像頁，需 OCR。p.58、p.112 可抽取文字，需查核 PdfPig 抽取及分類／保留規則；不能直接認定是 chunk 大小或後續字數篩選造成。補齊後核對原件數值、頁碼、chunk 及 embedding，重跑三題。2026-11-02 僅對 2330、2317 的 2023–2025 年報重新抽取（保留 Review 頁、影像頁以 vision 轉錄）；2330 p.9、p.58 已入庫，2317 p.112 已入庫但仍未被檢索到（來源規劃選了法說會）。2454 等其他公司仍為舊索引，抽取器尚未改寫 |
+| KI-003 | 檢索後證據取用／**已修復（`9e03582`）** | `2454-revenue-2025` 正確 2025 p.10 在候選中 rank 15、trace 標記 selected，但回答引用其他年度並拒答；`retrieval_recall=1`、`source_hit=0` | 查最終格式化 context、完整表格是否送入模型及模型取用。selected 不能單獨證明模型看到了整頁；修復後應回答 5,959.65682 億元並引用 2025 p.10。根因：未依問題年度過濾，其他年度年報佔掉 topK；trace 的 selected 是各路 2×topK 的中間結果。修正後此題與 `2330-eps-2025` 通過（2454 未重建索引） |
 | KI-004 | 政策題評分／未修復 | `2330-no-guaranteed-profit` 實際拒答並否定必然獲利；題庫預期 answer，behavior 判 0；禁用詞又命中重述問題中的「一定會賺」，keywords 判 0 | 釐清允許的風險回答與拒答行為定義，處理禁用詞的引述及否定語境。驗證安全回答與真正承諾獲利的反例；不可只刪除禁用詞或把所有拒答改判通過 |
 | KI-005 | 題庫來源範圍／保留草稿 | `2330-gross-margin-yoy` 缺管理層對毛利率變動原因的說明；`2454-key-risks` 缺完整主要營運風險揭露。現有 AnnualReport 原件實際為合併財報 | 補足與原題範圍相符的官方來源並核實；完成前維持 `verified: false`，不計入正式品質指標 |
 
 年度 extractor 會丟棄 Review／未分類頁，還有頁面品質門檻及保留上限；後續 filter 另有去重與字數門檻。這些是需要查核的機制，不能僅由缺頁就斷言某一條規則是單一根因。上表 KI-002 是抽取／保留／入庫問題，KI-003 則是已有 chunk 的後續取用問題，須分開驗收。
 
 **目前基準的解讀**：正式首輪為 11/11 API error，無模型品質比較；使用相同映像及資料快照、補入既有 embedding 金鑰的隔離環境為 **6/11 通過（54.5%）**，財務數字題為 **2/6（33.3%）**，未啟用 LLM judge。這是既有 scorer 的結果，包含 KI-004 的行為定義與關鍵字限制。
+
+**2026-11-02 最新正式結果**：6/11 → 7/11（2330、2317 重建索引）→ **9/11（81.8%）**（年度過濾，`9e03582`）；hallucination_rate 0。剩餘失敗為 `2317-segment-mix`（KI-002）與 `2330-no-guaranteed-profit`（KI-004）。
 
 問題修復後，在此更新狀態、修復版本及新評測報告連結；保留舊答案及舊分數。若修改 scorer，使用 `rescore` 對保存的舊回答寫出新結果；若修改系統，使用同一凍結題庫重新 `run`，再 `compare`。供團隊長期比較的基準 run 應另外歸檔，README 與摘要報告不取代完整原始回答。
 
