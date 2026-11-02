@@ -217,3 +217,12 @@
 - 明示 A4 的預設 v1 已被後續使用者部署授權覆蓋；A7 恢復先處理 pending turn，而非直接略過；A9 是輸出契約相容，不是 harness 完全零變更。
 - 保留未完成與覆蓋限制：A15 研究結果風險觸發人工審閱尚未實作；ResearchAgentLoop NoProgress 有停止路徑，但目前沒有獨立命名的專項邊界測試，不能拿其他 workflow 的 NoProgress 測試代替；CI success 不等於所有 PostgreSQL 整合測試未 skip。
 - 本次只補證據索引，不重跑已完成套件、不改產品程式與 README、不操作正式服務。外部 API 新增費用 US$0。
+
+
+## 07:11 NoProgress 邊界測試補齊
+
+- 從乾淨 main `a73886d` 建立 `test/research-loop-no-progress`，只新增測試及更新證據索引，沒有修改 runtime 或部署正式服務。
+- `NoProgress_EmptySearches_StopWithoutAnotherModelCall_AndRemainStoppedOnResume`：兩輪空結果以 NoProgress 停止、標準拒答、checkpoint 保存停止原因；恢復不新增模型／工具呼叫。
+- `NoProgress_DuplicateEvidence_AllowsOneFinalDraft_WithNoFurtherTools`：首次取得證據後兩輪重複證據，提供一次不含工具的最終起草機會，停止原因仍為 NoProgress，保留唯一證據與回答。
+- `dotnet test ... --filter FullyQualifiedName~ResearchAgentLoopTests`：20/20 通過，0 skipped。這是 fake provider／工具與記憶體 DB 的確定性邊界測試，不代表程序崩潰或真實模型測試。
+- 功能分支推送供後續合併；沒有重跑財報 A/B，原分數不變，外部 API 新增費用 US$0。
