@@ -43,6 +43,7 @@ services:
       Google__ClientId: ${GOOGLE_CLIENT_ID}
       Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
       DeepSeek__ApiKey: ${DEEPSEEK_API_KEY}
+      OpenAI__ApiKey: ${OPENAI_API_KEY}
       Cohere__ApiKey: ${COHERE_API_KEY}
       Jina__ApiKey: ${JINA_API_KEY}
       Brave__ApiKey: ${BRAVE_API_KEY}
