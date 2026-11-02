@@ -71,6 +71,21 @@ Critic 負責語義上的過度主張、證據是否真的支持結論。修訂�
 
 先顯示一個 research run：固定節點外框、逐輪 LLM action、工具參數與 guard、引用和最終答案。再跑一個故障注入測試，解釋結果如何恢復。最後打開 A/B 報告，說明仍未達到的門檻。
 
+優先準備離線備案，直接重播已保存的真實 API 結果；畫面會標示 OFFLINE REPLAY、後端 commit、執行時間、原評分與工具統計，不重新呼叫模型或需要 JWT：
+
+```bash
+python3 scripts/demo-research-agent.py \
+  --replay docs/eval-verification/2026-11-02-agent-loop-ab/agent-loop-unit-verification/responses.jsonl \
+  --case 2330-eps-2025
+
+# 同一份紀錄也能示範政策題的 FAIL 原因，並非只展示成功答案。
+python3 scripts/demo-research-agent.py \
+  --replay docs/eval-verification/2026-11-02-agent-loop-ab/agent-loop-unit-verification/responses.jsonl \
+  --case 2330-no-guaranteed-profit
+```
+
+需要展開來源摘錄時加 `--show-quotes`。離線檔只保留執行統計，不能冒充逐輪即時動作或完整後端 trace；要展示完整 LLM turn，使用 live 模式或已保存於隔離資料庫的 detail API。
+
 已啟動 API 時，可在另一個終端執行：
 
 ```bash
