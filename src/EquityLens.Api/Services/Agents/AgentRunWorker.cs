@@ -33,8 +33,9 @@ public sealed class AgentRunWorker : BackgroundService
             return false;
         }
 
-        await executor.ExecuteAsync(item.Message.RunId, item.Message.UserId, cancellationToken);
-        await queue.AcknowledgeAsync(item.StreamId, cancellationToken);
+        var outcome = await executor.ExecuteAsync(item.Message.RunId, item.Message.UserId, cancellationToken);
+        if (outcome is AgentRunExecutionOutcome.Executed or AgentRunExecutionOutcome.SkippedTerminalOrWaiting)
+            await queue.AcknowledgeAsync(item.StreamId, cancellationToken);
         return true;
     }
 

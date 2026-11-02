@@ -101,3 +101,9 @@ dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --export-financ
 - `annual-report-chunks*.jsonl`, `exports/`, `0050_prices.csv`, `mops_response_full.html`, benchmark output under `exports/benchmark/`.
 - `法說會/`, `.playwright-mcp/`, downloaded PDF originals, or local session scratch files.
 - Secret or local-key changes in `src/EquityLens.Api/appsettings.json`.
+
+## Research Runtime reliability
+- Executor returns an outcome; the worker must not acknowledge `LeaseHeldByOther` or `LeaseLostDuringExecution`.
+- `LeaseVersion` changes on claim. Executor-scoped `AgentRunWriteFence` protects every async DbContext save with a PostgreSQL lease row lock in the same transaction as results. Synchronous saves during execution are rejected.
+- Heartbeat uses an independent scope/DbContext. Never share a handler DbContext with background renewal.
+- Interrupted Ready/Queued/Running nodes recover through the state machine with a bounded interruption count; caller cancellation and lease loss must not publish stale failure results.

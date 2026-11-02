@@ -794,7 +794,8 @@ v4 取代 v1 作為預設的條件（全部成立）：
 
 | 章節 | 原設計 | 實際做法 | 理由 |
 |---|---|---|---|
-| | | | |
+| §5.2 | EnsureOwned + 節點續約 | DbContext 非同步 SaveChanges 統一交易 fencing；executor 全期間以獨立 scope 續約 | 涵蓋 handler 中途 SaveChanges 與 planner；避免檢查和寫入之間的競態及共用 DbContext |
+| §5.3 | MaxRetryCount 限制接手 | 至少一次接手，之後受 MaxRetryCount + 1 上限 | 預設 retry=0 的既有節點也必須符合 A2 的一次故障恢復 |
 
 ---
 

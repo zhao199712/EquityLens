@@ -290,6 +290,11 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("lease_owner");
 
+                    b.Property<long>("LeaseVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("lease_version");
+
                     b.Property<long>("OrchestrationVersion")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint")
@@ -449,6 +454,10 @@ namespace EquityLens.Api.Migrations
 
                     b.Property<int?>("InputTokens")
                         .HasColumnType("integer");
+
+                    b.Property<int>("InterruptionCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("interruption_count");
 
                     b.Property<int>("Iteration")
                         .HasColumnType("integer")

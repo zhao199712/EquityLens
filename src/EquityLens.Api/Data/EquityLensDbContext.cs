@@ -10,6 +10,20 @@ public class EquityLensDbContext : DbContext
     {
     }
 
+    internal AgentRunWriteFence? AgentWriteFence { get; set; }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default) =>
+        AgentWriteFence is { } fence
+            ? fence.SaveAsync(this, () => base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken), cancellationToken)
+            : base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        if (AgentWriteFence is not null)
+            throw new InvalidOperationException("Agent execution must use fenced asynchronous persistence.");
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
     // Core
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<Portfolio> Portfolios => Set<Portfolio>();

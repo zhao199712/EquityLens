@@ -18,6 +18,7 @@ public class AgentRun
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
     public long OrchestrationVersion { get; set; }
+    public long LeaseVersion { get; set; }
     public string? LeaseOwner { get; set; }
     public DateTime? LeaseExpiresAtUtc { get; set; }
     public bool EnableBlackboardSnapshots { get; set; }

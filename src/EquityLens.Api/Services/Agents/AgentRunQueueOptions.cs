@@ -8,5 +8,6 @@ public sealed class AgentRunQueueOptions
 
     public string ConsumerGroupName { get; set; } = "agent-run-workers";
 
-    public int PendingMinIdleSeconds { get; set; } = 300;
+    /// <summary>重新認領間隔預設大於五分鐘租約；正確性仍由執行結果與租約檢查保證。</summary>
+    public int PendingMinIdleSeconds { get; set; } = 420;
 }

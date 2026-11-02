@@ -142,6 +142,7 @@ public sealed class AgentNodeStateMachine : IAgentNodeStateMachine
     private static bool CanTransition(string current, string next) => (current, next) switch
     {
         (AgentNodeStatuses.Pending, AgentNodeStatuses.Ready) => true,
+        (AgentNodeStatuses.Pending, AgentNodeStatuses.Skipped) => true,
         (AgentNodeStatuses.Pending, AgentNodeStatuses.WaitingForApproval) => true,
         (AgentNodeStatuses.WaitingForApproval, AgentNodeStatuses.Pending) => true,
         (AgentNodeStatuses.WaitingForApproval, AgentNodeStatuses.Cancelled) => true,

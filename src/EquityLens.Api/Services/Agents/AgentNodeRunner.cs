@@ -17,8 +17,10 @@ public sealed class AgentNodeRunner(
     IAgentRunStateMachine runStateMachine,
     IAgentNodeStateMachine nodeStateMachine,
     IEnumerable<IAgentNodeHandler> handlers,
-    AgentWorkflowPolicyReader policies) : IAgentNodeRunner
+    AgentWorkflowPolicyReader policies,
+    TimeProvider? clock = null) : IAgentNodeRunner
 {
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly IReadOnlyDictionary<string, IAgentNodeHandler> _nodeHandlers =
         handlers.ToDictionary(x => x.NodeType, StringComparer.Ordinal);
@@ -43,7 +45,7 @@ public sealed class AgentNodeRunner(
             nodeStateMachine.Transition(node, AgentNodeStatuses.Queued);
             addEvent(run, node, AgentEventTypes.SchedulerDecision, $"Node {nodeKey} queued.", new { decision = "QueueNode", node.Iteration });
             nodeStateMachine.Transition(node, AgentNodeStatuses.Running);
-            node.StartedAtUtc = DateTime.UtcNow;
+            node.StartedAtUtc = _clock.GetUtcNow().UtcDateTime;
             addEvent(run, node, AgentEventTypes.NodeStarted, $"Node {nodeKey} started.", new { attempt = attempt + 1, policy.TimeoutSeconds });
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -80,7 +82,7 @@ public sealed class AgentNodeRunner(
                     return false;
                 }
                 nodeStateMachine.Transition(node, AgentNodeStatuses.Succeeded);
-                node.CompletedAtUtc = DateTime.UtcNow;
+                node.CompletedAtUtc = _clock.GetUtcNow().UtcDateTime;
                 node.DurationMs = stopwatch.ElapsedMilliseconds;
                 if (run.EnableBlackboardSnapshots)
                 {
@@ -93,6 +95,10 @@ public sealed class AgentNodeRunner(
                 await dbContext.SaveChangesAsync(cancellationToken);
                 return true;
             }
+            catch (Exception ex) when (ex is AgentRunLeaseLostException or Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException || cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (AgentNodeException ex)
             {
                 EquityLensTelemetry.MarkError(activity, ex);
@@ -102,7 +108,7 @@ public sealed class AgentNodeRunner(
                 node.ErrorCode = ex.ErrorCode;
                 node.ErrorCategory = ex.ErrorCategory;
                 node.ErrorRetryable = ex.Retryable;
-                node.CompletedAtUtc = DateTime.UtcNow;
+                node.CompletedAtUtc = _clock.GetUtcNow().UtcDateTime;
                 node.DurationMs = stopwatch.ElapsedMilliseconds;
                 addEvent(run, node, AgentEventTypes.NodeFailed, $"Node {nodeKey} failed.", new { error = ex.Message, ex.ErrorCode, ex.ErrorCategory, ex.Retryable });
                 if (attempt >= policy.MaxRetryCount || !ex.Retryable) throw;
@@ -122,7 +128,7 @@ public sealed class AgentNodeRunner(
                 node.ErrorCode = "timeout";
                 node.ErrorCategory = AgentNodeErrorCategories.TimedOut;
                 node.ErrorRetryable = false;
-                node.CompletedAtUtc = DateTime.UtcNow;
+                node.CompletedAtUtc = _clock.GetUtcNow().UtcDateTime;
                 node.DurationMs = stopwatch.ElapsedMilliseconds;
                 addEvent(run, node, AgentEventTypes.NodeFailed, $"Node {nodeKey} timed out.", new { policy.TimeoutSeconds });
                 throw;
@@ -136,7 +142,7 @@ public sealed class AgentNodeRunner(
                 node.ErrorCode = "unhandled_exception";
                 node.ErrorCategory = AgentNodeErrorCategories.PermanentFailure;
                 node.ErrorRetryable = false;
-                node.CompletedAtUtc = DateTime.UtcNow;
+                node.CompletedAtUtc = _clock.GetUtcNow().UtcDateTime;
                 node.DurationMs = stopwatch.ElapsedMilliseconds;
                 addEvent(run, node, AgentEventTypes.NodeFailed, $"Node {nodeKey} failed.", new { error = exception.Message });
                 if (attempt >= policy.MaxRetryCount) throw;
@@ -162,7 +168,7 @@ public sealed class AgentNodeRunner(
             .FirstOrDefault();
         if (current?.Status == AgentApprovalStatuses.Approved)
         {
-            current.ConsumedAtUtc ??= DateTime.UtcNow;
+            current.ConsumedAtUtc ??= _clock.GetUtcNow().UtcDateTime;
             await dbContext.SaveChangesAsync(cancellationToken);
             return true;
         }
@@ -186,7 +192,7 @@ public sealed class AgentNodeRunner(
             Reason = policy.Reason,
             PolicySnapshotJson = JsonSerializer.Serialize(policy, SerializerOptions),
             ExecutionAttempt = run.ExecutionAttempt,
-            RequestedAtUtc = DateTime.UtcNow,
+            RequestedAtUtc = _clock.GetUtcNow().UtcDateTime,
             Run = run,
             Node = node
         };

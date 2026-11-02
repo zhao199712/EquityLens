@@ -117,6 +117,8 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<AgentWorkflowPolicyReader>();
         builder.Services.AddScoped<IAgentNodeRunner, AgentNodeRunner>();
         builder.Services.AddScoped<IAgentDynamicPlanCoordinator, AgentDynamicPlanCoordinator>();
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddScoped<AgentRunLeaseHeartbeat>();
         builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
         builder.Services.AddScoped<IAgentRunService, AgentRunService>();
         builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();

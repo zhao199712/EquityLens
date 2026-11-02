@@ -14,6 +14,7 @@ public class AgentRunNode
     public DateTime? CompletedAtUtc { get; set; }
     public long? DurationMs { get; set; }
     public string TemplateNodeKey { get; set; } = string.Empty;
+    public int InterruptionCount { get; set; }
     public int Iteration { get; set; }
     public string? ErrorCode { get; set; }
     public string? ErrorCategory { get; set; }

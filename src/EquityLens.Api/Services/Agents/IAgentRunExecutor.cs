@@ -1,6 +1,8 @@
 namespace EquityLens.Api.Services.Agents;
 
+public enum AgentRunExecutionOutcome { Executed, SkippedTerminalOrWaiting, LeaseHeldByOther, LeaseLostDuringExecution }
+
 public interface IAgentRunExecutor
 {
-    Task ExecuteAsync(Guid runId, Guid userId, CancellationToken cancellationToken = default);
+    Task<AgentRunExecutionOutcome> ExecuteAsync(Guid runId, Guid userId, CancellationToken cancellationToken = default);
 }
