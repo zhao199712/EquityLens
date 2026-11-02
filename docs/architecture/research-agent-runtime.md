@@ -13,9 +13,58 @@
 
 ---
 
+## 任務簡報（必須遵守）
+
+> **閱讀方式**：本節與 §0 是**約束**；§1 之後是**建議做法**。
+> 實作時以「目標、邊界、驗收清單」為準。§1 之後的類別名稱、欄位、檔案配置都可以依實際程式碼調整，甚至換成更簡單的做法；只要驗收項目都有測試證明、邊界沒有被違反即可。偏離建議時，在 §15 記錄「原建議 / 實際做法 / 理由」。
+
+### 目標
+
+`ResearchInvestigation` 新增 **AgentLoop 引擎**：用固定的粗粒度 workflow，加上一個在確定性邊界內自主選工具的 LLM 迴圈，取代「LLM 動態生成 DAG」。預設引擎維持 v1，行為不變；兩者以 eval A/B 決定去留。同時修補 runtime 現有的可靠性漏洞。
+
+### 邊界（不可違反）
+
+1. 不修改、不 commit `src/EquityLens.Api/appsettings.json`；不新增真實外部副作用工具（下單、寄信、改投組）。
+2. 預設設定下 v1 行為不變；不跳過、停用、刪除既有測試。
+3. 新 workflow **不得**呼叫 graph planner（`LlmAgentWorkflowPlanner` / `DynamicPlanValidator` / `GraphMaterializer`）。
+4. Source policy 由**結構**保證：`LocalOnly` 時 Web 檢索不可能被執行（工具不可見，且呼叫時也會被拒絕），不能只靠 prompt。
+5. 數字不經 LLM 搬運：計算類工具不接受 LLM 直接傳入的數值資料。
+6. 狀態變更只能透過狀態機（`AgentStateMachine` 既有或新增的明確方法）。
+7. 本地文件搜尋沿用 `search_document_chunks(...)`（經由既有 `IDocumentRetriever`）。
+8. 新 node type 必須同時註冊在 DI 與 `AgentWorkflowCatalog`。
+9. 遵守 `AGENTS.md`；不在 commit、程式碼、文件中寫入模型識別名稱。
+
+### 驗收清單（每一項都要有自動化測試證明）
+
+| # | 驗收條件 | 優先 |
+|---|---|---|
+| A1 | Worker 認領到「租約被他人持有」的 run 時**不 ack**，訊息不遺失，之後仍會被處理 | MUST |
+| A2 | 節點執行中途 worker 當掉（節點停在 `Running`、租約過期），run 能被新 worker 接手並完成，**不會**因為「沒有 ready 節點」而失敗 | MUST |
+| A3 | 長時間節點會續約租約；已失去租約的 worker **無法**寫入節點結果（fencing） | MUST |
+| A4 | `Engine = AgentLoop` 時建立新 workflow，且整個 run 期間 graph planner 未被呼叫；未指定時仍走 v1 | MUST |
+| A5 | 迴圈中 LLM 可自行決定工具、參數、輪數與起草時機；同一輪多個工具呼叫**平行**執行，且每個呼叫都有紀錄 | MUST |
+| A6 | 不可見工具、違反政策、參數不合法、超出預算的呼叫都被拒絕，**拒絕本身也被記錄**，並回饋給 LLM | MUST |
+| A7 | 迴圈在第 N 輪後中斷，恢復時從第 N+1 輪繼續，**已成功的工具呼叫不重做** | MUST |
+| A8 | 預算耗盡、無進展、LLM 回傳格式連續錯誤時，迴圈有明確停止原因並優雅結束（有證據就起草，沒有就標準拒答） | MUST |
+| A9 | 輸出與 v1 相容：既有 Critic 節點與 eval harness **不需修改**即可處理 AgentLoop 的結果（answer、citations、candidates、ResearchRun） | MUST |
+| A10 | 答案有懸空引用或違反 source policy 時會被確定性關卡攔下，進入一次修訂；修訂後仍不合格則改為標準拒答 | MUST |
+| A11 | 每一輪 LLM 決策可查詢：模型、prompt 版本、動作、精簡理由、token、成本、延遲，以及對應的工具呼叫 | MUST |
+| A12 | eval harness 可用 `--engine` 指定引擎，並輸出軌跡指標（至少：web 政策違規、planner fallback 率、平均輪數 / 工具呼叫數）；舊的 `responses.jsonl` 仍可 rescore | SHOULD |
+| A13 | 副作用工具（以**測試專用**工具驗證）執行前必須審批；審批綁定工具與參數，參數改變即失效；核准後只執行一次（冪等）；Reject 必須附理由 | SHOULD |
+| A14 | OTel：迴圈輪次、LLM 呼叫、工具執行有 span；工具呼叫、Guard 拒絕、租約遺失、節點中斷有 metrics | SHOULD |
+| A15 | 品質關卡可依風險觸發人工審閱（沿用既有 `WaitForHumanApproval` 機制） | COULD |
+| A16 | 實際跑 v1 vs AgentLoop 的 A/B，報告存入 `docs/eval-verification/`，依 §10.3 門檻給出結論 | COULD |
+| A17 | 全部既有測試通過；`dotnet build` 成功；`has-pending-model-changes` 無待處理變更；`evals` 的 `pytest` 全綠 | **每次 commit 都要成立** |
+
+### 完成順序
+
+A1–A3 → A4–A11 → A12 → A13 → A14 → A15–A16。每完成一項就 commit + push，並更新 progress 檔；任何時間點分支都必須可建置、測試全綠。
+
+---
+
 ## 0. 給實作 Agent 的執行指引（先讀這一節）
 
-本文件同時是**設計文件**與**可執行規格**。如果你是負責夜間實作的 coding agent，請嚴格照以下規則執行。
+本節是工作方式與專案地雷的約束；§1 之後是建議做法。驗收以上方「任務簡報」為準。
 
 ### 0.1 開工前必讀（依序）
 
@@ -69,6 +118,9 @@ cd evals && pip install -e '.[test]' && pytest
 `NU1510 System.Text.Encoding.CodePages` 警告是既有的，可忽略。
 
 ---
+
+> ### 📌 以下章節（§1–§14）為建議做法
+> 內容是依閱讀現有程式碼推導出的設計，**未經編譯驗證**。類別名稱、欄位、資料表、檔案位置都是建議；若實際程式碼有更簡單或更正確的做法，請採用，並在 §15 記錄偏差。各章節列出的測試名稱是建議的驗證方式，可以改名或合併，但對應的驗收項目（A1–A17）必須都有測試覆蓋。
 
 ## 1. 背景與動機
 
@@ -675,27 +727,26 @@ v4 取代 v1 作為預設的條件（全部成立）：
 
 ## 12. 實作順序與優先序（夜間執行用）
 
-| 優先 | 工作 | 必要性 | 預估 |
-|---|---|---|---|
-| 1 | Phase 1：ack 修正、租約 heartbeat/fencing、中斷節點接手 | **MUST** | 1.5–2h |
-| 2 | Phase 2：工具/Guard/Budget/Ledger/Loop/Checkpoint + `AgentLlmTurn` | **MUST** | 3h |
-| 3 | Phase 3：`ResearchAgent` workflow、OutputGate、品質路由、引擎切換 | **MUST** | 2h |
-| 4 | Phase 5.1：harness trajectory 與 `--engine`（離線部分） | **SHOULD** | 1h |
-| 5 | Phase 4 A：工具審批 + 測試工具 | **SHOULD** | 1.5h |
-| 6 | §9.3 OTel span/metrics | **SHOULD** | 0.5h |
-| 7 | Phase 4 C：結果審閱節點 | COULD | 1h |
-| 8 | Phase 5.2：實際 A/B（需 API） | COULD | 視環境 |
-| 9 | Phase 4 B、§9.4 前端 | COULD | — |
+| 優先 | 工作 | 對應驗收 | 必要性 | 預估 |
+|---|---|---|---|---|
+| 1 | Phase 1：ack 修正、租約 heartbeat/fencing、中斷節點接手 | A1–A3 | **MUST** | 1.5–2h |
+| 2 | Phase 2：工具/Guard/Budget/Ledger/Loop/Checkpoint + LLM turn 紀錄 | A5–A8、A11 | **MUST** | 3h |
+| 3 | Phase 3：`ResearchAgent` workflow、OutputGate、品質路由、引擎切換 | A4、A9、A10 | **MUST** | 2h |
+| 4 | Phase 5.1：harness trajectory 與 `--engine`（離線部分） | A12 | **SHOULD** | 1h |
+| 5 | Phase 4 A：工具審批 + 測試工具 | A13 | **SHOULD** | 1.5h |
+| 6 | §9.3 OTel span/metrics | A14 | **SHOULD** | 0.5h |
+| 7 | Phase 4 C：結果審閱節點 | A15 | COULD | 1h |
+| 8 | Phase 5.2：實際 A/B（需 API） | A16 | COULD | 視環境 |
+| 9 | 簡化 DAG：把 OutputGate + Critic 四節點合併為單一 `QualityGate` 節點（內部仍重用既有 Critic 邏輯），`ResearchAgent` 縮為約 6 個節點；既有 Critic 相關測試必須維持通過 | — | COULD | 1.5h |
+| 10 | Phase 4 B、§9.4 前端 | — | COULD | — |
 
 **每一列完成就 commit + push。** 任何時間點中止，分支上都應該是可建置、測試全綠的狀態。
 
 ### 12.1 整體完成定義（Definition of Done）
 
-- [ ] `dotnet build` 成功；`dotnet test` 全綠，且測試總數 ≥ 開工前數量（記錄於 progress 檔）
-- [ ] `has-pending-model-changes` 無待處理變更；migration 名稱有意義
-- [ ] 預設設定下 v1 行為不變（既有測試證明）
-- [ ] `Engine = AgentLoop` 時走 `ResearchAgent`，不經 graph planner（測試證明）
-- [ ] §11 中 MUST 範圍的情境皆有測試
+- [ ] 任務簡報驗收清單中所有 MUST 項目（A1–A11）皆有測試證明，A17 成立
+- [ ] `dotnet test` 測試總數 ≥ 開工前數量（記錄於 progress 檔）
+- [ ] migration 名稱有意義
 - [ ] `evals` 的 `pytest` 全綠
 - [ ] `AGENTS.md`、本文件（若有偏差，於 §15 記錄）、progress 檔已更新
 - [ ] 所有 commit 已 push 到 `feat/research-agent-runtime`

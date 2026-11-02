@@ -1,7 +1,7 @@
 # Research Agent Runtime v4 — 實作進度
 
-> 對應設計：[`research-agent-runtime.md`](research-agent-runtime.md)。
-> 實作者每完成一個工作項目就更新本檔並 commit。Reviewer 早上只看這一份就能知道做到哪裡。
+> 對應設計：[`research-agent-runtime.md`](research-agent-runtime.md)。驗收以設計文件開頭的「任務簡報」A1–A17 為準。
+> 實作者每完成一個項目就更新本檔並 commit。Reviewer 早上只看這一份就能知道做到哪裡。
 
 ## 開工基準
 
@@ -12,31 +12,34 @@
 | 開工時 `evals` `pytest` 通過數 | |
 | 分支 | `feat/research-agent-runtime` |
 
-## 工作項目狀態
+## 驗收項目狀態
 
 狀態：⬜ 未開始 ・ 🟨 進行中 ・ ✅ 完成 ・ ⛔ 阻塞 ・ ⏭ 略過（時間不足）
 
-| 優先 | 項目 | 狀態 | Commit | 測試（新增數） | 備註 |
-|---|---|---|---|---|---|
-| 1 | Phase 1.1 Worker ack 修正 | ⬜ | | | |
-| 1 | Phase 1.2 租約 heartbeat / fencing / TimeProvider | ⬜ | | | |
-| 1 | Phase 1.3 中斷節點接手 | ⬜ | | | |
-| 2 | Phase 2 工具 / Guard / Budget / Ledger | ⬜ | | | |
-| 2 | Phase 2 Loop + 行動協定 + 平行 dispatch | ⬜ | | | |
-| 2 | Phase 2 Checkpoint + `AgentLlmTurn` + 恢復 | ⬜ | | | |
-| 3 | Phase 3 `ResearchAgent` workflow + catalog + DI | ⬜ | | | |
-| 3 | Phase 3 OutputGate + RouteAfterQualityGate | ⬜ | | | |
-| 3 | Phase 3 引擎切換（`Engine` / Options） | ⬜ | | | |
-| 4 | Phase 5.1 Harness trajectory + `--engine` | ⬜ | | | |
-| 5 | Phase 4 A 工具審批 | ⬜ | | | |
-| 6 | OTel span / metrics | ⬜ | | | |
-| 7 | Phase 4 C 結果審閱 | ⬜ | | | |
-| 8 | Phase 5.2 實際 A/B | ⬜ | | | |
-| 9 | Phase 4 B / 前端 | ⬜ | | | |
+| # | 驗收條件（摘要） | 優先 | 狀態 | 證明的測試 | Commit | 備註 |
+|---|---|---|---|---|---|---|
+| A1 | 租約被他人持有時不 ack | MUST | ⬜ | | | |
+| A2 | 執行中斷的節點可被接手，run 不失敗 | MUST | ⬜ | | | |
+| A3 | 租約續約；失去租約者無法寫入 | MUST | ⬜ | | | |
+| A4 | AgentLoop 引擎不呼叫 graph planner；預設仍 v1 | MUST | ⬜ | | | |
+| A5 | LLM 自主選工具；同輪平行；每次呼叫有紀錄 | MUST | ⬜ | | | |
+| A6 | 違規呼叫被拒絕、記錄、回饋 | MUST | ⬜ | | | |
+| A7 | 中斷後從下一輪續跑，不重做工具 | MUST | ⬜ | | | |
+| A8 | 預算／無進展／格式錯誤時優雅停止 | MUST | ⬜ | | | |
+| A9 | 輸出與 v1 相容（Critic、harness 不改） | MUST | ⬜ | | | |
+| A10 | 確定性關卡攔截 → 修訂一次 → 仍失敗則拒答 | MUST | ⬜ | | | |
+| A11 | 每輪 LLM 決策可查詢 | MUST | ⬜ | | | |
+| A12 | harness `--engine` 與軌跡指標；舊檔可 rescore | SHOULD | ⬜ | | | |
+| A13 | 副作用工具審批（參數綁定、冪等、Reject 附理由） | SHOULD | ⬜ | | | |
+| A14 | OTel span 與 metrics | SHOULD | ⬜ | | | |
+| A15 | 依風險觸發人工審閱 | COULD | ⬜ | | | |
+| A16 | 實際 A/B 報告 | COULD | ⬜ | | | |
+| — | 合併為單一 `QualityGate`、DAG 縮為約 6 節點 | COULD | ⬜ | | | |
+| A17 | build / test / migration / pytest 全綠 | 每次 commit | ⬜ | | | |
 
-## 每次 Phase 結束的驗證紀錄
+## 每次 commit 的驗證紀錄
 
-| 時間 | Phase | `dotnet build` | `dotnet test`（通過/總數） | `has-pending-model-changes` | `pytest` |
+| 時間 | 完成項目 | `dotnet build` | `dotnet test`（通過/總數） | `has-pending-model-changes` | `pytest` |
 |---|---|---|---|---|---|
 | | | | | | |
 
