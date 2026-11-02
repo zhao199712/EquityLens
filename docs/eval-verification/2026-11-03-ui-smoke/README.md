@@ -102,3 +102,17 @@
 - 本次未實際觸發取消、重試、人工批准；這些沿用既有功能並由前端回歸測試保障，不宣稱新增實機驗證。
 
 截圖：[成功摘要](agent-loop-summary.jpg)、[手機版](agent-loop-mobile.jpg)、[品質拒絕](agent-loop-refusal.jpg)、[新問答與追問](agent-loop-chat.jpg)。
+
+## 國巨高權重與 Ask Agent 投組診斷（01:42）
+
+使用者要求在測試投組加入高比例國巨並詢問風險管理優化。沿用 `b8790cf8-b132-4330-b53f-cc89e78dfbf3`（五檔成分股 Risk 驗收），新增模擬買入國巨 2327 共 3,407 股，2026-11-02 系統收盤價 498.50，權重 50.00%，原持倉未刪除或減持。
+
+- 投組頁同一 1Y 顯示：波動率 22.32% → 44.74%、最大回撤 -14.38% → -40.98%；總值約 1.70M → 3.40M。這是頁面風險指標，不當作真實持有期間績效或模型回測驗證。
+- 第一個 Ask run `50205687-04b7-4b76-a468-5a83b458cfb2`：PortfolioDiagnosis，舊 Risk Run 被 DATE_RANGE_MISMATCH / NO_COMPATIBLE_RISK_RUN 排除，0 重用 / 8 新算，經發布報告批准後 Succeeded。僅批准 WritesAgentTrace，不涉及交易。Risk Quality 仍為 Unvalidated。
+- 診斷預設期間 2026-10-02～2026-11-02，波動率 43.19%、最大回撤 -17.44%、HHI 0.4198、歷史 VaR/ES -5.88%；不能與投組頁 1Y 數字直接視為矛盾。投組/主動報酬資料不足。
+- 第一份敘述把 aggregate volatilityRiskShare=1 解讀成單一股票驅動，並一度由 VaR=ES 推論沒有厚尾，屬過度推論；未視為完全正確的分析。
+- 包含「核對上一份報告」的追問回傳「上一份研究尚未完成或不支援修正」，未建立新 run。改成明確指定 portfolioId 的情境分析後成功建立第二個 run `55c79bb0-e35f-425e-80b7-2e9b7a32418e`，批准發布後 Succeeded。
+- 第二份解讀明確承認未提供國巨 30% / 20% + 現金情境重算，未偽造優化後數字；指出缺乏逐股貢獻證據及 VaR=ES 不足推論沒有厚尾。提出監控最大權重、HHI、波動、回撤、VaR/ES 及補回測，但沒有實際求解最優權重或量化門檻。
+- 未對原投組執行任何再平衡。國巨仍保留約 50% 測試部位。此次是瀏覽器驗收，沒有修改後端或重新部署服務。兩次新診斷及路由呼叫沿用既有 API 預算保留額，未取得完整供應商帳單。
+
+截圖：[新增持倉](yageo-holdings.jpg)、[首次診斷](yageo-diagnosis.jpg)、[情境分析](yageo-scenarios.jpg)、[限制說明](yageo-scenario-detail.jpg)。
