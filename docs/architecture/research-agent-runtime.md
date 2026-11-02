@@ -803,6 +803,27 @@ v4 取代 v1 作為預設的條件（全部成立）：
 | §9.3 | loop turns histogram | 新決策 counter，另有延遲 histogram | 區分決策數與時間分布；DB 為稽核真值 |
 | §5.3 | MaxRetryCount 限制接手 | 至少一次接手，之後受 MaxRetryCount + 1 上限 | 預設 retry=0 的既有節點也必須符合 A2 的一次故障恢復 |
 
+### 驗收證據索引（2026-11-03 更新）
+
+前文是開工時的設計與驗收要求，未勾選的原始 checklist 不代表目前全未完成。以下對應實作證據與限制；不是新的測試執行或新的 A/B 成績。完整執行紀錄見 [progress](research-agent-runtime-progress.md)。
+
+| 項目 | 可查證證據 | 範圍與限制 |
+|---|---|---|
+| A1 | [AgentRunWorkerTests](../../tests/EquityLens.Api.Tests/Services/Agents/AgentRunWorkerTests.cs)：`ProcessNextAsync_AcknowledgesOnlyDurableOutcomes` | 租約被占用／執行中失去租約不 ack |
+| A2 | [AgentExecutorBoundaryTests](../../tests/EquityLens.Api.Tests/Services/Agents/AgentExecutorBoundaryTests.cs)：`ExpiredLease_RecoversInterruptedNode`、`RepeatedInterruption_StopsAtBudget` | 中斷恢復有上限；非冪等節點不盲目重跑 |
+| A3 | [AgentLeasePostgresTests](../../tests/EquityLens.Api.Tests/Integration/AgentLeasePostgresTests.cs) | 真實 PostgreSQL 的拒寫、過期續約、獨立 heartbeat、並行 claim 與長執行驗證 |
+| A4、A9、A10 | [ResearchAgentWorkflowTests](../../tests/EquityLens.Api.Tests/Services/Agents/ResearchAgentWorkflowTests.cs)：`FixedWorkflow_AcceptsOrRevisesOnce_WithoutCallingPlanner`、`OutputGate_BlocksInvalidEvidence` | 固定圖不呼叫動態 planner；修訂再驗收；正式預設已經使用者授權切成 AgentLoop，覆蓋 A4 原先預設 v1 的要求 |
+| A5–A8 | [ResearchAgentLoopTests](../../tests/EquityLens.Api.Tests/Services/Agents/ResearchAgentLoopTests.cs) 與 [ResearchAgentLoop](../../src/EquityLens.Api/Services/Agents/Loop/ResearchAgentLoop.cs) | 平行工具、來源／參數 guard、已提交結果重用、協定與預算上限有測試。NoProgress 有程式停止路徑，但目前沒有獨立命名的 NoProgress 邊界測試；不把其他 workflow 的同名測試當此迴圈證據 |
+| A11 | 同上 `TwoTurns_RecordDecisionsEvidenceAndToolResults`；[正式 UI 驗收](../eval-verification/2026-11-03-ui-smoke/README.md) | turn 與工具可查詢；UI 成本僅涵蓋已記錄迴圈，不是完整供應商帳單 |
+| A12 | [test_trajectory.py](../../evals/tests/test_trajectory.py)、[test_pipeline.py](../../evals/tests/test_pipeline.py)；[題目範圍核對](../eval-verification/2026-11-02-agent-loop-ab/scope-audit-20261103.json) | 舊輸出無 trajectory 時表示未知，不冒充零違規；原始題庫計分八題 |
+| A13 | [ToolApprovalTests](../../tests/EquityLens.Api.Tests/Services/Agents/ToolApprovalTests.cs)、[ToolApprovalPostgresTests](../../tests/EquityLens.Api.Tests/Integration/ToolApprovalPostgresTests.cs) | 測試工具驗證參數綁定、拒絕、恢復冪等；正式 Research Loop 不註冊副作用工具 |
+| A14 | `Telemetry_ParentsParallelToolsToTurn_AndUsesBoundedMetricTags`（ResearchAgentLoopTests） | 驗證 span 親子關係及有限 metric tags；不是正式 dashboard 告警驗收 |
+| A15 | 尚未實作研究結果依風險自動觸發人工審閱 | 工具執行審批與投組報告發布批准不等於此項 |
+| A16 | [A/B 報告](../eval-verification/2026-11-02-agent-loop-ab/README.md) | 兩輪 v1 6/8、v4 7/8；同一開發集，未取得 holdout 泛化證據 |
+| A17 | [部署後遠端 checks](../eval-verification/2026-11-03-portfolio-scenarios/release-checks.json)、progress 各版本測試紀錄 | 本地完整後端 977（含隔離 PostgreSQL）、前端 124；CI success 不自動代表 PostgreSQL 測試無 skip。migration 無 pending 的既有紀錄不冒稱每次文件 commit 都重跑 |
+
+另需保留的界限：A7 恢復會先處理 pending turn 未提交部分，再進入下一輪，不能直接跳過整輪。已呼叫但未落盤的唯讀工具可能重呼叫；A13 的外部效果去重依賴下游冪等，不是任意 API 的 exactly-once。A9 的相容性指既有輸出契約；harness 已另行擴充 engine 與 trajectory，並非所有程式完全未變。
+
 ---
 
 ## 附錄 A：面試說明重點（30 秒版）
