@@ -200,13 +200,13 @@ JUDGE_SCORES = ("judge_correctness", "judge_groundedness")
 def case_passed(case: EvalCase, items: list[ScoreItem]) -> bool | None:
     """Strict pass/fail gate for verified cases.
 
-    Returns None for draft (unverified) cases: they are still scored for diagnostics but must never
-    count toward pass_rate, otherwise an answer to an unchecked question can "pass" by citing anything.
+    Returns None for draft (unverified) and excluded cases: they are still scored for diagnostics but
+    must never count toward pass_rate, otherwise an answer to an unchecked question can "pass" by citing anything.
     A verified case passes only when behaviour is right, every applicable deterministic score is 1.0
     (all facts, all must_include groups, no forbidden text, no dangling citation) and, when the judge
     ran, it succeeded and its scores clear JUDGE_MIN_SCORE.
     """
-    if not case.verified:
+    if not case.counted:
         return None
     by_name = {item.name: item for item in items}
     if by_name["behavior"].score != 1.0:

@@ -36,8 +36,9 @@ def _git_commit() -> str | None:
 
 
 def _select(cases: list[EvalCase], include_unverified: bool, categories: list[str] | None,
-            ids: list[str] | None) -> list[EvalCase]:
+            ids: list[str] | None, include_excluded: bool = False) -> list[EvalCase]:
     selected = [c for c in cases if include_unverified or c.verified]
+    selected = [c for c in selected if include_excluded or not c.excluded_reason]
     if categories:
         selected = [c for c in selected if c.category in categories]
     if ids:
@@ -56,6 +57,7 @@ def build_record(case: EvalCase, output: RunOutput, judge: LlmJudge | None) -> d
         "case_id": case.id,
         "category": case.category,
         "verified": case.verified,
+        "excluded_reason": case.excluded_reason or None,
         "expected_behavior": case.expected_behavior,
         "detected_behavior": detected_behavior(output),
         "passed": case_passed(case, items),
@@ -144,9 +146,15 @@ def cmd_validate(args: argparse.Namespace) -> int:
             bad += 1
             print(f"{case.id}: " + "; ".join(problems))
     unverified = [c.id for c in cases if not c.verified]
-    print(f"{len(cases)} cases, {bad} with problems, {len(unverified)} not yet verified")
+    excluded = [c.id for c in cases if c.excluded_reason]
+    print(f"{len(cases)} cases, {bad} with problems, {len(unverified)} not yet verified, "
+          f"{len(excluded)} excluded")
     if unverified and args.verbose:
         print("unverified: " + ", ".join(unverified))
+    if excluded and args.verbose:
+        for case in cases:
+            if case.excluded_reason:
+                print(f"excluded: {case.id}: {case.excluded_reason}")
     return 1 if bad else 0
 
 
@@ -157,7 +165,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         print("--engine requires --mode investigation", file=sys.stderr)
         return 2
     all_cases = load_cases(args.cases)
-    cases = _select(all_cases, args.include_unverified, args.category, args.case)
+    cases = _select(all_cases, args.include_unverified, args.category, args.case, args.include_excluded)
     if not cases:
         print("no cases selected (unverified cases need --include-unverified)", file=sys.stderr)
         return 2
@@ -165,6 +173,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     if skipped_drafts:
         print(f"skipping {skipped_drafts} unverified case(s); pass --include-unverified to run them as drafts",
               file=sys.stderr)
+    skipped_excluded = sum(1 for c in all_cases if c.excluded_reason) if not args.include_excluded else 0
+    if skipped_excluded:
+        print(f"skipping {skipped_excluded} excluded case(s) (known corpus problems); "
+              "pass --include-excluded to run them for diagnostics", file=sys.stderr)
     judge = _make_judge(args.no_judge)
     out_dir = Path(args.out or Path(__file__).resolve().parent.parent / "runs" / args.label)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -248,6 +260,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--out")
     run.add_argument("--include-unverified", action="store_true",
                      help="also run draft cases; they are scored but never counted in pass_rate")
+    run.add_argument("--include-excluded", action="store_true",
+                     help="also run cases with excluded_reason; scored for diagnostics, never counted")
     run.add_argument("--system-commit", help="commit of the API under test (default: this checkout's HEAD)")
     run.add_argument("--category", action="append")
     run.add_argument("--case", action="append", help="run only this case id (repeatable)")

@@ -51,7 +51,8 @@ def summarize(records: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, 
     Latency, tokens, cost and error rate cover every case that was sent, because they were all paid for.
     """
     verified = [r for r in records if r["passed"] is not None]
-    drafts = [r for r in records if r["passed"] is None]
+    excluded = [r for r in records if r["passed"] is None and r.get("excluded_reason")]
+    drafts = [r for r in records if r["passed"] is None and not r.get("excluded_reason")]
     by_category: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for record in verified:
         by_category[record["category"]].append(record)
@@ -104,6 +105,8 @@ def summarize(records: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, 
                         for cat, rs in sorted(by_category.items())},
         "failed_cases": [r["case_id"] for r in verified if r["passed"] is False],
         "draft_cases": [r["case_id"] for r in drafts],
+        "excluded_case_count": len(excluded),
+        "excluded_cases": [r["case_id"] for r in excluded],
         "draft_metrics": _metric_means(drafts) if drafts else {},
     }
 
@@ -159,7 +162,12 @@ def render_markdown(summary: dict[str, Any], records: list[dict[str, Any]]) -> s
                 reasons = "; ".join(filter(None, (reasons, f"judge error: {record['judge_error']}")))
             lines.append(f"- **{record['case_id']}** ({record['category']}, detected `{record['detected_behavior']}`)"
                          f": {reasons or record.get('error') or 'see results.jsonl'}")
-    drafts = [r for r in records if r["passed"] is None]
+    excluded = [r for r in records if r["passed"] is None and r.get("excluded_reason")]
+    drafts = [r for r in records if r["passed"] is None and not r.get("excluded_reason")]
+    if excluded:
+        lines += ["", "## Excluded cases (known corpus problems, excluded from pass_rate)", ""]
+        lines += [f"- {r['case_id']} (detected `{r['detected_behavior']}`): {r['excluded_reason']}"
+                  for r in excluded]
     if drafts:
         lines += ["", "## Draft cases (not verified, excluded from pass_rate)", ""]
         lines += [f"- {r['case_id']} (detected `{r['detected_behavior']}`)"
