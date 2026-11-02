@@ -167,6 +167,7 @@ class RunOutput:
     model: str | None = None
     run_id: str | None = None
     error: str | None = None
+    trajectory: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

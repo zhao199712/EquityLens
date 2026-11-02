@@ -87,7 +87,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             {
                 _runStateMachine.Transition(run, AgentRunStatuses.Running);
                 run.StartedAtUtc ??= _clock.GetUtcNow().UtcDateTime;
-                if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)
+                if (AgentWorkflowTypes.OwnsResearchArtifact(run.WorkflowType) && run.ResearchRunId is Guid researchRunId)
                 {
                     var artifact = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == researchRunId, cancellationToken);
                     artifact.Status = "Running";
@@ -183,6 +183,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         {
             _dbContext.ChangeTracker.Clear();
             _logger.LogInformation("Agent run {AgentRunId} stopped after losing its lease.", runId);
+            EquityLensTelemetry.AgentLeaseLost.Add(1);
             return AgentRunExecutionOutcome.LeaseLostDuringExecution;
         }
         catch (OperationCanceledException) when (callerCancellation.IsCancellationRequested)
@@ -215,7 +216,8 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             catch (Exception writeError) when (writeError is AgentRunLeaseLostException or DbUpdateConcurrencyException)
             {
                 _dbContext.ChangeTracker.Clear();
-                return AgentRunExecutionOutcome.LeaseLostDuringExecution;
+                EquityLensTelemetry.AgentLeaseLost.Add(1);
+            return AgentRunExecutionOutcome.LeaseLostDuringExecution;
             }
         }
         finally
@@ -233,6 +235,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         {
             var previousStatus = node.Status;
             node.InterruptionCount++;
+            EquityLensTelemetry.AgentNodeInterrupted.Add(1);
             AddEvent(run, node, "NodeInterrupted", "Interrupted node recovered under a new lease.", new { previousStatus, node.InterruptionCount, run.LeaseVersion });
             var policy = _policies.GetExecutionPolicy(run.WorkflowDefinitionJson, node.NodeKey, node.NodeType);
             // 一次接手是最低恢復保證；後續中斷受節點 retry budget 限制。
@@ -304,14 +307,16 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     private void CompleteRun(AgentRun run)
     {
         _runStateMachine.Transition(run, AgentRunStatuses.Succeeded); run.CompletedAtUtc = _clock.GetUtcNow().UtcDateTime;
-        if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)
+        if (AgentWorkflowTypes.OwnsResearchArtifact(run.WorkflowType) && run.ResearchRunId is Guid researchRunId)
         {
             var artifact = _dbContext.ResearchRuns.Local.SingleOrDefault(x => x.Id == researchRunId)
                 ?? _dbContext.ResearchRuns.Single(x => x.Id == researchRunId);
             var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
             artifact.Answer = board[AgentBlackboardKeys.RevisedAnswer]?.GetValue<string>()
                 ?? board[AgentBlackboardKeys.Answer]?.GetValue<string>() ?? artifact.Answer;
-            artifact.Status = artifact.Answer.Contains("資料不足", StringComparison.OrdinalIgnoreCase) ? "InsufficientEvidence" : "Answered";
+            artifact.Status = run.WorkflowType == AgentWorkflowTypes.ResearchAgent
+                ? board["researchAgentFinalStatus"]?.GetValue<string>() ?? "InsufficientEvidence"
+                : artifact.Answer.Contains("資料不足", StringComparison.OrdinalIgnoreCase) ? "InsufficientEvidence" : "Answered";
             artifact.LatencyMs = run.StartedAtUtc.HasValue ? (long)(_clock.GetUtcNow().UtcDateTime - run.StartedAtUtc.Value).TotalMilliseconds : 0;
         }
         AddEvent(run, null, AgentEventTypes.RunSucceeded, $"{run.WorkflowType} run succeeded.", null);
@@ -355,7 +360,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
 
     private async Task UpdateResearchArtifactTerminalAsync(AgentRun run, string status, CancellationToken cancellationToken)
     {
-        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) || run.ResearchRunId is not Guid researchRunId) return;
+        if (!AgentWorkflowTypes.OwnsResearchArtifact(run.WorkflowType) || run.ResearchRunId is not Guid researchRunId) return;
         var artifact = await _dbContext.ResearchRuns.SingleOrDefaultAsync(x => x.Id == researchRunId, cancellationToken);
         if (artifact is null) return;
         artifact.Status = status; artifact.ErrorMessage = run.ErrorMessage;

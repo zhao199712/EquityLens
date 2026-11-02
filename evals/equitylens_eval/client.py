@@ -12,6 +12,8 @@ Modes:
 from __future__ import annotations
 
 import time
+import json
+from collections import Counter
 from typing import Any, Callable
 
 import httpx
@@ -27,7 +29,7 @@ class EquityLensClient:
     def __init__(self, base_url: str, token: str | None = None, timeout_s: float = 180.0,
                  poll_interval_s: float = 2.0, investigation_timeout_s: float = 900.0,
                  transport: httpx.BaseTransport | None = None,
-                 sleep: Callable[[float], None] = time.sleep) -> None:
+                 sleep: Callable[[float], None] = time.sleep, engine: str | None = None) -> None:
         headers = {"Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -36,6 +38,7 @@ class EquityLensClient:
         self._poll_interval_s = poll_interval_s
         self._investigation_timeout_s = investigation_timeout_s
         self._sleep = sleep
+        self._engine = engine
 
     def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         """Send a request, waiting out HTTP 429 (the API's per-user LLM rate limit) a few times.
@@ -59,9 +62,11 @@ class EquityLensClient:
         self.close()
 
     @staticmethod
-    def build_request(case: EvalCase, debug: bool) -> dict[str, Any]:
+    def build_request(case: EvalCase, debug: bool, engine: str | None = None) -> dict[str, Any]:
         body: dict[str, Any] = {"ticker": case.ticker, "question": case.question, "debug": debug}
         body.update(case.request)  # sourcePolicy, retrievalMode, documentType, topK, portfolioId...
+        if engine is not None:
+            body["engine"] = engine
         return body
 
     def run(self, case: EvalCase, mode: str) -> RunOutput:
@@ -82,7 +87,7 @@ class EquityLensClient:
 
     # ---- investigation ----------------------------------------------------------------
     def _investigate(self, case: EvalCase) -> RunOutput:
-        created = self._request("POST", "/api/research/investigations", json=self.build_request(case, debug=False))
+        created = self._request("POST", "/api/research/investigations", json=self.build_request(case, debug=False, engine=self._engine))
         created.raise_for_status()
         ids = created.json()
         agent_run_id, research_run_id = ids["agentRunId"], ids["researchRunId"]
@@ -92,16 +97,19 @@ class EquityLensClient:
         while time.monotonic() < deadline:
             detail = self._request("GET", f"/api/agent-runs/{agent_run_id}")
             detail.raise_for_status()
-            summary = detail.json()["run"]
+            full_detail = detail.json()
+            summary = full_detail["run"]
             if summary["status"] in TERMINAL_RUN_STATUSES:
                 break
-            time.sleep(self._poll_interval_s)
+            self._sleep(self._poll_interval_s)
         else:
             raise TimeoutError(f"agent run {agent_run_id} did not finish in {self._investigation_timeout_s:.0f}s")
 
         research = self._request("GET", f"/api/research/runs/{research_run_id}")
         research.raise_for_status()
-        return parse_investigation(case.id, summary, research.json())
+        output = parse_investigation(case.id, summary, research.json())
+        output.trajectory = parse_trajectory(full_detail)
+        return output
 
 
 def parse_ask_response(case_id: str, body: dict[str, Any]) -> RunOutput:
@@ -178,3 +186,49 @@ def _describe(exc: Exception) -> str:
         body = exc.response.text[:300]
         return f"HTTP {exc.response.status_code}: {body}"
     return f"{type(exc).__name__}: {exc}"
+
+
+def parse_trajectory(detail: dict[str, Any]) -> dict[str, Any]:
+    """Keep inspectable execution facts, not the full Blackboard or provider payloads."""
+    events = detail.get("events") or []
+    tools = detail.get("toolCalls") or []
+    nodes = detail.get("nodes") or []
+    modes: list[str] = []
+    stops: list[str] = []
+    for event in events:
+        try:
+            payload = json.loads(event.get("payloadJson") or "{}")
+        except (TypeError, ValueError):
+            payload = {}
+        if not isinstance(payload, dict):
+            continue
+        if event.get("eventType") == "PlannerProposed" and payload.get("mode"):
+            modes.append(payload["mode"])
+        if event.get("eventType") == "AgentLoopStopped" and payload.get("stopReason"):
+            stops.append(payload["stopReason"])
+    # Count dispatched calls, including failures; a denied call never reached the provider.
+    dispatched_web = sum(t.get("toolName") in {"search_web", "braveWebSearch"}
+                         and t.get("guardDecision") != "Deny" and t.get("status") != "Denied" for t in tools)
+    legacy_web = 0
+    for node in nodes:
+        if node.get("nodeType") != "RetrieveWebResearchEvidence":
+            continue
+        try:
+            output = json.loads(node.get("outputJson") or "{}")
+        except (TypeError, ValueError):
+            output = {}
+        if isinstance(output, dict) and output.get("used") is True:
+            legacy_web += 1
+    return {
+        "workflow_type": (detail.get("run") or {}).get("workflowType"),
+        "node_types": [n.get("nodeType") for n in nodes],
+        "planner_modes": modes,
+        "plan_rejected_count": sum(e.get("eventType") == "PlanRejected" for e in events),
+        "llm_turns": len(detail.get("llmTurns") or []),
+        "tool_calls_by_name": dict(Counter(t.get("toolName", "unknown") for t in tools)),
+        "guard_denials": sum(t.get("guardDecision") == "Deny" or t.get("status") == "Denied" for t in tools),
+        "web_calls": dispatched_web + legacy_web,
+        "stop_reason": stops[-1] if stops else None,
+        "node_durations_ms": {n.get("nodeKey", "unknown"): n.get("durationMs") for n in nodes},
+        "interrupted_nodes": sum(e.get("eventType") == "NodeInterrupted" for e in events),
+    }

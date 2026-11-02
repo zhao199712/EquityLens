@@ -91,7 +91,11 @@ public sealed record AgentToolCallResponse(
     string? ErrorMessage,
     DateTime StartedAtUtc,
     DateTime? CompletedAtUtc,
-    long? DurationMs);
+    long? DurationMs,
+    Guid? AgentLlmTurnId = null,
+    string? ToolCallKey = null,
+    string? GuardDecision = null,
+    string? GuardReason = null);
 
 public sealed record AgentFeedbackResponse(
     Guid Id,
@@ -148,4 +152,10 @@ public sealed record AgentRunDetailResponse(
     string WorkflowDefinitionJson,
     IReadOnlyList<AgentApprovalResponse>? Approvals = null,
     IReadOnlyList<AgentRunPromptSnapshotResponse>? PromptSnapshots = null,
-    AgentLoopSummaryResponse? LoopSummary = null);
+    AgentLoopSummaryResponse? LoopSummary = null,
+    IReadOnlyList<AgentLlmTurnResponse>? LlmTurns = null);
+
+public sealed record AgentLlmTurnResponse(Guid Id, Guid AgentRunNodeId, int Turn, int ExecutionAttempt, string Mode,
+    string Provider, string Model, string PromptTemplateId, int PromptVersion, string RenderedPromptHash,
+    string Action, string ThoughtSummary, int PromptTokens, int CompletionTokens, decimal EstimatedCostUsd,
+    long LatencyMs, string? ErrorMessage, DateTime CreatedAtUtc);

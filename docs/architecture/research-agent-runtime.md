@@ -795,6 +795,11 @@ v4 取代 v1 作為預設的條件（全部成立）：
 | 章節 | 原設計 | 實際做法 | 理由 |
 |---|---|---|---|
 | §5.2 | EnsureOwned + 節點續約 | DbContext 非同步 SaveChanges 統一交易 fencing；executor 全期間以獨立 scope 續約 | 涵蓋 handler 中途 SaveChanges 與 planner；避免檢查和寫入之間的競態及共用 DbContext |
+| §6 | 每輪 checkpoint 與最後三筆快照 | 每 node / attempt 最新 checkpoint，turn/tool 保留歷史 | 簡化恢復唯一鍵，手動 Retry 不重用舊輪次 |
+| §6.6 | compute_growth | 暫不開放計算工具 | 目前 evidence 為文件片段，無可信結構化 metric 輸入 |
+| §7.2 | claims[].numbers | 直接解析答案與同句引用，正規化及單位容忍 | 不依賴模型額外自報 claims |
+| §6 prompt | 可選 prompt registry | 固定 template ID/version/hash | 先交付可重現版本 |
+| §9.3 | loop turns histogram | 新決策 counter，另有延遲 histogram | 區分決策數與時間分布；DB 為稽核真值 |
 | §5.3 | MaxRetryCount 限制接手 | 至少一次接手，之後受 MaxRetryCount + 1 上限 | 預設 retry=0 的既有節點也必須符合 A2 的一次故障恢復 |
 
 ---

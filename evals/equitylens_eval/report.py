@@ -18,6 +18,7 @@ METRIC_ORDER = (
     "citation_coverage",
     "source_hit",
     "retrieval_recall",
+    "source_policy_compliance",
     "judge_correctness",
     "judge_groundedness",
 )
@@ -75,7 +76,19 @@ def summarize(records: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, 
         "mean_total_tokens": round(mean(tokens), 1) if tokens else None,
         "total_cost_usd": round(sum(costs), 6) if costs else None,
     }
+    trajectories = [r["trajectory"] for r in records if r.get("trajectory") is not None]
+    planner_modes = [m for t in trajectories for m in t.get("planner_modes", [])]
+    trajectory = {
+        "recorded_runs": len(trajectories),
+        "web_policy_violation_count": sum(bool((r.get("details", {}).get("source_policy_compliance") or {}).get("web_policy_violation"))
+                                          for r in records) if trajectories else None,
+        "planner_fallback_rate": sum(m == "DeterministicFallback" for m in planner_modes) / len(planner_modes) if planner_modes else None,
+        "mean_llm_turns": mean(t.get("llm_turns", 0) for t in trajectories) if trajectories else None,
+        "mean_tool_calls": mean(sum(t.get("tool_calls_by_name", {}).values()) for t in trajectories) if trajectories else None,
+        "guard_denials": sum(t.get("guard_denials", 0) for t in trajectories) if trajectories else None,
+    }
     return {
+        "trajectory": trajectory,
         "meta": meta,
         "case_count": len(records),
         "verified_case_count": len(verified),
@@ -121,6 +134,9 @@ def render_markdown(summary: dict[str, Any], records: list[dict[str, Any]]) -> s
             lines.append(f"| {name} | {_fmt(metric['mean'])} | {metric['n']} |")
     lines += ["", "## Behaviour, cost and latency", "", "| metric | value |", "|---|---|"]
     for name, value in summary["operational"].items():
+        lines.append(f"| {name} | {_fmt(value)} |")
+    lines += ["", "## Trajectory", "", "| metric | value |", "|---|---|"]
+    for name, value in summary.get("trajectory", {}).items():
         lines.append(f"| {name} | {_fmt(value)} |")
     lines += ["", "## By category", "", "| category | cases | pass_rate | facts | source_hit |", "|---|---|---|---|---|"]
     for category, block in summary["by_category"].items():

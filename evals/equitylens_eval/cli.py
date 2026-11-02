@@ -67,6 +67,7 @@ def build_record(case: EvalCase, output: RunOutput, judge: LlmJudge | None) -> d
         "cost_usd": output.cost_usd,
         "run_id": output.run_id,
         "error": output.error,
+        "trajectory": output.trajectory,
         "judge_error": next((item.details["error"] for item in items
                              if item.name in JUDGE_SCORES and item.details.get("error")), None),
         "answer_preview": output.answer[:200],
@@ -96,6 +97,7 @@ def _run_meta(args: argparse.Namespace) -> dict:
     return {
         "label": args.label,
         "mode": args.mode,
+        "engine": getattr(args, "engine", None),
         "base_url": args.base_url,
         # the system under test; defaults to this checkout's HEAD, override when the API runs another build
         "system_commit": args.system_commit or _git_commit(),
@@ -151,6 +153,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     from .client import EquityLensClient  # imported lazily so rescore/compare work without network deps
 
+    if args.engine and args.mode != "investigation":
+        print("--engine requires --mode investigation", file=sys.stderr)
+        return 2
     all_cases = load_cases(args.cases)
     cases = _select(all_cases, args.include_unverified, args.category, args.case)
     if not cases:
@@ -167,7 +172,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     run_meta = _run_meta(args)
     (out_dir / RUN_META_FILE).write_text(json.dumps(run_meta, ensure_ascii=False, indent=2), encoding="utf-8")
     records = []
-    with EquityLensClient(args.base_url, token=token, investigation_timeout_s=args.investigation_timeout) as client, \
+    with EquityLensClient(args.base_url, token=token, investigation_timeout_s=args.investigation_timeout, engine=args.engine) as client, \
             (out_dir / "responses.jsonl").open("w", encoding="utf-8") as responses:
         for index, case in enumerate(cases, start=1):
             output = client.run(case, args.mode)
@@ -236,6 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     run = sub.add_parser("run", help="run cases against a live API")
     run.add_argument("--cases", required=True)
     run.add_argument("--mode", choices=sorted(MODES), default="ask")
+    run.add_argument("--engine", choices=["DynamicDag", "AgentLoop"], help="investigation engine override")
     run.add_argument("--label", required=True, help="name for this run, e.g. prompt-v4 or jev-assessor")
     run.add_argument("--base-url", default=os.getenv("EQUITYLENS_BASE_URL", "http://localhost:5035"))
     run.add_argument("--token", help="JWT bearer token (default: $EQUITYLENS_TOKEN)")

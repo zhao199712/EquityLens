@@ -107,3 +107,10 @@ dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --export-financ
 - `LeaseVersion` changes on claim. Executor-scoped `AgentRunWriteFence` protects every async DbContext save with a PostgreSQL lease row lock in the same transaction as results. Synchronous saves during execution are rejected.
 - Heartbeat uses an independent scope/DbContext. Never share a handler DbContext with background renewal.
 - Interrupted Ready/Queued/Running nodes recover through the state machine with a bounded interruption count; caller cancellation and lease loss must not publish stale failure results.
+
+## Research Agent Loop (v4 opt-in)
+- `ResearchAskRequest.Engine`: omitted keeps configured default `DynamicDag`; `AgentLoop` selects fixed `ResearchAgent` workflow. Do not remove v1 planner/validator while existing workflows use them.
+- Loop code lives under `Services/Agents/Loop`; persist an LLM decision before dispatch and each tool result before merging the evidence ledger. Checkpoint uniqueness is node + execution attempt; committed results are reused on lease recovery.
+- All currently exposed loop tools are read-only. Never introduce a side-effect tool without durable approval, argument binding and downstream idempotency.
+- OutputGate is deterministic; revision runs Critic again. A final rejected answer becomes standard refusal with artifact status, while runtime can still succeed.
+- Eval: `--mode investigation --engine DynamicDag|AgentLoop`. Legacy output without trajectory remains rescorable and must not imply zero violations.

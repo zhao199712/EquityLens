@@ -78,6 +78,9 @@ public class EquityLensDbContext : DbContext
     public DbSet<ResearchRunCandidate> ResearchRunCandidates => Set<ResearchRunCandidate>();
     public DbSet<ResearchRunCitation> ResearchRunCitations => Set<ResearchRunCitation>();
 
+    public DbSet<AgentLlmTurn> AgentLlmTurns => Set<AgentLlmTurn>();
+    public DbSet<AgentLoopCheckpoint> AgentLoopCheckpoints => Set<AgentLoopCheckpoint>();
+
     // Agent workflows
     public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
     public DbSet<AgentRunNode> AgentRunNodes => Set<AgentRunNode>();

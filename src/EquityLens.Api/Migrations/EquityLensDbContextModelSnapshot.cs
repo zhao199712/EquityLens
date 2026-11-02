@@ -190,6 +190,151 @@ namespace EquityLens.Api.Migrations
                     b.ToTable("agent_feedback", (string)null);
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentLlmTurn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("ActionJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("action_json");
+
+                    b.Property<Guid>("AgentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_id");
+
+                    b.Property<Guid>("AgentRunNodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_node_id");
+
+                    b.Property<int>("CompletionTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("completion_tokens");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<decimal>("EstimatedCostUsd")
+                        .HasColumnType("numeric")
+                        .HasColumnName("estimated_cost_usd");
+
+                    b.Property<int>("ExecutionAttempt")
+                        .HasColumnType("integer")
+                        .HasColumnName("execution_attempt");
+
+                    b.Property<long>("LatencyMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("latency_ms");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("mode");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("model");
+
+                    b.Property<string>("PromptTemplateId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("prompt_template_id");
+
+                    b.Property<int>("PromptTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("prompt_tokens");
+
+                    b.Property<int>("PromptVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("prompt_version");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("RenderedPromptHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rendered_prompt_hash");
+
+                    b.Property<string>("ThoughtSummary")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("thought_summary");
+
+                    b.Property<int>("Turn")
+                        .HasColumnType("integer")
+                        .HasColumnName("turn");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentRunId");
+
+                    b.HasIndex("AgentRunNodeId", "ExecutionAttempt", "Turn")
+                        .IsUnique();
+
+                    b.ToTable("agent_llm_turn", (string)null);
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentLoopCheckpoint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_id");
+
+                    b.Property<Guid>("AgentRunNodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_run_node_id");
+
+                    b.Property<int>("ExecutionAttempt")
+                        .HasColumnType("integer")
+                        .HasColumnName("execution_attempt");
+
+                    b.Property<long>("LeaseVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("lease_version");
+
+                    b.Property<string>("StateJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("state_json");
+
+                    b.Property<int>("Turn")
+                        .HasColumnType("integer")
+                        .HasColumnName("turn");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentRunId");
+
+                    b.HasIndex("AgentRunNodeId", "ExecutionAttempt")
+                        .IsUnique();
+
+                    b.ToTable("agent_loop_checkpoint", (string)null);
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentNodeSetting", b =>
                 {
                     b.Property<Guid>("Id")
@@ -656,6 +801,10 @@ namespace EquityLens.Api.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<Guid?>("AgentLlmTurnId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_llm_turn_id");
+
                     b.Property<Guid>("AgentRunId")
                         .HasColumnType("uuid")
                         .HasColumnName("agent_run_id");
@@ -680,6 +829,14 @@ namespace EquityLens.Api.Migrations
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("text")
                         .HasColumnName("error_message");
+
+                    b.Property<string>("GuardDecision")
+                        .HasColumnType("text")
+                        .HasColumnName("guard_decision");
+
+                    b.Property<string>("GuardReason")
+                        .HasColumnType("text")
+                        .HasColumnName("guard_reason");
 
                     b.Property<Guid?>("PromptSnapshotId")
                         .HasColumnType("uuid")
@@ -708,6 +865,10 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("status");
 
+                    b.Property<string>("ToolCallKey")
+                        .HasColumnType("text")
+                        .HasColumnName("tool_call_key");
+
                     b.Property<string>("ToolName")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -719,6 +880,9 @@ namespace EquityLens.Api.Migrations
                     b.HasIndex("AgentRunNodeId");
 
                     b.HasIndex("PromptSnapshotId");
+
+                    b.HasIndex("AgentLlmTurnId", "ToolCallKey")
+                        .IsUnique();
 
                     b.HasIndex("AgentRunId", "StartedAtUtc");
 
@@ -3885,6 +4049,36 @@ namespace EquityLens.Api.Migrations
                     b.Navigation("Run");
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentLlmTurn", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRun", null)
+                        .WithMany()
+                        .HasForeignKey("AgentRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRunNode", null)
+                        .WithMany()
+                        .HasForeignKey("AgentRunNodeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentLoopCheckpoint", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRun", null)
+                        .WithMany()
+                        .HasForeignKey("AgentRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentRunNode", null)
+                        .WithMany()
+                        .HasForeignKey("AgentRunNodeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRun", b =>
                 {
                     b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "ParentRun")
@@ -3950,6 +4144,11 @@ namespace EquityLens.Api.Migrations
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentToolCall", b =>
                 {
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentLlmTurn", null)
+                        .WithMany()
+                        .HasForeignKey("AgentLlmTurnId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "Run")
                         .WithMany("ToolCalls")
                         .HasForeignKey("AgentRunId")

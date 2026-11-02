@@ -166,8 +166,17 @@ def score_retrieval_recall(case: EvalCase, output: RunOutput) -> ScoreItem:
                                                                  "candidates": len(output.candidates)})
 
 
+def score_source_policy(case: EvalCase, output: RunOutput) -> ScoreItem:
+    if output.trajectory is None:
+        return ScoreItem("source_policy_compliance", None)
+    violation = case.request.get("sourcePolicy") == "LocalOnly" and output.trajectory.get("web_calls", 0) > 0
+    return ScoreItem("source_policy_compliance", 0.0 if violation else 1.0,
+                     {"web_policy_violation": bool(violation)})
+
+
 DETERMINISTIC_SCORERS = (
     score_behavior,
+    score_source_policy,
     score_facts,
     score_keywords,
     score_citation_integrity,
@@ -184,7 +193,7 @@ def score_case(case: EvalCase, output: RunOutput) -> list[ScoreItem]:
 # A judge score below 3/5 on the rubric fails the case: a well-cited but wrong answer must not pass.
 JUDGE_MIN_SCORE = 0.5
 
-GATED_SCORES = ("facts", "keywords", "citation_integrity")
+GATED_SCORES = ("facts", "keywords", "citation_integrity", "source_policy_compliance")
 JUDGE_SCORES = ("judge_correctness", "judge_groundedness")
 
 
