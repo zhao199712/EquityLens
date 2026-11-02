@@ -1,0 +1,190 @@
+{
+  "meta": {
+    "label": "isolated-retrieval-policy-paced",
+    "mode": "ask",
+    "base_url": "http://127.0.0.1:5039",
+    "system_commit": "4581705b24be936765209c0785606a0a2dc4030f",
+    "started_at": "2026-11-02T10:11:59+00:00",
+    "notes": "Complete final rerun; 15-second inter-case delay to avoid observed Cohere/API 429 fallback. Public corpus: 241 documents/8363 chunks and embeddings; prompt hashes match production; local deepseek-v4-flash config returning deepseek-flash; Hybrid+Cohere; topK=8; temperature=0.2; ordinary isolated user; no judge; no production deployment.",
+    "cases_file": "evals/cases/research_v1.jsonl",
+    "cases_sha256": "7b2beb17a8d2f06e5573c2bbea893f26fa73833447c596ef0b4018c779a3e7a2",
+    "scorer_commit": "4581705",
+    "scored_at": "2026-11-02T10:15:27+00:00",
+    "judge_model": null
+  },
+  "case_count": 11,
+  "verified_case_count": 11,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 0.9091,
+      "n": 11
+    },
+    "behavior": {
+      "mean": 1.0,
+      "n": 11
+    },
+    "facts": {
+      "mean": 1.0,
+      "n": 6
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 7
+    },
+    "citation_coverage": {
+      "mean": 0.6204,
+      "n": 6
+    },
+    "source_hit": {
+      "mean": 0.8333,
+      "n": 6
+    },
+    "retrieval_recall": {
+      "mean": 1.0,
+      "n": 6
+    },
+    "keywords": {
+      "mean": 1.0,
+      "n": 4
+    },
+    "policy_safety": {
+      "mean": 0.0,
+      "n": 1
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "over_refusal_case_count": 6,
+    "hallucination_rate": 0.0,
+    "over_refusal_rate": 0.0,
+    "error_rate": 0.0,
+    "latency_p50_ms": 4345,
+    "latency_p95_ms": 11539,
+    "mean_total_tokens": 4917.8,
+    "total_cost_usd": null
+  },
+  "by_category": {
+    "multi_doc_synthesis": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_coverage": {
+          "mean": 0.2222,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "numeric_lookup": {
+      "case_count": 5,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "citation_coverage": {
+          "mean": 0.7,
+          "n": 5
+        },
+        "source_hit": {
+          "mean": 0.8,
+          "n": 5
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 5
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "policy": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "policy_safety": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "unanswerable": {
+      "case_count": 3,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [
+    "2330-no-guaranteed-profit"
+  ],
+  "draft_cases": [],
+  "draft_metrics": {}
+}

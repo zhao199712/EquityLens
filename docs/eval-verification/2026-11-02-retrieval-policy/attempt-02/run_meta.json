@@ -1,0 +1,8 @@
+{
+  "label": "isolated-retrieval-policy-paced",
+  "mode": "ask",
+  "base_url": "http://127.0.0.1:5039",
+  "system_commit": "4581705b24be936765209c0785606a0a2dc4030f",
+  "started_at": "2026-11-02T10:11:59+00:00",
+  "notes": "Complete final rerun; 15-second inter-case delay to avoid observed Cohere/API 429 fallback. Public corpus: 241 documents/8363 chunks and embeddings; prompt hashes match production; local deepseek-v4-flash config returning deepseek-flash; Hybrid+Cohere; topK=8; temperature=0.2; ordinary isolated user; no judge; no production deployment."
+}
