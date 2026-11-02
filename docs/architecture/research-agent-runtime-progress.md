@@ -156,3 +156,10 @@
 - 預設仍為 DynamicDag，新引擎以 engine=AgentLoop 啟用。沒有部署或操作正式服務；GitHub workflow 僅 build/test。四項新 migration 只在隔離 DB 驗證，實際部署前仍需套用。
 
 - 2026-11-03 正式部署：先保留舊映像與完整 DB 備份（含停止 API 後快照），再套用四項 migration、重啟 API。公開 HTTPS 請求省略 engine，確認 ResearchAgent / Succeeded / Answered，EPS 66.26，引用第 10／58 頁。正式 compose 啟用 AgentLoop 與 thinking=false；其餘既有設定保留。續跑指令已更新，避免回復過期的舊預設要求。
+
+## AgentLoop 前端呈現更新（2026-11-03）
+
+- ResearchAgent 詳情新增五階段摘要、最終答案／引用、獨立品質結果與 LLM 呼叫紀錄；不再用 16 個實體節點百分比代表研究進度。修訂略過標示不需要修訂。
+- 接上既有 llmTurns；統計包含已記錄 attempts，費用僅代表研究／修訂迴圈，不含其他模型與檢索服務。證據數明確標為最後一輪。
+- Ask Agent 卡片移除 ResearchAgent 節點進度；既有卡片 API 沒有時間欄位，因此耗時放在詳細頁，不新增輪詢或後端 API。其他 workflows 與批准、取消、重試維持既有路徑。
+- 前端 18 個測試檔、120 個測試通過，正式 build 通過；新增 10 個測試涵蓋暫存答案隔離、拒答、政策回覆、修訂略過、重試統計及舊資料缺漏。瀏覽器發布驗證另記 UI smoke 報告。

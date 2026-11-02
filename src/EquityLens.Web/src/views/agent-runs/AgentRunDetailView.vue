@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
+import ResearchAgentSummary from '../../components/agents/ResearchAgentSummary.vue'
 import AgentRunProgress from '../../components/agents/AgentRunProgress.vue'
 import CapabilityRequestStatus from '../../components/agents/CapabilityRequestStatus.vue'
 import {
@@ -398,7 +399,8 @@ const nextActionLabel = computed(() => {
             </dl>
           </div>
 
-          <AgentRunProgress
+          <ResearchAgentSummary v-if="run.run.workflowType === 'ResearchAgent'" :detail="run" />
+          <AgentRunProgress v-else
             :nodes="run.nodes"
             :workflow-definition="run.workflowDefinitionJson"
             :run-status="run.run.status"
@@ -406,7 +408,7 @@ const nextActionLabel = computed(() => {
             :completed-at-utc="run.run.completedAtUtc"
           />
 
-          <div v-if="run.loopSummary" class="prestige-panel prestige-panel-pad result-panel" data-testid="loop-summary">
+          <div v-if="run.loopSummary && run.run.workflowType !== 'ResearchAgent'" class="prestige-panel prestige-panel-pad result-panel" data-testid="loop-summary">
             <h3 class="panel-title">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? 'Portfolio Diagnosis Loop' : 'Research Quality Loop' }}</h3>
             <div class="stat-grid">
               <div><div class="prestige-label stat-caption">狀態</div><div class="stat-value">{{ run.loopSummary.status }}</div></div>
@@ -439,7 +441,7 @@ const nextActionLabel = computed(() => {
           />
 
           <!-- Waiting for output -->
-          <div v-if="!isTerminalStatus || run.outputJson === null" class="prestige-empty waiting-block">
+          <div v-if="run.run.workflowType !== 'ResearchAgent' && (!isTerminalStatus || run.outputJson === null)" class="prestige-empty waiting-block">
             <div style="font-size: 14px; margin-bottom: 8px">等待背景工作完成</div>
             <div style="font-size: 12px">結果產出後會自動顯示在這裡</div>
           </div>

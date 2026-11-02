@@ -130,12 +130,13 @@ function formatTime(updatedAtUtc: string) {
                   {{ message.runCard.status }}
                 </span>
               </div>
-              <p v-if="message.runCard.currentStageDisplayName">目前階段：{{ message.runCard.currentStageDisplayName }}</p>
-              <div class="progress">
+              <p v-if="message.runCard.workflowType !== 'ResearchAgent' && message.runCard.currentStageDisplayName">目前階段：{{ message.runCard.currentStageDisplayName }}</p>
+              <div v-if="message.runCard.workflowType !== 'ResearchAgent'" class="progress">
                 <span :style="{ width: `${message.runCard.totalNodes ? message.runCard.completedNodes / message.runCard.totalNodes * 100 : 0}%` }"></span>
               </div>
-              <small>{{ message.runCard.completedNodes }} / {{ message.runCard.totalNodes }} stages</small>
-              <div v-if="message.runCard.finalAnswer" class="final-answer" v-html="renderMarkdown(message.runCard.finalAnswer)"></div>
+              <small v-if="message.runCard.workflowType !== 'ResearchAgent'">{{ message.runCard.completedNodes }} / {{ message.runCard.totalNodes }} nodes</small>
+              <small v-else>AgentLoop · 研究進度與耗時請見執行詳情</small>
+              <div v-if="message.runCard.status === 'Succeeded' && message.runCard.finalAnswer" class="final-answer" v-html="renderMarkdown(message.runCard.finalAnswer)"></div>
               <p v-if="message.runCard.errorMessage" class="prestige-error">{{ message.runCard.errorMessage }}</p>
               <RouterLink :to="{ name: 'agent-run-detail', params: { id: message.runCard.agentRunId } }">查看 Agent Run →</RouterLink>
             </section>

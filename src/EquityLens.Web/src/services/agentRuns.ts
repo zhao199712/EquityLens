@@ -89,7 +89,29 @@ export interface SubmitAgentFeedbackResponse {
   followUpResearchRunId: string | null
 }
 
+export interface AgentLlmTurnDto {
+  id: string
+  agentRunNodeId: string
+  turn: number
+  executionAttempt: number
+  mode: string
+  provider: string
+  model: string
+  promptTemplateId: string
+  promptVersion: number
+  renderedPromptHash: string
+  action: string
+  thoughtSummary: string
+  promptTokens: number
+  completionTokens: number
+  estimatedCostUsd: number
+  latencyMs: number
+  errorMessage: string | null
+  createdAtUtc: string
+}
+
 export interface AgentRunDetail {
+  llmTurns?: AgentLlmTurnDto[] | null
   run: AgentRunListItem
   nodes: AgentRunNodeDto[]
   events: AgentRunEventDto[]
@@ -146,6 +168,7 @@ export interface AgentRunPromptSnapshotDto {
 export interface AgentRunCreatedResponse extends AgentRunListItem {}
 
 interface RawAgentRunDetail {
+  llmTurns?: AgentLlmTurnDto[] | null
   run: AgentRunListItem
   nodes: Array<Omit<AgentRunNodeDto, 'inputJson' | 'outputJson'> & { inputJson: string | null; outputJson: string | null }>
   events: Array<Omit<AgentRunEventDto, 'payloadJson'> & { payloadJson: string | null }>
@@ -259,6 +282,7 @@ function normalizeDetail(raw: RawAgentRunDetail): AgentRunDetail {
     outputJson: parseJsonObject(raw.outputJson),
     workflowDefinitionJson: parseJsonObject(raw.workflowDefinitionJson) ?? {},
     loopSummary: raw.loopSummary ?? null,
+    llmTurns: raw.llmTurns ?? null,
   }
 }
 
