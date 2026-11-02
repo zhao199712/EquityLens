@@ -238,3 +238,5 @@ pytest
 **Portfolio Analytics + Quantitative Risk + Financial Research + Constrained Agentic Workflow**
 
 EquityLens 探索如何將金融資料、量化模型與可靠的 AI orchestration 整合成一套可追蹤、可驗證的投資研究系統。
+
+正式環境已於 2026-11-03 啟用 AgentLoop 預設；程式內未設定環境的 fallback 仍為 DynamicDag。備份、migration、煙霧驗證與回退方式見 [部署紀錄](docs/architecture/research-agent-runtime-deployment.md)。

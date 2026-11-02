@@ -3,6 +3,8 @@
 > 對應設計：[`research-agent-runtime.md`](research-agent-runtime.md)。驗收以設計文件開頭的「任務簡報」A1–A17 為準。
 > 實作者每完成一個項目就更新本檔並 commit。Reviewer 早上只看這一份就能知道做到哪裡。
 
+> 最新狀態（2026-11-03 00:02）：使用者已授權正式部署，AgentLoop 已成為正式預設，四項 migration 已套用且 smoke 通過。下方保留舊預設的描述為當時歷史決策，已由此次授權取代。詳見 [部署紀錄](research-agent-runtime-deployment.md)。
+
 ## 開工基準
 
 | 項目 | 值 |
@@ -138,3 +140,5 @@
 - 合併來源：`feat/research-agent-runtime`，tip `c395b9b`；包含 Claude excluded_reason `379022b`。保留 merge commit 與功能分支歷史，不 squash。
 - 合併前 Release build/test：958/958（含隔離 PostgreSQL、零 skipped）；eval harness 75/75；題庫 validate：13 題、2 未核實、3 excluded。
 - 預設仍為 DynamicDag，新引擎以 engine=AgentLoop 啟用。沒有部署或操作正式服務；GitHub workflow 僅 build/test。四項新 migration 只在隔離 DB 驗證，實際部署前仍需套用。
+
+- 2026-11-03 正式部署：先保留舊映像與完整 DB 備份（含停止 API 後快照），再套用四項 migration、重啟 API。公開 HTTPS 請求省略 engine，確認 ResearchAgent / Succeeded / Answered，EPS 66.26，引用第 10／58 頁。正式 compose 啟用 AgentLoop 與 thinking=false；其餘既有設定保留。續跑指令已更新，避免回復過期的舊預設要求。

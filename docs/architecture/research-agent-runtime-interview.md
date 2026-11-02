@@ -1,6 +1,6 @@
 # EquityLens 研究代理架構與面試示範
 
-EquityLens 的研究功能需要同時處理證據搜尋、回答品質與背景工作的可靠性。這次改動把 LLM 的決策範圍放在工具迴圈內，外層保留固定 DAG，讓搜尋路線可以變動，而權限、預算、品質驗收和故障恢復仍由程式控制。新引擎以 `engine: "AgentLoop"` 啟用，預設仍保留 DynamicDag。
+EquityLens 的研究功能需要同時處理證據搜尋、回答品質與背景工作的可靠性。這次改動把 LLM 的決策範圍放在工具迴圈內，外層保留固定 DAG，讓搜尋路線可以變動，而權限、預算、品質驗收和故障恢復仍由程式控制。正式環境已於 2026-11-03 啟用 AgentLoop 預設；仍可明確指定 `engine: "DynamicDag"` 使用舊引擎，未設定環境的程式 fallback 不變。部署與備份見 [部署紀錄](research-agent-runtime-deployment.md)。
 
 ## 開場說法
 
