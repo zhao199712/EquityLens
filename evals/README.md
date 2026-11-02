@@ -139,7 +139,7 @@ API 回應 429（被限流）時，client 會依 `Retry-After` 等待後重試�
 ```bash
 export EVAL_JUDGE_BASE_URL=https://api.deepseek.com/v1   # 任何 OpenAI 相容的 endpoint
 export EVAL_JUDGE_API_KEY=...
-export EVAL_JUDGE_MODEL=deepseek-chat
+export EVAL_JUDGE_MODEL=deepseek-flash
 ```
 
 - 評審最好**和被測模型不同家**，自己評自己分數會偏高。

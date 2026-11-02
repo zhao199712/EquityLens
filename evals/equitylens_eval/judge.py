@@ -6,7 +6,7 @@ Gemini's OpenAI-compatible endpoint, a local vLLM...). Configure with:
 
   EVAL_JUDGE_BASE_URL   e.g. https://api.deepseek.com/v1
   EVAL_JUDGE_API_KEY
-  EVAL_JUDGE_MODEL      e.g. deepseek-chat
+  EVAL_JUDGE_MODEL      e.g. deepseek-flash
 
 Rules of thumb baked in:
   * the judge should be a different model family from the one under test
