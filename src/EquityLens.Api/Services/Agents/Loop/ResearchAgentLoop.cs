@@ -41,6 +41,15 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
             context.AddEvent(context.Run, context.Node, "AgentLoopStarted", "Research loop started.", new { mode });
             await SaveAsync();
         }
+        // 人工等待不消耗執行時間；每筆審批只扣除一次，並持久化。
+        var resumed = await db.AgentApprovalRequests.Where(x => x.AgentRunNodeId == context.Node.Id
+            && x.ExecutionAttempt == context.Run.ExecutionAttempt && x.Scope == "ToolCall" && x.DecidedAtUtc != null).ToListAsync(ct);
+        foreach (var approval in resumed.Where(x => !state.ResumedApprovalIds.Contains(x.Id)))
+        {
+            state.StartedAtUtc += clock.GetUtcNow().UtcDateTime - approval.RequestedAtUtc;
+            state.ResumedApprovalIds.Add(approval.Id);
+        }
+        if (resumed.Count > 0) await SaveAsync();
         var maxTurns = mode == "Revise" ? _options.MaxRevisionTurns : _options.MaxTurns;
         using var duration = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1,
             _options.MaxWallClockSeconds - (clock.GetUtcNow().UtcDateTime - state.StartedAtUtc).TotalSeconds)));
@@ -135,6 +144,7 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
                         case "ask_human": state.StopReason = "HumanClarificationUnavailable"; break;
                         case "call_tools":
                             await DispatchAsync(turn, action, scope, state, context, SaveAsync, bounded.Token);
+                            if (context.AwaitingApproval) return state;
                             state.NoProgressTurns = state.Ledger.Count == before ? state.NoProgressTurns + 1 : 0;
                             if (state.ForcedDraft) state.StopReason = "BudgetExhausted";
                             break;
@@ -179,11 +189,14 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
         var stored = await db.AgentToolCalls.Where(x => x.AgentLlmTurnId == turn.Id).ToListAsync(ct);
         if (stored.Count == 0)
         {
-            var accepted = 0;
+            var accepted = 0; var approvals = 0;
             foreach (var call in action.ToolCalls)
             {
                 var reason = tools.Validate(scope, call);
-                var toolCost = tools.Visible(scope).SingleOrDefault(x => x.Name == call.Tool)?.EstimatedCostUsd ?? 0;
+                var definition = tools.Visible(scope).SingleOrDefault(x => x.Name == call.Tool);
+                var toolCost = definition?.EstimatedCostUsd ?? 0;
+                var requiresApproval = definition?.RequiresApproval == true;
+                if (requiresApproval && approvals > 0) reason ??= "OneApprovalPerTurn";
                 if (state.ForcedDraft) reason = "ForcedDraftOnly";
                 else if (accepted >= _options.MaxToolCallsPerTurn || state.ToolCalls >= _options.MaxToolCalls
                     || state.CostUsd + toolCost > _options.MaxCostUsd) reason ??= "ToolBudgetExceeded";
@@ -191,10 +204,11 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
                 if (reason is null)
                 { accepted++; state.ToolCalls++; if (call.Tool == "search_web") state.WebCalls++; state.CostUsd += toolCost; }
                 else state.GuardDenials++;
+                if (reason is null && requiresApproval) approvals++;
                 var record = new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
                     AgentLlmTurnId = turn.Id, ToolCallKey = call.CallId, ToolName = call.Tool,
-                    ArgumentsJson = call.Arguments.ToJsonString(), Status = reason is null ? "Running" : "Denied",
-                    GuardDecision = reason is null ? "Allow" : "Deny", GuardReason = reason,
+                    ArgumentsJson = call.Arguments.ToJsonString(), Status = reason is null ? (requiresApproval ? "AwaitingApproval" : "Running") : "Denied",
+                    GuardDecision = reason is null ? (requiresApproval ? "RequireApproval" : "Allow") : "Deny", GuardReason = reason,
                     StartedAtUtc = clock.GetUtcNow().UtcDateTime, CompletedAtUtc = reason is null ? null : clock.GetUtcNow().UtcDateTime };
                 stored.Add(record); db.AgentToolCalls.Add(record);
                 if (reason is not null) context.AddEvent(context.Run, context.Node, "ToolGuardDenied", reason, new { call.Tool, call.CallId });
@@ -203,6 +217,11 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
             EquityLensTelemetry.AgentLoopGuardDenials.Add(stored.Count(x => x.Status == "Denied"));
             // 整批預算先保留，避免平行工具各自看到相同餘額。
         }
+        var canProceed = await ResearchToolApproval.PrepareAsync(context, stored, scope, tools, _options, state, clock.GetUtcNow().UtcDateTime, ct);
+        await save();
+        if (!canProceed) return;
+        var approvalsByTool = await db.AgentApprovalRequests.Where(x => x.AgentRunNodeId == context.Node.Id && x.Scope == "ToolCall")
+            .ToDictionaryAsync(x => x.AgentToolCallId!.Value, ct);
         var pending = stored.Where(x => x.Status == "Running").Select(async record =>
         {
             var timer = Stopwatch.StartNew();
@@ -215,7 +234,7 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
             try
             {
                 var call = new LoopToolCall(record.ToolCallKey!, record.ToolName, JsonNode.Parse(record.ArgumentsJson)!.AsObject());
-                result = await tools.InvokeAsync(scope, call, timeout.Token).WaitAsync(timeout.Token);
+                result = await tools.InvokeAsync(scope with { IdempotencyKey = approvalsByTool.GetValueOrDefault(record.Id)?.IdempotencyKey }, call, timeout.Token).WaitAsync(timeout.Token);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) { result = new([], "Tool failed", AgentNodeJson.Trim(ex.Message, 300)); }
@@ -229,6 +248,11 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
             var (record, result, elapsed) = await completed;
             record.Status = result.Error is null ? "Succeeded" : "Failed";
             record.ResultJson = AgentNodeJson.Serialize(result); record.ResultPreview = result.Summary;
+            if (approvalsByTool.TryGetValue(record.Id, out var consumed))
+            {
+                consumed.ConsumedAtUtc = clock.GetUtcNow().UtcDateTime;
+                context.AddEvent(context.Run, context.Node, "ToolApprovalConsumed", "Tool result recorded.", new { consumed.Id });
+            }
             record.ErrorMessage = result.Error; record.CompletedAtUtc = clock.GetUtcNow().UtcDateTime; record.DurationMs = elapsed;
             await save();
             EquityLensTelemetry.AgentToolCalls.Add(1, new KeyValuePair<string, object?>("status", record.Status));

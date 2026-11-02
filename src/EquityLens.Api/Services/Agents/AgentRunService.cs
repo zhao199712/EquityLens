@@ -361,7 +361,7 @@ public sealed class AgentRunService : IAgentRunService
             .Select(x => new AgentApprovalResponse(
                 x.Id, x.AgentRunId, x.AgentRunNodeId, x.NodeKey, x.NodeType, x.Status,
                 x.SideEffectLevel, x.Reason, x.RequestedAtUtc, x.DecidedAtUtc, x.ConsumedAtUtc,
-                x.DecidedByUserId, x.DecisionComment, x.ClientRequestId))
+                x.DecidedByUserId, x.DecisionComment, x.ClientRequestId, x.Scope, x.AgentToolCallId, x.ToolName, x.ArgumentsJson, x.ArgumentsHash))
             .ToListAsync(cancellationToken);
         var promptSnapshots = await _dbContext.AgentRunPromptSnapshots.AsNoTracking()
             .Where(x => x.AgentRunId == id)
@@ -599,6 +599,9 @@ public sealed class AgentRunService : IAgentRunService
         var gateNode = run.Nodes.FirstOrDefault(x => x.Status == AgentNodeStatuses.WaitingForFeedback)
             ?? throw new AgentApprovalException("approval_node_not_found", "No node is waiting for approval.");
 
+        if (await _dbContext.AgentApprovalRequests.AnyAsync(x => x.AgentRunId == runId && x.AgentRunNodeId == gateNode.Id
+            && x.Scope == "ToolCall" && x.Status == AgentApprovalStatuses.Pending, cancellationToken))
+            throw new AgentApprovalException("tool_approval_id_required", "Use the approval-specific approve/reject endpoint for a tool call.");
         var blackboard = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
         blackboard[AgentBlackboardKeys.ApprovalDecision] = JsonSerializer.SerializeToNode(new
         {

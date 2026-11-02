@@ -27,7 +27,12 @@ public sealed record AgentApprovalResponse(
     DateTime? ConsumedAtUtc,
     Guid? DecidedByUserId,
     string? DecisionComment,
-    Guid? ClientRequestId);
+    Guid? ClientRequestId,
+    string Scope = "Node",
+    Guid? AgentToolCallId = null,
+    string? ToolName = null,
+    string? ArgumentsJson = null,
+    string? ArgumentsHash = null);
 
 public sealed record ApprovalDecisionRequest(string Decision, string? Comment = null);
 

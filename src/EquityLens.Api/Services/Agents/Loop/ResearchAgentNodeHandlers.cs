@@ -15,7 +15,7 @@ public sealed class ResearchAgentLoopNodeHandler(ResearchAgentLoop loop) : IAgen
     {
         var revise = context.Node.NodeKey == "reviseAgent";
         var state = await loop.RunAsync(context, revise ? "Revise" : "Research", cancellationToken);
-        await ResearchAgentOutput.WriteAsync(context, state, revise, cancellationToken);
+        if (!context.AwaitingApproval) await ResearchAgentOutput.WriteAsync(context, state, revise, cancellationToken);
     }
 }
 

@@ -22,6 +22,7 @@ public sealed class ResearchAgentLoopOptions
     public decimal OutputUsdPerMillion { get; set; } = 4m;
     public decimal ToolCostReserveUsd { get; set; } = .005m;
     public int MaxWallClockSeconds { get; set; } = 240;
+    public int ApprovalExpiryHours { get; set; } = 24;
     public int ToolTimeoutSeconds { get; set; } = 30;
 }
 
@@ -30,8 +31,8 @@ public sealed record LoopToolCall(string CallId, string Tool, JsonObject Argumen
 public sealed record LoopAnswer(string Markdown, IReadOnlyList<string> CitedEvidenceIds);
 public sealed record LoopAction(string Action, string ThoughtSummary, IReadOnlyList<LoopToolCall> ToolCalls, LoopAnswer? Answer);
 public sealed record LoopToolResult(IReadOnlyList<RetrievedDocumentChunk> Evidence, string Summary, string? Error = null);
-public sealed record LoopToolScope(Guid UserId, ResearchAskRequest Request, IReadOnlyList<LoopEvidence> Ledger, bool LocalSearchCompleted);
-public sealed record LoopToolDefinition(string Name, string Description, JsonObject Parameters, decimal EstimatedCostUsd = 0);
+public sealed record LoopToolScope(Guid UserId, ResearchAskRequest Request, IReadOnlyList<LoopEvidence> Ledger, bool LocalSearchCompleted, string? IdempotencyKey = null);
+public sealed record LoopToolDefinition(string Name, string Description, JsonObject Parameters, decimal EstimatedCostUsd = 0, bool RequiresApproval = false);
 
 public interface IResearchLoopTools
 {
@@ -58,6 +59,7 @@ public sealed class ResearchLoopState
     public DateTime StartedAtUtc { get; set; }
     public string? StopReason { get; set; }
     public LoopAnswer? Answer { get; set; }
+    public List<Guid> ResumedApprovalIds { get; set; } = [];
     public bool ForcedDraft { get; set; }
 }
 

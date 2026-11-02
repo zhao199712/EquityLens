@@ -39,6 +39,19 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("agent_run_node_id");
 
+                    b.Property<Guid?>("AgentToolCallId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_tool_call_id");
+
+                    b.Property<string>("ArgumentsHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("arguments_hash");
+
+                    b.Property<string>("ArgumentsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("arguments_json");
+
                     b.Property<Guid?>("ClientRequestId")
                         .HasColumnType("uuid")
                         .HasColumnName("client_request_id");
@@ -63,6 +76,15 @@ namespace EquityLens.Api.Migrations
                     b.Property<int>("ExecutionAttempt")
                         .HasColumnType("integer")
                         .HasColumnName("execution_attempt");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<long?>("LeaseVersionAtRequest")
+                        .HasColumnType("bigint")
+                        .HasColumnName("lease_version_at_request");
 
                     b.Property<string>("NodeKey")
                         .IsRequired()
@@ -91,6 +113,14 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("requested_at_utc");
 
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("Node")
+                        .HasColumnName("scope");
+
                     b.Property<string>("SideEffectLevel")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -104,7 +134,14 @@ namespace EquityLens.Api.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("status");
 
+                    b.Property<string>("ToolName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("tool_name");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AgentToolCallId");
 
                     b.HasIndex("ClientRequestId")
                         .IsUnique()
@@ -4013,6 +4050,11 @@ namespace EquityLens.Api.Migrations
                         .HasForeignKey("AgentRunNodeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("EquityLens.Api.Data.Entities.AgentToolCall", null)
+                        .WithMany()
+                        .HasForeignKey("AgentToolCallId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("EquityLens.Api.Data.Entities.AppUser", null)
                         .WithMany()

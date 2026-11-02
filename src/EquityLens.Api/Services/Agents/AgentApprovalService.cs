@@ -55,7 +55,10 @@ public sealed class AgentApprovalService(
 
         var run = approval.Run;
         var node = approval.Node;
-        if (run.Status != AgentRunStatuses.WaitingForApproval || node.Status != AgentNodeStatuses.WaitingForApproval)
+        var toolApproval = approval.Scope == "ToolCall";
+        var waitingRun = toolApproval ? AgentRunStatuses.WaitingForFeedback : AgentRunStatuses.WaitingForApproval;
+        var waitingNode = toolApproval ? AgentNodeStatuses.WaitingForFeedback : AgentNodeStatuses.WaitingForApproval;
+        if (run.Status != waitingRun || node.Status != waitingNode)
             throw new AgentApprovalException("approval_state_conflict", "Agent run is no longer waiting for this approval.");
 
         var now = DateTime.UtcNow;
@@ -65,14 +68,15 @@ public sealed class AgentApprovalService(
         approval.ClientRequestId = request.RequestId;
         approval.DecisionComment = comment;
 
-        if (approve)
+        if (approve || toolApproval)
         {
             nodeStateMachine.Transition(node, AgentNodeStatuses.Pending);
             runStateMachine.Transition(run, AgentRunStatuses.Running);
             run.LeaseOwner = null;
             run.LeaseExpiresAtUtc = null;
             run.OrchestrationVersion++;
-            AddEvent(run, node, AgentEventTypes.ApprovalApproved, "Human approval granted; run queued to resume.", new { approvalId, actorUserId, isAdmin, comment });
+            AddEvent(run, node, toolApproval ? "ToolApprovalDecided" : AgentEventTypes.ApprovalApproved,
+                "Human decision recorded; run queued to resume.", new { approvalId, actorUserId, isAdmin, comment, approved = approve });
             AddWakeOutbox(run, node);
         }
         else
@@ -153,7 +157,7 @@ public sealed class AgentApprovalService(
     internal static AgentApprovalResponse Map(AgentApprovalRequest x) => new(
         x.Id, x.AgentRunId, x.AgentRunNodeId, x.NodeKey, x.NodeType, x.Status, x.SideEffectLevel,
         x.Reason, x.RequestedAtUtc, x.DecidedAtUtc, x.ConsumedAtUtc, x.DecidedByUserId,
-        x.DecisionComment, x.ClientRequestId);
+        x.DecisionComment, x.ClientRequestId, x.Scope, x.AgentToolCallId, x.ToolName, x.ArgumentsJson, x.ArgumentsHash);
 }
 
 public sealed class AgentApprovalException(string code, string message) : InvalidOperationException(message)

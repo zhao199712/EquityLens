@@ -15,19 +15,24 @@ internal static partial class ResearchNumberTraceability
     {
         var total = 0; var missing = 0;
         var warnings = new HashSet<string>();
-        foreach (var sentence in Regex.Split(answer.Normalize(NormalizationForm.FormKC), @"[。！？!?；;\n]"))
+        // 常見「句子。[1]」格式仍屬同句引用。
+        answer = Regex.Replace(answer.Normalize(NormalizationForm.FormKC), @"([。！？!?；;])\s*((?:\[\d+\])+)", "$2$1");
+        foreach (var sentence in Regex.Split(answer, @"[。！？!?；;\n]"))
         {
             var numbers = Extract(sentence);
             if (numbers.Count == 0) continue;
             var ids = Reference().Matches(sentence).Select(x => int.TryParse(x.Groups[1].Value, out var id) ? id : -1).ToHashSet();
             if (ids.Count == 0) warnings.Add("UncitedNumber");
             var quotes = citations.Where(x => ids.Contains(x["citationIndex"]?.GetValue<int>() ?? -1))
-                .SelectMany(x => Extract(x["quoteText"]?.GetValue<string>() ?? "")).ToList();
+                .SelectMany(x => Extract((x["quoteText"]?.GetValue<string>() ?? "") + " " + (x["title"]?.GetValue<string>() ?? ""))).ToList();
             foreach (var number in numbers)
             {
                 total++;
                 if (quotes.Any(q => q.Kind == number.Kind && Math.Sign(q.Value) == Math.Sign(number.Value)
                     && Math.Abs(q.Value - number.Value) <= (q.Kind == "plain" ? 0 : Math.Abs(q.Value) * .005m))) continue;
+                // 財報表格的單位常在欄名，數值本身沒有後綴；只能證明數值出現，單位語義仍交 Critic。
+                if (number.Kind != "plain" && quotes.Any(q => q.Kind == "plain" && q.Value == number.Value))
+                { warnings.Add("UnitContextRequiresReview"); continue; }
                 missing++; warnings.Add("UntraceableNumber");
             }
         }

@@ -63,7 +63,7 @@ public sealed class ResearchAgentLoopTests
         using var root = new Activity("test.loop").Start();
         await Loop(new FakeChat(Search, Submit), new FakeTools()).RunAsync(context, "Research", default);
         var own = spans.Where(x => x.TraceId == root.TraceId).ToList();
-        var tool = Assert.Single(own.Where(x => x.OperationName == "gen_ai.execute_tool"));
+        var tool = Assert.Single(own, x => x.OperationName == "gen_ai.execute_tool");
         Assert.Contains(own, x => x.OperationName == "agent.loop.turn" && x.SpanId == tool.ParentSpanId);
         Assert.All(own.Where(x => x.OperationName == "gen_ai.chat"), llm =>
             Assert.Contains(own, x => x.OperationName == "agent.loop.turn" && x.SpanId == llm.ParentSpanId));

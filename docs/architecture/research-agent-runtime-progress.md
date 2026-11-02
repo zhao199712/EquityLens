@@ -30,7 +30,7 @@
 | A10 | 確定性關卡攔截 → 修訂一次 → 仍失敗則拒答 | MUST | ✅ | FixedWorkflow revision / OutputGate / NumberGate tests | Phase 2–4 | |
 | A11 | 每輪 LLM 決策可查詢 | MUST | ✅ | TwoTurns / detail LlmTurns tests | Phase 2–4 | |
 | A12 | harness `--engine` 與軌跡指標；舊檔可 rescore | SHOULD | ✅ | evals/tests/test_trajectory.py | Phase 2–4 | |
-| A13 | 副作用工具審批（參數綁定、冪等、Reject 附理由） | SHOULD | ⬜ | | | |
+| A13 | 副作用工具審批（參數綁定、冪等、Reject 附理由） | SHOULD | ✅ | ToolApprovalTests / ToolApprovalPostgresTests | Phase 4 | 測試工具；正式工具仍唯讀 |
 | A14 | OTel span 與 metrics | SHOULD | ✅ | Telemetry_ParentsParallelToolsToTurn | Phase 2–4 | |
 | A15 | 依風險觸發人工審閱 | COULD | ⬜ | | | |
 | A16 | 實際 A/B 報告 | COULD | ⬜ | | | |
@@ -43,6 +43,7 @@
 |---|---|---|---|---|---|
 | 2026-11-02 | A1–A3 | 通過 | 885 / 885，0 skipped | 無 pending | 60 通過 |
 | 2026-11-02 | A4–A12、A14 | 通過（test build） | 915 / 915，0 skipped | 無 pending；隔離 DB migration 成功 | 69 通過 |
+| 2026-11-02 | A13 / 數字 gate 實測修正 | 通過 | 924 / 924，0 skipped | 無 pending；隔離 DB migration 成功 | 69 通過 |
 
 ## Migration 清單
 
@@ -51,6 +52,7 @@
 | AddAgentRunLeaseFencing | lease_version、interruption_count |
 | AddResearchLoopPersistence | LLM turns、checkpoint、tool turn FK / guard |
 | ScopeResearchLoopCheckpointToAttempt | retry attempt 隔離及唯一鍵 |
+| AddToolCallApprovals | scope / tool / arguments hash / idempotency key / lease version |
 
 ## 設計偏差
 
@@ -86,3 +88,8 @@
 
 - Phase 2–4：固定 ResearchAgent workflow、JSON 行動協定、同輪唯讀工具平行與逐筆落盤、輸出 adapter、Gate → 修訂 → 第二次 Critic、detail API LlmTurns、eval engine/trajectory、OTel spans/metrics 已實作。
 - 隔離公開 corpus：74 securities、241 documents、8363 chunks / embeddings；uploaded user 欄位清空，無正式使用者或 portfolio 資料。
+
+- Phase 4：副作用工具透過 RequireApproval 暫停；審批復用 `/api/agent-runs/{runId}/approvals/{approvalId}/approve|reject`，Rejected 亦恢復迴圈並回饋理由。參數 canonical hash、可見性、attempt、預算、24 小時到期重新驗證。最多一個副作用審批／輪；測試工具不註冊到正式 DI。
+- 故障注入：副作用成功但結果尚未落盤就取消；接手後重用相同 idempotency key，測試下游只產生一次效果。這是下游冪等合約，不是跨系統 exactly-once 承諾。
+- 真實 PostgreSQL 雙 reviewer 競爭：只有一個決策成功且只有一筆 wake outbox。
+- 首筆實測 runtime 成功，但數字關卡誤擋正確 EPS；已修復句號後引用與表格單位欄名，新增回歸。首筆保守估算約 US$0.02（非供應商帳單）。

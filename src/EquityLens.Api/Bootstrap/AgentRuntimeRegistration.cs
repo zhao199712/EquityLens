@@ -13,7 +13,7 @@ public static class AgentRuntimeRegistration
         builder.Services.AddOptions<ResearchAgentLoopOptions>().Bind(builder.Configuration.GetSection(ResearchAgentLoopOptions.SectionName))
             .PostConfigure(x => x.DefaultEngine = builder.Configuration["AgentRuntime:ResearchEngine"] ?? x.DefaultEngine)
             .Validate(x => x.MaxTurns >= 2 && x.MaxRevisionTurns >= 2 && x.MaxToolCalls > 0 && x.MaxToolCallsPerTurn > 0
-                && x.MaxWallClockSeconds > 0 && x.ToolTimeoutSeconds > 0 && x.MaxCostUsd > 0
+                && x.MaxWallClockSeconds > 0 && x.ToolTimeoutSeconds > 0 && x.ApprovalExpiryHours > 0 && x.MaxCostUsd > 0
                 && x.InputUsdPerMillion > 0 && x.OutputUsdPerMillion > 0 && x.MaxOutputTokens > 0
                 && x.DefaultEngine is "DynamicDag" or "AgentLoop", "Invalid research loop limits.");
         builder.Services.AddScoped<IResearchLoopTools, ResearchLoopTools>();

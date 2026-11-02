@@ -101,6 +101,7 @@ public sealed class ResearchAgentWorkflowTests
     [InlineData("營收 999 元[1]", "營收 100 元", true)]
     [InlineData("2024 年營收 100 元[1]", "2024 年營收 100 元", false)]
     [InlineData("營收 100 元", "營收 100 元", true)]
+    [InlineData("EPS 66.26 元。[1]", "基本每股盈餘（元） 66.26", false)]
     [InlineData("營收增加[1]", "營收增加", false)]
     public void NumberGate_ChecksCitedQuote_WithNormalizationAndUnits(string answer, string quote, bool blocking)
     {
