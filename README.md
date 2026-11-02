@@ -58,46 +58,19 @@ AI 研究與證據驗證
 
 ### AI Research Workflow
 
-正式研究流程使用 **固定 DAG＋Agent Loop**。DAG 定義穩定的執行階段，LLM 在工具迴圈內決定查詢內容、使用哪些工具，以及何時提交答案，不再動態產生研究 DAG。
+研究流程採用 **固定 DAG＋Agent Loop**：LLM 決定搜尋工具、查詢內容與回答，程式控制權限、預算與品質驗收。
 
 ```text
-問題
- ↓
-請求驗證與意圖辨識
- ↓
-Research Agent Loop
- ├─ LLM 選擇搜尋工具與參數
- ├─ 程式檢查來源政策、權限與預算
- └─ 工具結果落盤，依證據補查或起草
- ↓
-Output Gate ＋ Evidence Check ＋ Critic
- ├─ 通過 ──────────────────────────────┐
- └─ 未通過 → Revision Agent Loop（最多一次）│
-                 ↓                    │
-           再次執行完整品質檢查           │
-                 ↓                    ↓
-             最終答案或標準拒答
+問題 → Agent Loop 搜尋與起草 → 品質檢查 → 最終答案
+                                 ↓ 未通過
+                              修訂並重新檢查
 ```
 
-這是邏輯流程；目前固定 workflow 保留 16 個實體節點，重用既有 Critic handlers。新流程不呼叫動態 Planner，仍檢查持久化圖與節點的一致性。
+- 引用與數值由 Output Gate 檢查，證據是否支持結論由 Critic 檢查。
+- 最多修訂一次，仍未通過則拒答。
+- 決策與工具結果持久化，支援執行追蹤與中斷恢復。
 
-核心分工：
-
-- LLM 負責工具選擇、查詢調整、回答生成與修訂。
-- 程式負責固定流程、工具可見性、參數驗證、來源政策與預算限制。
-- Output Gate 檢查引用與數值追溯，Critic 檢查證據是否支持主張。
-- Run、Node、LLM Turn、Tool Call 與結果皆可保存與追查。
-
-### 執行可靠性
-
-- 每輪決策與工具結果落盤；worker 接手時重用已保存的結果。
-- Heartbeat 與交易式 lease fencing 防止失去租約的舊 worker 提交結果。
-- 修訂後再次執行品質檢查，仍不合格就回標準拒答；報酬承諾類問題可回固定風險說明。
-- 副作用工具需綁定參數審批與下游冪等鍵。目前正式研究工具均唯讀，副作用路徑以測試工具驗證。
-
-正式環境已啟用 `AgentLoop` 預設。舊 `DynamicDag` 僅保留作相容與回退用途；未設定環境的程式 fallback 仍是舊引擎。本機可設定 `AgentRuntime__ResearchEngine=AgentLoop`，或在 `/api/research/investigations` 請求指定 `engine: "AgentLoop"`。
-
-[設計與驗收](docs/architecture/research-agent-runtime.md) · [實作進度](docs/architecture/research-agent-runtime-progress.md) · [A/B 實測](docs/eval-verification/2026-11-02-agent-loop-ab/README.md) · [面試講稿與示範](docs/architecture/research-agent-runtime-interview.md) · [部署與回退](docs/architecture/research-agent-runtime-deployment.md)
+詳見[架構設計](docs/architecture/research-agent-runtime.md)與[A/B 實測](docs/eval-verification/2026-11-02-agent-loop-ab/README.md)。
 
 ---
 
