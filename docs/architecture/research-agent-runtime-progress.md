@@ -188,3 +188,10 @@
 - 使用者明確要求部署及推送 GitHub；main merge `d8af5ef` 已推送，前後端發布成功。API healthy，AgentLoop 預設與原環境設定不變。
 - 部署前保留 Git 分支、舊 API 映像與私有 DB dump；本次無 migration、無持倉／交易變更。正式瀏覽器登入及歷史報告可讀，已看到新版 UI；沒有新模型呼叫。
 - 面試稿與情境報告同步更新部署狀態，保留合成行情驗收與真實行情回測的區分。詳細備份與映像見部署紀錄。
+
+## 03:09 部署後 CI 核對
+
+- 起始 main `8e8e0c6` 工作目錄乾淨、與 origin 同步。使用者要求的 README 設計決策移除已保留，不重新加入架構解說。
+- 該提交的 Cloudflare Pages、Backend、Frontend、Mathematics、Eval harness 五項遠端檢查皆 success。正式 API healthy，預設仍為 AgentLoop，映像與 02:12 部署一致。
+- 可核對的提交 SHA、檢查連結及時間保存在 `../eval-verification/2026-11-03-portfolio-scenarios/release-checks.json`。本次只補部署後驗證紀錄，沒有新增功能、部署、模型呼叫或資料變更，新增費用 US$0。
+- 仍未宣稱完成：正式行情下的新情境完整問答回歸、VaR 覆蓋率回測、獨立 holdout 題組；現有合成行情與開發集成績不替代這些驗收。

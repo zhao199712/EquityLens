@@ -60,3 +60,7 @@ RESEARCH_ENGINE=DynamicDag docker compose -f docker-compose.prod.yml up -d --no-
 - 部署前本地驗證：後端 977 項、前端 124 項及前端 build 通過；最後參數防禦修改另跑情境 16 項通過。完整數學與隔離瀏覽器證據見[情境驗收](../eval-verification/2026-11-03-portfolio-scenarios/README.md)。
 
 - Cloudflare Pages 對 `d8af5ef` 回報 success；重新載入正式網站確認新版品質／逐股風險缺漏標示，既有登入與歷史報告仍可用。本次煙霧驗證沒有新增模型呼叫；未把舊報告改寫成新情境結果。
+
+### 03:09 部署後遠端檢查
+
+main `8e8e0c6`（僅後續 README 修改）的 Cloudflare Pages、Backend、Frontend、Mathematics 與 Eval harness 檢查皆成功。正式 API 映像仍為上述 `d97fe450…`，健康且保持 AgentLoop 預設。完整 SHA、檢查時間及來源連結見 [release-checks.json](../eval-verification/2026-11-03-portfolio-scenarios/release-checks.json)。此次沒有重新部署或重跑模型。
