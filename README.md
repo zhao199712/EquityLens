@@ -58,47 +58,46 @@ AI 研究與證據驗證
 
 ### AI Research Workflow
 
+正式研究流程使用 **固定 DAG＋Agent Loop**。DAG 定義穩定的執行階段，LLM 在工具迴圈內決定查詢內容、使用哪些工具，以及何時提交答案，不再動態產生研究 DAG。
+
 ```text
 問題
  ↓
-Router
+請求驗證與意圖辨識
  ↓
-Planner
+Research Agent Loop
+ ├─ LLM 選擇搜尋工具與參數
+ ├─ 程式檢查來源政策、權限與預算
+ └─ 工具結果落盤，依證據補查或起草
  ↓
-DAG / Contract Validation
- ↓
-Workers
- ↓
-Evidence Check
- ↓
-Critique
- ↓
-Revision
- ↓
-Final Answer
+Output Gate ＋ Evidence Check ＋ Critic
+ ├─ 通過 ──────────────────────────────┐
+ └─ 未通過 → Revision Agent Loop（最多一次）│
+                 ↓                    │
+           再次執行完整品質檢查           │
+                 ↓                    ↓
+             最終答案或標準拒答
 ```
 
-EquityLens 不採用完全自由的 Autonomous Agent，而是以受限制的能力、可驗證的流程與可追蹤的執行紀錄控制 AI 行為。
+這是邏輯流程；目前固定 workflow 保留 16 個實體節點，重用既有 Critic handlers。新流程不呼叫動態 Planner，仍檢查持久化圖與節點的一致性。
 
-核心原則：
+核心分工：
 
-- LLM 負責語義理解、規劃與生成
-- 程式負責權限、流程與 deterministic validation
-- Capability 必須受到 Skill 授權範圍限制
-- Run、Node、Tool Call、成本與結果皆可追蹤
+- LLM 負責工具選擇、查詢調整、回答生成與修訂。
+- 程式負責固定流程、工具可見性、參數驗證、來源政策與預算限制。
+- Output Gate 檢查引用與數值追溯，Critic 檢查證據是否支持主張。
+- Run、Node、LLM Turn、Tool Call 與結果皆可保存與追查。
 
----
+### 執行可靠性
 
-## Research Agent Loop
+- 每輪決策與工具結果落盤；worker 接手時重用已保存的結果。
+- Heartbeat 與交易式 lease fencing 防止失去租約的舊 worker 提交結果。
+- 修訂後再次執行品質檢查，仍不合格就回標準拒答；報酬承諾類問題可回固定風險說明。
+- 副作用工具需綁定參數審批與下游冪等鍵。目前正式研究工具均唯讀，副作用路徑以測試工具驗證。
 
-研究請求可用 `engine: "AgentLoop"` 選擇固定 DAG 與自主工具迴圈；未指定時仍使用既有 DynamicDag。新引擎由 LLM 選搜尋工具、參數與起草時機，程式控制來源政策、預算、引用檢查與一次修訂。它不呼叫動態 graph planner；持久化圖與節點狀態仍保留基本一致性檢查。
+正式環境已啟用 `AgentLoop` 預設。舊 `DynamicDag` 僅保留作相容與回退用途；未設定環境的程式 fallback 仍是舊引擎。本機可設定 `AgentRuntime__ResearchEngine=AgentLoop`，或在 `/api/research/investigations` 請求指定 `engine: "AgentLoop"`。
 
-- 每輪決策與工具結果落盤，接手時重用已完成結果。
-- Heartbeat 與交易式 lease fencing 防止舊 worker 提交結果。
-- 修訂後再次跑 Critic，驗收仍失敗就回標準拒答。
-- 副作用工具需綁定參數審批與下游冪等鍵；目前正式研究工具均唯讀，副作用流程由測試工具驗證。
-
-[設計與驗收](docs/architecture/research-agent-runtime.md) · [實作進度](docs/architecture/research-agent-runtime-progress.md) · [A/B 實測](docs/eval-verification/2026-11-02-agent-loop-ab/README.md) · [面試講稿與示範](docs/architecture/research-agent-runtime-interview.md)
+[設計與驗收](docs/architecture/research-agent-runtime.md) · [實作進度](docs/architecture/research-agent-runtime-progress.md) · [A/B 實測](docs/eval-verification/2026-11-02-agent-loop-ab/README.md) · [面試講稿與示範](docs/architecture/research-agent-runtime-interview.md) · [部署與回退](docs/architecture/research-agent-runtime-deployment.md)
 
 ---
 
@@ -136,7 +135,7 @@ EquityLens 不採用完全自由的 Autonomous Agent，而是以受限制的能�
   除了常見 VaR / ES，也整合 EWMA、Monte Carlo 與 MVEWMA-FHS。
 
 - **受限制的 Agent 架構**  
-  LLM 負責規劃與推理，程式則負責權限與執行邊界。
+  固定 DAG 管理執行階段，LLM 在有界工具迴圈內決定研究步驟；程式控制權限、預算與品質檢查。
 
 - **可追蹤的研究流程**  
   Node 執行、證據、Tool Call、成本與最終輸出皆可保存與稽核。
@@ -208,15 +207,14 @@ docker compose up -d
 啟動 API：
 
 ```bash
-cd src/EquityLens.Api
-dotnet run
+AgentRuntime__ResearchEngine=AgentLoop dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj
 ```
 
 執行測試：
 
 ```bash
-dotnet test
-pytest
+dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
+python -m pytest evals/tests -q
 ```
 
 實際執行還需要設定 PostgreSQL、Redis、S3、OAuth 與 AI provider 等環境變數。
@@ -238,5 +236,3 @@ pytest
 **Portfolio Analytics + Quantitative Risk + Financial Research + Constrained Agentic Workflow**
 
 EquityLens 探索如何將金融資料、量化模型與可靠的 AI orchestration 整合成一套可追蹤、可驗證的投資研究系統。
-
-正式環境已於 2026-11-03 啟用 AgentLoop 預設；程式內未設定環境的 fallback 仍為 DynamicDag。備份、migration、煙霧驗證與回退方式見 [部署紀錄](docs/architecture/research-agent-runtime-deployment.md)。
