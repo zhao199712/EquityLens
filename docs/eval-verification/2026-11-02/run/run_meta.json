@@ -1,0 +1,8 @@
+{
+  "label": "prod-2026-11-02",
+  "mode": "ask",
+  "base_url": "https://equitylens.duckdns.org",
+  "system_commit": "362179d",
+  "started_at": "2026-11-02T08:26:25+00:00",
+  "notes": "首次在正式容器（已補 OpenAI key）跑基準；no-judge，與 2026-10-01 隔離環境可比"
+}
