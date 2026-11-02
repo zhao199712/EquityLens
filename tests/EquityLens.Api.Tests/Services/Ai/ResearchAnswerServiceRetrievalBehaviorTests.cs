@@ -184,6 +184,85 @@ public sealed class ResearchAnswerServiceRetrievalBehaviorTests
             && decision.DuplicateOfChunkId is not null);
     }
 
+    [Theory]
+    [InlineData("台積電 2025 年的基本每股盈餘（EPS）是多少元？")]
+    [InlineData("台積電114年度基本每股盈餘是多少？")]
+    public async Task AskAsync_QuestionNamesYear_ExcludesOtherYearAnnualReports(string question)
+    {
+        var service = CreateService(
+            new MultiYearAnnualReportSearchService(),
+            new SuccessfulChatService());
+
+        var response = await service.AskAsync(new ResearchAskRequest(
+            Ticker: "2330",
+            Question: question,
+            RetrievalMode: RetrievalMode.AnnualReportOnly,
+            TopK: 2,
+            Debug: true));
+
+        Assert.NotEmpty(response.Citations);
+        Assert.All(response.Citations, citation => Assert.Equal("2330 Annual Report 2025", citation.Title));
+        Assert.Contains(response.Trace!.Results, decision =>
+            decision.Decision == "DiscardedByFiscalYearMismatch"
+            && decision.DocumentTitle == "2330 Annual Report 2023");
+    }
+
+    [Fact]
+    public async Task AskAsync_QuestionWithoutYear_KeepsAllAnnualReportYears()
+    {
+        var service = CreateService(
+            new MultiYearAnnualReportSearchService(),
+            new SuccessfulChatService());
+
+        var response = await service.AskAsync(new ResearchAskRequest(
+            Ticker: "2330",
+            Question: "台積電的每股盈餘是多少？",
+            RetrievalMode: RetrievalMode.AnnualReportOnly,
+            TopK: 2,
+            Debug: true));
+
+        Assert.DoesNotContain(response.Trace!.Results, decision => decision.Decision == "DiscardedByFiscalYearMismatch");
+        Assert.Contains(response.Citations, citation => citation.Title == "2330 Annual Report 2023");
+    }
+
+    [Fact]
+    public async Task AskAsync_YearRangeQuestion_KeepsYearsInBetween()
+    {
+        var service = CreateService(
+            new MultiYearAnnualReportSearchService(),
+            new SuccessfulChatService());
+
+        var response = await service.AskAsync(new ResearchAskRequest(
+            Ticker: "2330",
+            Question: "台積電 2024 到 2025 年的每股盈餘變化？",
+            RetrievalMode: RetrievalMode.AnnualReportOnly,
+            TopK: 4,
+            Debug: true));
+
+        Assert.Contains(response.Citations, citation => citation.Title == "2330 Annual Report 2024");
+        Assert.DoesNotContain(response.Citations, citation => citation.Title == "2330 Annual Report 2023");
+    }
+
+    [Fact]
+    public async Task AskAsync_CandidatesBeyondFinalTopK_AreTracedAsDiscardedByTopK()
+    {
+        var service = CreateService(
+            new MultiYearAnnualReportSearchService(),
+            new SuccessfulChatService());
+
+        var response = await service.AskAsync(new ResearchAskRequest(
+            Ticker: "2330",
+            Question: "台積電的每股盈餘是多少？",
+            RetrievalMode: RetrievalMode.AnnualReportOnly,
+            TopK: 2,
+            Debug: true));
+
+        var citedChunkIds = response.Citations.Select(citation => citation.DocumentChunkId).ToHashSet();
+        var selected = response.Trace!.Results.Where(decision => decision.Decision == "Selected").ToList();
+        Assert.All(selected, decision => Assert.Contains(decision.DocumentChunkId, citedChunkIds));
+        Assert.Contains(response.Trace.Results, decision => decision.Decision == "DiscardedByTopK");
+    }
+
     private static ResearchAnswerService CreateService(
         IDocumentSearchService documentSearchService,
         IChatCompletionService chatService,
@@ -232,6 +311,46 @@ public sealed class ResearchAnswerServiceRetrievalBehaviorTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new DocumentSearchResponse(request.Query, "test-embedding", []));
+        }
+    }
+
+    private sealed class MultiYearAnnualReportSearchService : IDocumentSearchService
+    {
+        private static readonly DocumentSearchResult[] Results =
+        [
+            CreateResult("2330 Annual Report 2023", 1, 0.97, "股利政策與盈餘分配，每股盈餘 32.34 元。"),
+            CreateResult("2330 Annual Report 2024", 2, 0.96, "股利政策與盈餘分配，每股盈餘 45.25 元。"),
+            CreateResult("2330 Annual Report 2023", 3, 0.95, "合併綜合損益表，每股盈餘。"),
+            CreateResult("2330 Annual Report 2025", 4, 0.90, "每股盈餘附註：基本每股盈餘 66.26 元。"),
+            CreateResult("2330 Annual Report 2025", 5, 0.85, "合併綜合損益表（承前頁），基本每股盈餘 66.26 元。"),
+            CreateResult("2330 Annual Report 2025", 6, 0.80, "權益與普通股股本。")
+        ];
+
+        public Task<DocumentSearchResponse> SearchAsync(
+            DocumentSearchRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new DocumentSearchResponse(request.Query, "test-embedding", Results));
+        }
+
+        private static DocumentSearchResult CreateResult(string title, int page, double relevance, string content)
+        {
+            return new DocumentSearchResult(
+                DocumentChunkId: Guid.NewGuid(),
+                DocumentId: Guid.NewGuid(),
+                DocumentTitle: title,
+                DocumentType: "AnnualReport",
+                SourceUrl: null,
+                ChunkIndex: page,
+                PageNumber: page,
+                SectionTitle: null,
+                Content: content,
+                Distance: 1 - relevance,
+                RelevanceScore: relevance,
+                SecurityId: null,
+                Ticker: "2330",
+                Exchange: "TWSE",
+                SecurityName: "Test Security");
         }
     }
 

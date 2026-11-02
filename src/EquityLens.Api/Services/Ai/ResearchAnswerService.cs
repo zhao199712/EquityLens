@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Observability;
 using EquityLens.Api.Services.Ai.Retrieval;
@@ -8,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Services.Ai;
 
-public sealed class ResearchAnswerService : IResearchAnswerService
+public sealed partial class ResearchAnswerService : IResearchAnswerService
 {
     private const string InsufficientEvidenceAnswer = "目前提供的資料不足以回答此問題。";
     private static readonly string[] InsufficientEvidencePatterns =
@@ -148,7 +149,10 @@ public sealed class ResearchAnswerService : IResearchAnswerService
             searchStopwatch.Stop();
 
             var candidateGateDecisions = new List<RankingDecision>();
-            var eligibleChunks = ApplyCandidateScoreGate(chunks, candidateGateDecisions);
+            var eligibleChunks = ApplyFiscalYearGate(
+                ApplyCandidateScoreGate(chunks, candidateGateDecisions),
+                request.Question,
+                candidateGateDecisions);
 
             var rerankStopwatch = Stopwatch.StartNew();
             var rankStart = DateTime.UtcNow;
@@ -171,11 +175,12 @@ public sealed class ResearchAnswerService : IResearchAnswerService
             }
 
             var mergedChunks = MergeLocalAndWeb(rankedLocal.SelectedResults, selectedWeb, topK);
-            var mergedDecisions = candidateGateDecisions
-                .Concat(rankedLocal.Decisions)
-                .Concat(selectedWeb.Select(w => new RankingDecision(
-                    w, null, null, null, null, "Selected", "Web search result selected into context.", null)))
-                .ToList();
+            var mergedDecisions = MarkSelectedBeyondContextAsDiscarded(
+                candidateGateDecisions
+                    .Concat(rankedLocal.Decisions)
+                    .Concat(selectedWeb.Select(w => new RankingDecision(
+                        w, null, null, null, null, "Selected", "Web search result selected into context.", null))),
+                mergedChunks);
 
             rerankStopwatch.Stop();
             steps.Add(new StepInput("Rerank",
@@ -483,6 +488,112 @@ public sealed class ResearchAnswerService : IResearchAnswerService
 
         return eligible;
     }
+
+    /// <summary>
+    /// 問題指定年度時，排除其他年度的年報 chunk，避免舊年度年報佔掉最終 context 名額。
+    /// 只有在候選中確實有符合年度的年報時才生效，否則保持原樣。
+    /// </summary>
+    private static IReadOnlyList<RetrievedDocumentChunk> ApplyFiscalYearGate(
+        IReadOnlyList<RetrievedDocumentChunk> chunks,
+        string question,
+        List<RankingDecision> decisions)
+    {
+        var requestedYears = ExtractRequestedYears(question);
+        if (requestedYears.Count == 0)
+        {
+            return chunks;
+        }
+
+        var hasMatchingAnnualReport = chunks.Any(chunk =>
+            GetAnnualReportYear(chunk) is { } year && requestedYears.Contains(year));
+        if (!hasMatchingAnnualReport)
+        {
+            return chunks;
+        }
+
+        var eligible = new List<RetrievedDocumentChunk>();
+        foreach (var chunk in chunks)
+        {
+            if (GetAnnualReportYear(chunk) is { } year && !requestedYears.Contains(year))
+            {
+                decisions.Add(new RankingDecision(
+                    chunk,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "DiscardedByFiscalYearMismatch",
+                    $"Annual report fiscal year {year} does not match the year(s) asked in the question.",
+                    null));
+                continue;
+            }
+
+            eligible.Add(chunk);
+        }
+
+        return eligible;
+    }
+
+    private static IReadOnlySet<int> ExtractRequestedYears(string question)
+    {
+        var years = new List<int>();
+        foreach (Match match in GregorianYearPattern().Matches(question))
+        {
+            years.Add(int.Parse(match.Value));
+        }
+        foreach (Match match in RocYearPattern().Matches(question))
+        {
+            years.Add(int.Parse(match.Groups[1].Value) + 1911);
+        }
+
+        if (years.Count == 0)
+        {
+            return new HashSet<int>();
+        }
+
+        // 「2023 到 2025」這類區間問題要保留中間年度
+        return Enumerable.Range(years.Min(), years.Max() - years.Min() + 1).ToHashSet();
+    }
+
+    private static int? GetAnnualReportYear(RetrievedDocumentChunk chunk)
+    {
+        if (!string.Equals(chunk.Result.DocumentType, "AnnualReport", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var match = AnnualReportTitleYearPattern().Match(chunk.Result.DocumentTitle);
+        return match.Success ? int.Parse(match.Groups[1].Value) : null;
+    }
+
+    /// <summary>
+    /// 各路排序會先多選候選，最後合併時再裁到 topK；被裁掉的候選在 trace 上改標為 DiscardedByTopK，
+    /// 讓 trace 與實際送進模型的 context 一致。
+    /// </summary>
+    private static List<RankingDecision> MarkSelectedBeyondContextAsDiscarded(
+        IEnumerable<RankingDecision> decisions,
+        IReadOnlyList<RetrievedDocumentChunk> contextChunks)
+    {
+        var contextChunkIds = contextChunks.Select(chunk => chunk.Result.DocumentChunkId).ToHashSet();
+        return decisions
+            .Select(decision => decision.Decision == "Selected" && !contextChunkIds.Contains(decision.Chunk.Result.DocumentChunkId)
+                ? decision with
+                {
+                    Decision = "DiscardedByTopK",
+                    Reason = "Chunk passed ranking but fell outside the final context topK."
+                }
+                : decision)
+            .ToList();
+    }
+
+    [GeneratedRegex(@"(?<!\d)20\d{2}(?!\d)")]
+    private static partial Regex GregorianYearPattern();
+
+    [GeneratedRegex(@"(?<!\d)(1[01]\d)\s*年")]
+    private static partial Regex RocYearPattern();
+
+    [GeneratedRegex(@"Annual Report (\d{4})", RegexOptions.IgnoreCase)]
+    private static partial Regex AnnualReportTitleYearPattern();
 
     private async Task<RankedSelection> RankLocalBySearchPathAsync(
         IReadOnlyList<RetrievedDocumentChunk> chunks,
