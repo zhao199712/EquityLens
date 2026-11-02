@@ -105,6 +105,15 @@ dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj \
   --filter 'FullyQualifiedName~ResearchAgentLoopTests.CrashWithinTurn'
 ```
 
+執行後預期兩個測試各通過一項，可搭配下列斷言解說：
+
+| 測試 | 實際驗證 | 不能據此宣稱 |
+|---|---|---|
+| `CrashAfterExternalEffect_ReplaysSameIdempotencyKey_NotTheEffect` | 測試工具產生效果後觸發取消；恢復後呼叫次數為 2、效果次數為 1，run 成功 | 任意外部 API 都能 exactly-once；效果去重依賴測試工具的冪等實作 |
+| `CrashWithinTurn_ReusesPersistedSuccessfulCall` | 預先保存中斷時的 turn、checkpoint 與成功結果；恢復時工具新增呼叫為 0，保留一筆證據並提交答案 | 真正殺掉程序或 PostgreSQL 故障的端到端演練；此測試使用記憶體資料庫與 fake 工具 |
+
+這兩項示範展示恢復語義。真實 PostgreSQL 的租約 fencing、並行審批與競爭情境由獨立整合測試涵蓋，不混稱為同一種測試。
+
 網路不穩時，直接顯示保存的 `responses.jsonl`、`report.md` 與測試結果。不要臨場把資料不足的回答包裝成正確答案。隔離環境與重現設定記錄在[進度檔](research-agent-runtime-progress.md)及[實驗 manifest](../eval-verification/2026-11-02-agent-loop-ab/experiment-manifest.json)。
 
 ## 面試追問

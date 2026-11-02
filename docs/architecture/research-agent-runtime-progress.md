@@ -195,3 +195,10 @@
 - 該提交的 Cloudflare Pages、Backend、Frontend、Mathematics、Eval harness 五項遠端檢查皆 success。正式 API healthy，預設仍為 AgentLoop，映像與 02:12 部署一致。
 - 可核對的提交 SHA、檢查連結及時間保存在 `../eval-verification/2026-11-03-portfolio-scenarios/release-checks.json`。本次只補部署後驗證紀錄，沒有新增功能、部署、模型呼叫或資料變更，新增費用 US$0。
 - 仍未宣稱完成：正式行情下的新情境完整問答回歸、VaR 覆蓋率回測、獨立 holdout 題組；現有合成行情與開發集成績不替代這些驗收。
+
+## 04:10 故障恢復展示驗收
+
+- 起始 main `a95831a` 工作目錄乾淨。依面試稿執行兩項故障恢復測試，2/2 通過，無略過：`CrashWithinTurn_ReusesPersistedSuccessfulCall`、`CrashAfterExternalEffect_ReplaysSameIdempotencyKey_NotTheEffect`。
+- 面試稿補上可解說的斷言：已保存工具不新增呼叫；副作用恢復呼叫兩次但效果一次。明示前者使用預建中斷狀態，後者以取消注入故障，均不是實際 kill process／DB crash 演練。
+- 將記憶體 fake 工具驗證與既有真實 PostgreSQL 整合驗證分開描述，避免面試過度承諾 exactly-once。
+- 本次只更新 docs，不改 README、產品程式或正式服務。外部 API 新增費用 US$0。
