@@ -104,7 +104,7 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
                     state.CompletionTokens += response.CompletionTokens;
                     state.CostUsd += Cost(response.PromptTokens, response.CompletionTokens);
                     turn = new AgentLlmTurn { ExecutionAttempt = context.Run.ExecutionAttempt, Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 2, Provider = chat.Provider, Model = response.Model,
+                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 3, Provider = chat.Provider, Model = response.Model,
                         RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(SystemPrompt + prompt))),
                         PromptTokens = response.PromptTokens, CompletionTokens = response.CompletionTokens,
                         EstimatedCostUsd = Cost(response.PromptTokens, response.CompletionTokens), LatencyMs = timer.ElapsedMilliseconds,
@@ -316,6 +316,7 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
         call_tools 包含 toolCalls 陣列，每項有唯一 callId、tool、arguments。互不依賴的搜尋可以同輪呼叫。
         submit_answer 包含 answer:{markdown,citedEvidenceIds}，markdown 用 [E1] 等證據編號引用；citedEvidenceIds 列出所引用的 E 編號。
         每個數字或事實主張必須由引用支持。核對公司、年份、單位，不將預測當事實，不保證獲利。
-        證據不足請 give_up，不能編造來源或數值。修訂時針對 critic 及 outputGate 指出的問題修正。
+        證據不足或問題無法直接回答時，一律 give_up；不要用 submit_answer 說明無法回答，也不要附帶無關的財務數字。
+        不能編造來源或數值。修訂時針對 critic 及 outputGate 指出的問題修正。
         """;
 }

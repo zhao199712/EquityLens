@@ -62,3 +62,16 @@ def test_trajectory_parser_tolerates_bad_event_payloads():
     result = parse_trajectory({"events": [{"eventType": "PlannerProposed", "payloadJson": x}
                                          for x in ["not json", "[]", "null", '{"mode":"DeterministicFallback"}']]})
     assert result["planner_modes"] == ["DeterministicFallback"]
+
+
+def test_trajectory_rates_use_observed_calls_and_known_loop_stops():
+    output = RunOutput("policy", "investigation", "InsufficientEvidence", "資料不足", trajectory={
+        "web_calls": 0, "tool_calls_by_name": {"search_local": 4}, "guard_denials": 1,
+        "stop_reason": "BudgetExhausted"})
+    summary = summarize([build_record(case(), output, None)], {})
+    assert summary["trajectory"]["guard_denial_rate"] == .25
+    assert summary["trajectory"]["budget_exhausted_rate"] == 1
+    output.trajectory = {"web_calls": 0}
+    summary = summarize([build_record(case(), output, None)], {})
+    assert summary["trajectory"]["guard_denial_rate"] is None
+    assert summary["trajectory"]["budget_exhausted_rate"] is None

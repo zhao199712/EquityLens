@@ -78,6 +78,9 @@ def summarize(records: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, 
     }
     trajectories = [r["trajectory"] for r in records if r.get("trajectory") is not None]
     planner_modes = [m for t in trajectories for m in t.get("planner_modes", [])]
+    total_tool_calls = sum(sum(t.get("tool_calls_by_name", {}).values()) for t in trajectories)
+    total_denials = sum(t.get("guard_denials", 0) for t in trajectories)
+    known_stops = [t["stop_reason"] for t in trajectories if t.get("stop_reason") is not None]
     trajectory = {
         "recorded_runs": len(trajectories),
         "web_policy_violation_count": sum(bool((r.get("details", {}).get("source_policy_compliance") or {}).get("web_policy_violation"))
@@ -85,7 +88,9 @@ def summarize(records: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, 
         "planner_fallback_rate": sum(m == "DeterministicFallback" for m in planner_modes) / len(planner_modes) if planner_modes else None,
         "mean_llm_turns": mean(t.get("llm_turns", 0) for t in trajectories) if trajectories else None,
         "mean_tool_calls": mean(sum(t.get("tool_calls_by_name", {}).values()) for t in trajectories) if trajectories else None,
-        "guard_denials": sum(t.get("guard_denials", 0) for t in trajectories) if trajectories else None,
+        "guard_denials": total_denials if trajectories else None,
+        "guard_denial_rate": total_denials / total_tool_calls if total_tool_calls else None,
+        "budget_exhausted_rate": sum(s == "BudgetExhausted" for s in known_stops) / len(known_stops) if known_stops else None,
     }
     return {
         "trajectory": trajectory,
@@ -201,6 +206,13 @@ def compare(baseline_dir: str | Path, candidate_dir: str | Path) -> str:
     for name in dict.fromkeys([*base_summary["operational"], *cand_summary["operational"]]):
         default = 0 if name == "judge_error_count" else None
         row(name, base_summary["operational"].get(name, default), cand_summary["operational"].get(name, default))
+
+    if base_summary.get("trajectory") or cand_summary.get("trajectory"):
+        lines += ["", "## Trajectory", "", "| metric | baseline | candidate |", "|---|---|---|"]
+        left, right = base_summary.get("trajectory", {}), cand_summary.get("trajectory", {})
+        for name in dict.fromkeys([*left, *right]):
+            lines.append(f"| {name} | {_fmt(left.get(name))} | {_fmt(right.get(name))} |")
+        lines += ["", "Loop turns count AgentLoop decisions only; legacy 0 does not mean zero LLM calls. Tool logging granularity differs between engines."]
 
     shared = sorted(set(base_records) & set(cand_records))
     regressions = [c for c in shared if base_records[c]["passed"] is True and cand_records[c]["passed"] is False]

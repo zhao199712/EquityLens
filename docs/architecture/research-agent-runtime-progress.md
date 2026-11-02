@@ -100,3 +100,7 @@
 - 加入 provider 層 token / finish_reason 日誌以涵蓋 Critic 等未納入 run totals 的呼叫；不得把 run totals 當完整帳單。
 - 額外邊界：明確非冪等 Running 節點不自動重跑；LocalThenWeb 修訂保留已完成但無結果的 local search 狀態。
 - 此階段驗證：930/930 後端測試全通過；舊 11 題 responses 離線 rescore 仍為 9/11，未改舊題評分結果。
+
+- 第二輪同設定 A/B（`11ce402`，thinking=false）：DynamicDag 7/11、AgentLoop 9/11，皆 0 runtime error / Web policy violation。v4 p95 30.162s，v1 10.733s，未通過 1.3 倍延遲門檻，因此預設仍不切換。完整 provider usage 的未快取尖峰上界：v1 US$0.0690、v4 US$0.0744，尚未含 embedding。
+- 人工抽查發現 scorer PASS 的拒答附帶錯誤貨幣單位（億元與十億元）；加入仟元換算與「任何無法追溯的貨幣數值即 blocking」，prompt v3 要求無法直接回答則 give_up。一般非貨幣數字仍使用原本超過半數無依據規則。
+- 新增 trajectory 的 guard_denial_rate / budget_exhausted_rate 與比較表。最新驗證：932/932 後端、70 pytest 通過。下一輪固定其餘設定驗證上述修正，不覆寫前兩輪。
