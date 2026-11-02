@@ -76,7 +76,7 @@
 
 ## 執行紀錄（2026-11-02 夜間）
 
-- 交付點：2026-11-03 10:00 Asia/Taipei；外部 API 上限 US$10，目前已花 US$0。
+- 交付點：2026-11-03 10:00 Asia/Taipei；外部 API 上限 US$10；開工時 US$0，實測後費用以 provider usage 保守估算，非供應商帳單。
 - 分支 `feat/research-agent-runtime`；續跑 automation `research-runtime` 已建立。
 - 隔離服務：`/tmp/equitylens-runtime-compose.yml`，Compose project `equitylens-runtime`；Postgres localhost:55432 / DB equitylens_runtime，Redis localhost:56379。只使用隔離 DB 做 migration／整合測試，正式服務未修改。
 - Python venv：`/tmp/equitylens-runtime-venv`。原本 root 擁有的 bin/obj 已移至 `/tmp/equitylens-before-runtime-*`，重新建置成功。
@@ -104,3 +104,6 @@
 - 第二輪同設定 A/B（`11ce402`，thinking=false）：DynamicDag 7/11、AgentLoop 9/11，皆 0 runtime error / Web policy violation。v4 p95 30.162s，v1 10.733s，未通過 1.3 倍延遲門檻，因此預設仍不切換。完整 provider usage 的未快取尖峰上界：v1 US$0.0690、v4 US$0.0744，尚未含 embedding。
 - 人工抽查發現 scorer PASS 的拒答附帶錯誤貨幣單位（億元與十億元）；加入仟元換算與「任何無法追溯的貨幣數值即 blocking」，prompt v3 要求無法直接回答則 give_up。一般非貨幣數字仍使用原本超過半數無依據規則。
 - 新增 trajectory 的 guard_denial_rate / budget_exhausted_rate 與比較表。最新驗證：932/932 後端、70 pytest 通過。下一輪固定其餘設定驗證上述修正，不覆寫前兩輪。
+
+- 第三輪（`691a4f4`）：原混合公司題集 v1 8/11、v4 5/11，嚴格貨幣 gate 暴露表頭單位繼承的誤擋。已修正仟元／十億元表頭換算、EPS 單位例外，以及禁止表格金額直接當元；937/937 後端測試通過。
+- 使用者最新確認：資料庫財報僅台積電 2330、鴻海 2317 正確。正式財報驗收改用 `evals/cases/research_runtime_verified_companies.jsonl`，僅按 ticker 篩選，保留原題與預期值；未 verified 題仍由 harness 略過。前三輪混合公司整體分數僅保留為診斷歷史，不作驗收結論。待以限定題集重跑兩個引擎。
