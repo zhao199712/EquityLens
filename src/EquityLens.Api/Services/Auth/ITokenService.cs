@@ -25,8 +25,7 @@ public sealed class TokenService : ITokenService
 
     public string GenerateAccessToken(AppUser user)
     {
-        var key = _configuration["Jwt:Key"]
-            ?? throw new InvalidOperationException("Jwt:Key is not configured");
+        var key = JwtSigningKey.GetBytes(_configuration);
         var issuer = _configuration["Jwt:Issuer"]!;
         var audience = _configuration["Jwt:Audience"]!;
         var expireMinutes = int.Parse(_configuration["Jwt:ExpireMinutes"]!);
@@ -39,7 +38,7 @@ public sealed class TokenService : ITokenService
             new Claim(ClaimTypes.Role, user.Role)
         };
 
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+        var securityKey = new SymmetricSecurityKey(key);
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
@@ -62,7 +61,7 @@ public sealed class TokenService : ITokenService
 
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
     {
-        var key = _configuration["Jwt:Key"]!;
+        var key = JwtSigningKey.GetBytes(_configuration);
 
         var tokenValidationParameters = new TokenValidationParameters
         {
@@ -72,7 +71,7 @@ public sealed class TokenService : ITokenService
             ValidateIssuerSigningKey = true,
             ValidIssuer = _configuration["Jwt:Issuer"],
             ValidAudience = _configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
+            IssuerSigningKey = new SymmetricSecurityKey(key)
         };
 
         var tokenHandler = new JwtSecurityTokenHandler();

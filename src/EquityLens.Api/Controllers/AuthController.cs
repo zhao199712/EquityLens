@@ -251,12 +251,13 @@ public class AuthController : ControllerBase
         [FromBody] RefreshRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.RefreshToken))
+        if (string.IsNullOrWhiteSpace(request.RefreshToken) || request.RefreshToken.Length > 512)
             return BadRequest(new ApiError("auth.refresh_token_required", "Refresh token is required."));
 
-        // 找到 refresh token
+        // 只查詢摘要，絕不退回明文比對。
+        var digest = RefreshTokenDigest.Compute(request.RefreshToken);
         var refreshToken = await _dbContext.RefreshTokens
-            .FirstOrDefaultAsync(rt => rt.Token == request.RefreshToken, cancellationToken);
+            .FirstOrDefaultAsync(rt => rt.Token == digest, cancellationToken);
 
         if (refreshToken == null)
             return Unauthorized(new ApiError("auth.invalid_refresh_token", "Invalid refresh token."));
@@ -317,7 +318,7 @@ public class AuthController : ControllerBase
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            Token = token,
+            Token = RefreshTokenDigest.Compute(token),
             ExpiresAtUtc = DateTime.UtcNow.AddDays(refreshExpireDays),
             CreatedByIp = HttpContext.Connection.RemoteIpAddress?.ToString(),
             UserAgent = HttpContext.Request.Headers.UserAgent.ToString(),

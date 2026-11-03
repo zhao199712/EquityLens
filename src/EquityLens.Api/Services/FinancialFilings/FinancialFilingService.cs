@@ -42,13 +42,14 @@ public sealed class FinancialFilingService : IFinancialFilingService
         string? sourceUrl,
         CancellationToken cancellationToken = default)
     {
+        PdfUploadPolicy.Validate(file);
         var userId = _currentUser.UserId;
         var objectKey = BuildObjectKey(userId, file.FileName);
 
         // 上傳至 S3 物件儲存
         using (var uploadStream = file.OpenReadStream())
         {
-            await _objectStorage.UploadAsync(objectKey, uploadStream, file.ContentType, cancellationToken);
+            await _objectStorage.UploadAsync(objectKey, uploadStream, "application/pdf", cancellationToken);
         }
 
         // 建立 UploadedFile 記錄
@@ -59,7 +60,7 @@ public sealed class FinancialFilingService : IFinancialFilingService
             BucketName = "equitylens",
             ObjectKey = objectKey,
             OriginalFileName = file.FileName,
-            ContentType = file.ContentType,
+            ContentType = "application/pdf",
             FileSizeBytes = file.Length,
             StorageProvider = "Garage",
             UploadStatus = "Uploaded",

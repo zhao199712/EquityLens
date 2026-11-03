@@ -17,7 +17,20 @@ equitylens.duckdns.org {
 	@health path /healthz
 	respond @health "ok" 200
 
-	reverse_proxy api:5034
+	# Download-only S3 proxy. Preserve host/path/query: all are covered by the signature.
+	@objectDownload {
+		method GET
+		path /equitylens/*
+		query X-Amz-Algorithm=AWS4-HMAC-SHA256
+	}
+	handle @objectDownload {
+		header Content-Security-Policy "default-src 'none'; sandbox"
+		header Cache-Control "private, no-store"
+		reverse_proxy garage:3900
+	}
+	handle {
+		reverse_proxy api:5034
+	}
 
 	header {
 		X-Content-Type-Options "nosniff"
@@ -28,6 +41,15 @@ equitylens.duckdns.org {
 
 	log {
 		output stdout
-		format console
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					replace X-Amz-Signature REDACTED
+					replace X-Amz-Credential REDACTED
+					delete X-Amz-Security-Token
+				}
+			}
+		}
 	}
 }

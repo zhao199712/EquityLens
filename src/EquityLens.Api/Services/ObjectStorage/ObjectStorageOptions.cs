@@ -10,6 +10,9 @@ public sealed class ObjectStorageOptions
     /// </summary>
     public string ServiceUrl { get; set; } = string.Empty;
 
+    /// <summary>供外部下載簽章使用的 HTTPS 原點，不可包含路徑、查詢或帳密。</summary>
+    public string PublicServiceUrl { get; set; } = string.Empty;
+
     /// <summary>
     /// S3 區域代碼，Garage 通常為 "garage"。
     /// </summary>

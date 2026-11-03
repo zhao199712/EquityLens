@@ -38,6 +38,7 @@ services:
       ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=${POSTGRES_DB:-equitylens};Username=${POSTGRES_USER:-equitylens};Password=${POSTGRES_PASSWORD}
       Redis__ConnectionString: redis:6379
       ObjectStorage__ServiceUrl: http://garage:3900
+      ObjectStorage__PublicServiceUrl: https://equitylens.duckdns.org
       ObjectStorage__AccessKeyId: ${S3_ACCESS_KEY_ID}
       ObjectStorage__SecretAccessKey: ${S3_SECRET_ACCESS_KEY}
       ObjectStorage__BucketName: ${S3_BUCKET:-equitylens}

@@ -14,6 +14,8 @@ public static class HttpRegistration
 {
     public static void AddEquityLensHttp(this WebApplicationBuilder builder)
     {
+        builder.Services.AddExceptionHandler<EquityLens.Api.Controllers.Filters.SafeExceptionHandler>();
+        builder.Services.AddProblemDetails();
         builder.Services.AddControllers(options => options.Filters.Add<EquityLens.Api.Controllers.Filters.LegacyWorkflowExceptionFilter>());
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
@@ -40,8 +42,7 @@ public static class HttpRegistration
         });
 
         // JWT Authentication
-        var jwtKey = builder.Configuration["Jwt:Key"]
-            ?? throw new InvalidOperationException("Jwt:Key is not configured");
+        var jwtKey = JwtSigningKey.GetBytes(builder.Configuration);
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -54,7 +55,7 @@ public static class HttpRegistration
                     ValidateIssuerSigningKey = true,
                     ValidIssuer = builder.Configuration["Jwt:Issuer"],
                     ValidAudience = builder.Configuration["Jwt:Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                    IssuerSigningKey = new SymmetricSecurityKey(jwtKey),
                     ClockSkew = TimeSpan.Zero
                 };
             });
