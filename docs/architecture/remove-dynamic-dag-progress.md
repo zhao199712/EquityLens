@@ -6,13 +6,13 @@
 
 | 項目 | 值 |
 |---|---|
-| 開工 commit | |
-| 開工時 `dotnet test` 通過數 / 總數 | |
-| 開工時 `evals` `pytest` 通過數 | |
-| 開工時前端 `npm test` 通過數 | |
+| 開工 commit | `8903e48` |
+| 開工時 `dotnet test` 通過數 / 總數 | 最近基準 979/979；R1 後實跑 986/986，0 skipped |
+| 開工時 `evals` `pytest` 通過數 | 75 |
+| 開工時前端 `npm test` 通過數 | 124 |
 | 可建立的工作流數 | 9 |
-| catalog node type 數 | 53 |
-| `Services/Agents` 行數 | |
+| catalog node type 數 | 54（新增情境節點已納入） |
+| `Services/Agents` 行數 | 11,674 |
 | 分支 | `refactor/three-workflows` |
 
 ## 驗收項目狀態
@@ -23,7 +23,7 @@
 
 | # | 驗收條件（摘要） | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
-| R1 | 舊資料唯讀、retry 409、佇列安全失敗 | MUST | ⬜ | | | |
+| R1 | 舊資料唯讀、retry 409、佇列安全失敗 | MUST | 🟨 | WorkflowExecutionCompatibilityTests：7 passed；版本／節點辨識、四種非終態、租約、讀取／retry 隔離 | 本項提交 | 防護完成；隨後續 provider 更新啟用各舊版退役，R10 再總驗收 |
 | R2 | 研究一律 ResearchAgent；DynamicDag → 400 | MUST | ⬜ | | | |
 | R3 | qualityGate 合併 | MUST | ⬜ | | | |
 | R4 | 回饋修訂併入 ResearchAgent | MUST | ⬜ | | | |
@@ -59,13 +59,13 @@
 | # | 驗收條件 | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
 | R26 | 8 題 eval 不退步 | SHOULD | ⬜ | | | |
-| R27 | 全部驗證全綠 | 每次 commit | ⬜ | | | |
+| R27 | 全部驗證全綠 | 每次 commit | ✅ | R1 完整驗證通過 | 本項提交 | 每項重新執行 |
 
 ## 驗證紀錄
 
 | 時間 | 完成項目 | `dotnet build` | `dotnet test`（通過/總數） | `has-pending-model-changes` | `pytest` | 前端 build/test |
 |---|---|---|---|---|---|---|
-| | | | | | | |
+| 2026-11-03 09:20 | R1 防護基礎 | PASS | 986/986，0 skipped | 無變更 | 75 passed | build PASS／124 passed |
 
 ## 刪除清單
 
@@ -78,8 +78,8 @@
 | 指標 | 收斂前 | 收斂後 |
 |---|---|---|
 | 可建立的工作流 | 9 | |
-| catalog node type | 53 | |
-| `Services/Agents` 行數 | | |
+| catalog node type | 54 | |
+| `Services/Agents` 行數 | 11,674 | |
 | 編排模式 | Static／Stateful／DynamicStateful | |
 
 ## 阻塞
@@ -91,3 +91,10 @@
 ## 給 Reviewer 的摘要
 
 （結束前填寫：完成了什麼、沒完成什麼、收斂前後數字、已知風險、正式站問題處理結果、建議的 merge 與部署步驟）
+
+## 實作紀錄
+
+- R1：版本相容性判定注入正式 DI；執行、retry、回饋、兩種審批入口有防護。HTTP exception filter 將退役錯誤轉為 409。GET 保持既有 fallback，不要求歷史節點仍存在 catalog。
+- worker 先取得租約及 fencing，再終止退役圖；WaitingForFeedback／WaitingForApproval 的舊圖同樣可安全終止，不執行 handler、不寫新的 wake。
+- 按使用者補充，D3 已加入投組任務型工具上限 8 個、首批 6 個；底層數學函式不對模型公開。
+- 無正式環境／DB 變更，無模型呼叫。R1 完整驗證記錄在本機 `/tmp/r1-*.log`；不把本機 log 納入 Git。

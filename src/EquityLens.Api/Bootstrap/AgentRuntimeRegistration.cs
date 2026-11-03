@@ -72,6 +72,7 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<IDynamicPlanValidator, DynamicPlanValidator>();
         builder.Services.AddScoped<IGraphMaterializer, GraphMaterializer>();
         builder.Services.AddScoped<IAgentRunGraphValidator, AgentRunGraphValidator>();
+        builder.Services.AddScoped<WorkflowExecutionCompatibility>();
         builder.Services.AddSingleton<IAgentRunStateMachine, AgentRunStateMachine>();
         builder.Services.AddSingleton<IAgentNodeStateMachine, AgentNodeStateMachine>();
         builder.Services.AddScoped<IWorkflowPolicyEvaluator, CriticReviewPolicyEvaluator>();

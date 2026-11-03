@@ -21,7 +21,8 @@ internal static class AgentExecutorTestFactory
         IWorkflowSkillCatalog? skills = null,
         INodeCapabilityRegistry? capabilities = null,
         IAgentWorkflowAdminService? workflowAdminService = null,
-        IAgentLoopController? loopController = null)
+        IAgentLoopController? loopController = null,
+        WorkflowExecutionCompatibility? compatibility = null)
     {
         var policies = new AgentWorkflowPolicyReader(catalog, workflowAdminService);
         var catalogForPlanning = catalog ?? new AgentWorkflowCatalog();
@@ -36,7 +37,7 @@ internal static class AgentExecutorTestFactory
             registry,
             loopController ?? new AgentLoopController([new ResearchQualityReviewLoopPolicy(), new PortfolioDiagnosisLoopPolicy()]),
             policies);
-        return new AgentRunExecutor(dbContext, topology, runGraphValidator, runStateMachine, runner, dynamicPlans, logger);
+        return new AgentRunExecutor(dbContext, topology, runGraphValidator, runStateMachine, runner, dynamicPlans, logger, compatibility: compatibility);
     }
 
     private sealed class DeterministicPlannerAdapter : IAgentWorkflowPlanner

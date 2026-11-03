@@ -18,7 +18,8 @@ public interface IAgentApprovalService
 public sealed class AgentApprovalService(
     EquityLensDbContext db,
     IAgentRunStateMachine runStateMachine,
-    IAgentNodeStateMachine nodeStateMachine) : IAgentApprovalService
+    IAgentNodeStateMachine nodeStateMachine,
+    WorkflowExecutionCompatibility? compatibility = null) : IAgentApprovalService
 {
     public Task<AgentApprovalResponse?> ApproveAsync(Guid runId, Guid approvalId, Guid actorUserId, bool isAdmin, DecideAgentApprovalRequest request, CancellationToken cancellationToken = default) =>
         DecideAsync(runId, approvalId, actorUserId, isAdmin, request, approve: true, cancellationToken);
@@ -46,6 +47,8 @@ public sealed class AgentApprovalService(
             .Include(x => x.Node)
             .SingleOrDefaultAsync(x => x.Id == approvalId && x.AgentRunId == runId, cancellationToken);
         if (approval is null || (!isAdmin && approval.Run.UserId != actorUserId)) return null;
+
+        compatibility?.EnsureExecutable(approval.Run);
 
         if (approval.Status != AgentApprovalStatuses.Pending)
         {

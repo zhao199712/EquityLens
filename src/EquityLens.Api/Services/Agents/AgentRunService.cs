@@ -24,6 +24,7 @@ public sealed class AgentRunService : IAgentRunService
     private readonly IAgentWorkflowCatalog _catalog;
     private readonly IAgentPromptSnapshotService? _promptSnapshots;
     private readonly ResearchAgentLoopOptions _loopOptions;
+    private readonly WorkflowExecutionCompatibility? _compatibility;
 
     public AgentRunService(
         EquityLensDbContext dbContext,
@@ -35,7 +36,8 @@ public sealed class AgentRunService : IAgentRunService
         PortfolioDiagnosisWorkflowDefinitionProvider? portfolioDiagnosisProvider = null,
         IAgentWorkflowCatalog? catalog = null,
         IAgentPromptSnapshotService? promptSnapshots = null,
-        IOptions<ResearchAgentLoopOptions>? loopOptions = null)
+        IOptions<ResearchAgentLoopOptions>? loopOptions = null,
+        WorkflowExecutionCompatibility? compatibility = null)
     {
         _dbContext = dbContext;
         _workflowProviders = CreateWorkflowProviderRegistry(workflowProviders);
@@ -47,6 +49,7 @@ public sealed class AgentRunService : IAgentRunService
         _catalog = catalog ?? new AgentWorkflowCatalog();
         _promptSnapshots = promptSnapshots;
         _loopOptions = loopOptions?.Value ?? new();
+        _compatibility = compatibility;
     }
 
     public async Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
@@ -209,6 +212,7 @@ public sealed class AgentRunService : IAgentRunService
 
         var source = await _dbContext.AgentRuns.SingleOrDefaultAsync(x => x.Id == runId && x.UserId == userId, cancellationToken)
             ?? throw new AgentFeedbackException("agent_run_not_found", "Agent run not found.");
+        _compatibility?.EnsureExecutable(source);
         var existing = await _dbContext.AgentFeedback.AsNoTracking().SingleOrDefaultAsync(
             x => x.AgentRunId == runId && x.ClientRequestId == request.RequestId, cancellationToken);
         if (existing is not null)
@@ -473,6 +477,7 @@ public sealed class AgentRunService : IAgentRunService
                 .ThenInclude(x => x.Node)
             .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
         if (run is null) return null;
+        _compatibility?.EnsureExecutable(run);
         if (run.Status != AgentRunStatuses.Failed) return MapSummary(run);
 
         _runStateMachine.ResetForRetry(run);
@@ -597,6 +602,7 @@ public sealed class AgentRunService : IAgentRunService
             .Include(x => x.Nodes)
             .FirstOrDefaultAsync(x => x.Id == runId && x.UserId == userId, cancellationToken)
             ?? throw new AgentApprovalException("agent_run_not_found", "Agent run not found.");
+        _compatibility?.EnsureExecutable(run);
         if (run.Status != AgentRunStatuses.WaitingForFeedback)
             throw new AgentApprovalException("agent_run_not_waiting", "Only a run waiting for approval can receive a decision.");
         var gateNode = run.Nodes.FirstOrDefault(x => x.Status == AgentNodeStatuses.WaitingForFeedback)

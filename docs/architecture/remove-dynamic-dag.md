@@ -38,7 +38,7 @@
 |---|---|---|
 | D1 | `ResearchInvestigation`（v1） | 刪除。`POST /api/research/investigations` 一律建立 `ResearchAgent`。`engine`：省略或 `AgentLoop` → v4；`DynamicDag` → `400`，訊息說明已停用。 |
 | D2 | `FeedbackRevision` | 併入 `ResearchAgent` 修訂模式。`POST /api/agent-runs/{id}/feedback` 的 API 契約與前端行為不變。 |
-| D3 | `PortfolioDiagnosis` | 改成 Agent 迴圈。風險數學、歸因、風險設定檔、**權重情境模擬**、重用既有 Risk Run 都包成工具。**數值資料只能由工具從 Blackboard / DB 讀取**；LLM 只能給有 schema 限制的設定參數（例如目標權重、轉入對象、期間）。**always-on 人工審批與核准／拒絕分支不變。** |
+| D3 | `PortfolioDiagnosis` | 改成 Agent 迴圈。風險數學、歸因、風險設定檔、**權重情境模擬**、重用既有 Risk Run 都包成工具。**投組工具以任務為單位，上限 8 個；37 個底層數學函式不得直接暴露給 LLM**，只由工具內部確定性組合執行。首批使用 `get_portfolio_snapshot`、`get_risk_report`、`run_risk_analysis`、`get_performance_attribution`、`simulate_weight_scenario`、`get_risk_profile` 六個工具；分析種類用 enum 限制，人工審批仍是固定節點。**數值資料只能由工具從 Blackboard / DB 讀取**；LLM 只能給有 schema 限制的設定參數（例如目標權重、轉入對象、期間）。**always-on 人工審批與核准／拒絕分支不變。** |
 | D4 | `ResearchQualityReview` | **刪除**（沒有任何 UI 呼叫；功能已被 ResearchAgent 涵蓋）。移除 endpoint 與前端未使用的 service 函式。 |
 | D5 | `DraftRevision`、`EvidenceRemediation`、`EvidenceReanalysis` | **刪除**（功能已被 ResearchAgent 的迴圈與修訂模式涵蓋）。移除 endpoint、前端呼叫與按鈕（`AgentRunDetailView.vue`、`AgentRunAdminDetail.vue` 等）。只被它們使用的節點、Agent、prompt、Blackboard key、測試一併移除。 |
 | D6 | `CriticReview` | 保留，改用 `qualityGate`（評分模式）。`POST /api/agent-runs/critic-review` 與 Admin 研究管理頁行為不變。 |
@@ -147,4 +147,5 @@
 
 | 章節 | 原規格 | 實際做法 | 理由 |
 |---|---|---|---|
-| | | | |
+| D7 | 明列刪除的工作流及舊投組唯讀 | 舊 ResearchAgent／CriticReview 圖也依版本及節點辨識為唯讀 | 合併 QualityGate 會刪除其舊節點；不能繼續執行不再受支援的圖。 |
+| R1 分階段實作 | 先建立舊資料防護 | 防護先以目前註冊 provider 的版本／catalog 判定，替換 provider 版本或移除註冊時立即生效 | 避免中途提交讓仍在替換中的工作流全部失效；最終只註冊三個新版本。 |

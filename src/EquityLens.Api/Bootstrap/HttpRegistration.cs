@@ -14,7 +14,7 @@ public static class HttpRegistration
 {
     public static void AddEquityLensHttp(this WebApplicationBuilder builder)
     {
-        builder.Services.AddControllers();
+        builder.Services.AddControllers(options => options.Filters.Add<EquityLens.Api.Controllers.Filters.LegacyWorkflowExceptionFilter>());
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
         builder.Services.AddSwaggerGen(options =>
