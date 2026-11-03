@@ -50,7 +50,7 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         var output = new PortfolioDiagnosisOutput(summary, attribution?.PortfolioReturn, attribution?.BenchmarkReturn, attribution?.ActiveReturn,
             attribution?.Holdings.Where(x => x.Contribution < 0).OrderBy(x => x.Contribution).Take(3).ToArray() ?? [],
             attribution?.Holdings.Where(x => x.Contribution > 0).OrderByDescending(x => x.Contribution).Take(3).ToArray() ?? [], [],
-            limited ? "Limited" : "complete", metrics, issues.Count == 0 ? answer?.Markdown : comparison?.Status == "Calculated" && issues.All(i => i is "UntraceableNumbers" or "MixedRiskBasis") ? VerifiedParagraphs(answer, facts) : null, comparison, diagnosis,
+            limited ? "Limited" : "complete", metrics, issues.Count == 0 ? answer?.Markdown : comparison?.Status == "Calculated" && issues.All(i => i is "UntraceableNumbers" or "MixedRiskBasis" or "ScenarioComparisonDirectionMismatch" or "UnverifiedScenarioComparison") ? VerifiedParagraphs(answer, facts) : null, comparison, diagnosis,
             "Unvalidated", board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>(),
             "既有持股歷史重建；情境採固定權重、含現金的共同快照；模型未經回測驗證", attribution?.CoverageStatus,
             (board[AgentBlackboardKeys.MathResults] as JsonArray)?.OfType<JsonObject>()
@@ -78,7 +78,8 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             (s.Metrics is { } m ? "；調整後：" + Metrics(m) : "") +
             (s.DifferenceFromBaseline is { } d ? "；相較原組合差異（百分點）：" + $"年化波動 {d.AnnualizedVolatility * 100:F2}、VaR {d.HistoricalVaR * 100:F2}、ES {d.ExpectedShortfall * 100:F2}、最大回撤 {d.HypotheticalMaxDrawdown * 100:F2}" : ""))) +
             (comparison.Status == "Calculated" ? "。情境不代表未來績效或保證改善。" : "。資料不足，風險指標無法計算。") +
-            $"方法：{comparison.Method}；有效日報酬 {comparison.ObservationCount} 筆、VaR 信心水準 {comparison.ConfidenceLevel:P0}、期間 {comparison.HorizonDays} 日。";
+            $"方法：{comparison.Method}；有效日報酬 {comparison.ObservationCount} 筆、VaR 信心水準 {comparison.ConfidenceLevel:P0}、期間 {comparison.HorizonDays} 日。" +
+            string.Join("", PortfolioComparisonClaims.Statements(comparison));
     }
 
     internal static List<string> Check(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts, List<string>? rejectedNumbers = null)
@@ -150,6 +151,7 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             }
         }
         if (Regex.IsMatch(answer.Markdown, @"(?<!不)(?<!無法)(?<!不能)保證獲利")) issues.Add("GuaranteedProfitClaim");
+        issues.AddRange(PortfolioComparisonClaims.Check(answer.Markdown, facts));
         return issues.Distinct().ToList();
     }
 
@@ -210,6 +212,9 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
                 .Select(v => $"[{v.Id}] raw={v.Raw.ToString(CultureInfo.InvariantCulture)}, rounded={decimal.Round(v.Display, Math.Min(decimals, 8), MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture)}{(percent ? "%/百分點" : "")}");
             hints.Add(token + " candidates (核對語義後引用，不可只挑相同數字): " + string.Join("; ", candidates));
         }
+        foreach (var fact in facts.Where(f => f.Tool == "simulate_weight_scenario"))
+            if (fact.Data["riskComparisonStatements"] is JsonArray statements)
+                hints.Add("逐項比較依據 [" + fact.Id + "]: " + statements.ToJsonString());
         return string.Join("\n", hints);
     }
 

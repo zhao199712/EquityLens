@@ -10,6 +10,7 @@ const gate = computed(() => props.detail.blackboardJson.portfolioQualityGate as 
 const waiting = computed(() => ['WaitingForFeedback', 'WaitingForApproval'].includes(props.detail.run.status))
 const draft = computed(() => props.detail.blackboardJson.portfolioDiagnosisDraft as { summary?: string; interpretation?: string } | undefined)
 const reasons: Record<string, string> = {
+  ScenarioComparisonDirectionMismatch: '草稿中的情境優劣方向與工具計算不一致', UnverifiedScenarioComparison: '情境比較的對象或依據不明，無法驗證',
   UntraceableNumbers: '部分數字無法對應引用的工具結果', MixedRiskBasis: '草稿混用了不同方法或快照的風險數字',
   OptimizationScenarioRequired: '尚未完成優化情境比較', OptimizationDataUnavailable: '共同歷史資料不足',
   InsufficientEvidence: '證據不足，未產生可採用的模型建議', PartialScenarioFailure: '部分情境失敗，僅呈現成功結果',

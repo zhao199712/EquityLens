@@ -222,6 +222,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 to = snapshot.Dates.Count > 0 ? snapshot.Dates[^1] : snapshot.To,
                 returnFrom = snapshot.Dates.Count > 1 ? (DateOnly?)snapshot.Dates[1] : null,
                 requestedFrom = snapshot.From, requestedTo = snapshot.To }) : null };
+        data["riskComparisonStatements"] = JsonSerializer.SerializeToNode(PortfolioComparisonClaims.Statements(comparison));
         data["priceBasis"] = comparison.Snapshot?.PriceBasis;
         data["indexEtfCandidates"] = JsonSerializer.SerializeToNode(comparison.Snapshot?.IndexEtfCandidates, AgentNodeJson.SerializerOptions);
         foreach (var item in Object(comparison with { Snapshot = null })) data[item.Key] = item.Value?.DeepClone();

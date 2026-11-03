@@ -17,3 +17,5 @@
 獨立授權上限 US$0.05，五次 provider 呼叫（含路由）、保守費用上界 **US$0.0097443**，pending 0；歷史累計上界 US$1.3156488。budget.json／provider_usage.jsonl 保存記錄；未保存帳號 token。測後 API／費用 proxy 已停止。沒有合併 main 或部署。
 
 同版本 CI [41639905538](https://github.com/zhao199712/EquityLens/actions/runs/41639905538) 已成功。這次僅新增驗證證據及文件，未改程式或 prompt。
+
+後續比較方向修正及離線驗證見 [offline-fix.md](offline-fix.md)；上方保留原始真實 AI 結果，不回寫為通過。
