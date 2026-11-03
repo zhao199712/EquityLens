@@ -151,3 +151,7 @@
 | R1 分階段實作 | 先建立舊資料防護 | 防護先以目前註冊 provider 的版本／catalog 判定，替換 provider 版本或移除註冊時立即生效 | 避免中途提交讓仍在替換中的工作流全部失效；最終只註冊三個新版本。 |
 
 | R10 唯讀例外 | 廢棄名稱只允許集中 legacy 對應 | API `LegacyWorkflowReadModel.cs` 保留舊摘要與 artifact 歸屬；Web `services/legacyWorkflows.ts` 保留歷史結果型別／篩選名稱 | 保持舊 GET 與前端可讀，不參與建立、retry 或執行；搜尋除 migrations 僅命中這兩檔。 |
+
+### R32 原始 PDF 取得方式補充
+
+2026-11-03：Garage 正式 bucket 為空，資料庫指向的原始 PDF key 回 NoSuchKey。使用工作目錄既有 PDF 原檔作逐頁核實，未以 chunk／摘要替代。台積電檔案 hash 與 DB 一致；鴻海來源 DB 未存 hash，另記本機原檔 hash，無法證明與不存在的 Garage 物件相同。核實紀錄與限制見補充題報告。未修改正式資料或上傳檔案；原始檔儲存恢復列為發布前待辦。

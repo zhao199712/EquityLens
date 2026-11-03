@@ -69,7 +69,7 @@
 | R29 | Router 只選工作流與參數，不選 skill／capability | MUST | ✅ | | | 與 R9 一併做；取代先前 Router 選 playbook 的方案 |
 | R30 | 投組任務型工具 ≤ 8；37 個數學函式不可直接呼叫；重用情境計算 | MUST | ✅ | 六工具白名單、全數底層函式拒絕、各工具數值注入拒絕、快照／所有權情境測試 | 本項提交 | R5–R7 完成前先驗收；load_skill 不計入 8 個上限 |
 | R31 | 研究角色來源規則與可確定性檢查的 OutputGate | MUST | ✅ | prompt／證據中繼資料、6 組來源錯置正反例 | 本項提交 | R16 後優先補做；直接／補充來源不可錯置，表格／目錄／封面不得充當風險或實質證據 |
-| R32 | 台積電／鴻海風險、法說會新題庫與原始 PDF 核實紀錄；validate 通過 | SHOULD | ⬜ | | | R26 前；至少各 1 題，Garage 原始 PDF 核對文件、實體頁碼、摘錄前保持 verified: false；與原 8 題分開計分 |
+| R32 | 台積電／鴻海風險、法說會新題庫與原始 PDF 核實紀錄；validate 通過 | SHOULD | ✅ | | | R26 前；至少各 1 題，Garage 原始 PDF 核對文件、實體頁碼、摘錄前保持 verified: false；與原 8 題分開計分 |
 | R33 | 新題庫 investigation、skill trajectory、拆解實驗 A（MaxTurns=1）與 C | COULD | ⬜ | | | R32 核實後、R26 前或一起做；沿用累計 US$10 預算，無法確認剩餘額度先記錄阻塞 |
 | R34 | 入口／追問免 LLM 路由、程式訊號、權限與參數驗證、低信心及不支援情境澄清 | MUST | ✅ | | | 與 R9 一併做；每種情況均有測試，不猜投組或替換情境；混合問題單 run 不跨角色 |
 | R35 | 合併對話與 Router 為一次 LLM 呼叫，輸出 D14 結構 | SHOULD | ✅ | | | 與 R9 一併做；保護直接回覆、澄清、拒絕、重置、修訂上次 run；明確入口仍為零次路由呼叫 |
@@ -306,3 +306,9 @@
 - 重現：正式設定沒有 Logging 分類，測試先失敗。僅在 appsettings.Production.json 設定 EF Database.Command／Infrastructure 為 Warning，保留其他設定。
 - ASPNETCORE_ENVIRONMENT=Production 時由標準設定載入；本次只提交，不部署、不改 appsettings.json。
 - 完整 R27：build PASS、878/878（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／127 tests。無外部 API 呼叫。
+
+### R32 風險與法說會題庫
+
+- 新增獨立 2 題：台積電匯率風險（財報實體第64頁）、鴻海核心獲利規模化（2026-05-14 法說會實體第12頁）。封面、全文摘錄及圖表渲染核對後才設 verified:true；validate：2 cases、0 problems、0 unverified。
+- Garage 目前 bucket 為空、DB object key 回 NoSuchKey；改讀既有本機原始 PDF。台積電與 DB SHA256 完全一致；鴻海 DB 未存 hash，保留核對原檔 hash 與限制。詳見 docs/eval-verification/2026-11-03-risk-conference-cases/；PDF 不提交，也未上傳正式 bucket。
+- 此項只驗收 gold，不宣稱新系統已答對。原八題及 excluded_reason 未動。完整 R27：build PASS、878/878（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／127 tests。無付費 API 呼叫。

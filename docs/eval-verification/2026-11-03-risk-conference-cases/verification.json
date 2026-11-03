@@ -1,0 +1,55 @@
+{
+  "verified_at": "2026-11-03",
+  "method": "Original PDF text extraction plus rendered page visual verification",
+  "garage_status": "Configured production bucket empty; original database keys returned NoSuchKey. Used existing local originals; no upload, DB update or deployment.",
+  "sources": [
+    {
+      "id": "93351ecd-41a1-455d-a367-4091e9f390bb",
+      "title": "2317 27e7711a-9a74-4ca5-84f0-3abebdfda226 231720260514M002.pdf",
+      "document_type": "EarningsPresentation",
+      "bucket_name": "equitylens",
+      "object_key": "investor-conferences/2317/231720260514M002.pdf",
+      "sha256_hash": null,
+      "actual_sha256": "85df63bc76a70d85f9a4b8b74dcd6b4704250ddf2d2b028323d1e15c54f9e6ab",
+      "matches_db_hash": false,
+      "local_original": "法說會/2317_鴻海/231720260514M002.pdf",
+      "verified_pages": [
+        1,
+        12
+      ],
+      "printed_page": 12,
+      "visual_review": true,
+      "excerpt": "營業利益增速超越營收增幅，顯示核心獲利具規模化優勢。",
+      "chart_reading": {
+        "base_year": 2011,
+        "end_year": 2025,
+        "revenue": 2.4,
+        "gross_profit": 1.9,
+        "operating_profit": 3.1
+      }
+    },
+    {
+      "id": "bbefd357-8e17-4a8d-a3da-e9b85a6780bc",
+      "title": "2330 Annual Report 2025",
+      "document_type": "AnnualReport",
+      "bucket_name": "equitylens",
+      "object_key": "financial-reports/twse/2330/2025/annual-report.pdf",
+      "sha256_hash": "68daa6d9ba02d71efe0838f2a9b0e135af26a2d1bddbaa62a06d3eb3501dacb2",
+      "actual_sha256": "68daa6d9ba02d71efe0838f2a9b0e135af26a2d1bddbaa62a06d3eb3501dacb2",
+      "matches_db_hash": true,
+      "local_original": "exports/equitylens-financial-rag-20260618/pdf/financial-reports/twse/2330/2025/annual-report.pdf",
+      "verified_pages": [
+        1,
+        64
+      ],
+      "printed_page": 64,
+      "visual_review": true,
+      "excerpt": "這些避險可減少資產及負債受匯率變動的影響，但無法完全消除。",
+      "chart_reading": null
+    }
+  ],
+  "case_ids": [
+    "2330-fx-risk-2025",
+    "2317-conference-operating-scale-2026q1"
+  ]
+}
