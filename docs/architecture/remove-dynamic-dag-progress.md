@@ -67,7 +67,7 @@
 |---|---|---|---|---|---|---|
 | R28 | 共用基礎＋角色＋本角色 skill 目錄＋已載入全文；唯讀 load_skill、至少 3 個 skill、載入上限與可追溯紀錄 | MUST | ⬜ | | | 與 R9 一併做；保留法說會原 prompt，刪 Supporting skill；不能擴大權限；記錄 id／版本／雜湊及 trajectory |
 | R29 | Router 只選工作流與參數，不選 skill／capability | MUST | ⬜ | | | 與 R9 一併做；取代先前 Router 選 playbook 的方案 |
-| R30 | 投組任務型工具 ≤ 8；37 個數學函式不可直接呼叫；重用情境計算 | MUST | 🟨 | 六個任務型工具草稿，待邊界測試 | | R5–R7 完成前先驗收；load_skill 不計入 8 個上限 |
+| R30 | 投組任務型工具 ≤ 8；37 個數學函式不可直接呼叫；重用情境計算 | MUST | ✅ | 六工具白名單、全數底層函式拒絕、各工具數值注入拒絕、快照／所有權情境測試 | 本項提交 | R5–R7 完成前先驗收；load_skill 不計入 8 個上限 |
 | R31 | 研究角色來源規則與可確定性檢查的 OutputGate | MUST | ✅ | prompt／證據中繼資料、6 組來源錯置正反例 | 本項提交 | R16 後優先補做；直接／補充來源不可錯置，表格／目錄／封面不得充當風險或實質證據 |
 | R32 | 台積電／鴻海風險、法說會新題庫與原始 PDF 核實紀錄；validate 通過 | SHOULD | ⬜ | | | R26 前；至少各 1 題，Garage 原始 PDF 核對文件、實體頁碼、摘錄前保持 verified: false；與原 8 題分開計分 |
 | R33 | 新題庫 investigation、skill trajectory、拆解實驗 A（MaxTurns=1）與 C | COULD | ⬜ | | | R32 核實後、R26 前或一起做；沿用累計 US$10 預算，無法確認剩餘額度先記錄阻塞 |
@@ -166,3 +166,10 @@
 - 確定性 gate 檢查明確年報冒稱法說會、目錄／封面起始標記、風險題引用沒有風險內容的財報表格；不以寬泛關鍵字替代 Critic 的語意充分性判斷。
 - 同次提交 R7 的共用迴圈核心抽離與結構化工具結果恢復基礎；投組工具／圖／審批尚未註冊，R7 仍進行中。
 - 完整 R27：build PASS、1001/1001（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。無外部 API 呼叫。
+
+### R30 投組工具邊界
+
+- 六個任務型唯讀工具，分析只能選 Core／TailRisk／RiskContribution；從授權 DB 或持久化 Blackboard 取得數值，不接受模型提供價格、報酬、持倉或計算結果。
+- 情境工具重用既有 PortfolioScenarioCalculator 與快照擷取，不建立另一套數學。測試核對保存結果 hash／指標、跨使用者拒絕及沒有修改來源 Blackboard。
+- 所有 37 個底層函式均無工具可見性，逐一驗證 Guard 拒絕。尚未註冊為投組 workflow，接續 R5–R7。
+- 完整 R27：build PASS、1009/1009（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。無模型呼叫。

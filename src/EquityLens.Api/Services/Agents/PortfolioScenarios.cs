@@ -149,7 +149,7 @@ public sealed class EvaluatePortfolioScenariosNodeHandler : IAgentNodeHandler
         context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
     }
 
-    private static async Task<PortfolioScenarioSnapshot> CaptureAsync(AgentNodeExecutionContext context, CancellationToken ct)
+    internal static async Task<PortfolioScenarioSnapshot> CaptureAsync(AgentNodeExecutionContext context, CancellationToken ct)
     {
         var diagnosis = PortfolioDiagnosisBlackboard.Context(AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson));
         var db = context.DbContext;
