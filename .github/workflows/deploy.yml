@@ -1,0 +1,62 @@
+name: Deploy backend
+run-name: Backend ${{ inputs.mode }} · ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Verify runner only, or deploy this main commit
+        required: true
+        default: verify
+        type: choice
+        options: [verify, deploy]
+
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  protection:
+    if: github.repository == 'zhao199712/EquityLens' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify required approval and main-only policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/deploy/runner/check_environment.py
+      - name: Require successful main CI for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, 'scripts/deploy')
+          import deploy
+          print(deploy.check_ci(os.environ['GITHUB_SHA']))
+          PY
+
+  deploy:
+    needs: protection
+    if: github.repository == 'zhao199712/EquityLens' && github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: [equitylens-prod]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify or deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODE: ${{ inputs.mode }}
+        run: python3 scripts/deploy/runner_entry.py "$DEPLOY_MODE"
