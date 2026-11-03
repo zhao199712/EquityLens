@@ -354,6 +354,33 @@ public sealed class ResearchAgentLoopTests
         Assert.Equal("Primary", item["sourceRole"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task PortfolioOptimization_GuardRequiresScenarioBeforeAcceptingAnswer()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
+        board[AgentBlackboardKeys.RoutingContext] = new JsonObject { ["objective"] = "優化投組" };
+        board[AgentBlackboardKeys.MathInputs] = new JsonObject { ["commonTradingDays"] = 180 };
+        board[PortfolioLoopTools.SnapshotKey] = new JsonObject();
+        context.Run.BlackboardJson = board.ToJsonString();
+        var answer = """{"action":"submit_answer","answer":{"markdown":"已比較情境[P1]","citedEvidenceIds":["P1"]}}""";
+        var chat = new FakeChat(answer, """{"action":"call_tools","toolCalls":[{"callId":"scenario","tool":"simulate_weight_scenario","arguments":{}}]}""", answer);
+        var state = await new AgentLoopEngine(chat, new ScenarioTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, true).RunAsync(context, "Portfolio", default);
+        Assert.Equal("AnswerSubmitted", state.StopReason);
+        Assert.Equal(1, state.GuardDenials);
+        Assert.Contains("OptimizationScenarioRequired", chat.Prompts[1]);
+        Assert.Single(await db.AgentToolCalls.ToListAsync());
+        Assert.Contains(context.Run.Events, e => e.EventType == "AnswerGuardDenied");
+    }
+    private sealed class ScenarioTools : IAgentLoopTools
+    {
+        public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("simulate_weight_scenario", "fixture", new())];
+        public string? Validate(LoopToolScope scope, LoopToolCall call) => null;
+        public Task<LoopToolResult> InvokeAsync(LoopToolScope scope, LoopToolCall call, CancellationToken ct) => Task.FromResult(new LoopToolResult([], "calculated",
+            Data: new() { ["status"] = "Calculated" }, BlackboardPatch: new() { [PortfolioScenarioCalculator.ResultKey] = new JsonObject { ["status"] = "Calculated" } }));
+    }
+
     private static ResearchAgentLoop Loop(FakeChat chat, FakeTools tools, ResearchAgentLoopOptions? options = null) =>
         new(chat, tools, Options.Create(options ?? new ResearchAgentLoopOptions()), TimeProvider.System);
 

@@ -38,8 +38,12 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         var attribution = board[AgentBlackboardKeys.PerformanceAttribution]?.Deserialize<PortfolioPerformanceAttribution>(AgentNodeJson.SerializerOptions);
         var metrics = PortfolioRiskMetricsReader.FromMathResults(board[AgentBlackboardKeys.MathResults]);
         var comparison = board[PortfolioScenarioCalculator.ResultKey]?.Deserialize<PortfolioScenarioComparison>(AgentNodeJson.SerializerOptions);
+        if (RequiresScenario(board) && comparison?.Status != "Calculated")
+            issues.Add((board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>() ?? 0) >= 120 ? "OptimizationScenarioRequired" : "OptimizationDataUnavailable");
         var limited = issues.Count > 0 || attribution?.CoverageStatus != "complete";
         var summary = issues.Count > 0 ? "模型答案未通過品質檢查；以下僅列出已保存的工具資料，請確認資料限制。" : answer!.Markdown;
+        if (issues.Contains("OptimizationScenarioRequired")) summary = "優化問題尚未取得同一快照的完整情境比較，無法提供改善幅度。";
+        if (issues.Contains("OptimizationDataUnavailable")) summary = "共同歷史資料不足，無法比較優化前後的波動、VaR、ES 與最大回撤；請補足資料。";
         if (comparison is not null) summary = ScenarioSummary(comparison);
         var output = new PortfolioDiagnosisOutput(summary, attribution?.PortfolioReturn, attribution?.BenchmarkReturn, attribution?.ActiveReturn,
             attribution?.Holdings.Where(x => x.Contribution < 0).OrderBy(x => x.Contribution).Take(3).ToArray() ?? [],
@@ -55,11 +59,23 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         return Task.CompletedTask;
     }
 
-    internal static string ScenarioSummary(PortfolioScenarioComparison comparison) =>
-        "以下為唯讀情境，未變更實際持倉。" + string.Join("；", comparison.Scenarios.Select(s =>
+    internal static bool RequiresScenario(JsonObject board) => Regex.IsMatch(
+        board[AgentBlackboardKeys.RoutingContext]?["objective"]?.GetValue<string>() ?? "",
+        @"優化|改善|降低?波動|降低.{0,8}風險|降低.{0,8}波動|optimi[sz]|reduce.{0,20}(?:risk|volatility)", RegexOptions.IgnoreCase)
+        || board[AgentBlackboardKeys.RoutingContext]?["scenarios"] is JsonArray { Count: > 0 };
+
+    internal static string ScenarioSummary(PortfolioScenarioComparison comparison)
+    {
+        static string Metrics(ScenarioMetrics m) => $"年化波動 {m.AnnualizedVolatility:P2}、VaR {m.HistoricalVaR:P2}、ES {m.ExpectedShortfall:P2}、最大回撤 {m.HypotheticalMaxDrawdown:P2}";
+        var baseline = comparison.Baseline?.Metrics is { } b ? "同一快照原組合：" + Metrics(b) + "。" : "";
+        return "以下為唯讀情境，未變更實際持倉。" + baseline + string.Join("；", comparison.Scenarios.Select(s =>
             $"{s.Name}：減碼資金{(s.RemainderPolicy == "holding" ? "轉入 " + s.TransferToTicker : "留作現金")}；" +
-            string.Join("、", s.Weights.Select(w => $"{w.Key} 權重 {w.Value:P2}")) + $"；現金 {s.CashWeight:P2}")) +
-        (comparison.Status == "Calculated" ? "。" : "。資料不足，風險指標無法計算。" );
+            string.Join("、", s.Weights.Select(w => $"{w.Key} 權重 {w.Value:P2}")) + $"；現金 {s.CashWeight:P2}" +
+            (s.Metrics is { } m ? "；調整後：" + Metrics(m) : "") +
+            (s.DifferenceFromBaseline is { } d ? "；相較原組合差異（百分點）：" + Metrics(d) : ""))) +
+            (comparison.Status == "Calculated" ? "。情境不代表未來績效或保證改善。" : "。資料不足，風險指標無法計算。") +
+            $"方法：{comparison.Method}；有效日報酬 {comparison.ObservationCount} 筆、VaR 信心水準 {comparison.ConfidenceLevel:P0}、期間 {comparison.HorizonDays} 日。";
+    }
 
     internal static List<string> Check(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts)
     {

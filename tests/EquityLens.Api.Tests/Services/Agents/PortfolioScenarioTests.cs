@@ -71,6 +71,10 @@ public sealed class PortfolioScenarioTests
         Assert.Contains($"2330 權重 {comparison.Scenarios[0].Weights["2330"]:P2}", reply);
         Assert.Contains("未變更實際持倉", reply);
         Assert.DoesNotContain("留作現金", reply);
+        foreach (var metric in new[] { "年化波動", "VaR", "ES", "最大回撤" }) Assert.Contains(metric, reply);
+        Assert.Contains("同一快照原組合", reply);
+        Assert.Contains("相較原組合差異", reply);
+        Assert.Contains($"{comparison.Scenarios[0].Metrics!.ExpectedShortfall:P2}", reply);
     }
 
     [Fact]

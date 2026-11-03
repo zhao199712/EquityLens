@@ -45,7 +45,7 @@
 |---|---|---|---|---|---|---|---|
 | R16 | B1 OutputGate 誤判年份／代號 | MUST | ✅ | OutputGate_ExcludesContextNumbersButKeepsFinancialClaims：3 個正案例先失敗 | 5 個正反案例、拒答事件與 artifact、UI 新舊圖及原因顯示 | 本項提交 | 不忽略代號同值的財務金額 |
 | R17 | B3 情境偷換＋澄清 | MUST | ✅ | 轉入既有持股原本 scenario_invalid | 守恆／其他持股／錯誤目標／替換拒絕／回覆取保存值 | 本項提交 | 自然語言路由澄清於 R34 再驗收 |
-| R18 | B2 優化建議 | MUST | ⬜ | | | | |
+| R18 | B2 優化建議 | MUST | ✅ | 無情境的優化建議原本仍 passed | 提交 Guard、足夠／不足資料 gate、四指標與差異取同快照 | 本項提交 | |
 | R19 | B4 路由重試＋log | MUST | ⬜ | | | | |
 | R20 | B8 拖累正負號 | SHOULD | ⬜ | | | | |
 | R21 | B6 VaR 樣本不足 | SHOULD | ⬜ | | | | |
@@ -190,3 +190,10 @@
 - 保留其他持股股數及原現金；不接受同一標的、缺目標、未知標的、借款或增加減碼來源權重。分數權重的十進位精度以微小誤差界檢查淨值守恆，現金比例取原快照。
 - 工具 Guard 比對使用者已確認情境，不接受模型將 holding 偷換為 cash 或更改來源權重；情境報告的轉入對象／權重直接由持久化結果生成，不發布模型另述的配置。路由自然語言與澄清在 R34 全面驗收。
 - 完整 R27：build PASS、1020/1020（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。外部 API 費用 0。
+
+### R18／B2 優化必須有情境證據
+
+- 重現：只建議降低集中度、未模擬任何情境，舊 gate 仍 Passed。現在優化意圖或明確情境請求必須有 Calculated 比較，否則輸出 Limited 與未能計算改善幅度的原因。
+- 已有足夠快照時，提前 submit_answer 會被 Guard 拒絕並回饋 simulate_weight_scenario 要求；已落盤決策保留，接續下一輪。預算耗盡不把未比較的建議視為通過。
+- 回覆直接呈現同一快照原組合／調整後的年化波動、VaR、ES、最大回撤與差異，並標出樣本數、信心水準與 horizon；資料不足不生成改善幅度。
+- R6 再驗收：核准／拒絕／等待釋放租約／無 wake／跨使用者及去重測試再次通過。完整 R27：build PASS、1023/1023（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。無外部 API 呼叫。

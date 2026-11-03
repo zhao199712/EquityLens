@@ -144,6 +144,17 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     switch (action.Action)
                     {
                         case "submit_answer":
+                            if (portfolio && PortfolioQualityGateNodeHandler.RequiresScenario(board)
+                                && board[PortfolioLoopTools.SnapshotKey] is not null
+                                && (board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>() ?? 0) >= 120
+                                && board[PortfolioScenarioCalculator.ResultKey]?["status"]?.GetValue<string>() != "Calculated")
+                            {
+                                state.GuardDenials++;
+                                state.History.Add("OptimizationScenarioRequired: 提交前必須呼叫 simulate_weight_scenario，比較同一快照的波動、VaR、ES、最大回撤。不得編造改善幅度。");
+                                context.AddEvent(context.Run, context.Node, "AnswerGuardDenied", "OptimizationScenarioRequired", new { turn.Turn });
+                                if (state.ForcedDraft) state.StopReason = "QualityGateRejected";
+                                break;
+                            }
                             state.Answer = action.Answer;
                             state.StopReason = state.ForcedDraft ? (state.NoProgressTurns >= 2 ? "NoProgress" : "BudgetExhausted") : "AnswerSubmitted";
                             break;

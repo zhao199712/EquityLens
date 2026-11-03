@@ -73,6 +73,27 @@ public sealed class PortfolioDiagnosisApprovalWorkflowTests
         Assert.Equal(blocked, issues.Count > 0);
     }
 
+    [Theory]
+    [InlineData(180, "OptimizationScenarioRequired")]
+    [InlineData(20, "OptimizationDataUnavailable")]
+    public async Task OptimizationWithoutScenario_CannotPassQualityGate(int days, string expected)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var board = new JsonObject {
+            [AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(new PortfolioDiagnosisContext(Guid.NewGuid(), "測試", "TWD", new(2025, 1, 1), new(2025, 12, 31), 1), AgentNodeJson.SerializerOptions),
+            [AgentBlackboardKeys.RoutingContext] = new JsonObject { ["objective"] = "如何優化配置降低波動？" },
+            ["portfolioLoopAnswer"] = JsonSerializer.SerializeToNode(new LoopAnswer("建議降低集中度[P1]。", ["P1"]), AgentNodeJson.SerializerOptions),
+            ["agentLoopFacts"] = JsonSerializer.SerializeToNode(new[] { new LoopDataFact("P1", "key", "get_risk_report", new() { ["volatility"] = .2m }) }, AgentNodeJson.SerializerOptions),
+            [AgentBlackboardKeys.MathInputs] = new JsonObject { ["commonTradingDays"] = days }
+        };
+        var run = new AgentRun { Id = Guid.NewGuid(), BlackboardJson = board.ToJsonString() };
+        await new PortfolioQualityGateNodeHandler().ExecuteAsync(new(db, run, new AgentRunNode(), (_, _, _, _, _) => { }));
+        var output = JsonNode.Parse(run.BlackboardJson)!;
+        Assert.False(output["portfolioQualityGate"]!["passed"]!.GetValue<bool>());
+        Assert.Contains(expected, output["portfolioQualityGate"]!["blockingIssues"]!.ToJsonString());
+        Assert.Null(output[AgentBlackboardKeys.PortfolioDiagnosisDraft]!["interpretation"]);
+    }
+
     private sealed class Fixture(string type) : IAgentNodeHandler
     {
         public string NodeType => type;
