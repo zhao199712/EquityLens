@@ -27,6 +27,19 @@ public sealed class PortfolioScenarioTests
     private static PortfolioScenarioRequest Request(decimal target) => new("國巨情境", new Dictionary<string, decimal> { ["2327"] = target });
 
     [Fact]
+    public void ScenarioLabel_DoesNotTrustModelStockNames()
+    {
+        var named = Snapshot() with { Assets = Snapshot().Assets.Select(a => a with { SecurityName = a.Ticker == "2327" ? "國巨" : "台積電" }).ToArray() };
+        var comparison = PortfolioScenarioCalculator.Calculate(named,
+            [Request(.3m) with { Name = "國建 2327 轉入台達電", RemainderPolicy = "holding", TransferToTicker = "2330" }]);
+        Assert.DoesNotContain("國建", comparison.Scenarios[0].Name);
+        Assert.DoesNotContain("台達電", comparison.Scenarios[0].Name);
+        Assert.Contains("國巨（2327）", comparison.Scenarios[0].Name);
+        Assert.Contains("台積電（2330）", comparison.Scenarios[0].Name);
+        Assert.DoesNotContain("國建", PortfolioQualityGateNodeHandler.ScenarioSummary(comparison));
+    }
+
+    [Fact]
     public void ScenarioWorkflow_PassesContracts_AndOrdersToolAfterOwnershipCheck()
     {
         var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid(), new(2025, 1, 1), new(2026, 1, 1), Routing([Request(.3m)]));
@@ -181,7 +194,7 @@ public sealed class PortfolioScenarioTests
         var portfolio = new Portfolio { Id = snapshot.PortfolioId, OwnerUserId = user, Name = "fixture" };
         foreach (var (asset, index) in snapshot.Assets.Select((a, i) => (a, i)))
         {
-            var security = new Security { Id = Guid.NewGuid(), Ticker = asset.Ticker, Currency = mixedCurrency && index == 1 ? "USD" : "TWD" };
+            var security = new Security { Id = Guid.NewGuid(), Ticker = asset.Ticker, Name = asset.Ticker == "2327" ? "國巨" : "台積電", Currency = mixedCurrency && index == 1 ? "USD" : "TWD" };
             portfolio.Holdings.Add(new PortfolioHolding { Id = Guid.NewGuid(), Security = security, SecurityId = security.Id, Quantity = asset.Quantity, PortfolioId = portfolio.Id });
             if (missingPrices && index == 1) continue;
             foreach (var date in snapshot.Dates)
@@ -201,6 +214,7 @@ public sealed class PortfolioScenarioTests
             var captured = await PortfolioScenarioSnapshotReader.CaptureAsync(new(db, run, node, (_, _, _, _, _) => { }), default);
             var result = PortfolioScenarioCalculator.Calculate(captured, [Request(.3m)]);
             Assert.Equal(expected, result.Status); Assert.Equal(2500, captured.Cash);
+            Assert.Contains("國巨（2327）", result.Scenarios[0].Name);
             Assert.Equal(.2m, result.Baseline!.CashWeight); Assert.Equal(.3m, result.Scenarios[0].CashWeight);
             Assert.Equal(50, result.Scenarios[0].Quantities["2330"]);
         }

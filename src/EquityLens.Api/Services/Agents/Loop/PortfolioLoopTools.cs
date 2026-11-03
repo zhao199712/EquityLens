@@ -99,9 +99,10 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                     patch[SnapshotKey] = board[SnapshotKey]?.DeepClone() ?? JsonSerializer.SerializeToNode(await PortfolioScenarioSnapshotReader.CaptureAsync(context, ct), AgentNodeJson.SerializerOptions);
                 }
                 catch (AgentWorkflowQueryException e) { warning = e.Message; }
+                var namedAssets = patch[SnapshotKey]?.Deserialize<PortfolioScenarioSnapshot>(AgentNodeJson.SerializerOptions)?.Assets;
                 var total = inputs.Assets.Sum(x => x.Quantity * x.Prices.LastOrDefault());
                 data = Object(new { diagnosis, inputs.CommonTradingDays, inputs.Warnings, warning,
-                    holdings = inputs.Assets.Select(a => new { a.Ticker, a.Currency, a.Quantity, a.AverageCost,
+                    holdings = inputs.Assets.Select(a => new { a.Ticker, securityName = namedAssets?.FirstOrDefault(x => x.Ticker == a.Ticker)?.SecurityName, a.Currency, a.Quantity, a.AverageCost,
                         price = a.Prices.LastOrDefault(), weight = total > 0 ? a.Quantity * a.Prices.LastOrDefault() / total : (decimal?)null,
                         unrealizedProfit = a.Quantity * (a.Prices.LastOrDefault() - a.AverageCost) }) });
                 break;

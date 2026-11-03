@@ -420,3 +420,17 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - 新增指定計算的快照 API；前端傳目前顯示的 Run ID。從授權 DB 保存原始結果、輸入／期間、模型、InputHash、fallback 及品質評估，不再重算。失敗品質保留 Failed，未驗證保留 Unvalidated，明示此快照範圍。讀取舊快照格式不變，不需要 migration。
 - 新增他人／其他投組／未完成／缺結果／錯誤 operation 拒絕、快照不可變及不呼叫計算的測試。UI 先重現未傳 Run ID，修後也驗證清單刷新失敗仍顯示已成功保存。
 - 完整 R27：後端 930/930、0 skipped；pytest 83、前端 129，雙端 build／EF 通過。`/tmp/browser-risk-r27-*.log`。無檔案刪除、無付費呼叫、無部署。
+
+### 投組股票名稱與本輪終驗
+
+- 修正前情境名稱測試失敗：模型提供「國建 2327 轉入台達電」會原樣顯示。現在由授權持股快照的 SecurityName／Ticker、驗證後權重及轉入對象產生名稱；缺名稱只顯示代號，不猜名稱。工具快照同時回傳 DB 名稱；模型原始輸入仍留在工具稽核紀錄。
+- 回歸驗證國巨／台積電名稱、轉入既有持股、資產守恆、其他持股不變；原有負貢獻篩選測試仍通過。新路由 objective 沿用問題文字，沒有重新加入模型改寫目標。
+- 完整 R27：後端 **931/931、0 skipped**（含隔離 PostgreSQL 整合測試），eval pytest **83**，前端 **129**；雙端 build 與 EF pending-model 通過。最後日誌 `/tmp/browser-final-r27-*.log`。
+- 真實瀏覽器以本分支前端＋5535 隔離 API 驗證。僅複製自己的測試投組與保存結果到隔離 DB；付費 provider 金鑰停用，沒有重新生成 AI 回答。長報告深層連結／中段捲動／重新整理皆無透明祖先；指定 Risk Run 快照建立成功，SQL 比對保存 risk JSON 與原 Run ResultJson 完全相同、模型相同、資料日 2026-11-02。
+- 瀏覽器證據：`exports/browser-smoke/2026-11-03-fixes/long-report.png`、`risk-snapshot.png`（依規範不 commit）。長報告使用歷史輸出測可見性，所以舊名稱與舊拖累內容仍保留，不能當作新流程生成結果。隔離 DB 未複製正式回測評估，故畫面 Unvalidated；Failed 狀態保存另有後端回歸測試。
+
+### 給 Reviewer 的摘要：本輪追加
+
+- 完成四項修正：引用算式差額／百分點追溯、長報告可見性、指定 Run 不重算的風險快照及壓力價格防護、可信股票名稱。沒有重寫歷史 run，也沒有新增工作流／node／工具。
+- 仍為 3 workflows、13 node types；本輪未刪除檔案，無 migration、無外部 API 費用。原 8 題線上 eval 仍是前次 7/8，本輪是保存回答回放與完整 harness 測試，不宣稱新的線上分數。
+- 未部署、未 merge main、未恢復排程；正式站仍是舊版本。發布時先後端再前端，因新前端快照呼叫新 endpoint。沿用前文備份／停止舊 worker／舊圖退役／smoke／回復步驟；額外 smoke 檢查指定 Run 快照模型、日期、品質與原結果一致。回退後新快照仍可由原 GET JSON 顯示。

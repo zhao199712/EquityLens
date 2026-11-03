@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace EquityLens.Api.Services.Agents;
 
 public sealed record PortfolioHoldingRiskContribution(string Ticker, decimal Weight, decimal ComponentVolatility, decimal ComponentRiskShare);
-public sealed record ScenarioAsset(string Ticker, decimal Quantity, decimal ValuationPrice, IReadOnlyList<decimal> Prices);
+public sealed record ScenarioAsset(string Ticker, decimal Quantity, decimal ValuationPrice, IReadOnlyList<decimal> Prices, string? SecurityName = null);
 public sealed record PortfolioScenarioSnapshot(Guid PortfolioId, DateTime CapturedAtUtc, string Currency, DateOnly From, DateOnly To,
     IReadOnlyList<DateOnly> Dates, IReadOnlyList<ScenarioAsset> Assets, decimal Cash, IReadOnlyList<string> Warnings);
 public sealed record ScenarioMetrics(decimal AnnualizedVolatility, decimal HistoricalVaR, decimal ExpectedShortfall, decimal HypotheticalMaxDrawdown,
@@ -103,7 +103,16 @@ public static class PortfolioScenarioCalculator
                 var released = request.TargetWeights.Sum(x => baseWeights[x.Key] - x.Value);
                 weights[request.TransferToTicker!] += released;
             }
-            var result = Evaluate(request.Name, weights) with { RemainderPolicy = request.RemainderPolicy, TransferToTicker = request.TransferToTicker,
+            // 標題來自授權快照及已驗證參數；模型提供的 Name 只留在原始呼叫紀錄。
+            string Label(string ticker)
+            {
+                var name = snapshot.Assets.Single(a => a.Ticker == ticker).SecurityName;
+                return string.IsNullOrWhiteSpace(name) ? ticker : $"{name}（{ticker}）";
+            }
+            var label = string.Join("、", request.TargetWeights.OrderBy(x => x.Key, StringComparer.Ordinal)
+                .Select(x => $"{Label(x.Key)}減碼至{(x.Value * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%"))
+                + (request.RemainderPolicy == "holding" ? $"，轉入{Label(request.TransferToTicker!)}" : "，餘額留現金");
+            var result = Evaluate(label, weights) with { RemainderPolicy = request.RemainderPolicy, TransferToTicker = request.TransferToTicker,
                 CashWeight = request.RemainderPolicy == "holding" ? snapshot.Cash / nav : 1 - weights.Values.Sum() };
             if (result.Metrics is { } m && baseline.Metrics is { } b)
                 result = result with { DifferenceFromBaseline = new(m.AnnualizedVolatility - b.AnnualizedVolatility,
@@ -150,6 +159,6 @@ internal static class PortfolioScenarioSnapshotReader
         if (prices.Any(p => p.AdjustedClose is null)) warnings.Add("部分資料無調整後價格，使用收盤價；公司行動影響需另行確認。");
         return new(portfolio.Id, capturedAt, portfolio.BaseCurrency, diagnosis.From, diagnosis.To, dates,
             holdings.Select((h, i) => new ScenarioAsset(h.Security.Ticker, h.Quantity, maps[i][dates[^1]].Close,
-                dates.Select(d => maps[i][d].AdjustedClose ?? maps[i][d].Close).ToArray())).ToList(), cash, warnings);
+                dates.Select(d => maps[i][d].AdjustedClose ?? maps[i][d].Close).ToArray(), h.Security.Name)).ToList(), cash, warnings);
     }
 }

@@ -94,7 +94,7 @@ public sealed class PortfolioLoopToolsTests
         }
         var result = await tools.InvokeAsync(scope, new("call", name, name == "run_risk_analysis" ? new() { ["analysis"] = "Core" } : new()), default);
         Assert.Null(result.Error); Assert.NotNull(result.Data); Assert.NotNull(result.BlackboardPatch);
-        if (name == "get_portfolio_snapshot") { Assert.NotNull(result.BlackboardPatch[PortfolioLoopTools.SnapshotKey]); Assert.Single(result.Data["holdings"]!.AsArray()); }
+        if (name == "get_portfolio_snapshot") { Assert.NotNull(result.BlackboardPatch[PortfolioLoopTools.SnapshotKey]); Assert.Equal("台積電", Assert.Single(result.Data["holdings"]!.AsArray())!["securityName"]!.GetValue<string>()); }
         if (name == "get_risk_report") { Assert.Equal("Hit", result.Data["evidence"]!["cacheStatus"]!.GetValue<string>()); Assert.Equal(.2m, result.Data["metrics"]!["annualizedVolatility"]!.GetValue<decimal>()); }
         if (name == "run_risk_analysis") Assert.Equal(4, result.Data["results"]!.AsArray().Count);
         if (name == "get_performance_attribution") Assert.Equal("complete", result.Data["attribution"]!["coverageStatus"]!.GetValue<string>());
