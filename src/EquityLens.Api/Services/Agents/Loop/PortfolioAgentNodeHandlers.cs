@@ -96,6 +96,20 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             // Markdown 編號不是數據；標題裡真正的指標數字仍須引用。
             text = Regex.Replace(text, @"^\s*(?:#{1,6}\s*)?\d+[.)、]\s+", "");
             var cited = ids.Where(byId.ContainsKey).Select(id => byId[id]).ToArray();
+            // 帳戶餘額只能由明確帳簿欄位支持，不能借用情境 cashWeight 或其他指標碰巧相同的數字。
+            foreach (Match cashClaim in Regex.Matches(text,
+                @"(?:帳戶現金(?:餘額)?|帳簿現金(?:餘額)?|現金餘額)\s*(?:為|是|[:：|])?\s*(?:[A-Z]{3}|NT\$|新[台臺]幣)?\s*(?<value>[-+]?\d+(?:,\d{3})*(?:\.\d+)?)(?![\d.]|\s*[%％])"))
+            {
+                var token = cashClaim.Groups["value"].Value;
+                if (!decimal.TryParse(token, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)) continue;
+                var precision = token.Contains('.') ? token.Length - token.IndexOf('.') - 1 : 0;
+                var supported = cited.Any(f => f.Tool == "get_portfolio_snapshot"
+                    && f.Data["accountCash"] is JsonObject cash
+                    && cash["status"]?.ToString() == "Available"
+                    && cash["balance"] is JsonValue balance && balance.TryGetValue<decimal>(out var value)
+                    && Matches(value, amount, false, precision));
+                if (!supported) { issues.Add("UntraceableNumbers"); rejectedNumbers?.Add(token); }
+            }
             // 日期是分析範圍而非金額；必須在本句引用的事實中確實存在。
             text = Regex.Replace(text, @"(?<!\d)20\d{2}-\d{2}-\d{2}(?!\d)", m =>
                 cited.Any(f => f.Data.ToJsonString().Contains(m.Value, StringComparison.Ordinal)) ? "日期" : m.Value);
@@ -105,14 +119,16 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             const string listNumber = @"[-+]?\d+(?:,\d{3})*(?:\.\d+)?";
             text = Regex.Replace(text, $@"(?<![\d.])(?<numbers>{listNumber}(?:\s*(?:與|和|及|、|或|~|～|至)\s*{listNumber})+)\s*(?<unit>個百分點|百分點)",
                 m => Regex.Replace(m.Groups["numbers"].Value, listNumber, n => n.Value + m.Groups["unit"].Value));
+            // 配置比例不是風險指標差值；只在口徑分類時移除，原文數字仍須通過來源檢查。
+            var riskText = WithoutAllocationAmounts(text);
             // 解釋兩種口徑不可互換，不等於把它們相減；但實際數字箭頭／改善幅度仍須同一快照。
-            var quantitativeChange = Regex.IsMatch(text, @"\d[^。；;\n]{0,15}→[^。；;\n]{0,15}\d|(?:下降|降低|增加|改善|差額|差異為|降至|增至)[^。；;\n]{0,12}[-+]?\d");
-            var separatesBases = !quantitativeChange && Regex.IsMatch(text,
+            var quantitativeChange = Regex.IsMatch(riskText, @"\d[^。；;\n]{0,15}→[^。；;\n]{0,15}\d|(?:下降|降低|增加|改善|差額|差異為|降至|增至)[^。；;\n]{0,12}[-+]?\d");
+            var separatesBases = !quantitativeChange && Regex.IsMatch(riskText,
                 @"(?:口徑|基礎|基準).{0,8}不同|(?:不宜|不可|不能).{0,12}(?:比較|相減|替換|互換|相加)");
             var comparisonClaim = !separatesBases && facts.Any(f => f.Tool == "simulate_weight_scenario")
-                && Regex.IsMatch(text, @"(?<![A-Za-z\d])[-+]?\d+(?:\.\d+)?")
-                && Regex.IsMatch(text, @"波動|VaR|ES|回撤", RegexOptions.IgnoreCase)
-                && (quantitativeChange || Regex.IsMatch(text, @"比較|差異|差額|前後")
+                && Regex.IsMatch(riskText, @"(?<![A-Za-z\d])[-+]?\d+(?:\.\d+)?")
+                && Regex.IsMatch(riskText, @"波動|VaR|ES|回撤", RegexOptions.IgnoreCase)
+                && (quantitativeChange || Regex.IsMatch(riskText, @"比較|差異|差額|前後")
                     || (text.Contains('|') && cited.Any(f => f.Tool == "simulate_weight_scenario")));
             if (comparisonClaim && cited.Any(f => f.Tool is "run_risk_analysis" or "get_risk_report")) issues.Add("MixedRiskBasis");
             var citations = cited.Where(f => !comparisonClaim || f.Tool == "simulate_weight_scenario").SelectMany(f => Values(f.Data)).ToArray();
@@ -131,6 +147,13 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         return issues.Distinct().ToList();
     }
 
+    private static string WithoutAllocationAmounts(string text)
+    {
+        const string amount = @"[-+]?\d+(?:,\d{3})*(?:\.\d+)?\s*(?:%|％|個百分點|百分點)";
+        text = Regex.Replace(text, $@"(?<![\d.]){amount}\s*(?:的\s*)?(?:權重|資金|現金|部位)", "配置比例");
+        return Regex.Replace(text, $@"(?:現金權重|持股權重|股票權重|現金部位|現金配置)\s*(?:為|是|[:：])?\s*{amount}", "配置比例");
+    }
+
     internal static string RepairHints(IReadOnlyList<string> rejected, IReadOnlyList<LoopDataFact> facts, LoopAnswer? answer = null)
     {
         var hints = new List<string>();
@@ -146,6 +169,10 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
                 hints.Add("問題段落: " + AgentNodeJson.Trim(line, 350) + "；問題=" + string.Join(",", problems)
                     + "；目前引用=" + string.Join(",", sources)
                     + "。逐句補正確來源；風險偏好不能支持風險數字或權重。無法核對就移除非必要數字，不要猜算合計或改引用湊數。");
+                // 僅提供同一股票、同一欄位且符合顯示精度的現況權重證據，不跨口徑找相近值或自動改引用。
+                if (problems.Contains("UntraceableNumbers") && line.Contains("權重")
+                    && !Regex.IsMatch(line, "情境|假設|減碼|調整|風險貢獻|成分風險"))
+                    hints.AddRange(HoldingWeightHints(line, rejected, facts).Take(6));
                 if (hints.Count >= 6) break;
             }
         }
@@ -178,6 +205,30 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             hints.Add(token + " candidates (核對語義後引用，不可只挑相同數字): " + string.Join("; ", candidates));
         }
         return string.Join("\n", hints);
+    }
+
+    private static IEnumerable<string> HoldingWeightHints(string line, IReadOnlyList<string> rejected, IReadOnlyList<LoopDataFact> facts)
+    {
+        foreach (var fact in facts.Where(f => f.Tool == "get_portfolio_snapshot"))
+        {
+            if (fact.Data["holdings"] is not JsonArray holdings) continue;
+            for (var i = 0; i < holdings.Count; i++)
+            {
+                var holding = holdings[i];
+                var ticker = holding?["ticker"]?.ToString();
+                if (string.IsNullOrEmpty(ticker) || !Regex.IsMatch(line, $@"(?<![\w]){Regex.Escape(ticker)}(?![\w])")
+                    || holding?["weight"] is not JsonValue value || !value.TryGetValue<decimal>(out var weight)) continue;
+                foreach (var token in rejected.Distinct().Where(t => line.Contains(t, StringComparison.Ordinal)))
+                {
+                    var m = Regex.Match(token, @"^(?<number>[-+]?\d+(?:\.\d+)?)\s*[%％]$");
+                    if (!m.Success || !decimal.TryParse(m.Groups["number"].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var claim)) continue;
+                    var number = m.Groups["number"].Value;
+                    var precision = number.Contains('.') ? number.Length - number.IndexOf('.') - 1 : 0;
+                    if (Matches(weight, claim, true, precision))
+                        yield return $"現況權重來源 [{fact.Id}] get_portfolio_snapshot holdings[{i}].weight；ticker={ticker}，raw={weight.ToString(CultureInfo.InvariantCulture)}，對應 {token}。核對股票與現況語義後由你修正引用；不支持情境權重或風險貢獻，不可套用其他標的。";
+                }
+            }
+        }
     }
 
     private static string? VerifiedParagraphs(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts)

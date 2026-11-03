@@ -1,0 +1,19 @@
+{
+  "eligible_for_quality_comparison": false,
+  "benchmark_isolation_verified": true,
+  "reason": "Remaining twelve cases on clean merged main 6d805b9, prompt 14; multi-scenario and tradeoff were tested separately in round 14. Not a single full 14-case run.",
+  "raw_sha256": "06d3b33fa065008e9c41237145193edd31a673fc1a60a3d1c34271c6ffef3fc9",
+  "raw_bytes": 7120429,
+  "startup_attempt": {
+    "result": "CLI rejected --usage-ledger before any paid call because Python resolved an older installed package. Relaunched with explicit PYTHONPATH to current checkout.",
+    "upper_usd": 0
+  },
+  "checks": {
+    "provider_healthy": 12,
+    "no_side_effects": 12,
+    "scenario_calculated": 7,
+    "independent_risk_math": 7,
+    "conservation": 8,
+    "same_basis_deltas": 7
+  }
+}

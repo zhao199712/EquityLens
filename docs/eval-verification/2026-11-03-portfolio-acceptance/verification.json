@@ -1,6 +1,6 @@
 {
   "backend": {
-    "passed": 1008,
+    "passed": 1023,
     "postgres_integration": 18,
     "skipped": 0
   },
@@ -14,13 +14,24 @@
   "mathematics_pytest": 36,
   "eval_pytest": 92,
   "ef_pending_model_changes": false,
-  "live_code_final_verification": "Prompt 13 full round 12/14; prompt 14 targeted rerun 2/2, other 12 not rerun; do not claim 14/14",
-  "authorized_usd": 1,
-  "charged_or_reserved_upper_usd": 0.9632685,
+  "live_code_final_verification": "Prompt 16 on unchanged clean d57e5c3: round 18 13/14, round 19 14/14. Lower-volatility once omitted the Core citation; no consecutive all-pass or production reliability claim.",
+  "authorized_usd": 1.5,
+  "charged_or_reserved_upper_usd": 1.3059045,
   "deployment": "none",
   "original_research_cases": "unchanged",
-  "integrated_main": "81c8809",
+  "integrated_main": "6d805b9",
   "benchmark_isolation_verified_from_round": 12,
-  "evaluated_code": "c4b643a plus per-round recorded diff hashes (prompt 13 full, prompt 14 targeted)",
-  "recovery_observed": "round 13 cash: per-turn ToolBudgetExceeded then identical arguments succeeded next turn; invalid-argument recovery not observed"
+  "evaluated_code": "d57e5c3b3cb84dfc06cfeeb6ce05f7ba38156ac1 (rounds 18 and 19, clean, prompt 16)",
+  "recovery_observed": "round 13 cash: per-turn ToolBudgetExceeded then identical arguments succeeded next turn; invalid-argument recovery not observed",
+  "additional_authorized_usd": 0.5,
+  "latest_offline_fix": "Prompt 16: typed holding-weight source repair hints and allocation-versus-risk classification; full live results 13/14 and 14/14",
+  "pending_reserved_usd": 0,
+  "latest_additional_authorized_usd": 0.3,
+  "latest_two_rounds_upper_usd": 0.174888,
+  "ci": {
+    "code_sha": "d57e5c3b3cb84dfc06cfeeb6ce05f7ba38156ac1",
+    "run_id": 41631841290,
+    "passed_jobs": 6
+  },
+  "stability_comparison": "stability-18-19.json"
 }

@@ -5,6 +5,69 @@ using EquityLens.Api.Services.Agents.Loop;
 namespace EquityLens.Api.Tests.Services.Agents;
 public class AcceptanceNumberRegressionTests
 {
+    [Fact]
+    public void Round17AllocationTradeoffDoesNotMixRiskBases()
+    {
+        var (answer, facts) = Round17("lower-volatility");
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(answer, facts));
+        Assert.Contains("MixedRiskBasis", PortfolioQualityGateNodeHandler.Check(answer with {
+            Markdown = answer.Markdown + "\n波動從 24.53% [P5] 降至 15.25% [P8]，改善 9.09 個百分點。" }, facts));
+    }
+
+    [Fact]
+    public void Round17WeightRepairOffersExactHoldingField_WithoutAcceptingWrongCitation()
+    {
+        var (answer, facts) = Round17("unprompted");
+        var rejected = new List<string>();
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(answer, facts, rejected));
+        var hints = PortfolioQualityGateNodeHandler.RepairHints(rejected, facts, answer);
+        Assert.Contains("get_portfolio_snapshot", hints);
+        Assert.Contains("9002", hints); Assert.Contains("9003", hints); Assert.Contains(".weight", hints);
+        Assert.Contains("[P1]", hints);
+        // Editorial test expectation only; production must never append citations automatically.
+        var corrected = answer with { Markdown = answer.Markdown.Replace("9003 標的C 10.00%，", "9003 標的C 10.00% [P1]，") };
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(corrected, facts));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(corrected with {
+            Markdown = corrected.Markdown.Replace("9003 標的C 10.00%", "9003 標的C 13.57%") }, facts));
+    }
+
+    [Theory]
+    [InlineData("降低波動的代價是把 30% 權重留現金 [P2]。兩者口徑不同，不宜比較 [P1][P2]。")]
+    [InlineData("改善回撤的代價是 30% 的資金留現金 [P2]。不同口徑不可相減 [P1][P2]。")]
+    [InlineData("降低波動時現金權重為 30% [P2]。不同口徑不可互換 [P1][P2]。")]
+    public void AllocationNumbersDoNotImplyRiskDeltas_ButRealDeltasStillDo(string text)
+    {
+        var facts = new[] {
+            new LoopDataFact("P1", "risk", "run_risk_analysis", new JsonObject { ["volatility"] = .2453m }),
+            new LoopDataFact("P2", "scenario", "simulate_weight_scenario", new JsonObject { ["cashWeight"] = .3m, ["volatility"] = .1525m, ["delta"] = -.0909m }) };
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new(text, ["P1", "P2"]), facts));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(new(text.Replace("30%", "31.57%"), ["P1", "P2"]), facts));
+        Assert.Contains("MixedRiskBasis", PortfolioQualityGateNodeHandler.Check(new(
+            text + " 波動降低 9.09 個百分點，由 24.53% 至 15.25% [P1][P2]。", ["P1", "P2"]), facts));
+    }
+
+    [Fact]
+    public void HoldingHintsDoNotSupplyScenarioWeightsOrNearbyValues()
+    {
+        var (answer, facts) = Round17("unprompted");
+        var hints = PortfolioQualityGateNodeHandler.RepairHints(["13.57%"], facts,
+            new("現況 9002 權重 13.57% [P5]", ["P5"]));
+        Assert.DoesNotContain("holdings[", hints);
+        hints = PortfolioQualityGateNodeHandler.RepairHints(["10.00%"], facts,
+            new("9002 風險貢獻權重 10.00% [P5]", ["P5"]));
+        Assert.DoesNotContain("holdings[", hints);
+        hints = PortfolioQualityGateNodeHandler.RepairHints(["10.00%"], facts,
+            new("情境 9002 權重 10.00% [P5]", ["P5"]));
+        Assert.DoesNotContain("holdings[", hints);
+    }
+
+    private static (LoopAnswer Answer, List<LoopDataFact> Facts) Round17(string id)
+    {
+        var fixture = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "portfolio-round17-quality.json")))![id]!;
+        return (fixture["answer"]!.Deserialize<LoopAnswer>(AgentNodeJson.SerializerOptions)!,
+            fixture["facts"]!.Deserialize<List<LoopDataFact>>(AgentNodeJson.SerializerOptions)!);
+    }
+
     [Theory]
     [InlineData("lower-volatility")]
     [InlineData("concentration")]
@@ -51,6 +114,26 @@ public class AcceptanceNumberRegressionTests
         var issues = PortfolioQualityGateNodeHandler.Check(answer with { Markdown = corrected }, facts, rejected);
         Assert.True(issues.Count == 0, string.Join(",", issues) + ": " + string.Join(",", rejected));
         Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(answer with { Markdown = corrected + $"\n年化波動 876.54321% [{scenarioId}]" }, facts));
+    }
+
+    [Fact]
+    public void AccountCashClaimRequiresActualBalance_NotUnrelatedZeroOrScenarioCash()
+    {
+        var snapshot = new LoopDataFact("P1", "snapshot", "get_portfolio_snapshot", new JsonObject {
+            ["commonTradingDays"] = 0, ["accountCash"] = new JsonObject { ["status"] = "Unavailable", ["balance"] = null } });
+        var scenario = new LoopDataFact("P2", "scenario", "simulate_weight_scenario", new JsonObject { ["cashWeight"] = 0 });
+        var claim = new LoopAnswer("帳戶現金為 0 [P1][P2]", ["P1", "P2"]);
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(claim, [snapshot, scenario]));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(new("系統帳簿現金餘額為 TWD 0.00 [P1]", ["P1"]), [snapshot]));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(new("帳戶現金為新台幣 0 [P1]", ["P1"]), [snapshot]));
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("未取得帳戶現金餘額，無法確認是否為零。", []), [snapshot]));
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("情境現金權重 0% [P2]", ["P2"]), [scenario]));
+        snapshot.Data["accountCash"] = new JsonObject { ["status"] = "Available", ["balance"] = 731m };
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(claim, [snapshot, scenario]));
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("系統帳簿現金餘額 731 元 [P1]", ["P1"]), [snapshot]));
+        snapshot.Data["accountCash"]!["balance"] = 0m;
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(claim, [snapshot, scenario]));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(new("帳戶現金為 0 [P2]", ["P2"]), [snapshot, scenario]));
     }
 
     [Fact]

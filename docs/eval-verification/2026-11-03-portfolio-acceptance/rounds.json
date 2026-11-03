@@ -173,5 +173,145 @@
     "reason": "Targeted rerun of multi-scenario and tradeoff only; not a full 14-case result",
     "raw_sha256": "52eb27c8ac7f5752aa0650e1d59a3c7e17df38e25d110c2c45e46597d9589d72",
     "raw_bytes": 1670762
+  },
+  {
+    "round": 15,
+    "original_directory": "portfolio-eval-20261103-remaining-twelve-verified",
+    "strict_passed": 11,
+    "attempted_cases": 12,
+    "not_run": 2,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": true,
+    "reason": "Remaining twelve cases on clean merged main 6d805b9, prompt 14; multi-scenario and tradeoff were tested separately in round 14. Not a single full 14-case run.",
+    "raw_sha256": "06d3b33fa065008e9c41237145193edd31a673fc1a60a3d1c34271c6ffef3fc9",
+    "raw_bytes": 7120429,
+    "startup_attempt": {
+      "result": "CLI rejected --usage-ledger before any paid call because Python resolved an older installed package. Relaunched with explicit PYTHONPATH to current checkout.",
+      "upper_usd": 0
+    },
+    "checks": {
+      "provider_healthy": 12,
+      "no_side_effects": 12,
+      "scenario_calculated": 7,
+      "independent_risk_math": 7,
+      "conservation": 8,
+      "same_basis_deltas": 7
+    }
+  },
+  {
+    "round": 16,
+    "original_directory": "portfolio-eval-20261103-cash-evidence",
+    "strict_passed": 1,
+    "attempted_cases": 1,
+    "not_run": 13,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": true,
+    "reason": "Single cash case after accountCash evidence and prompt 15, clean code 99be9f3; other thirteen cases not rerun. Final currency-prefix guard extension is covered by offline tests, not another paid run.",
+    "raw_sha256": "e760cf7149d59a8d0029432b44a205c225f377b8cf5f72fc7700dbd73d8c42e7",
+    "raw_bytes": 811896
+  },
+  {
+    "round": 17,
+    "original_directory": "portfolio-eval-20261103-cash-fix-other-thirteen",
+    "strict_passed": 11,
+    "attempted_cases": 13,
+    "not_run": 1,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": true,
+    "reason": "Remaining thirteen cases on clean 5c7bb24 prompt 15; cash was tested separately in round 16. Not a single full 14-case run.",
+    "raw_sha256": "a45061fb21e68ecfcea73b20c0586b2aa92db144024046d89b6e1d095e556abb",
+    "raw_bytes": 8034852,
+    "checks": {
+      "provider_healthy": 13,
+      "no_side_effects": 13,
+      "scenario_calculated": 8,
+      "independent_risk_math": 8,
+      "conservation": 9,
+      "same_basis_deltas": 8
+    }
+  },
+  {
+    "round": 18,
+    "original_directory": "portfolio-eval-20261103-stability-18",
+    "strict_passed": 13,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": "Full 14-case stability run on unchanged clean d57e5c3, prompt 16; no selective reruns.",
+    "raw_sha256": "29a415aba3c7662789914673c9685565f180cf90504b995deb6d9e320e3f1408",
+    "raw_bytes": 8843423,
+    "checks": {
+      "provider_healthy": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "no_side_effects": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "scenario_calculated": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "independent_risk_math": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "conservation": {
+        "passed": 10,
+        "evaluated": 10
+      },
+      "same_basis_deltas": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "quality_passed": {
+        "passed": 8,
+        "evaluated": 9
+      }
+    }
+  },
+  {
+    "round": 19,
+    "original_directory": "portfolio-eval-20261103-stability-19",
+    "strict_passed": 14,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": "Full 14-case stability run on unchanged clean d57e5c3, prompt 16; no selective reruns.",
+    "raw_sha256": "ed213a314186e46983d75bd71e1010f4d17f3c67c77cd108c4e79c9456e062e4",
+    "raw_bytes": 8798990,
+    "checks": {
+      "provider_healthy": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "no_side_effects": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "scenario_calculated": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "independent_risk_math": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "conservation": {
+        "passed": 10,
+        "evaluated": 10
+      },
+      "same_basis_deltas": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "quality_passed": {
+        "passed": 9,
+        "evaluated": 9
+      }
+    }
   }
 ]
