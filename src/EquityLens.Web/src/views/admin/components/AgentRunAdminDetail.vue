@@ -267,7 +267,7 @@ const nodeMap = computed(() => {
         <textarea v-model="approvalComment" class="prestige-input approval-admin-comment" rows="3" placeholder="批准可選填；拒絕必填" />
         <NSpace>
           <button type="button" class="prestige-btn prestige-btn-solid" @click="handleApproval('approve')">批准並繼續</button>
-          <button type="button" class="prestige-btn detail-btn-danger" :disabled="!approvalComment.trim()" @click="handleApproval('reject')">拒絕並取消</button>
+          <button type="button" class="prestige-btn detail-btn-danger" :disabled="!approvalComment.trim()" @click="handleApproval('reject')">{{ pendingApproval.scope === 'WorkflowGate' ? '拒絕此診斷' : '拒絕並取消' }}</button>
         </NSpace>
       </section>
 

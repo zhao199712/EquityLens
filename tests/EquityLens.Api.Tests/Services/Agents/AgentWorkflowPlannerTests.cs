@@ -63,17 +63,7 @@ public sealed class AgentWorkflowPlannerTests
         var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 6, 1), new DateOnly(2026, 7, 1));
         var planner = new AgentWorkflowPlanner();
 
-        Assert.Equal(
-        [
-            PortfolioDiagnosisNodeKeys.LoadContext,
-            PortfolioDiagnosisNodeKeys.ResolveRiskEvidence,
-            PortfolioRiskMathNodeKeys.PrepareInputs,
-            PortfolioRiskMathNodeKeys.ExecuteCore,
-            PortfolioDiagnosisNodeKeys.CalculateAttribution,
-            PortfolioDiagnosisNodeKeys.LoadRiskProfile,
-            PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses,
-            PortfolioDiagnosisNodeKeys.EvaluateQuality
-        ], planner.GetExecutionOrder(run.WorkflowDefinitionJson));
+        Assert.Equal(PortfolioDiagnosisWorkflowDefinitionProvider.Steps.Select(x => x.Key), planner.GetExecutionOrder(run.WorkflowDefinitionJson));
     }
 
     [Fact]

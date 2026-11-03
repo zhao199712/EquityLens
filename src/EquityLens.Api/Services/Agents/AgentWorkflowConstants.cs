@@ -91,7 +91,7 @@ public static class ResearchInvestigationNodeTypes
 
 public static class PortfolioDiagnosisWorkflow
 {
-    public const int Version = 3;
+    public const int Version = 4;
     public const int LoopProfileVersion = 1;
     public const int MaxAnalysisIterations = 1;
     public const int MaxDynamicNodes = 10;
@@ -186,8 +186,8 @@ public static class PortfolioDiagnosisNodeTypes
     public const string EvaluateQuality = "EvaluatePortfolioDiagnosisQuality";
     public const string BuildEvidencePacket = "BuildPortfolioEvidencePacket";
     public const string DraftDiagnosis = "DraftPortfolioDiagnosis";
-    public const string FinalizeDiagnosis = "FinalizePortfolioDiagnosis";
-    public const string FinalizeRejectedDiagnosis = "FinalizeRejectedPortfolioDiagnosis";
+    public const string FinalizeDiagnosis = "FinalizePortfolio";
+    public const string FinalizeRejectedDiagnosis = "FinalizeRejectedPortfolio";
 }
 
 public static class PortfolioRiskMathNodeTypes

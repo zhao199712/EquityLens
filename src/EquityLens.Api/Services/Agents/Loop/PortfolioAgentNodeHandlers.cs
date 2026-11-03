@@ -1,0 +1,97 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using EquityLens.Api.Services.Ai;
+using Microsoft.Extensions.Options;
+
+namespace EquityLens.Api.Services.Agents.Loop;
+
+/// <summary>投組角色使用共用有界迴圈；只將已保存的工具事實交給品質關卡。</summary>
+public sealed class PortfolioAgentLoopNodeHandler(IChatCompletionService chat, PortfolioLoopTools tools,
+    IOptions<ResearchAgentLoopOptions> options, TimeProvider clock) : IAgentNodeHandler
+{
+    public string NodeType => "PortfolioAgentLoop";
+    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    {
+        var state = await new AgentLoopEngine(chat, tools, options, clock, portfolio: true).RunAsync(context, "Portfolio", cancellationToken);
+        if (context.AwaitingApproval) return;
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
+        board["portfolioLoopAnswer"] = JsonSerializer.SerializeToNode(state.Answer, AgentNodeJson.SerializerOptions);
+        board["portfolioLoopStopReason"] = state.StopReason;
+        context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        context.Node.OutputJson = AgentNodeJson.Serialize(new { state.Answer, state.StopReason, state.Turn, state.ToolCalls, state.GuardDenials });
+    }
+}
+
+/// <summary>確定性檢查工具事實與模型主張，結構化數字直接來自保存結果。</summary>
+public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
+{
+    public string NodeType => "PortfolioQualityGate";
+    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    {
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
+        var diagnosis = PortfolioDiagnosisBlackboard.Context(board);
+        var answer = board["portfolioLoopAnswer"]?.Deserialize<LoopAnswer>(AgentNodeJson.SerializerOptions);
+        var facts = board["agentLoopFacts"]?.Deserialize<List<LoopDataFact>>(AgentNodeJson.SerializerOptions) ?? [];
+        var issues = Check(answer, facts);
+        var attribution = board[AgentBlackboardKeys.PerformanceAttribution]?.Deserialize<PortfolioPerformanceAttribution>(AgentNodeJson.SerializerOptions);
+        var metrics = PortfolioRiskMetricsReader.FromMathResults(board[AgentBlackboardKeys.MathResults]);
+        var comparison = board[PortfolioScenarioCalculator.ResultKey]?.Deserialize<PortfolioScenarioComparison>(AgentNodeJson.SerializerOptions);
+        var limited = issues.Count > 0 || attribution?.CoverageStatus != "complete";
+        var summary = issues.Count > 0 ? "模型答案未通過品質檢查；以下僅列出已保存的工具資料，請確認資料限制。" : answer!.Markdown;
+        var output = new PortfolioDiagnosisOutput(summary, attribution?.PortfolioReturn, attribution?.BenchmarkReturn, attribution?.ActiveReturn,
+            attribution?.Holdings.Where(x => x.Contribution < 0).OrderBy(x => x.Contribution).Take(3).ToArray() ?? [],
+            attribution?.Holdings.Where(x => x.Contribution > 0).OrderByDescending(x => x.Contribution).Take(3).ToArray() ?? [], [],
+            limited ? "Limited" : "complete", metrics, issues.Count == 0 ? answer?.Markdown : null, comparison, diagnosis,
+            "Unvalidated", board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>(),
+            "既有持股歷史重建；情境採固定權重、含現金的共同快照；模型未經回測驗證");
+        board["portfolioQualityGate"] = JsonSerializer.SerializeToNode(new { passed = issues.Count == 0, blockingIssues = issues, limited }, AgentNodeJson.SerializerOptions);
+        PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioDiagnosisDraft, output);
+        context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        context.Node.OutputJson = board["portfolioQualityGate"]!.ToJsonString();
+        context.AddEvent(context.Run, context.Node, "PortfolioQualityGateEvaluated", issues.Count == 0 ? "Passed" : "Limited", new { issues });
+        return Task.CompletedTask;
+    }
+
+    internal static List<string> Check(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts)
+    {
+        var issues = new List<string>();
+        if (answer is null || string.IsNullOrWhiteSpace(answer.Markdown) || answer.Markdown == AgentLoopEngine.Refusal) return ["InsufficientEvidence"];
+        var byId = facts.ToDictionary(x => x.Id, StringComparer.Ordinal);
+        if (facts.Count == 0) issues.Add("MissingToolEvidence");
+        if (answer.CitedEvidenceIds.Any(x => !byId.ContainsKey(x))) issues.Add("UnknownToolEvidence");
+        foreach (var sentence in Regex.Split(answer.Markdown, @"[。！？\n]"))
+        {
+            var ids = Regex.Matches(sentence, @"\[(P\d+)\]").Select(x => x.Groups[1].Value).ToArray();
+            if (ids.Any(x => !byId.ContainsKey(x))) issues.Add("UnknownToolEvidence");
+            var text = Regex.Replace(sentence, @"\[P\d+\]", "");
+            var citations = ids.Where(byId.ContainsKey).SelectMany(id => Values(byId[id].Data)).ToHashSet(StringComparer.Ordinal);
+            foreach (Match number in Regex.Matches(text, @"(?<![A-Za-z\d])[-+]?\d+(?:,\d{3})*(?:\.\d+)?\s*[%％]?"))
+            {
+                if (!decimal.TryParse(number.Value.Trim().TrimEnd('%', '％'), NumberStyles.Number, CultureInfo.InvariantCulture, out var value)) continue;
+                var percent = number.Value.TrimEnd().EndsWith('%') || number.Value.TrimEnd().EndsWith('％');
+                if (!citations.Contains(Key(value, percent))) issues.Add("UntraceableNumbers");
+            }
+        }
+        if (Regex.IsMatch(answer.Markdown, @"(?<!不)(?<!無法)(?<!不能)保證獲利")) issues.Add("GuaranteedProfitClaim");
+        return issues.Distinct().ToList();
+    }
+
+    private static string Key(decimal value, bool percent) => (percent ? "p:" : "n:") + value.ToString("G29", CultureInfo.InvariantCulture);
+    private static IEnumerable<string> Values(JsonNode? node)
+    {
+        if (node is JsonObject obj) { foreach (var item in obj) foreach (var v in Values(item.Value)) yield return v; }
+        else if (node is JsonArray array) { foreach (var item in array) foreach (var v in Values(item)) yield return v; }
+        else if (node is JsonValue scalar)
+        {
+            if (decimal.TryParse(scalar.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var number))
+            {
+                yield return Key(number, false);
+                yield return Key(decimal.Round(number * 100, 2), true);
+                yield return Key(decimal.Round(number * 100, 1), true);
+                yield return Key(decimal.Round(number * 100, 4), true);
+            }
+        }
+    }
+}

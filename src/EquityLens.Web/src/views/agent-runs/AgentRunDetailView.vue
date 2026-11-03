@@ -378,7 +378,7 @@ const nextActionLabel = computed(() => {
             <textarea v-model="approvalComment" class="prestige-input approval-comment" rows="3" placeholder="批准可選填備註；拒絕必須填寫原因" />
             <div class="action-row">
               <button class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleApproval('approve')">批准並繼續</button>
-              <button class="prestige-btn btn-danger" :disabled="actionLoading || !approvalComment.trim()" @click="handleApproval('reject')">拒絕並取消 Run</button>
+              <button class="prestige-btn btn-danger" :disabled="actionLoading || !approvalComment.trim()" @click="handleApproval('reject')">{{ pendingApproval.scope === 'WorkflowGate' ? '拒絕此診斷' : '拒絕並取消 Run' }}</button>
             </div>
           </div>
 

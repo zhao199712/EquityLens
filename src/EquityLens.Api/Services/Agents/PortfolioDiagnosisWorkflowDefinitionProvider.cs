@@ -35,30 +35,8 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
             BlackboardJson = CreateInitialBlackboardJson(portfolioId, from, to, routingContext),
             WorkflowDefinitionJson = Definition().ToJsonString(AgentNodeJson.SerializerOptions),
             CreatedAtUtc = DateTime.UtcNow,
-            Nodes = [
-                Node(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext),
-                Node(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, PortfolioDiagnosisNodeTypes.ResolveRiskEvidence),
-                Node(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeTypes.PrepareInputs),
-                new AgentRunNode { Id = Guid.NewGuid(), NodeKey = PortfolioRiskMathNodeKeys.ExecuteCore, NodeType = PortfolioRiskMathNodeTypes.Execute, Status = AgentNodeStatuses.Pending, InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-portfolio-return", "calculate-concentration", "calculate-annualized-volatility", "calculate-max-drawdown" } }) },
-                Node(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution),
-                Node(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile),
-                Node(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses),
-                Node(PortfolioDiagnosisNodeKeys.EvaluateQuality, PortfolioDiagnosisNodeTypes.EvaluateQuality)]
+            Nodes = Steps.Select(x => Node(x.Key, x.Type)).ToList()
         };
-
-        if (routingContext?.Scenarios is { Count: > 0 })
-        {
-            var node = Node("evaluatePortfolioScenarios", PortfolioScenarioCalculator.NodeType);
-            run.Nodes.Add(node);
-            var definition = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
-            definition["nodes"]!.AsArray().Add(N(node.NodeKey, node.NodeType));
-            var edges = definition["edges"]!.AsArray();
-            var previous = edges.Single(x => x!["from"]!.GetValue<string>() == PortfolioDiagnosisNodeKeys.LoadContext);
-            edges.Remove(previous);
-            edges.Add(E(PortfolioDiagnosisNodeKeys.LoadContext, node.NodeKey));
-            edges.Add(E(node.NodeKey, PortfolioDiagnosisNodeKeys.ResolveRiskEvidence));
-            run.WorkflowDefinitionJson = definition.ToJsonString(AgentNodeJson.SerializerOptions);
-        }
         return run;
     }
 
@@ -80,31 +58,23 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
 
     private static AgentRunNode Node(string key, string type) => new() { Id = Guid.NewGuid(), NodeKey = key, NodeType = type, Status = AgentNodeStatuses.Pending };
 
-    private static JsonObject Definition() => new()
+    public static readonly (string Key, string Type)[] Steps = [
+        (PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext),
+        ("portfolioAgent", "PortfolioAgentLoop"), ("portfolioQualityGate", "PortfolioQualityGate"),
+        (PortfolioDiagnosisNodeKeys.ApproveDiagnosis, HumanApprovalNodeTypes.WaitForHumanApproval),
+        (PortfolioDiagnosisNodeKeys.FinalizeDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeDiagnosis),
+        (PortfolioDiagnosisNodeKeys.FinalizeRejectedDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeRejectedDiagnosis)];
+
+    private static JsonObject Definition()
     {
-        ["workflowType"] = AgentWorkflowTypes.PortfolioDiagnosis,
-        ["version"] = PortfolioDiagnosisWorkflow.Version,
-        ["orchestrationMode"] = "DynamicStateful",
-        ["loopProfile"] = new JsonObject
-        {
-            ["type"] = AgentWorkflowTypes.PortfolioDiagnosis,
-            ["version"] = PortfolioDiagnosisWorkflow.LoopProfileVersion,
-            ["maxAnalysisIterations"] = PortfolioDiagnosisWorkflow.MaxAnalysisIterations,
-            ["maxDynamicNodes"] = PortfolioDiagnosisWorkflow.MaxDynamicNodes,
-            ["maxMathCapabilitiesPerIteration"] = PortfolioDiagnosisWorkflow.MaxMathCapabilitiesPerIteration
-        },
-        ["goalStatus"] = "PendingPlanning",
-        ["planningHistory"] = new JsonArray(),
-        ["nodes"] = new JsonArray
-        {
-            N(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext), N(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, PortfolioDiagnosisNodeTypes.ResolveRiskEvidence), N(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeTypes.PrepareInputs, AgentBlackboardKeys.CoreRiskCalculationRequired, "true"), N(PortfolioRiskMathNodeKeys.ExecuteCore, PortfolioRiskMathNodeTypes.Execute, AgentBlackboardKeys.CoreRiskCalculationRequired, "true"), N(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution), N(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile), N(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses),
-            N(PortfolioDiagnosisNodeKeys.EvaluateQuality, PortfolioDiagnosisNodeTypes.EvaluateQuality)
-        },
-        ["edges"] = new JsonArray
-        {
-            E(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeKeys.ResolveRiskEvidence), E(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, PortfolioRiskMathNodeKeys.PrepareInputs), E(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeKeys.ExecuteCore), E(PortfolioRiskMathNodeKeys.ExecuteCore, PortfolioDiagnosisNodeKeys.CalculateAttribution), E(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeKeys.LoadRiskProfile), E(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses), E(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeKeys.EvaluateQuality)
-        }
-    };
+        var nodes = new JsonArray(Steps.Select(x => (JsonNode)N(x.Key, x.Type)).ToArray());
+        nodes[3]!["config"] = new JsonObject { ["approvalType"] = "ApproveReject", ["prompt"] = "請審閱投組診斷後核准或拒絕。", ["subjectKey"] = AgentBlackboardKeys.PortfolioDiagnosisDraft };
+        nodes[4]!["condition"] = new JsonObject { ["path"] = "humanApproval.decision", ["equals"] = "Approved" };
+        nodes[5]!["condition"] = new JsonObject { ["path"] = "humanApproval.decision", ["equals"] = "Rejected" };
+        return new() { ["workflowType"] = AgentWorkflowTypes.PortfolioDiagnosis, ["version"] = PortfolioDiagnosisWorkflow.Version,
+            ["orchestrationMode"] = "Static", ["nodes"] = nodes,
+            ["edges"] = new JsonArray(E(Steps[0].Key, Steps[1].Key), E(Steps[1].Key, Steps[2].Key), E(Steps[2].Key, Steps[3].Key), E(Steps[3].Key, Steps[4].Key), E(Steps[3].Key, Steps[5].Key)) };
+    }
 
     private static JsonObject N(string id, string type, string? conditionPath = null, string? expected = null) => new()
     {

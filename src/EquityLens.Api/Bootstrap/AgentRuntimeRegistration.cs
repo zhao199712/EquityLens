@@ -18,6 +18,9 @@ public static class AgentRuntimeRegistration
                 && x.DefaultEngine == "AgentLoop", "Invalid research loop limits.");
         builder.Services.AddScoped<IResearchLoopTools, ResearchLoopTools>();
         builder.Services.AddScoped<ResearchAgentLoop>();
+        builder.Services.AddScoped<PortfolioLoopTools>();
+        builder.Services.AddScoped<IAgentNodeHandler, PortfolioAgentLoopNodeHandler>();
+        builder.Services.AddScoped<IAgentNodeHandler, PortfolioQualityGateNodeHandler>();
         builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchAgentWorkflowDefinitionProvider>();
         builder.Services.AddScoped<IWorkflowPolicyEvaluator, ResearchAgentPolicyEvaluator>();
         builder.Services.AddScoped<IAgentNodeHandler, ResearchAgentLoopNodeHandler>();

@@ -27,9 +27,9 @@
 | R2 | 研究一律 ResearchAgent；DynamicDag → 400 | MUST | ✅ | 預設／AgentLoop 建立及隔離、停用引擎不落盤測試 | 本項提交 | controller 明確回 engine_retired；初始資料不再借用舊 provider |
 | R3 | qualityGate 合併 | MUST | ✅ | 7／3 節點契約、接受／修訂一次／拒答、已提交 Critic 恢復不重呼叫 | 本項提交 | 新版本研究／Critic 舊圖由 R1 判定唯讀 |
 | R4 | 回饋修訂併入 ResearchAgent | MUST | ✅ | 回饋 API 去重／父子關聯、三節點修訂圖、prompt 內容、retry 還原種子 | 本項提交 | 研究詳情改選 ResearchAgent 接收回饋 |
-| R5 | 投組 Agent 迴圈與工具 | MUST | 🟨 | 任務型工具草稿尚未完成驗收 | | 補充規格到達後，先驗收 R31、R30 再接續 |
-| R6 | 投組人工審批不變 | MUST | ⬜ | | | |
-| R7 | 迴圈基礎設施共用、可續跑、可查詢 | MUST | 🟨 | 共用核心與結構化工具結果恢復測試草稿 | | 工作目錄 R27 已通過；未提交實作，尚未完成投組行為驗收 |
+| R5 | 投組 Agent 迴圈與工具 | MUST | ✅ | 任務型工具草稿尚未完成驗收 | | 補充規格到達後，先驗收 R31、R30 再接續 |
+| R6 | 投組人工審批不變 | MUST | ✅ | | | |
+| R7 | 迴圈基礎設施共用、可續跑、可查詢 | MUST | ✅ | 共用核心與結構化工具結果恢復測試草稿 | | 工作目錄 R27 已通過；未提交實作，尚未完成投組行為驗收 |
 | R8 | 刪除 4 個多餘工作流與前端呼叫 | MUST | ⬜ | | | |
 | R9 | Ask Agent 路由到 3 個工作流 | MUST | ⬜ | | | |
 | R10 | 移除型別零參照 | MUST | ⬜ | | | |
@@ -173,3 +173,13 @@
 - 情境工具重用既有 PortfolioScenarioCalculator 與快照擷取，不建立另一套數學。測試核對保存結果 hash／指標、跨使用者拒絕及沒有修改來源 Blackboard。
 - 所有 37 個底層函式均無工具可見性，逐一驗證 Guard 拒絕。尚未註冊為投組 workflow，接續 R5–R7。
 - 完整 R27：build PASS、1009/1009（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。無模型呼叫。
+
+### R5–R7 固定投組與共用迴圈
+
+- PortfolioDiagnosis 升版為 4，固定六個持久化節點（單一路徑執行五個）；工具選擇在 PortfolioAgentLoop 內完成，不再靠動態圖補分析。
+- 研究／投組使用同一 AgentLoopEngine，保留決策先落盤、工具結果先落盤、checkpoint、工具審批、預算／停止原因與 Guard 拒絕紀錄。投組結構化事實與 Blackboard patch 亦可從已保存結果恢復；使用不同角色 prompt／工具集。
+- PortfolioQualityGate 檢查 P 編號引用及數字，輸出數字直接讀保存工具資料；不通過的模型文字不發布，明示 Limited，保留已計算資料供審閱。後續 R18 加入優化情境必要條件。
+- WaitForHumanApproval 固定節點透過既有 approvals API 提交，WorkflowGate 的核准／拒絕都恢復執行，再走對應條件分支；拒絕理由保留、run Failed。測試涵蓋等待時沒有租約／wake、requestId 去重、他人不可審批、拒絕必填及兩分支。
+- 六個工具均有執行測試：快照／Risk Run 重用／數學／歸因／情境／未保存風險偏好的明確 unavailable；持倉與交易不變。現有資料模型沒有使用者風險偏好欄位，因此不虛構偏好。
+- 移除 DynamicWorkflowPlanningTests 中 3 個投組動態規劃專屬測試（70 行）；由固定圖、工具選擇、審批與恢復測試接替仍存在的行為。舊情境 handler 測試暫以獨立 fixture 保留，R10 移除 handler 時再移至工具層。
+- 完整 R27：build PASS、1014/1014（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。沒有外部 API 呼叫。

@@ -67,6 +67,7 @@ export interface AgentFeedbackDto {
 }
 
 export interface AgentApprovalDto {
+  scope?: 'Node' | 'ToolCall' | 'WorkflowGate'
   id: string
   agentRunId: string
   agentRunNodeId: string

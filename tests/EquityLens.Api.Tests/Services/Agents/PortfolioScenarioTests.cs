@@ -32,8 +32,9 @@ public sealed class PortfolioScenarioTests
         var order = new AgentWorkflowPlanner().GetExecutionOrder(run.WorkflowDefinitionJson);
         new AgentRunGraphValidator().Validate(run, order);
         Assert.Equal(PortfolioDiagnosisNodeKeys.LoadContext, order[0]);
-        Assert.Equal("evaluatePortfolioScenarios", order[1]);
-        Assert.Equal(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, order[2]);
+        Assert.Equal("portfolioAgent", order[1]);
+        Assert.Equal("portfolioQualityGate", order[2]);
+        Assert.Equal(6, run.Nodes.Count);
 
     }
 
@@ -120,7 +121,8 @@ public sealed class PortfolioScenarioTests
         var snapshot = Snapshot();
         var routing = Routing([Request(.3m)]);
         var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), snapshot.PortfolioId, snapshot.From, snapshot.To, routing);
-        var node = run.Nodes.Single(n => n.NodeType == PortfolioScenarioCalculator.NodeType);
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = PortfolioScenarioCalculator.NodeType };
+        db.AgentRunNodes.Add(node);
         node.InputJson = AgentNodeJson.Serialize(new { snapshot });
         db.AgentRuns.Add(run); await db.SaveChangesAsync();
         var context = new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { });
@@ -143,7 +145,8 @@ public sealed class PortfolioScenarioTests
         var board = JsonNode.Parse(run.BlackboardJson)!.AsObject();
         board[AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(new PortfolioDiagnosisContext(portfolio.Id, "private", "TWD", new(2025, 1, 1), new(2026, 1, 1), 0), AgentNodeJson.SerializerOptions);
         run.BlackboardJson = board.ToJsonString(); db.AgentRuns.Add(run); await db.SaveChangesAsync();
-        var node = run.Nodes.Single(n => n.NodeType == PortfolioScenarioCalculator.NodeType);
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = PortfolioScenarioCalculator.NodeType };
+        db.AgentRunNodes.Add(node);
         await new EvaluatePortfolioScenariosNodeHandler().ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
         Assert.Contains("Unavailable", node.OutputJson); Assert.Empty(db.PortfolioTransactions);
     }
@@ -170,7 +173,8 @@ public sealed class PortfolioScenarioTests
         var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(user, portfolio.Id, snapshot.From, snapshot.To, Routing([Request(.3m)]));
         db.AgentRuns.Add(run); await db.SaveChangesAsync();
         await new LoadPortfolioDiagnosisContextNodeHandler().ExecuteAsync(new(db, run, run.Nodes.Single(n => n.NodeType == PortfolioDiagnosisNodeTypes.LoadContext), (_, _, _, _, _) => { }));
-        var node = run.Nodes.Single(n => n.NodeType == PortfolioScenarioCalculator.NodeType);
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = PortfolioScenarioCalculator.NodeType };
+        db.AgentRunNodes.Add(node);
         await new EvaluatePortfolioScenariosNodeHandler().ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
         var result = JsonSerializer.Deserialize<PortfolioScenarioComparison>(node.OutputJson!, AgentNodeJson.SerializerOptions)!;
         Assert.Equal(expected, result.Status);

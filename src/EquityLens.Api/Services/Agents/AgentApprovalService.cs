@@ -59,8 +59,9 @@ public sealed class AgentApprovalService(
         var run = approval.Run;
         var node = approval.Node;
         var toolApproval = approval.Scope == "ToolCall";
-        var waitingRun = toolApproval ? AgentRunStatuses.WaitingForFeedback : AgentRunStatuses.WaitingForApproval;
-        var waitingNode = toolApproval ? AgentNodeStatuses.WaitingForFeedback : AgentNodeStatuses.WaitingForApproval;
+        var workflowGate = approval.Scope == "WorkflowGate";
+        var waitingRun = (toolApproval || workflowGate) ? AgentRunStatuses.WaitingForFeedback : AgentRunStatuses.WaitingForApproval;
+        var waitingNode = (toolApproval || workflowGate) ? AgentNodeStatuses.WaitingForFeedback : AgentNodeStatuses.WaitingForApproval;
         if (run.Status != waitingRun || node.Status != waitingNode)
             throw new AgentApprovalException("approval_state_conflict", "Agent run is no longer waiting for this approval.");
 
@@ -71,7 +72,15 @@ public sealed class AgentApprovalService(
         approval.ClientRequestId = request.RequestId;
         approval.DecisionComment = comment;
 
-        if (approve || toolApproval)
+        if (workflowGate)
+        {
+            var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+            board[AgentBlackboardKeys.ApprovalDecision] = JsonSerializer.SerializeToNode(new {
+                decision = approve ? HumanApprovalDecisions.Approved : HumanApprovalDecisions.Rejected,
+                comment, reviewerId = actorUserId.ToString(), decidedAtUtc = now.ToString("O") }, AgentNodeJson.SerializerOptions);
+            run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        }
+        if (approve || toolApproval || workflowGate)
         {
             nodeStateMachine.Transition(node, AgentNodeStatuses.Pending);
             runStateMachine.Transition(run, AgentRunStatuses.Running);
