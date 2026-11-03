@@ -17,7 +17,7 @@
 
 ## 驗收項目狀態
 
-狀態：⬜ 未開始 ・ 🟨 進行中 ・ ✅ 完成 ・ ⛔ 阻塞 ・ ⏭ 略過 ・ 🔁 無法重現
+狀態：⬜ 未開始 ・ 🟨 進行中 ・ ✅ 完成 ・ ⛔ 阻塞 ・ ⏭ 略過 ・ 🔁 無法重現 ・ ❌ 驗收未通過
 
 ### Part A：收斂架構
 
@@ -58,7 +58,7 @@
 
 | # | 驗收條件 | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
-| R26 | 8 題 eval 不退步 | SHOULD | ⛔ | 舊回答離線重算 7/8；新 live 未執行 | 終驗提交 | |
+| R26 | 8 題 eval 不退步 | SHOULD | ❌ | 新 live 6/8，舊基準 7/8；鴻海協定解析失敗 | 本次 eval 提交 | docs/eval-verification/2026-11-03-three-workflows-live/ |
 | R27 | 全部驗證全綠 | 每次 commit | ✅ | 每項完整 R27；最後紀錄見下方 | 各項提交 | 每項重新執行 |
 
 ### 補充規格：角色、方法、來源與路由
@@ -77,7 +77,7 @@
 
 ## 更新後執行順序
 
-R1–R25、R28–R32、R34–R35 均完成。R26、R33、R36 live 因預算覆蓋不足阻塞；題庫／離線工具已交付，未將未測項標為通過。
+R1–R25、R28–R32、R34–R35 均完成。R26 已獲本次獨立 US$1 授權並完成 live：6/8，低於舊基準 7/8，驗收未通過。R33／R36 live 仍受原預算限制；題庫／離線工具已交付。
 
 `R1 → R2 → R3 → R4 → R16 → R31 → R30 → R5–R7 → R17 → R18 → R6 再驗收 → R8 → R9＋R28＋R29＋R34＋R35 → R19 → R10 → R11 → R12 → R13–R15 → R20–R25 → R32 → R33（環境與預算允許）＋R36 → R26`
 
@@ -144,7 +144,8 @@ R1–R25、R28–R32、R34–R35 均完成。R26、R33、R36 live 因預算覆�
 
 | 項目 | 原因 | 已嘗試 | 建議 |
 |---|---|---|---|
-| R26／R33／R36 live | 歷史外部費用缺完整帳務與 embedding 覆蓋，剩餘 US$10 無法確認 | 檢查舊 progress、A/B manifest、provider usage 與本機 usage snapshots；初期明示未完整記錄 | 提供累計費用覆蓋後在隔離服務執行，不增加上限 |
+| R33／R36 live | 歷史外部費用缺完整帳務與 embedding 覆蓋，剩餘 US$10 無法確認 | 檢查舊 progress、A/B manifest、provider usage 與本機 usage snapshots；初期明示未完整記錄 | 提供累計費用覆蓋後在隔離服務執行，不增加上限 |
+| R26 品質退步 | 原 8 題 live 6/8，鴻海產品線題 ProtocolFailure | 保存 4 次 parse_error、節點／Critic／工具紀錄；沒有改 scorer 或挑選重跑 | 補解析診斷與重現測試後修正，再驗收 |
 | R33 實驗 C | 引用報告未含 C 操作定義 | 搜尋 docs 中拆解實驗／MaxTurns；只有補充條文引用 | 取得具體對照條件，不自行改來源安全規則 |
 | Garage 原始檔 | 目前 bucket 為空，DB key 回 NoSuchKey | 本機原始 PDF 核實；台積電與 DB hash 相符 | 發布前恢復原始檔儲存及下載驗證，另案授權操作 |
 
@@ -154,7 +155,7 @@ R1–R25、R28–R32、R34–R35 均完成。R26、R33、R36 live 因預算覆�
 
 **已完成**：R1–R25、R28–R32、R34–R35。三工作流／13 種 node type／13 個正式 handler；共用 durable loop、六個投組任務工具、三個研究工具與共用 load_skill、三個方法設定檔。原 planner capability 與 Supporting skill registry 已移除。Services/Agents 由 11,674 減為 7,596 行（含 Loop 子目錄），約減少 34.9%。
 
-**未完成**：R26 新八題 live 不退步驗收、R33 補充題及拆解實驗、R36 真實 Router 準確率。缺完整歷史費用，不能確認 US$10 剩餘額度；本次新增付費呼叫與費用都是 0。舊回答離線重算仍 7/8，不能代表新分支。Router 26 題與評分工具已交付，0/26 observed、accuracy:null。C 的操作定義也未在引用報告中找到。
+**未完成**：R26 不退步驗收未通過：本次獨立 US$1 授權下執行原 8 題，6/8，較舊基準少鴻海產品線題；詳見新 live 報告。37 次 LLM 呼叫保守估價 US$0.052676，加完整 embedding 預留後上界 US$0.152676，沒有追加重跑。R33 補充題／拆解實驗與 R36 真實 Router 準確率仍未執行；本次授權不涵蓋它們，歷史 US$10 累計仍不完整。Router 26 題與評分工具已交付，0/26 observed、accuracy:null。C 的操作定義也未在引用報告中找到。
 
 Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 轉入持股不偷換、B4 Router 重試及遮罩 log、B5 口徑揭露及模擬數值不冒充歷史估計、B6 每期限有效視窗門檻、B7 產業大類與原分類保存、B8 負貢獻過濾及空清單、B9 問題摘要、B10 空投組不呼叫風險、B11 正式 SQL Warning 均有回歸。這些是隔離驗證結果，未聲稱正式站已更新。
 
@@ -164,7 +165,7 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 
 建議 merge／部署順序（僅建議，本次未執行）：
 
-1. Review 本分支及 `comparison.json`／Router not_run 報告，先確認費用覆蓋，完成隔離 live R26／R36；R33 依可選優先度及具體實驗條件執行。
+1. Review 本分支及新 live 逐題對照／Router not_run 報告，先修正 R26 鴻海協定解析失敗並重新驗收，確認費用覆蓋後完成 R36；R33 依可選優先度及具體實驗條件執行。
 2. 備份部署版本、DB、Redis 工作佇列與 outbox、Garage 物件及配置，記錄可回復映像。確認原始檔可下載。
 3. 排程維護時間，停止舊 worker 及新的 run 建立，等待有效租約排空。清查未完成舊圖，保留唯讀並透過新版相容層安全終止；不要改寫定義，不讓新舊 worker 混跑。
 4. 使用者核准後才合併 main 並部署同版 API／worker／前端；驗證三工作流、研究接受／修訂／拒答、追問、投組情境、審批暫停與核准／拒絕、跨使用者隔離、舊 run GET 與 409、工具／租約恢復、空投組、Production log 設定。
@@ -348,3 +349,11 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - 終驗另補投組同批分析＋中斷恢復：獨立 MathResults 累積保留，已成功工具不再呼叫。廢棄名稱搜尋僅命中 migrations 與兩處集中 legacy 相容檔；App.vue／appsettings.json 相對基準零差異。
 
 - 最後完整 R27（final-release）：後端 build PASS、879/879（隔離 PostgreSQL，0 skipped）、EF 無模型變更、eval pytest 83 passed、前端 build PASS／127 tests。git diff --check 通過。R26 live 仍阻塞，這些套件通過不替代模型 eval。
+
+### 使用者追加原 8 題 live eval（2026-11-03）
+
+- 使用者明確授權本次獨立 US$1；隔離 API 重啟至 404df16，原題庫 investigation／AgentLoop 一次，未改 scorer。
+- 6/8（75%），基準 7/8（87.5%）。鴻海產品線新增失敗：研究／修訂合計 4 次 JsonObject 解析錯誤，最終資料不足；保證獲利題與舊基準同樣 citation_integrity=0。R26 不標完成。
+- 原始回答、逐題結果、持久化軌跡、費用與比較保存在 docs/eval-verification/2026-11-03-three-workflows-live/。37 次 LLM 呼叫保守估價 US$0.052676，另留 embedding US$0.10；總上界 US$0.152676。未做額外重跑。
+- 完整 R27（eval-live-final）通過：build、879/879 後端（0 skipped、隔離 PostgreSQL）、EF 無變更、pytest 83、前端 build／127 tests。測試結果不掩蓋 live eval 品質退步。
+- 僅交付驗證產物與進度；未修改程式、合併 main、部署或修改正式 DB。
