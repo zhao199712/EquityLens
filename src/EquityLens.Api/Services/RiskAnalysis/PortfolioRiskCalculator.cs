@@ -113,7 +113,7 @@ public sealed class PortfolioRiskCalculator(
                 source.ComponentVolatility,
                 source.ComponentRiskShare,
                 source.MarginalVolatility,
-                source.IncrementalVolatility));
+                source.IncrementalVolatility, IndustryClassification.Raw(m.Holding.Industry, m.Holding.Sector)));
         }
 
         var (concentrationHhi, largestHoldingWeight) = RiskMath.CalculateConcentration(

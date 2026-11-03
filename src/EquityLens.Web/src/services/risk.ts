@@ -49,6 +49,8 @@ export interface RiskHorizonResult {
 }
 
 export interface PortfolioHoldingRisk {
+  rawIndustry?: string | null
+  classificationVersion?: string
   securityId: string
   ticker: string
   exchange: string

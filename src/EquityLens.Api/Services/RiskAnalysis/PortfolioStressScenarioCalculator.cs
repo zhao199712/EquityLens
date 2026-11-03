@@ -1,3 +1,4 @@
+using EquityLens.Api.Domain.Calculations;
 using EquityLens.Api.Contracts.MarketPrices;
 using EquityLens.Api.Contracts.PortfolioHoldings;
 using EquityLens.Api.Contracts.Risk;
@@ -54,7 +55,7 @@ internal static class PortfolioStressScenarioCalculator
 
     private static PortfolioStressScenarioResponse BuildHypotheticalStress(string id, string name, IReadOnlyList<EquityLens.Api.Contracts.PortfolioHoldings.PortfolioHoldingResponse> holdings, IReadOnlyDictionary<Guid, decimal> weights, IReadOnlyDictionary<Guid, decimal> latest, decimal semiconductor, decimal finance, decimal other)
     {
-        var details = holdings.Select(h => { var industry = ResolveIndustry(h); var shock = industry.Contains("半導體") ? semiconductor : industry.Contains("金融") ? finance : other; var weight = weights.GetValueOrDefault(h.SecurityId); var price = latest.GetValueOrDefault(h.SecurityId); return new PortfolioStressHoldingResponse(h.Ticker, h.SecurityName, industry, weight, price, price * (1 + shock), shock, weight * shock); }).ToList();
+        var details = holdings.Select(h => { var industry = ResolveIndustry(h); var rawIndustry = IndustryClassification.Raw(h.Industry, h.Sector) ?? ""; var shock = rawIndustry.Contains("半導體") ? semiconductor : rawIndustry.Contains("金融") ? finance : other; var weight = weights.GetValueOrDefault(h.SecurityId); var price = latest.GetValueOrDefault(h.SecurityId); return new PortfolioStressHoldingResponse(h.Ticker, h.SecurityName, industry, weight, price, price * (1 + shock), shock, weight * shock); }).ToList();
         return BuildStressResponse(id, name, "hypothetical", "ready", $"半導體 {semiconductor:P0}；金融保險 {finance:P0}；其他／未分類 {other:P0}。假設情境，非發生機率預測。", null, null, details);
     }
 

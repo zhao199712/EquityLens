@@ -50,7 +50,7 @@
 | R20 | B8 拖累正負號 | SHOULD | ✅ | | | | |
 | R21 | B6 VaR 樣本不足 | SHOULD | ✅ | | | | |
 | R22 | B5 數字口徑 | SHOULD | ✅ | | | | |
-| R23 | B7 產業分類 | SHOULD | ⬜ | | | | |
+| R23 | B7 產業分類 | SHOULD | ✅ | | | | |
 | R24 | B9、B10 前端 | COULD | ⬜ | | | | |
 | R25 | B11 log 等級 | COULD | ⬜ | | | | |
 
@@ -287,3 +287,10 @@
 - 同步 Risk API 新增 measurementBasis，Agent 每項數字保存 provenance，Risk Run 讀取回傳原請求 inputSnapshot；舊結果未記錄的權重／現金／樣本口徑一律未知，不補造。前端共用元件顯示期間、權重、現金、方法、樣本、信心與期限。
 - 口徑差異詳見 portfolio-risk-measurement-basis.md。情境比較沿用同快照同方法的原組合／調整組合，四指標的差異不與其他頁面混算。
 - 完整 R27：build PASS、870/870（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／124 tests。無外部 API 呼叫。
+
+### R23／B7 產業彙總層級
+
+- 重現：相同集中度用途的 ResolveIndustry 原樣回傳「電子工業」與「電子零組件業」，等值測試失敗。SecurityService 保存不同外部來源的 Industry／Sector；原本讀取只做 fallback，沒有層級正規化。
+- 新共用 broad-industry-v1 將已知電子細類彙總為電子工業、已知金融別名彙總為金融保險業；未知原值不猜測。風險、歸因、回測輸入均使用，原分類另存 RawIndustry，不修改 Security 原始資料。
+- 壓力測試仍依原始細分類決定半導體／金融衝擊，僅彙總分類改為一致。風險輸入 hash 會因新的分類快照改變；舊快照不改寫，必要時重新計算以取得新口徑。
+- 原快照排序測試改為同時核對正規化類別與原始分類，仍驗證來源變動不改既存快照。完整 R27：build PASS、876/876（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／124 tests。無外部 API 呼叫。

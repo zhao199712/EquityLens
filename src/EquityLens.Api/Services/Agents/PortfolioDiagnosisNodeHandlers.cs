@@ -1,3 +1,4 @@
+using EquityLens.Api.Domain.Calculations;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Portfolios;
@@ -9,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace EquityLens.Api.Services.Agents;
 
 public sealed record PortfolioDiagnosisContext(Guid PortfolioId, string PortfolioName, string BaseCurrency, DateOnly From, DateOnly To, int HoldingCount);
-public sealed record AttributionItem(string EvidenceId, string Name, string? Industry, decimal Weight, decimal Return, decimal Contribution);
+public sealed record AttributionItem(string EvidenceId, string Name, string? Industry, decimal Weight, decimal Return, decimal Contribution, string? RawIndustry = null);
 public sealed record PortfolioPerformanceAttribution(decimal? PortfolioReturn, decimal? BenchmarkReturn, decimal? ActiveReturn, int PricedHoldingCount, int HoldingCount, IReadOnlyList<AttributionItem> Holdings, IReadOnlyList<AttributionItem> Industries, string CoverageStatus);
 public sealed record RiskAnalysisPriority(string EvidenceId, int Priority, string Analysis, string Reason);
 public sealed record PortfolioRiskProfileSnapshot(bool Available, string DataStatus, DateOnly? DataAsOfDate, int CommonTradingDays, int AlertCount);
@@ -142,10 +143,10 @@ internal sealed class PortfolioAttributionReader
             if (series.Count < 2) continue;
             var first = series[0].AdjustedClose ?? series[0].Close; var last = series[^1].AdjustedClose ?? series[^1].Close;
             if (first <= 0m) continue;
-            raw.Add(($"{holding.Security.Ticker} {holding.Security.Name}".Trim(), holding.Security.Industry ?? holding.Security.Sector, holding.Quantity * first, last / first - 1m));
+            raw.Add(($"{holding.Security.Ticker} {holding.Security.Name}".Trim(), IndustryClassification.Raw(holding.Security.Industry, holding.Security.Sector), holding.Quantity * first, last / first - 1m));
         }
         var total = raw.Sum(x => x.Value);
-        var holdings = raw.Select((x, i) => new AttributionItem($"holding-{i + 1}", x.Name, x.Industry, total == 0m ? 0m : x.Value / total, x.Return, total == 0m ? 0m : x.Value / total * x.Return)).OrderBy(x => x.Contribution).ToList();
+        var holdings = raw.Select((x, i) => new AttributionItem($"holding-{i + 1}", x.Name, IndustryClassification.Normalize(x.Industry), total == 0m ? 0m : x.Value / total, x.Return, total == 0m ? 0m : x.Value / total * x.Return, x.Industry)).OrderBy(x => x.Contribution).ToList();
         var industries = holdings.GroupBy(x => string.IsNullOrWhiteSpace(x.Industry) ? "未分類" : x.Industry!).Select((g, i) => new AttributionItem($"industry-{i + 1}", g.Key, g.Key, g.Sum(x => x.Weight), g.Sum(x => x.Weight) == 0m ? 0m : g.Sum(x => x.Contribution) / g.Sum(x => x.Weight), g.Sum(x => x.Contribution))).OrderBy(x => x.Contribution).ToList();
         var history = historyResult.Value;
         var output = new PortfolioPerformanceAttribution(history.Twr, history.BenchmarkReturn, history.ExcessReturn, holdings.Count, portfolio.Holdings.Count, holdings, industries, holdings.Count == portfolio.Holdings.Count ? "complete" : "partial");

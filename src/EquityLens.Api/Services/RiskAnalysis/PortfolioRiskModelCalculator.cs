@@ -195,9 +195,7 @@ internal static class PortfolioRiskModelCalculator
     }
 
     internal static string ResolveIndustry(EquityLens.Api.Contracts.PortfolioHoldings.PortfolioHoldingResponse holding) =>
-        string.IsNullOrWhiteSpace(holding.Industry)
-            ? string.IsNullOrWhiteSpace(holding.Sector) ? "未分類" : holding.Sector
-            : holding.Industry;
+        IndustryClassification.Normalize(holding.Industry, holding.Sector);
 
     internal static (
         IReadOnlyDictionary<Guid, VolatilityRiskContribution> BySecurityId,

@@ -67,7 +67,7 @@ public sealed class PortfolioRiskReportSnapshotService(
                 measurementBasis = riskValue.MeasurementBasis,
                 horizons = riskValue.Horizons.Select(h => new { h.HorizonDays, h.HistoricalVaR, h.HistoricalES, h.EffectiveHistoricalObservations, h.HistoricalStatus, h.MinimumHistoricalObservations, h.MonteCarloVaR, h.MonteCarloES })
             },
-            holdings = riskValue.Holdings.Select(h => new { h.Ticker, h.Exchange, h.SecurityName, h.Industry, h.Weight, h.AnnualizedVolatility, h.ComponentVolatility, h.ComponentRiskShare, h.MarginalVolatility, h.IncrementalVolatility, h.DataPointCount }),
+            holdings = riskValue.Holdings.Select(h => new { h.Ticker, h.Exchange, h.SecurityName, h.Industry, h.RawIndustry, h.ClassificationVersion, h.Weight, h.AnnualizedVolatility, h.ComponentVolatility, h.ComponentRiskShare, h.MarginalVolatility, h.IncrementalVolatility, h.DataPointCount }),
             industries = riskValue.Industries?.Select(i => new { i.Industry, i.HoldingCount, i.Weight, i.ComponentVolatility, i.ComponentRiskShare, i.MarginalVolatility, i.IncrementalVolatility }),
             backtest = backtestValue.Models.Select(m => new { m.Model, m.ConfidenceLevel, m.ObservationCount, m.BreachCount, m.BreachRate, m.ExpectedBreachRate, m.KupiecPValue, m.ChristoffersenPValue, m.TailObservationCount, m.EsTailLossRatio, m.EsStatus, m.Status }),
             stress = stressValue.Scenarios.Select(s => new
