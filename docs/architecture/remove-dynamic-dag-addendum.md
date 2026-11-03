@@ -8,27 +8,28 @@
 
 1. A/B 報告（`docs/eval-verification/2026-11-02-agent-loop-ab/README.md`「改善原因與成本分析」）發現：v4 迴圈的 system prompt **沒有** v1 起草 prompt 的來源角色規則（Primary／Supporting 區分；風險題不可把年報揭露說成法說會提到）。目前 8 題計分題沒有風險或法說會題，**無法看出是否退步**，而正式站已預設使用 v4。
 2. 主規格對 skill、router、工具粒度的描述太模糊，可能導致法說會 prompt 被誤刪，或把 37 個底層數學函式直接開放給 LLM。
+3. 研究與投組是不同角色（工具、邊界、審批都不同），不能共用同一個 prompt；但同一角色內的分析方法應由 Agent 視需要載入，而不是由 router 預先決定。
 
 ## 新增決策
 
 | # | 對象 | 決策 |
 |---|---|---|
-| D9 | **Skill → Playbook** | `WorkflowSkillCatalog` 的 4 個 Lead skill 改為 **playbook**：一份給 Agent 迴圈的設定 = 研究方法 prompt ＋ 可用工具範圍 ＋ 預算預設 ＋ 必要輸入。至少包含：一般個股研究、法說會要點（**沿用現有 `InvestmentResearchSkillPrompts.ConferenceCallTakeaways`**）、市場事件（Web 優先，仍受 source policy 限制）、投組風險／優化。7 個 Supporting skill（只是 capability 打包）刪除。 |
-| D10 | **Router** | `InvestmentResearchRouter` 的輸出改為「工作流（Research／Portfolio）＋ playbook ＋ 參數（ticker、投組、情境）」，不再帶 capability 或 skill 清單。解析失敗依主規格 B4 處理（重試一次、仍失敗回澄清、記 warning log）。 |
-| D11 | **工具粒度** | 給 LLM 的工具以**任務為單位**：研究迴圈維持約 3 個（`search_local`、`search_web`、`get_document_page`）；投組迴圈 **≤ 8 個**，建議形狀：持股快照、讀取既有風險報告、補算指定類型的風險分析（類型為 enum）、績效歸因、權重情境模擬、風險偏好。`PortfolioRiskMathCapabilities` 的 37 個底層函式**不得直接作為工具暴露**，只能在工具內部使用。既有的 `evaluate_portfolio_scenario` 與 `EvaluatePortfolioScenarios` 節點（已部署）納入投組迴圈的情境工具，不要另做一套。 |
-| D12 | **來源角色規則** | 研究迴圈的 prompt（或 playbook）補回 v1 的來源角色規則：區分直接來源與補充來源；不可把補充來源的事實歸給直接來源；風險題不可把年報揭露說成法說會提到；財報表格頁不可當作風險證據，目錄頁與封面不可當作實質證據。若 OutputGate 能以確定性方式檢查其中一部分（例如引用頁的文件類型與題目意圖不符），一併實作。 |
+| D9 | **角色與方法分層：Skill 由 Agent 自行載入** | 分兩層，決定者不同：<br>**① 角色（工作流）**：研究 Agent／投組 Agent，由 Router 在開始前決定，**執行中不可切換**（工具、安全邊界、審批流程不同）。<br>**② 方法（skill）**：由 Agent 在迴圈中透過唯讀工具 `load_skill` **自行決定是否載入**（progressive disclosure）。<br>Prompt 組成：**共用基礎**（JSON 動作協定、文件為不可信資料、不編造、預算）＋ **角色 prompt**（依工作流固定）＋ **skill 目錄**（只有 id、名稱、一句說明）＋ **已載入的 skill 全文**。<br>現有 4 個 Lead skill 轉為 skill 檔：一般個股研究的方法可併入研究角色 prompt；**法說會要點沿用 `InvestmentResearchSkillPrompts.ConferenceCallTakeaways`**；市場事件；投組風險／降波動優化。7 個 Supporting skill（只是 capability 打包）刪除。Skill 內容以檔案或設定保存，新增方法只需新增一個 skill，不改程式與 router。<br>**Skill 規則**：(a) skill 只能增加說明，**不能擴大工具可見性或權限**，最多可縮小範圍；(b) 每個 skill 只屬於一個角色，另一個角色看不到；(c) `load_skill` 與其他工具一樣寫入 `AgentToolCall`，記錄 skill id、版本與內容雜湊；(d) 每個 run 最多載入 3 個 skill（Options 可調），超過由 Guard 拒絕並記錄；(e) 軌跡（eval trajectory）記錄載入了哪些 skill。 |
+| D10 | **Router** | `InvestmentResearchRouter` 只決定**角色（工作流：Research／Portfolio）＋ 參數**（ticker、投組、情境、期間），不選 skill，也不帶 capability／skill 清單。解析失敗依主規格 B4 處理（重試一次、仍失敗回澄清、記 warning log）。 |
+| D11 | **工具粒度** | 給 LLM 的工具以**任務為單位**：研究迴圈維持約 3 個（`search_local`、`search_web`、`get_document_page`）＋ `load_skill`；投組迴圈 **≤ 8 個**，建議形狀：持股快照、讀取既有風險報告、補算指定類型的風險分析（類型為 enum）、績效歸因、權重情境模擬、風險偏好，再加 `load_skill`（不計入 8 個上限）。`PortfolioRiskMathCapabilities` 的 37 個底層函式**不得直接作為工具暴露**，只能在工具內部使用。既有的 `evaluate_portfolio_scenario` 與 `EvaluatePortfolioScenarios` 節點（已部署）納入投組迴圈的情境工具，不要另做一套。 |
+| D12 | **來源角色規則** | 研究角色 prompt 補回 v1 的來源角色規則：區分直接來源與補充來源；不可把補充來源的事實歸給直接來源；風險題不可把年報揭露說成法說會提到；財報表格頁不可當作風險證據，目錄頁與封面不可當作實質證據。若 OutputGate 能以確定性方式檢查其中一部分（例如引用頁的文件類型與題目意圖不符），一併實作。 |
 | D13 | **風險與法說會 eval 題** | 新增 **2330／2317 範圍內**的風險題與法說會題（至少各 1 題）。**標準答案必須對照原始 PDF 核實**（記錄文件、實體頁碼、摘錄），核實前保持 `verified: false`，不可憑模型記憶或搜尋摘要填答案。放在新的題庫檔（例如 `evals/cases/research_risk_conference.jsonl`），不併入既有 8 題的 pass_rate。 |
 
 ## 驗收清單
 
 | # | 驗收條件 | 優先 |
 |---|---|---|
-| R28 | D9：playbook 機制完成，至少 4 個；法說會 playbook 使用原有 prompt；Supporting skill 不再存在；新增 playbook 只需新增設定（測試證明） | MUST |
-| R29 | D10：router 輸出工作流＋playbook＋參數；不再引用 capability／skill 清單；Ask Agent 正常運作 | MUST |
+| R28 | D9：prompt 依「共用基礎＋角色＋skill 目錄＋已載入 skill」組成；`load_skill` 工具完成；至少 3 個 skill 檔（法說會要點使用原有 prompt、市場事件、投組降波動優化）；Supporting skill 不再存在。測試證明：skill 目錄只列本角色的 skill；載入後全文出現在下一輪 prompt；skill 無法讓不可見的工具變可見；超過載入上限被拒絕並記錄；`AgentToolCall` 有 skill id／版本／雜湊；新增 skill 不需改程式 | MUST |
+| R29 | D10：router 只輸出工作流＋參數；不引用 capability／skill 清單；Ask Agent 正常運作 | MUST |
 | R30 | D11：投組工具 ≤ 8 個；測試證明 37 個底層函式無法被 LLM 直接呼叫；既有情境工具被重用 | MUST |
-| R31 | D12：來源角色規則補回研究迴圈；有測試證明 prompt／playbook 含這些規則；可確定性檢查的部分有 OutputGate 測試 | MUST |
+| R31 | D12：來源角色規則補回研究角色 prompt；有測試證明 prompt 含這些規則；可確定性檢查的部分有 OutputGate 測試 | MUST |
 | R32 | D13：新題庫檔與核實紀錄（`docs/eval-verification/<日期>-risk-conference-cases/`）；`validate` 通過 | SHOULD |
-| R33 | 若環境可用：用新題庫跑 `--mode investigation`，記錄結果；並依 A/B 報告「建議的拆解實驗」執行實驗 A（`MaxTurns=1`）與 C，結果寫入報告 | COULD |
+| R33 | 若環境可用：用新題庫跑（trajectory 需含載入的 skill） `--mode investigation`，記錄結果；並依 A/B 報告「建議的拆解實驗」執行實驗 A（`MaxTurns=1`）與 C，結果寫入報告 | COULD |
 
 ## 建議插入的執行順序
 
