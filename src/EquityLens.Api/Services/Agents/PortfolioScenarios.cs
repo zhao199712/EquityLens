@@ -10,9 +10,9 @@ using Microsoft.EntityFrameworkCore;
 namespace EquityLens.Api.Services.Agents;
 
 public sealed record PortfolioHoldingRiskContribution(string Ticker, decimal Weight, decimal ComponentVolatility, decimal ComponentRiskShare);
-public sealed record ScenarioAsset(string Ticker, decimal Quantity, decimal ValuationPrice, IReadOnlyList<decimal> Prices, string? SecurityName = null);
+public sealed record ScenarioAsset(string Ticker, decimal Quantity, decimal ValuationPrice, IReadOnlyList<decimal> Prices, string? SecurityName = null, bool IsEligibleIndexEtf = false);
 public sealed record PortfolioScenarioSnapshot(Guid PortfolioId, DateTime CapturedAtUtc, string Currency, DateOnly From, DateOnly To,
-    IReadOnlyList<DateOnly> Dates, IReadOnlyList<ScenarioAsset> Assets, decimal Cash, IReadOnlyList<string> Warnings);
+    IReadOnlyList<DateOnly> Dates, IReadOnlyList<ScenarioAsset> Assets, decimal Cash, IReadOnlyList<string> Warnings, IReadOnlyList<PortfolioIndexEtfCandidate>? IndexEtfCandidates = null, string PriceBasis = "Unspecified");
 public sealed record ScenarioMetrics(decimal AnnualizedVolatility, decimal HistoricalVaR, decimal ExpectedShortfall, decimal HypotheticalMaxDrawdown,
     IReadOnlyList<PortfolioHoldingRiskContribution> Contributions);
 public sealed record PortfolioScenarioResult(string Name, string Status, IReadOnlyDictionary<string, decimal> Weights,
@@ -22,7 +22,7 @@ public sealed record PortfolioScenarioComparison(string Status, string Method, s
     int ObservationCount, decimal ConfidenceLevel, int HorizonDays, PortfolioScenarioResult? Baseline,
     IReadOnlyList<PortfolioScenarioResult> Scenarios, IReadOnlyList<string> Warnings, IReadOnlyList<string>? ScenarioErrors = null);
 
-/// <summary>以同一快照比較減碼留現金或轉入既有持股情境，不變更帳戶持倉。</summary>
+/// <summary>以同一快照比較減碼留現金、轉入既有持股或核准指數 ETF 情境，不變更帳戶持倉。</summary>
 public static class PortfolioScenarioCalculator
 {
     public const string ToolName = "evaluate_portfolio_scenario";
@@ -39,9 +39,11 @@ public static class PortfolioScenarioCalculator
         {
             if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 80 || request.TargetWeights is null || request.TargetWeights.Count == 0)
                 Invalid("情境須包含名稱、股票代號與目標權重。");
-            if (request.RemainderPolicy is not ("cash" or "holding") || !request.PreserveOtherHoldings) Invalid("僅支援減碼留現金或轉入指定既有持股，其他持股股數不變。");
-            if (request.RemainderPolicy == "holding" && (string.IsNullOrWhiteSpace(request.TransferToTicker) || request.TargetWeights!.ContainsKey(request.TransferToTicker)))
-                Invalid("轉入情境須指定不同於減碼標的的既有持股。");
+            if (request.RemainderPolicy is not ("cash" or "holding" or "index_etf") || !request.PreserveOtherHoldings) Invalid("僅支援減碼留現金、轉入既有持股或核准指數 ETF，其他持股股數不變。");
+            if (request.RemainderPolicy != "cash" && (string.IsNullOrWhiteSpace(request.TransferToTicker) || request.TargetWeights!.ContainsKey(request.TransferToTicker)))
+                Invalid("轉入情境須指定不同於減碼標的的明確代號。");
+            if (request.RemainderPolicy == "index_etf" && !PortfolioIndexEtfs.IsSupported(request.TransferToTicker))
+                Invalid("index_etf 僅支援核准清單 0050、006208；不能替換為其他標的。");
             if (request.RemainderPolicy == "cash" && request.TransferToTicker is not null) Invalid("現金情境不可同時指定轉入持股。");
             if (request.TargetWeights!.Any(x => string.IsNullOrWhiteSpace(x.Key) || x.Value < 0 || x.Value > 1) || request.TargetWeights.Values.Sum() > 1)
                 Invalid("權重須介於 0 與 1，合計不得超過 1。");
@@ -93,13 +95,17 @@ public static class PortfolioScenarioCalculator
             var weights = new Dictionary<string, decimal>(baseWeights);
             foreach (var (ticker, target) in request.TargetWeights)
             {
-                if (!baseWeights.TryGetValue(ticker, out var current)) Invalid($"{ticker} 不在持倉中；請指定既有股票代號。");
+                if (!baseWeights.TryGetValue(ticker, out var current) || snapshot.Assets.Single(a => a.Ticker == ticker).Quantity <= 0) Invalid($"{ticker} 不在持倉中；請指定既有股票代號。");
                 if (target > current) Invalid($"{ticker} 目標權重高於原權重；請只指定減碼來源權重，轉入持股另行指定。");
                 weights[ticker] = target;
             }
-            if (request.RemainderPolicy == "holding")
+            if (request.RemainderPolicy != "cash")
             {
-                if (!baseWeights.ContainsKey(request.TransferToTicker!)) Invalid("轉入標的不在既有持股中，請先澄清。");
+                var destination = snapshot.Assets.SingleOrDefault(a => a.Ticker == request.TransferToTicker);
+                if (destination is null || (request.RemainderPolicy == "holding" && destination.Quantity <= 0))
+                    Invalid("轉入標的不在既有持股或可用 ETF 快照中，請確認工具提供的候選狀態。");
+                if (request.RemainderPolicy == "index_etf" && (!destination.IsEligibleIndexEtf || snapshot.PriceBasis != "AdjustedClose"))
+                    Invalid("ETF 缺少核准及完整同期間行情，不能計算或以現金情境替代。");
                 var released = request.TargetWeights.Sum(x => baseWeights[x.Key] - x.Value);
                 weights[request.TransferToTicker!] += released;
             }
@@ -111,9 +117,9 @@ public static class PortfolioScenarioCalculator
             }
             var label = string.Join("、", request.TargetWeights.OrderBy(x => x.Key, StringComparer.Ordinal)
                 .Select(x => $"{Label(x.Key)}減碼至{(x.Value * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%"))
-                + (request.RemainderPolicy == "holding" ? $"，轉入{Label(request.TransferToTicker!)}" : "，餘額留現金");
+                + (request.RemainderPolicy != "cash" ? $"，轉入{Label(request.TransferToTicker!)}" : "，餘額留現金");
             var result = Evaluate(label, weights) with { RemainderPolicy = request.RemainderPolicy, TransferToTicker = request.TransferToTicker,
-                CashWeight = request.RemainderPolicy == "holding" ? snapshot.Cash / nav : 1 - weights.Values.Sum() };
+                CashWeight = request.RemainderPolicy != "cash" ? snapshot.Cash / nav : 1 - weights.Values.Sum() };
             if (result.Metrics is { } m && baseline.Metrics is { } b)
                 result = result with { DifferenceFromBaseline = new(m.AnnualizedVolatility - b.AnnualizedVolatility,
                     m.HistoricalVaR - b.HistoricalVaR, m.ExpectedShortfall - b.ExpectedShortfall,
@@ -122,6 +128,8 @@ public static class PortfolioScenarioCalculator
         }
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(AgentNodeJson.Serialize(new { snapshot, requests }))));
         var warnings = snapshot.Warnings.Concat(observations < 120 ? new[] { "InsufficientHistory: 至少需要120筆共同日報酬；僅顯示配置。" } : Array.Empty<string>()).ToList();
+        if (requests.Any(r => r.RemainderPolicy == "index_etf"))
+            warnings.Add("ETF 採完整同期間還原收盤價；HHI 僅計算證券部位、未穿透 ETF 成分股。0050／006208 追蹤同一臺灣50指數，可能與原持股重疊；不保證降低風險。");
         warnings.Add("假設固定權重歷史報酬序列，並非帳戶實際績效；現金零報酬，不含費用、滑價及稅負。模型未經回測驗證。");
         return new(baseline.Status, Method, hash, snapshot, observations, .95m, 1, baseline, scenarios, warnings);
     }
@@ -157,8 +165,9 @@ internal static class PortfolioScenarioSnapshotReader
             + flows.Sum(f => f.FlowType is "Withdrawal" or "Fee" or "DividendTax" ? -f.Amount : f.Amount);
         var warnings = new List<string>();
         if (prices.Any(p => p.AdjustedClose is null)) warnings.Add("部分資料無調整後價格，使用收盤價；公司行動影響需另行確認。");
-        return new(portfolio.Id, capturedAt, portfolio.BaseCurrency, diagnosis.From, diagnosis.To, dates,
+        var snapshot = new PortfolioScenarioSnapshot(portfolio.Id, capturedAt, portfolio.BaseCurrency, diagnosis.From, diagnosis.To, dates,
             holdings.Select((h, i) => new ScenarioAsset(h.Security.Ticker, h.Quantity, maps[i][dates[^1]].Close,
-                dates.Select(d => maps[i][d].AdjustedClose ?? maps[i][d].Close).ToArray(), h.Security.Name)).ToList(), cash, warnings);
+                dates.Select(d => maps[i][d].AdjustedClose ?? maps[i][d].Close).ToArray(), h.Security.Name)).ToList(), cash, warnings, PriceBasis: maps.All(m => dates.All(d => m[d].AdjustedClose is > 0)) ? "AdjustedClose" : "MixedOrClose");
+        return await PortfolioIndexEtfs.AttachAsync(db, snapshot, ct);
     }
 }

@@ -121,20 +121,23 @@ public sealed class AgentWorkflowQueryService(
     private async Task ValidateScenarioIntentAsync(Guid portfolioId, string question, IReadOnlyList<PortfolioScenarioRequest>? scenarios, CancellationToken ct)
     {
         if (Regex.IsMatch(question, @"放空|借款|槓桿|融資"))
-            throw new AgentWorkflowQueryException("scenario_clarification_required", "情境只支援減碼留現金或轉入既有持股，請確認調整方式。");
+            throw new AgentWorkflowQueryException("scenario_clarification_required", "情境只支援減碼留現金、轉入既有持股或核准指數 ETF，請確認調整方式。");
         var holdings = await db.PortfolioHoldings.AsNoTracking().Where(h => h.PortfolioId == portfolioId)
             .Select(h => new { h.Security.Ticker, h.Security.Name }).ToListAsync(ct);
         if (scenarios is { Count: > 0 } && scenarios.Any(s => s.TargetWeights.Keys.Any(t => !holdings.Any(h => h.Ticker == t))
-            || s.TransferToTicker is not null && !holdings.Any(h => h.Ticker == s.TransferToTicker)))
-            throw new AgentWorkflowQueryException("scenario_clarification_required", "請使用此投組的既有持股作為減碼與轉入標的。");
+            || s.TransferToTicker is not null && !(s.RemainderPolicy == "index_etf" ? PortfolioIndexEtfs.IsSupported(s.TransferToTicker) : holdings.Any(h => h.Ticker == s.TransferToTicker))))
+            throw new AgentWorkflowQueryException("scenario_clarification_required", "減碼來源須為既有持股；轉入只支援既有持股或核准指數 ETF。");
         var transfer = Regex.Match(question, @"(?:轉入|轉到|移到|移入|移至|轉成|轉為)\s*([^，。；？\s]+)");
         if (transfer.Success)
         {
             var target = transfer.Groups[1].Value;
-            var destination = holdings.Where(h => target.Contains(h.Ticker, StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrWhiteSpace(h.Name) && target.Contains(h.Name, StringComparison.OrdinalIgnoreCase))).ToArray();
+            var destination = holdings.Select(h => (h.Ticker, h.Name)).Concat(PortfolioIndexEtfs.Universe.Select(e => (e.Ticker, e.Name)))
+                .Where(h => Regex.IsMatch(target, @"(?<![\dA-Za-z])" + Regex.Escape(h.Ticker) + @"(?![\dA-Za-z])", RegexOptions.IgnoreCase)
+                    || (!string.IsNullOrWhiteSpace(h.Name) && h.Name != h.Ticker && Regex.IsMatch(target, Regex.Escape(h.Name) + @"(?![\p{L}\p{N}])", RegexOptions.IgnoreCase)))
+                .DistinctBy(h => h.Ticker).ToArray();
             var cash = target.Contains("現金");
             if (scenarios is null || scenarios.Count == 0 || (!cash && destination.Length != 1)
-                || scenarios.Any(s => cash ? s.RemainderPolicy != "cash" : s.RemainderPolicy != "holding" || s.TransferToTicker != destination[0].Ticker))
+                || scenarios.Any(s => cash ? s.RemainderPolicy != "cash" : s.RemainderPolicy is not ("holding" or "index_etf") || s.TransferToTicker != destination[0].Ticker))
                 throw new AgentWorkflowQueryException("scenario_clarification_required", "請確認減碼目標權重及轉入對象；不會以其他情境代替。");
         }
     }

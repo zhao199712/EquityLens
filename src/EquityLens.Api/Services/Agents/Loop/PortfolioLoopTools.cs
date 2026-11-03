@@ -19,11 +19,11 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
     public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => Names.Select(name => new LoopToolDefinition(name,
         name switch
         {
-            "get_portfolio_snapshot" => "取得授權投組持倉、成本、權重、價格、損益與 accountCash 帳簿現金。只有 accountCash.status=Available 才可引用 balance；Unavailable 是未知而非零，持股權重不包含帳戶現金。",
+            "get_portfolio_snapshot" => "取得授權投組持倉、成本、權重、價格、損益與 accountCash 帳簿現金。只有 accountCash.status=Available 才可引用 balance；Unavailable 是未知而非零，持股權重不包含帳戶現金。indexEtfCandidates 列出核准指數 ETF 的 Ready／Unavailable 與原因，未持有候選不算目前持倉。",
             "get_risk_report" => "重用同期間且輸入相符的已存風險結果；沒有時明確回 cache miss。",
             "run_risk_analysis" => "以快照補算 Core、TailRisk 或 RiskContribution；不可輸入數值資料。",
             "get_performance_attribution" => "取得持股與產業的正負績效貢獻。",
-            "simulate_weight_scenario" => "比較一至三個減碼情境；targetWeights 僅列減碼來源、使用 0 到 1 的最終權重且不得高於目前權重。cash 留現金不指定 transferToTicker；holding 必須指定另一檔既有持股 transferToTicker，不把轉入股放在 targetWeights。未指定情境的優化問題可自行提出假設；不改變持倉。",
+            "simulate_weight_scenario" => "比較一至三個減碼情境；targetWeights 僅列減碼來源、使用 0 到 1 的最終權重且不得高於目前權重。cash 留現金不指定 transferToTicker；holding 必須指定另一檔既有持股 transferToTicker，不把轉入股放在 targetWeights。index_etf 可轉入 snapshot 中 Ready 的 0050／006208，不必已持有；不能指定其他新標的。未指定情境的優化問題比較留現金與一個可用 ETF；不改變持倉。",
             _ => "讀取使用者已保存的風險偏好；缺少時回 unavailable，不推測。"
         }, Schema(name))).ToArray();
 
@@ -52,7 +52,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
         }
         if (name == "simulate_weight_scenario")
         {
-            properties["scenarios"] = JsonNode.Parse("""{"type":"array","minItems":1,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["name","targetWeights"],"properties":{"name":{"type":"string","maxLength":80},"targetWeights":{"type":"object","additionalProperties":{"type":"number","minimum":0,"maximum":1}},"remainderPolicy":{"type":"string","enum":["cash","holding"]},"preserveOtherHoldings":{"type":"boolean","const":true},"transferToTicker":{"type":["string","null"]}}}}""");
+            properties["scenarios"] = JsonNode.Parse("""{"type":"array","minItems":1,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["name","targetWeights"],"properties":{"name":{"type":"string","maxLength":80},"targetWeights":{"type":"object","additionalProperties":{"type":"number","minimum":0,"maximum":1}},"remainderPolicy":{"type":"string","enum":["cash","holding","index_etf"]},"preserveOtherHoldings":{"type":"boolean","const":true},"transferToTicker":{"type":["string","null"]}}}}""");
             required.Add("scenarios");
         }
         return new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = required, ["additionalProperties"] = false };
@@ -127,6 +127,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 var total = inputs.Assets.Sum(x => x.Quantity * x.Prices.LastOrDefault());
                 var accountCash = await PortfolioAccountCashReader.ReadAsync(db, diagnosis.PortfolioId, portfolio.BaseCurrency, diagnosis.To, ct);
                 data = Object(new { diagnosis, inputs.CommonTradingDays, inputs.Warnings, warning, accountCash,
+                    indexEtfCandidates = patch[SnapshotKey]?["indexEtfCandidates"]?.DeepClone(),
                     holdingWeightBasis = "SecuritiesMarketValueExcludingAccountCash",
                     holdings = inputs.Assets.Select(a => new { a.Ticker, securityName = namedAssets?.FirstOrDefault(x => x.Ticker == a.Ticker)?.SecurityName, a.Currency, a.Quantity, a.AverageCost,
                         price = a.Prices.LastOrDefault(), weight = total > 0 ? a.Quantity * a.Prices.LastOrDefault() / total : (decimal?)null,
@@ -188,7 +189,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
         catch (AgentWorkflowQueryException e)
         {
             return $"scenarios[{index}].targetWeights/remainderPolicy/transferToTicker: {e.Message} " +
-                "targetWeights only contains reductions (fractions 0..1); holding requires transferToTicker for another existing holding; cash requires no destination.";
+                "targetWeights only contains reductions (fractions 0..1); holding requires transferToTicker for another existing holding; index_etf requires a Ready approved ETF (0050/006208); cash requires no destination.";
         }
     }
 
@@ -221,6 +222,8 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 to = snapshot.Dates.Count > 0 ? snapshot.Dates[^1] : snapshot.To,
                 returnFrom = snapshot.Dates.Count > 1 ? (DateOnly?)snapshot.Dates[1] : null,
                 requestedFrom = snapshot.From, requestedTo = snapshot.To }) : null };
+        data["priceBasis"] = comparison.Snapshot?.PriceBasis;
+        data["indexEtfCandidates"] = JsonSerializer.SerializeToNode(comparison.Snapshot?.IndexEtfCandidates, AgentNodeJson.SerializerOptions);
         foreach (var item in Object(comparison with { Snapshot = null })) data[item.Key] = item.Value?.DeepClone();
         if (comparison.Baseline is { } baseline && data["scenarios"] is JsonArray scenarios)
             for (var i = 0; i < comparison.Scenarios.Count; i++)

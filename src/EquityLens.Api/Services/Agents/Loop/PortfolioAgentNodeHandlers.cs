@@ -73,7 +73,7 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         static string Metrics(ScenarioMetrics m) => $"年化波動 {m.AnnualizedVolatility:P2}、VaR {m.HistoricalVaR:P2}、ES {m.ExpectedShortfall:P2}、最大回撤 {m.HypotheticalMaxDrawdown:P2}";
         var baseline = comparison.Baseline?.Metrics is { } b ? "同一快照原組合：" + Metrics(b) + "。" : "";
         return "以下為唯讀情境，未變更實際持倉。" + baseline + string.Join("；", comparison.Scenarios.Select(s =>
-            $"{s.Name}：減碼資金{(s.RemainderPolicy == "holding" ? "轉入 " + s.TransferToTicker : "留作現金")}；" +
+            $"{s.Name}：減碼資金{(s.RemainderPolicy != "cash" ? "轉入 " + s.TransferToTicker : "留作現金")}；" +
             string.Join("、", s.Weights.Select(w => $"{w.Key} 權重 {w.Value:P2}")) + $"；現金 {s.CashWeight:P2}" +
             (s.Metrics is { } m ? "；調整後：" + Metrics(m) : "") +
             (s.DifferenceFromBaseline is { } d ? "；相較原組合差異（百分點）：" + $"年化波動 {d.AnnualizedVolatility * 100:F2}、VaR {d.HistoricalVaR * 100:F2}、ES {d.ExpectedShortfall * 100:F2}、最大回撤 {d.HypotheticalMaxDrawdown * 100:F2}" : ""))) +
@@ -113,6 +113,12 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             // 日期是分析範圍而非金額；必須在本句引用的事實中確實存在。
             text = Regex.Replace(text, @"(?<!\d)20\d{2}-\d{2}-\d{2}(?!\d)", m =>
                 cited.Any(f => f.Data.ToJsonString().Contains(m.Value, StringComparison.Ordinal)) ? "日期" : m.Value);
+            // ETF／指數名稱中的數字是識別名稱；僅接受本句引用的核准候選名稱，不放行收益主張。
+            foreach (var candidate in cited.SelectMany(f => (f.Data["indexEtfCandidates"] as JsonArray)?.OfType<JsonObject>() ?? []))
+                if (PortfolioIndexEtfs.IsSupported(candidate["ticker"]?.ToString()))
+                    foreach (var key in new[] { "name", "index" })
+                        if (candidate[key]?.ToString() is { Length: > 0 } name)
+                            text = Regex.Replace(text, Regex.Escape(name) + @"(?![\d.%％])", "指數標的");
             var tickers = facts.SelectMany(f => Tickers(f.Data)).ToHashSet(StringComparer.Ordinal);
             text = Regex.Replace(text, @"(?<![\d.])\d{4,6}(?![\d.]|\s*(?:%|％|元|股|百分點))", m => tickers.Contains(m.Value) ? "標的" : m.Value);
             // 「1.47 與 0.90 個百分點」共用尾端單位；僅限相鄰數字串列，不跨指標文字借用單位。

@@ -114,3 +114,9 @@
 驗收時重點看：模糊股票搜尋、無提示優化、轉入非持股的澄清、原始草稿與降級內容的區別、拒絕原因、等待審批狀態、同快照差異。
 
 發布建議：先 review/CI，合併後使用既有手動 CD verify，再核准 deploy；沿用備份與健康檢查。本次不含 schema 變更，回復可部署先前映像；不要把 eval manifest 或帳號 token 放進 repo。
+
+## 後續能力擴充：指數 ETF 情境
+
+使用者在 PR #14 合併後授權加入尚未持有的指數 ETF 比較。新分支從 main f8f3ffa 建立；六工具／三工作流／十三節點維持，新增 index_etf 政策及快照候選清單，不增加交易副作用。原 14 題、歷史分數及付費 ledger 不變。實作、資料要求與驗證限制見 [ETF 情境說明](portfolio-index-etf-scenarios.md)。
+
+本機驗證：後端 1046（18 PostgreSQL、0 skipped）、前端 138／瀏覽器 10、eval 92、數學 36 皆過，前後端 build 通過，EF 無模型變更。真實 AI／ETF 行情覆蓋驗收尚未執行，本次無額外 API 費用。

@@ -20,10 +20,10 @@ const delta = (n: number | null | undefined) => n == null ? '未提供' : `${n >
       <thead><tr><th>指標</th><th v-for="column in columns" :key="column.name">{{ column.name }}</th></tr></thead>
       <tbody>
         <tr><th>狀態</th><td v-for="column in columns" :key="column.name">{{ column.status === 'Calculated' ? '已計算' : '資料不足：僅顯示配置' }}</td></tr>
-        <tr><th>股票權重</th><td v-for="column in columns" :key="column.name"><div v-for="(weight, ticker) in column.weights" :key="ticker">{{ ticker }}：{{ percent(weight) }}</div></td></tr>
+        <tr><th>證券權重</th><td v-for="column in columns" :key="column.name"><div v-for="(weight, ticker) in column.weights" :key="ticker">{{ ticker }}：{{ percent(weight) }}</div></td></tr>
         <tr><th>現金權重</th><td v-for="column in columns" :key="column.name">{{ percent(column.cashWeight) }}</td></tr>
-        <tr><th>股票 HHI（排除現金、不重配）</th><td v-for="column in columns" :key="column.name">{{ column.equityHhi.toFixed(4) }}</td></tr>
-        <tr><th>最大股票權重</th><td v-for="column in columns" :key="column.name">{{ percent(column.largestEquityWeight) }}</td></tr>
+        <tr><th>證券 HHI（排除現金、不重配）</th><td v-for="column in columns" :key="column.name">{{ column.equityHhi.toFixed(4) }}</td></tr>
+        <tr><th>最大證券權重</th><td v-for="column in columns" :key="column.name">{{ percent(column.largestEquityWeight) }}</td></tr>
         <tr><th>年化波動率</th><td v-for="column in columns" :key="column.name">{{ percent(column.metrics?.annualizedVolatility) }}</td></tr>
         <tr><th>歷史 VaR</th><td v-for="column in columns" :key="column.name">{{ percent(column.metrics?.historicalVaR) }}</td></tr>
         <tr><th>歷史 ES</th><td v-for="column in columns" :key="column.name">{{ percent(column.metrics?.expectedShortfall) }}</td></tr>
