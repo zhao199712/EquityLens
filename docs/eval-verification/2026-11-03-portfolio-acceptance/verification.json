@@ -14,14 +14,14 @@
   "mathematics_pytest": 36,
   "eval_pytest": 92,
   "ef_pending_model_changes": false,
-  "live_code_final_verification": "Prompt 15 cash targeted 1/1 (round 16, 99be9f3); other thirteen not rerun. Previous prompt 14 remaining twelve 11/12.",
+  "live_code_final_verification": "Prompt 15: cash targeted 1/1 (round 16, 99be9f3); remaining thirteen 11/13 (round 17, 5c7bb24). Unprompted has wrong-source weight citations, lower-volatility MixedRiskBasis requires paragraph-scope review. No full latest 14/14 or stability claim.",
   "authorized_usd": 1.2,
-  "charged_or_reserved_upper_usd": 1.042494,
+  "charged_or_reserved_upper_usd": 1.1310165,
   "deployment": "none",
   "original_research_cases": "unchanged",
   "integrated_main": "6d805b9",
   "benchmark_isolation_verified_from_round": 12,
-  "evaluated_code": "99be9f3 (round 16 clean checkout, prompt 15); final currency-prefix guard extension offline-tested",
+  "evaluated_code": "5c7bb24671c3b1ed153f4d02a715481f0933df12 (round 17 clean checkout, prompt 15)",
   "recovery_observed": "round 13 cash: per-turn ToolBudgetExceeded then identical arguments succeeded next turn; invalid-argument recovery not observed",
   "additional_authorized_usd": 0.2
 }

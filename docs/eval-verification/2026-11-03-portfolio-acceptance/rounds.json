@@ -209,5 +209,25 @@
     "reason": "Single cash case after accountCash evidence and prompt 15, clean code 99be9f3; other thirteen cases not rerun. Final currency-prefix guard extension is covered by offline tests, not another paid run.",
     "raw_sha256": "e760cf7149d59a8d0029432b44a205c225f377b8cf5f72fc7700dbd73d8c42e7",
     "raw_bytes": 811896
+  },
+  {
+    "round": 17,
+    "original_directory": "portfolio-eval-20261103-cash-fix-other-thirteen",
+    "strict_passed": 11,
+    "attempted_cases": 13,
+    "not_run": 1,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": true,
+    "reason": "Remaining thirteen cases on clean 5c7bb24 prompt 15; cash was tested separately in round 16. Not a single full 14-case run.",
+    "raw_sha256": "a45061fb21e68ecfcea73b20c0586b2aa92db144024046d89b6e1d095e556abb",
+    "raw_bytes": 8034852,
+    "checks": {
+      "provider_healthy": 13,
+      "no_side_effects": 13,
+      "scenario_calculated": 8,
+      "independent_risk_math": 8,
+      "conservation": 9,
+      "same_basis_deltas": 8
+    }
   }
 ]

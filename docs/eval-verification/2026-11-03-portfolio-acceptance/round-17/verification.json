@@ -1,0 +1,15 @@
+{
+  "eligible_for_quality_comparison": false,
+  "benchmark_isolation_verified": true,
+  "reason": "Remaining thirteen cases on clean 5c7bb24 prompt 15; cash was tested separately in round 16. Not a single full 14-case run.",
+  "raw_sha256": "a45061fb21e68ecfcea73b20c0586b2aa92db144024046d89b6e1d095e556abb",
+  "raw_bytes": 8034852,
+  "checks": {
+    "provider_healthy": 13,
+    "no_side_effects": 13,
+    "scenario_calculated": 8,
+    "independent_risk_math": 8,
+    "conservation": 9,
+    "same_basis_deltas": 8
+  }
+}
