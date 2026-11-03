@@ -76,6 +76,8 @@ src/EquityLens.Api/exports/
 
 # Playwright MCP
 .playwright-mcp/
+src/EquityLens.Web/playwright-report/
+src/EquityLens.Web/test-results/
 
 # Local AI coding tool state
 .opencode-sessions/

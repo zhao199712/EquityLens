@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": { "lib": ["es2023", "DOM"], "strict": true },
+  "include": ["playwright.ci.config.ts", "browser-smoke/**/*.ts"]
+}
