@@ -28,7 +28,8 @@ public sealed record PortfolioDiagnosisOutput(string Summary, decimal? Portfolio
     PortfolioDiagnosisContext? AnalysisPeriod = null,
     string ModelQuality = "Unvalidated",
     int? ObservationCount = null,
-    string? Method = null);
+    string? Method = null,
+    string? AttributionCoverage = null);
 public sealed record PortfolioDiagnosisGap(string Code, bool Resolvable, string? RequiredCapability, string Reason);
 public sealed record PortfolioDiagnosisQualityResult(
     string Status,

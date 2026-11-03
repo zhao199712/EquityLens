@@ -50,7 +50,7 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             attribution?.Holdings.Where(x => x.Contribution > 0).OrderByDescending(x => x.Contribution).Take(3).ToArray() ?? [], [],
             limited ? "Limited" : "complete", metrics, issues.Count == 0 && comparison is null ? answer?.Markdown : null, comparison, diagnosis,
             "Unvalidated", board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>(),
-            "既有持股歷史重建；情境採固定權重、含現金的共同快照；模型未經回測驗證");
+            "既有持股歷史重建；情境採固定權重、含現金的共同快照；模型未經回測驗證", attribution?.CoverageStatus);
         board["portfolioQualityGate"] = JsonSerializer.SerializeToNode(new { passed = issues.Count == 0, blockingIssues = issues, limited }, AgentNodeJson.SerializerOptions);
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioDiagnosisDraft, output);
         context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);

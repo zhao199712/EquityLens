@@ -86,6 +86,16 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
     state.error.value = null
   })
 
+  it('distinguishes no negative contributors from incomplete coverage', () => {
+    const run = diagnosisRun(null)
+    run.outputJson!.attributionCoverage = 'complete'
+    state.agentRun.value = run
+    expect(mount(AgentRunDetailView, { global: { stubs } }).text()).toContain('本期沒有負貢獻持股')
+    run.outputJson!.attributionCoverage = 'partial'
+    state.agentRun.value = { ...run }
+    expect(mount(AgentRunDetailView, { global: { stubs } }).text()).toContain('資料涵蓋不足')
+  })
+
   it('renders risk metrics when present', () => {
     state.agentRun.value = diagnosisRun({
       annualizedVolatility: 0.3871, maxDrawdown: -0.0858, historicalVaR: -0.0729,

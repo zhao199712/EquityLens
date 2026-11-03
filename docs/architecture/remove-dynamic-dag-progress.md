@@ -47,7 +47,7 @@
 | R17 | B3 情境偷換＋澄清 | MUST | ✅ | 轉入既有持股原本 scenario_invalid | 守恆／其他持股／錯誤目標／替換拒絕／回覆取保存值 | 本項提交 | 自然語言路由澄清於 R34 再驗收 |
 | R18 | B2 優化建議 | MUST | ✅ | 無情境的優化建議原本仍 passed | 提交 Guard、足夠／不足資料 gate、四指標與差異取同快照 | 本項提交 | |
 | R19 | B4 路由重試＋log | MUST | ✅ | | | | |
-| R20 | B8 拖累正負號 | SHOULD | ⬜ | | | | |
+| R20 | B8 拖累正負號 | SHOULD | ✅ | | | | |
 | R21 | B6 VaR 樣本不足 | SHOULD | ⬜ | | | | |
 | R22 | B5 數字口徑 | SHOULD | ⬜ | | | | |
 | R23 | B7 產業分類 | SHOULD | ⬜ | | | | |
@@ -267,3 +267,9 @@
 - Live CLI 僅接受 AgentLoop，client 預設明確指定並覆蓋題庫舊 engine；非法引擎在 HTTP 前拒絕。舊 responses 的離線 rescore 與未知 trajectory 語意保留。
 - 更新 AGENTS runtime／workflow 清單、架構文件 §13 與 eval README；根 README 未加入設計決策。收斂數字採實際 catalog／handler 與程式行數。
 - 完整 R27：build PASS、864/864（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／121 tests。無外部 API 呼叫。
+
+### R20／B8 拖累的正負號與空清單
+
+- 新 gate 已在重構中排除正數／零貢獻，新增混合與全正案例證明只列負貢獻。UI 重現測試先失敗：完整歸因但沒有負貢獻仍顯示資料不足。
+- 報告新增可選 attributionCoverage；完整資料顯示「本期沒有負貢獻持股」，未完整或舊報告明示涵蓋不足，不把沒有負值當成缺資料。
+- 完整 R27：build PASS、866/866（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／122 tests。無外部 API 呼叫。

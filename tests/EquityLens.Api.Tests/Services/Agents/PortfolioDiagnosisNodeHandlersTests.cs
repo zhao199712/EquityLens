@@ -71,6 +71,32 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         Assert.True(metrics.MaxDrawdown is null);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QualityGate_OnlyNegativeContributionsAreDrags(bool includeNegative)
+    {
+        await using var db = CreateDb();
+        var run = CreateRun(new JsonArray());
+        var board = JsonNode.Parse(run.BlackboardJson)!;
+        var holdings = new List<AttributionItem> {
+            new("positive", "正貢獻", null, .5m, .1m, .05m),
+            new("zero", "零貢獻", null, .5m, 0, 0)
+        };
+        if (includeNegative) holdings.Add(new("negative", "負貢獻", null, .1m, -.1m, -.01m));
+        var attribution = new PortfolioPerformanceAttribution(0, 0, 0, holdings.Count, holdings.Count, holdings, [], "complete");
+        board[AgentBlackboardKeys.PerformanceAttribution] = JsonSerializer.SerializeToNode(attribution, AgentNodeJson.SerializerOptions);
+        run.BlackboardJson = board.ToJsonString();
+        await new EquityLens.Api.Services.Agents.Loop.PortfolioQualityGateNodeHandler()
+            .ExecuteAsync(new AgentNodeExecutionContext(db, run, DraftNode(run.Id), (_, _, _, _, _) => { }));
+        var output = JsonNode.Parse(run.BlackboardJson)![AgentBlackboardKeys.PortfolioDiagnosisDraft]!
+            .Deserialize<PortfolioDiagnosisOutput>(AgentNodeJson.SerializerOptions)!;
+        Assert.Equal(includeNegative ? 1 : 0, output.MainDrags.Count);
+        Assert.All(output.MainDrags, item => Assert.True(item.Contribution < 0));
+        Assert.Equal("positive", Assert.Single(output.MainContributors).EvidenceId);
+        Assert.Equal("complete", output.AttributionCoverage);
+    }
+
     private static AgentRun CreateRun(JsonArray mathResults)
     {
         var portfolioId = Guid.NewGuid();

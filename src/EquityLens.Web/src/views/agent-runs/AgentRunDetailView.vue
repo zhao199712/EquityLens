@@ -58,6 +58,7 @@ interface PortfolioRiskMetrics {
 }
 
 interface PortfolioDiagnosisOutput {
+  attributionCoverage?: string | null
   scenarioComparison?: ScenarioComparison | null
   analysisPeriod?: { from: string; to: string } | null
   observationCount?: number | null
@@ -551,12 +552,12 @@ const nextActionLabel = computed(() => {
             </div>
             <div class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">主要拖累</div>
-              <div v-if="portfolioDiagnosisOutput.mainDrags.length === 0" class="body-text">資料不足，無法列出拖累來源。</div>
+              <div v-if="portfolioDiagnosisOutput.mainDrags.length === 0" class="body-text">{{ portfolioDiagnosisOutput.attributionCoverage === 'complete' ? '本期沒有負貢獻持股。' : '資料涵蓋不足，已取得資料未列出負貢獻來源。' }}</div>
               <div v-for="item in portfolioDiagnosisOutput.mainDrags" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.name }}</div><div class="finding-rec">貢獻：{{ formatPercent(item.contribution) }} · 報酬：{{ formatPercent(item.return) }} · 權重：{{ formatPercent(item.weight) }}</div></div>
             </div>
             <div class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">主要貢獻</div>
-              <div v-if="portfolioDiagnosisOutput.mainContributors.length === 0" class="body-text">資料不足，無法列出貢獻來源。</div>
+              <div v-if="portfolioDiagnosisOutput.mainContributors.length === 0" class="body-text">{{ portfolioDiagnosisOutput.attributionCoverage === 'complete' ? '本期沒有正貢獻持股。' : '資料涵蓋不足，已取得資料未列出正貢獻來源。' }}</div>
               <div v-for="item in portfolioDiagnosisOutput.mainContributors" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.name }}</div><div class="finding-rec">貢獻：{{ formatPercent(item.contribution) }} · 報酬：{{ formatPercent(item.return) }} · 權重：{{ formatPercent(item.weight) }}</div></div>
             </div>
             <div class="finding-list" style="margin-top: 18px">
