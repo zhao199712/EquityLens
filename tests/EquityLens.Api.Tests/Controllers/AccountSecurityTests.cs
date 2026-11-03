@@ -32,12 +32,13 @@ public sealed class AccountSecurityTests
         var password = Guid.NewGuid().ToString("N");
         user.PasswordHash = new PasswordHasher<AppUser>().HashPassword(user, password);
         db.Users.Add(user);
-        var refresh = new RefreshToken { Id = Guid.NewGuid(), UserId = user.Id, Token = Guid.NewGuid().ToString(), ExpiresAtUtc = DateTime.UtcNow.AddDays(1) };
+        var rawRefresh = Guid.NewGuid().ToString();
+        var refresh = new RefreshToken { Id = Guid.NewGuid(), UserId = user.Id, Token = RefreshTokenDigest.Compute(rawRefresh), ExpiresAtUtc = DateTime.UtcNow.AddDays(1) };
         db.RefreshTokens.Add(refresh);
         await db.SaveChangesAsync();
         var controller = CreateController(app, db);
         var login = await controller.Login(new LoginRequest(user.Email, password), default);
-        var refreshed = await controller.Refresh(new RefreshRequest(refresh.Token), default);
+        var refreshed = await controller.Refresh(new RefreshRequest(rawRefresh), default);
         var token = new TokenService(app.Configuration).GenerateAccessToken(user);
         Assert.Equal(e2e, (await Authenticate(app, token)).Succeeded);
         if (e2e)
@@ -115,6 +116,47 @@ public sealed class AccountSecurityTests
         Assert.IsType<UnauthorizedObjectResult>((await controller.GoogleLogin(new GoogleLoginRequest("id-token"), default)).Result);
         Assert.Null((await db.Users.SingleAsync()).GoogleSubject);
         Assert.Empty(db.RefreshTokens);
+    }
+
+    [Fact]
+    public async Task RefreshToken_StoredValueCannotBeUsedAsBearerCredential()
+    {
+        using var db = RefactorTestDbContext.Create();
+        await using var app = BuildApp(db);
+        var controller = CreateController(app, db);
+        var registered = await controller.Register(new RegisterRequest("digest@example.test", Guid.NewGuid().ToString("N"), null), default);
+        var response = Assert.IsType<AuthResponse>(Assert.IsType<OkObjectResult>(registered.Result).Value);
+        var stored = (await db.RefreshTokens.SingleAsync()).Token;
+        Assert.NotEqual(response.RefreshToken, stored);
+        Assert.StartsWith("sha256:", stored);
+        Assert.IsType<UnauthorizedObjectResult>((await controller.Refresh(new RefreshRequest(stored), default)).Result);
+        Assert.IsType<OkObjectResult>((await controller.Refresh(new RefreshRequest(response.RefreshToken), default)).Result);
+        Assert.IsType<UnauthorizedObjectResult>((await controller.Refresh(new RefreshRequest(response.RefreshToken), default)).Result);
+        Assert.All(db.RefreshTokens, row => Assert.StartsWith("sha256:", row.Token));
+    }
+
+    [Fact]
+    public async Task LegacyPlaintextRefreshToken_IsRejectedWithoutFallback()
+    {
+        using var db = RefactorTestDbContext.Create();
+        await using var app = BuildApp(db);
+        var user = new AppUser { Id = Guid.NewGuid(), Email = "legacy@example.test" };
+        db.Users.Add(user);
+        var raw = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64));
+        db.RefreshTokens.Add(new RefreshToken { Id = Guid.NewGuid(), UserId = user.Id, Token = raw, ExpiresAtUtc = DateTime.UtcNow.AddDays(1) });
+        await db.SaveChangesAsync();
+        Assert.IsType<UnauthorizedObjectResult>((await CreateController(app, db).Refresh(new RefreshRequest(raw), default)).Result);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(31)]
+    public void WeakJwtKey_IsRejectedDuringRegistration(int bytes)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [], ContentRootPath = Path.GetTempPath(), EnvironmentName = "Production" });
+        builder.Configuration["Jwt:Key"] = new string('x', bytes);
+        Assert.Throws<InvalidOperationException>(() => builder.AddEquityLensHttp());
     }
 
     private static WebApplication BuildApp(EquityLensDbContext db, string environment = "Production", bool e2e = false)

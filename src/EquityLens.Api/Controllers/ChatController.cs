@@ -21,11 +21,13 @@ public sealed class ChatController : ControllerBase
     private static readonly JsonSerializerOptions EventJson = new(JsonSerializerDefaults.Web);
     private readonly EquityLensDbContext _db;
     private readonly IConversationService _conversation;
+    private readonly ILogger<ChatController> _logger;
 
-    public ChatController(EquityLensDbContext db, IConversationService conversation)
+    public ChatController(EquityLensDbContext db, IConversationService conversation, ILogger<ChatController>? logger = null)
     {
         _db = db;
         _conversation = conversation;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatController>.Instance;
     }
 
     [HttpPost("sessions")]
@@ -127,7 +129,8 @@ public sealed class ChatController : ControllerBase
         }
         catch (Exception ex)
         {
-            await WriteEventAsync(new { type = "error", code = "conversation_unavailable", message = ex.Message }, CancellationToken.None);
+            _logger.LogError(ex, "Conversation request failed. TraceId: {TraceId}", HttpContext.TraceIdentifier);
+            await WriteEventAsync(new { type = "error", code = "conversation_unavailable", message = "對話服務暫時無法使用，請稍後再試。" }, CancellationToken.None);
         }
     }
 

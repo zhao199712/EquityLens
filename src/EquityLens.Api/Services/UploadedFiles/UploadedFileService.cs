@@ -36,7 +36,7 @@ public sealed class UploadedFileService : IUploadedFileService
     /// <inheritdoc />
     public async Task<UploadedFileResponse> UploadAsync(IFormFile file, CancellationToken cancellationToken = default)
     {
-
+        PdfUploadPolicy.Validate(file);
         var userId = _currentUser.UserId;
         var objectKey = BuildObjectKey(userId, file.FileName);
 
@@ -49,7 +49,7 @@ public sealed class UploadedFileService : IUploadedFileService
 
         using (var uploadStream = file.OpenReadStream())
         {
-            await _objectStorage.UploadAsync(objectKey, uploadStream, file.ContentType, cancellationToken);
+            await _objectStorage.UploadAsync(objectKey, uploadStream, "application/pdf", cancellationToken);
         }
 
         var uploadedFile = new UploadedFile
@@ -59,7 +59,7 @@ public sealed class UploadedFileService : IUploadedFileService
             BucketName = "equitylens",
             ObjectKey = objectKey,
             OriginalFileName = file.FileName,
-            ContentType = file.ContentType,
+            ContentType = "application/pdf",
             FileSizeBytes = file.Length,
             Sha256Hash = sha256Hash,
             StorageProvider = "Garage",
@@ -110,9 +110,10 @@ public sealed class UploadedFileService : IUploadedFileService
             return null;
         }
 
-        var url = await _objectStorage.CreatePresignedDownloadUrlAsync(file.ObjectKey, cancellationToken: cancellationToken);
-        var expiryMinutes = 15; // 與 ObjectStorageOptions 預設一致
-        return new PresignedUrlResponse(url, DateTime.UtcNow.AddMinutes(expiryMinutes));
+        var lifetime = TimeSpan.FromMinutes(15);
+        var expiresAt = DateTime.UtcNow.Add(lifetime);
+        var url = await _objectStorage.CreatePresignedDownloadUrlAsync(file.ObjectKey, lifetime, cancellationToken);
+        return new PresignedUrlResponse(url, expiresAt);
     }
 
     /// <inheritdoc />

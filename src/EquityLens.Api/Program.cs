@@ -34,6 +34,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseForwardedHeaders(); // 必須最先執行：讓後面的限流與日誌拿到 Caddy 轉發的真實 IP
+app.UseExceptionHandler();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
