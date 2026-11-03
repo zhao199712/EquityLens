@@ -41,4 +41,5 @@ public sealed record ConversationRunCardDto(
     int CompletedNodes,
     int TotalNodes,
     string? FinalAnswer,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    IReadOnlyList<string>? QualityIssues = null);

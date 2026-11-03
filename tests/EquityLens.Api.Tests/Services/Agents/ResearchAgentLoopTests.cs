@@ -502,12 +502,67 @@ public sealed class ResearchAgentLoopTests
         Assert.Single(await db.AgentToolCalls.ToListAsync());
         Assert.Contains(context.Run.Events, e => e.EventType == "AnswerGuardDenied");
     }
-    private sealed class ScenarioTools : IAgentLoopTools
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PortfolioRepair_ReceivesActionableGuardOrExecutionErrorAndThenSucceeds(bool guard)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var bad = """{"action":"call_tools","toolCalls":[{"callId":"bad","tool":"simulate_weight_scenario","arguments":{"valid":false}}]}""";
+        var good = bad.Replace("bad", "good").Replace("false", "true");
+        var chat = new FakeChat(bad, good, """{"action":"submit_answer","answer":{"markdown":"已比較[P1]","citedEvidenceIds":["P1"]}}""");
+        var state = await new AgentLoopEngine(chat, new RepairTools(guard), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, true).RunAsync(context, "Portfolio", default);
+        Assert.Equal("AnswerSubmitted", state.StopReason);
+        Assert.Contains("transferToTicker", chat.Prompts[1]);
+        Assert.Contains(await db.AgentToolCalls.ToListAsync(), x => x.Status == (guard ? "Denied" : "Failed"));
+        Assert.Contains(await db.AgentToolCalls.ToListAsync(), x => x.Status == "Succeeded");
+        Assert.Single(state.Facts);
+    }
+    private sealed class RepairTools(bool guard) : IAgentLoopTools
+    {
+        private const string Reason = "scenarios[0].transferToTicker: holding requires another existing holding";
+        public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("simulate_weight_scenario", "injected recovery fixture", new())];
+        public string? Validate(LoopToolScope scope, LoopToolCall call) => guard && !call.Arguments["valid"]!.GetValue<bool>() ? Reason : null;
+        public Task<LoopToolResult> InvokeAsync(LoopToolScope scope, LoopToolCall call, CancellationToken ct) => Task.FromResult(
+            !call.Arguments["valid"]!.GetValue<bool>() ? new LoopToolResult([], "Tool failed", Reason) : new LoopToolResult([], "Calculated", Data: new() { ["status"] = "Calculated" }));
+    }
+
+    [Fact]
+    public async Task PortfolioNumericRepair_IsCheckpointedAndDoesNotRepeatTools()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        const string call = """{"action":"call_tools","toolCalls":[{"callId":"s","tool":"simulate_weight_scenario","arguments":{}}]}""";
+        const string bad = """{"action":"submit_answer","answer":{"markdown":"波動 99% [P1]","citedEvidenceIds":["P1"]}}""";
+        AgentLoopEngine Engine(FakeChat chat) => new(chat, new ScenarioTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, true);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Engine(new(call, bad)).RunAsync(context, "Portfolio", default));
+        var resumed = new FakeChat("""{"action":"submit_answer","answer":{"markdown":"已完成比較 [P1]","citedEvidenceIds":["P1"]}}""");
+        var state = await Engine(resumed).RunAsync(context, "Portfolio", default);
+        Assert.Equal(1, state.AnswerRepairCount);
+        Assert.Contains("AnswerQualityRepair", Assert.Single(resumed.Prompts));
+        Assert.Contains("99%", resumed.Prompts[0]);
+        Assert.Single(await db.AgentToolCalls.ToListAsync());
+        Assert.Equal("AnswerSubmitted", state.StopReason);
+    }
+
+    [Fact]
+    public async Task PortfolioMultipleScenarioFactsAreVisibleWithinBudget()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        const string call = """{"action":"call_tools","toolCalls":[{"callId":"s","tool":"simulate_weight_scenario","arguments":{}}]}""";
+        var chat = new FakeChat(call, """{"action":"submit_answer","answer":{"markdown":"已完成比較 [P1]","citedEvidenceIds":["P1"]}}""");
+        await new AgentLoopEngine(chat, new ScenarioTools(true), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, true).RunAsync(context, "Portfolio", default);
+        Assert.Contains("SECOND_SCENARIO_COMPLETE", chat.Prompts[1]);
+    }
+
+    private sealed class ScenarioTools(bool large = false) : IAgentLoopTools
     {
         public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("simulate_weight_scenario", "fixture", new())];
         public string? Validate(LoopToolScope scope, LoopToolCall call) => null;
         public Task<LoopToolResult> InvokeAsync(LoopToolScope scope, LoopToolCall call, CancellationToken ct) => Task.FromResult(new LoopToolResult([], "calculated",
-            Data: new() { ["status"] = "Calculated" }, BlackboardPatch: new() { [PortfolioScenarioCalculator.ResultKey] = new JsonObject { ["status"] = "Calculated" } }));
+            Data: new() { ["status"] = "Calculated", ["details"] = large ? new string('x', 3500) + "SECOND_SCENARIO_COMPLETE" : "" }, BlackboardPatch: new() { [PortfolioScenarioCalculator.ResultKey] = new JsonObject { ["status"] = "Calculated" } }));
     }
 
     [Fact]

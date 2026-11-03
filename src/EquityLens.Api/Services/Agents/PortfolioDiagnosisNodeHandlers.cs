@@ -31,7 +31,7 @@ public sealed record PortfolioDiagnosisOutput(string Summary, decimal? Portfolio
     int? ObservationCount = null,
     string? Method = null,
     string? AttributionCoverage = null,
-    IReadOnlyList<PortfolioMetricBasis>? MetricBases = null);
+    IReadOnlyList<PortfolioMetricBasis>? MetricBases = null, IReadOnlyList<string>? QualityIssues = null);
 public sealed record PortfolioMetricBasis(string Operation, JsonNode? Basis);
 public sealed record PortfolioDiagnosisGap(string Code, bool Resolvable, string? RequiredCapability, string Reason);
 public sealed record PortfolioDiagnosisQualityResult(

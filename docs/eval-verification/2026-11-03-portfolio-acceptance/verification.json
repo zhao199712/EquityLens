@@ -1,0 +1,22 @@
+{
+  "backend": {
+    "passed": 949,
+    "postgres_integration": 18,
+    "skipped": 0
+  },
+  "risk_contract_and_pipeline": {
+    "passed": 5,
+    "skipped": 0
+  },
+  "frontend_build": "pass",
+  "vitest": 138,
+  "playwright_mock_api": 9,
+  "mathematics_pytest": 36,
+  "eval_pytest": 90,
+  "ef_pending_model_changes": false,
+  "live_code_final_verification": "blocked by repeated upstream 503",
+  "authorized_usd": 1,
+  "charged_or_reserved_upper_usd": 0.498177,
+  "deployment": "none",
+  "original_research_cases": "unchanged"
+}

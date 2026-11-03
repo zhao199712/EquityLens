@@ -12,6 +12,7 @@ internal static class LegacyWorkflowReadModel
     public static bool OwnsResearchArtifact(string type) => type is "ResearchInvestigation" or "FeedbackRevision";
     public static AgentLoopSummaryResponse? BuildLoopSummary(AgentRun run, IReadOnlyList<AgentRunNode> nodes)
     {
+        if (nodes.Any(n => n.NodeType is "PortfolioAgentLoop" or "ResearchAgentLoop")) return null;
         if (run.WorkflowType is not ("ResearchQualityReview" or AgentWorkflowTypes.PortfolioDiagnosis)) return null;
         var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
         var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject;

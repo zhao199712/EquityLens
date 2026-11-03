@@ -1,0 +1,108 @@
+{"id": "1a49f39fcbe64610aa3dd9c59c670c27", "reserved_usd": 0.002667}
+{"id": "1a49f39fcbe64610aa3dd9c59c670c27", "charged_upper_usd": 0.0003066, "status": 200, "usage": {"prompt_tokens": 610, "completion_tokens": 103, "total_tokens": 713, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 354}, "total_upper_usd": 0.0003066}
+{"id": "d926b5e0c9bb4bdd8f455c3f07095c88", "reserved_usd": 0.0055374}
+{"id": "d926b5e0c9bb4bdd8f455c3f07095c88", "charged_upper_usd": 0.000666, "status": 200, "usage": {"prompt_tokens": 1760, "completion_tokens": 115, "total_tokens": 1875, "prompt_tokens_details": {"cached_tokens": 384}, "prompt_cache_hit_tokens": 384, "prompt_cache_miss_tokens": 1376}, "total_upper_usd": 0.0009726000000000001}
+{"id": "64de149a1dd84ec487079e0ae3ed1cde", "reserved_usd": 0.006962100000000001}
+{"id": "64de149a1dd84ec487079e0ae3ed1cde", "charged_upper_usd": 0.001095, "status": 200, "usage": {"prompt_tokens": 3094, "completion_tokens": 139, "total_tokens": 3233, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1686}, "total_upper_usd": 0.0020676}
+{"id": "119bd30ba1c0496b93113bcb19b7d616", "reserved_usd": 0.0105465}
+{"id": "119bd30ba1c0496b93113bcb19b7d616", "charged_upper_usd": 0.0021297, "status": 200, "usage": {"prompt_tokens": 6455, "completion_tokens": 161, "total_tokens": 6616, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 5687}, "total_upper_usd": 0.0041973}
+{"id": "42a3416d24fe4bdc802f071ab5cd9706", "reserved_usd": 0.0117756}
+{"id": "42a3416d24fe4bdc802f071ab5cd9706", "charged_upper_usd": 0.0033159, "status": 200, "usage": {"prompt_tokens": 7725, "completion_tokens": 832, "total_tokens": 8557, "prompt_tokens_details": {"cached_tokens": 1536}, "prompt_cache_hit_tokens": 1536, "prompt_cache_miss_tokens": 6189}, "total_upper_usd": 0.0075132}
+{"id": "d4d6fca74e0f4a148c0d0886612fd171", "reserved_usd": 0.0026796}
+{"id": "d4d6fca74e0f4a148c0d0886612fd171", "charged_upper_usd": 0.0002937, "status": 200, "usage": {"prompt_tokens": 631, "completion_tokens": 87, "total_tokens": 718, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 375}, "total_upper_usd": 0.0078069}
+{"id": "0f22556894bc431cb59e40f629458ce7", "reserved_usd": 0.0055401}
+{"id": "0f22556894bc431cb59e40f629458ce7", "charged_upper_usd": 0.0006405, "status": 200, "usage": {"prompt_tokens": 1755, "completion_tokens": 95, "total_tokens": 1850, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 987}, "total_upper_usd": 0.0084474}
+{"id": "3a5635418a154b648139a5ea5a122109", "reserved_usd": 0.0064182}
+{"id": "3a5635418a154b648139a5ea5a122109", "charged_upper_usd": 0.0009339, "status": 200, "usage": {"prompt_tokens": 2553, "completion_tokens": 140, "total_tokens": 2693, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1145}, "total_upper_usd": 0.0093813}
+{"id": "dc702a949505458fa4a482e5bf6194d3", "reserved_usd": 0.0104472}
+{"id": "dc702a949505458fa4a482e5bf6194d3", "charged_upper_usd": 0.0020768999999999996, "status": 200, "usage": {"prompt_tokens": 6299, "completion_tokens": 156, "total_tokens": 6455, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 4891}, "total_upper_usd": 0.0114582}
+{"id": "96e6de9cb1244514a3efe9f78edf6371", "reserved_usd": 0.0116625}
+{"id": "96e6de9cb1244514a3efe9f78edf6371", "charged_upper_usd": 0.0033195, "status": 200, "usage": {"prompt_tokens": 7557, "completion_tokens": 877, "total_tokens": 8434, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 6149}, "total_upper_usd": 0.0147777}
+{"id": "5e014f7452064708a24f1c8aae19ee84", "reserved_usd": 0.0027048000000000003}
+{"id": "5e014f7452064708a24f1c8aae19ee84", "charged_upper_usd": 0.0003123, "status": 200, "usage": {"prompt_tokens": 677, "completion_tokens": 91, "total_tokens": 768, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 421}, "total_upper_usd": 0.01509}
+{"id": "9290f7ae1d9647da9217a2a6c1a77127", "reserved_usd": 0.0055455}
+{"id": "9290f7ae1d9647da9217a2a6c1a77127", "charged_upper_usd": 0.0006155999999999999, "status": 200, "usage": {"prompt_tokens": 1764, "completion_tokens": 72, "total_tokens": 1836, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 996}, "total_upper_usd": 0.0157056}
+{"id": "175a48e28f9a4f139fff6d843fc239d0", "reserved_usd": 0.0063507}
+{"id": "175a48e28f9a4f139fff6d843fc239d0", "charged_upper_usd": 0.0009206999999999999, "status": 200, "usage": {"prompt_tokens": 2513, "completion_tokens": 139, "total_tokens": 2652, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1105}, "total_upper_usd": 0.0166263}
+{"id": "c2185f9b8ba84b81972d17bdff5a9ec5", "reserved_usd": 0.0099075}
+{"id": "c2185f9b8ba84b81972d17bdff5a9ec5", "charged_upper_usd": 0.0019223999999999999, "status": 200, "usage": {"prompt_tokens": 5836, "completion_tokens": 143, "total_tokens": 5979, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 4428}, "total_upper_usd": 0.0185487}
+{"id": "2d722ade467f4a71a5b421c0240b9909", "reserved_usd": 0.011119200000000001}
+{"id": "2d722ade467f4a71a5b421c0240b9909", "charged_upper_usd": 0.003279, "status": 200, "usage": {"prompt_tokens": 7094, "completion_tokens": 959, "total_tokens": 8053, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 5686}, "total_upper_usd": 0.021827700000000002}
+{"id": "feaebc4fc10a45e09fceb5ea34d89598", "reserved_usd": 0.0028826999999999998}
+{"id": "feaebc4fc10a45e09fceb5ea34d89598", "charged_upper_usd": 0.00048029999999999997, "status": 200, "usage": {"prompt_tokens": 917, "completion_tokens": 171, "total_tokens": 1088, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 661}, "total_upper_usd": 0.022308}
+{"id": "5f2576509db94e3ea34f213bdc880e8d", "reserved_usd": 0.0056001}
+{"id": "5f2576509db94e3ea34f213bdc880e8d", "charged_upper_usd": 0.0006626999999999999, "status": 200, "usage": {"prompt_tokens": 1821, "completion_tokens": 97, "total_tokens": 1918, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 1053}, "total_upper_usd": 0.0229707}
+{"id": "f0ccd8eccbce4fd485e1dd97d7f18159", "reserved_usd": 0.00648}
+{"id": "f0ccd8eccbce4fd485e1dd97d7f18159", "charged_upper_usd": 0.0009566999999999999, "status": 200, "usage": {"prompt_tokens": 2629, "completion_tokens": 140, "total_tokens": 2769, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1221}, "total_upper_usd": 0.0239274}
+{"id": "d771c1d97bdd47eea6aa42319f6e5c83", "reserved_usd": 0.0105081}
+{"id": "d771c1d97bdd47eea6aa42319f6e5c83", "charged_upper_usd": 0.0020745, "status": 200, "usage": {"prompt_tokens": 6423, "completion_tokens": 123, "total_tokens": 6546, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 5015}, "total_upper_usd": 0.0260019}
+{"id": "a565ec5c7adf415881cad6b74e9817f5", "reserved_usd": 0.011702699999999998}
+{"id": "a565ec5c7adf415881cad6b74e9817f5", "charged_upper_usd": 0.003387, "status": 200, "usage": {"prompt_tokens": 7666, "completion_tokens": 906, "total_tokens": 8572, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 6258}, "total_upper_usd": 0.029388900000000003}
+{"id": "56f66bcb534a4977a2f820c9fa2704a8", "reserved_usd": 0.0028767}
+{"id": "56f66bcb534a4977a2f820c9fa2704a8", "charged_upper_usd": 0.00045809999999999997, "status": 200, "usage": {"prompt_tokens": 907, "completion_tokens": 155, "total_tokens": 1062, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 651}, "total_upper_usd": 0.029847000000000002}
+{"id": "eac97ee3adec4b7f9a791e72855e8dfd", "reserved_usd": 0.0056046}
+{"id": "eac97ee3adec4b7f9a791e72855e8dfd", "charged_upper_usd": 0.0006984, "status": 200, "usage": {"prompt_tokens": 1828, "completion_tokens": 125, "total_tokens": 1953, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 1060}, "total_upper_usd": 0.0305454}
+{"id": "976b72adfa944a3387e716e8e365c841", "reserved_usd": 0.0070371}
+{"id": "976b72adfa944a3387e716e8e365c841", "charged_upper_usd": 0.0011972999999999999, "status": 200, "usage": {"prompt_tokens": 3175, "completion_tokens": 204, "total_tokens": 3379, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1767}, "total_upper_usd": 0.0317427}
+{"id": "6dc5fa5e98b7436fa832cc2931c8a126", "reserved_usd": 0.0116871}
+{"id": "6dc5fa5e98b7436fa832cc2931c8a126", "charged_upper_usd": 0.0032409, "status": 200, "usage": {"prompt_tokens": 7675, "completion_tokens": 782, "total_tokens": 8457, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 6267}, "total_upper_usd": 0.0349836}
+{"id": "b9e0345d80e040b2aadeda840d22bd5a", "reserved_usd": 0.0028287}
+{"id": "b9e0345d80e040b2aadeda840d22bd5a", "charged_upper_usd": 0.00035939999999999995, "status": 200, "usage": {"prompt_tokens": 806, "completion_tokens": 98, "total_tokens": 904, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 550}, "total_upper_usd": 0.035343}
+{"id": "83dfa9b52dc644ff91dfefb77e38246e", "reserved_usd": 0.0028263000000000003}
+{"id": "83dfa9b52dc644ff91dfefb77e38246e", "charged_upper_usd": 0.00034529999999999994, "status": 200, "usage": {"prompt_tokens": 811, "completion_tokens": 85, "total_tokens": 896, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 555}, "total_upper_usd": 0.0356883}
+{"id": "973b3823dee54cc8bbeebf9fd7bf5e3a", "reserved_usd": 0.0027216}
+{"id": "973b3823dee54cc8bbeebf9fd7bf5e3a", "charged_upper_usd": 0.0003369, "status": 200, "usage": {"prompt_tokens": 699, "completion_tokens": 106, "total_tokens": 805, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 443}, "total_upper_usd": 0.0360252}
+{"id": "d0b77ee504e045b9b8b22e2536409c8d", "reserved_usd": 0.0055493999999999995}
+{"id": "d0b77ee504e045b9b8b22e2536409c8d", "charged_upper_usd": 0.0006443999999999998, "status": 200, "usage": {"prompt_tokens": 1764, "completion_tokens": 96, "total_tokens": 1860, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 996}, "total_upper_usd": 0.0366696}
+{"id": "cd741a1cd9234f7d9443700297e7d21b", "reserved_usd": 0.00699}
+{"id": "cd741a1cd9234f7d9443700297e7d21b", "charged_upper_usd": 0.0010808999999999999, "status": 200, "usage": {"prompt_tokens": 3119, "completion_tokens": 121, "total_tokens": 3240, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1711}, "total_upper_usd": 0.0377505}
+{"id": "99b7dcf9f13f4fab954247b59669a7f6", "reserved_usd": 0.010886700000000001}
+{"id": "99b7dcf9f13f4fab954247b59669a7f6", "charged_upper_usd": 0.0022275, "status": 200, "usage": {"prompt_tokens": 6785, "completion_tokens": 160, "total_tokens": 6945, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 5377}, "total_upper_usd": 0.039978}
+{"id": "053f48c83f0348b4bc5216dd3ebcf460", "reserved_usd": 0.012187199999999999}
+{"id": "053f48c83f0348b4bc5216dd3ebcf460", "charged_upper_usd": 0.0032606999999999996, "status": 200, "usage": {"prompt_tokens": 8173, "completion_tokens": 674, "total_tokens": 8847, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 6765}, "total_upper_usd": 0.0432387}
+{"id": "205aef7fa7a54ea688f207b023ab8825", "reserved_usd": 0.002667}
+{"id": "205aef7fa7a54ea688f207b023ab8825", "charged_upper_usd": 0.0003066, "status": 200, "usage": {"prompt_tokens": 610, "completion_tokens": 103, "total_tokens": 713, "prompt_tokens_details": {"cached_tokens": 384}, "prompt_cache_hit_tokens": 384, "prompt_cache_miss_tokens": 226}, "total_upper_usd": 0.043545299999999995}
+{"id": "61b3a53555a0430fba30c129985ef988", "reserved_usd": 0.0055374}
+{"id": "61b3a53555a0430fba30c129985ef988", "charged_upper_usd": 0.000666, "status": 200, "usage": {"prompt_tokens": 1760, "completion_tokens": 115, "total_tokens": 1875, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 352}, "total_upper_usd": 0.044211299999999995}
+{"id": "8dcd649bc9a949788a9c4603f060840f", "reserved_usd": 0.006988799999999999}
+{"id": "8dcd649bc9a949788a9c4603f060840f", "charged_upper_usd": 0.0010988999999999999, "status": 200, "usage": {"prompt_tokens": 3111, "completion_tokens": 138, "total_tokens": 3249, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1703}, "total_upper_usd": 0.045310199999999995}
+{"id": "4bebb82a4c3a46069c717f24c7bb4cc7", "reserved_usd": 0.008805}
+{"id": "4bebb82a4c3a46069c717f24c7bb4cc7", "charged_upper_usd": 0.001638, "status": 200, "usage": {"prompt_tokens": 4740, "completion_tokens": 180, "total_tokens": 4920, "prompt_tokens_details": {"cached_tokens": 1536}, "prompt_cache_hit_tokens": 1536, "prompt_cache_miss_tokens": 3204}, "total_upper_usd": 0.046948199999999995}
+{"id": "094669895e414e079239e1d789b79d5a", "reserved_usd": 0.00951}
+{"id": "094669895e414e079239e1d789b79d5a", "charged_upper_usd": 0.0027362999999999997, "status": 200, "usage": {"prompt_tokens": 5453, "completion_tokens": 917, "total_tokens": 6370, "prompt_tokens_details": {"cached_tokens": 1536}, "prompt_cache_hit_tokens": 1536, "prompt_cache_miss_tokens": 3917}, "total_upper_usd": 0.04968449999999999}
+{"id": "d20184b22a824068bd99604f10d1456a", "reserved_usd": 0.002673}
+{"id": "d20184b22a824068bd99604f10d1456a", "charged_upper_usd": 0.0003261, "status": 200, "usage": {"prompt_tokens": 623, "completion_tokens": 116, "total_tokens": 739, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 367}, "total_upper_usd": 0.050010599999999995}
+{"id": "1958cad08759450dbc76ebb6bc76fd97", "reserved_usd": 0.0027468}
+{"id": "1958cad08759450dbc76ebb6bc76fd97", "charged_upper_usd": 0.00033629999999999993, "status": 200, "usage": {"prompt_tokens": 737, "completion_tokens": 96, "total_tokens": 833, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 481}, "total_upper_usd": 0.05034689999999999}
+{"id": "c5ab29054289420fb7a2d7d153f56518", "reserved_usd": 0.0055545}
+{"id": "c5ab29054289420fb7a2d7d153f56518", "charged_upper_usd": 0.0006414, "status": 200, "usage": {"prompt_tokens": 1766, "completion_tokens": 93, "total_tokens": 1859, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 998}, "total_upper_usd": 0.05098829999999999}
+{"id": "b3439026a0a9427698e5020904eea7fb", "reserved_usd": 0.0064344}
+{"id": "b3439026a0a9427698e5020904eea7fb", "charged_upper_usd": 0.0009425999999999999, "status": 200, "usage": {"prompt_tokens": 2558, "completion_tokens": 146, "total_tokens": 2704, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1150}, "total_upper_usd": 0.051930899999999995}
+{"id": "9ecdb2e55263434ba9b75932cf4cb702", "reserved_usd": 0.0104715}
+{"id": "9ecdb2e55263434ba9b75932cf4cb702", "charged_upper_usd": 0.0020826, "status": 200, "usage": {"prompt_tokens": 6286, "completion_tokens": 164, "total_tokens": 6450, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 4878}, "total_upper_usd": 0.05401349999999999}
+{"id": "5e5141ac976e49e381beca550687d711", "reserved_usd": 0.0117948}
+{"id": "5e5141ac976e49e381beca550687d711", "charged_upper_usd": 0.0034482, "status": 200, "usage": {"prompt_tokens": 7626, "completion_tokens": 967, "total_tokens": 8593, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 6858}, "total_upper_usd": 0.05746169999999999}
+{"id": "cc8ef290e1a04c8cbc1a7fc871b68b84", "reserved_usd": 0.0118023}
+{"id": "cc8ef290e1a04c8cbc1a7fc871b68b84", "charged_upper_usd": 0.0033672, "status": 200, "usage": {"prompt_tokens": 7628, "completion_tokens": 899, "total_tokens": 8527, "prompt_tokens_details": {"cached_tokens": 1536}, "prompt_cache_hit_tokens": 1536, "prompt_cache_miss_tokens": 6092}, "total_upper_usd": 0.06082889999999999}
+{"id": "4018dd10ef65414cb593fe7dcf52852a", "reserved_usd": 0.0028491}
+{"id": "4018dd10ef65414cb593fe7dcf52852a", "charged_upper_usd": 0.0003795, "status": 200, "usage": {"prompt_tokens": 841, "completion_tokens": 106, "total_tokens": 947, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 585}, "total_upper_usd": 0.06120839999999999}
+{"id": "71a964f73db04a0ba73364b1e8f0bd80", "reserved_usd": 0.0028508999999999995}
+{"id": "71a964f73db04a0ba73364b1e8f0bd80", "charged_upper_usd": 0.0004704, "status": 200, "usage": {"prompt_tokens": 840, "completion_tokens": 182, "total_tokens": 1022, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 584}, "total_upper_usd": 0.06167879999999999}
+{"id": "28bffde16085454d99c31732a27c0b5a", "reserved_usd": 0.0056337}
+{"id": "28bffde16085454d99c31732a27c0b5a", "charged_upper_usd": 0.0006465, "status": 200, "usage": {"prompt_tokens": 1847, "completion_tokens": 77, "total_tokens": 1924, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 1079}, "total_upper_usd": 0.06232529999999999}
+{"id": "9932a328bf83403bbf78ab166613efe1", "reserved_usd": 0.0064416000000000005}
+{"id": "9932a328bf83403bbf78ab166613efe1", "charged_upper_usd": 0.0009705, "status": 200, "usage": {"prompt_tokens": 2591, "completion_tokens": 161, "total_tokens": 2752, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1183}, "total_upper_usd": 0.0632958}
+{"id": "d95424d933244a2a99b52c9a50f2b50e", "reserved_usd": 0.010488}
+{"id": "d95424d933244a2a99b52c9a50f2b50e", "charged_upper_usd": 0.0020922, "status": 200, "usage": {"prompt_tokens": 6342, "completion_tokens": 158, "total_tokens": 6500, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 4934}, "total_upper_usd": 0.065388}
+{"id": "2f88577c983e4829b10e904d35275495", "reserved_usd": 0.011764199999999999}
+{"id": "2f88577c983e4829b10e904d35275495", "charged_upper_usd": 0.0034382999999999996, "status": 200, "usage": {"prompt_tokens": 7681, "completion_tokens": 945, "total_tokens": 8626, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 6273}, "total_upper_usd": 0.0688263}
+{"id": "012fe716e1b546e6ba7dacc5c89ad50c", "reserved_usd": 0.00273}
+{"id": "012fe716e1b546e6ba7dacc5c89ad50c", "charged_upper_usd": 0.000312, "status": 200, "usage": {"prompt_tokens": 716, "completion_tokens": 81, "total_tokens": 797, "prompt_tokens_details": {"cached_tokens": 256}, "prompt_cache_hit_tokens": 256, "prompt_cache_miss_tokens": 460}, "total_upper_usd": 0.06913830000000001}
+{"id": "bd7399e5822e42f992cd3e2b29961822", "reserved_usd": 0.005550899999999999}
+{"id": "bd7399e5822e42f992cd3e2b29961822", "charged_upper_usd": 0.0006698999999999999, "status": 200, "usage": {"prompt_tokens": 1769, "completion_tokens": 116, "total_tokens": 1885, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 1001}, "total_upper_usd": 0.06980820000000001}
+{"id": "771cb40d4b03447eaceffdd804af615e", "reserved_usd": 0.0065306999999999995}
+{"id": "771cb40d4b03447eaceffdd804af615e", "charged_upper_usd": 0.0009435, "status": 200, "usage": {"prompt_tokens": 2661, "completion_tokens": 121, "total_tokens": 2782, "prompt_tokens_details": {"cached_tokens": 768}, "prompt_cache_hit_tokens": 768, "prompt_cache_miss_tokens": 1893}, "total_upper_usd": 0.07075170000000001}
+{"id": "00e1953b46624221b30f9be1a387d70a", "reserved_usd": 0.010016099999999998}
+{"id": "00e1953b46624221b30f9be1a387d70a", "charged_upper_usd": 0.0019790999999999997, "status": 200, "usage": {"prompt_tokens": 5945, "completion_tokens": 163, "total_tokens": 6108, "prompt_tokens_details": {"cached_tokens": 1536}, "prompt_cache_hit_tokens": 1536, "prompt_cache_miss_tokens": 4409}, "total_upper_usd": 0.07273080000000001}
+{"id": "59195ecd501f4f3fb595173ec886e4b4", "reserved_usd": 0.0112446}
+{"id": "59195ecd501f4f3fb595173ec886e4b4", "charged_upper_usd": 0.0032441999999999996, "status": 200, "usage": {"prompt_tokens": 7226, "completion_tokens": 897, "total_tokens": 8123, "prompt_tokens_details": {"cached_tokens": 1536}, "prompt_cache_hit_tokens": 1536, "prompt_cache_miss_tokens": 5690}, "total_upper_usd": 0.07597500000000001}

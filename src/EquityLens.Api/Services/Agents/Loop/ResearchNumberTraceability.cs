@@ -137,7 +137,14 @@ internal static partial class ResearchNumberTraceability
     private static IReadOnlyList<Number> ExtractQuote(string text)
     {
         text = Reference().Replace(text.Normalize(NormalizationForm.FormKC).Replace('−', '-'), "");
+        // 僅修復 EPS 標籤後連續的兩位小數表格欄位；不對一般數字猜測切割。
+        // 完整匹配至少兩欄，保留兩位精度，移除原先貪婪解析出的假小數。
+        text = Regex.Replace(text, @"(?<label>EPS\s*\(NT Dollar\)\s*)(?<cells>(?:\d+\.\d{2}){2,})(?![\d.])", m =>
+            m.Groups["label"].Value + Regex.Replace(m.Groups["cells"].Value, @"\d+?\.\d{2}", "$0 "), RegexOptions.IgnoreCase);
         var numbers = Extract(text);
+        // 匯率報價的分母明確是每一美元，不能把其他語境中的 1 一概忽略。
+        if (Regex.IsMatch(text, @"(?:NT\$|NTD|新[臺台]幣)\s*/\s*(?:US\$|USD|美元)|(?:US\$|USD)\s*/\s*(?:NT\$|NTD)", RegexOptions.IgnoreCase))
+            numbers.Add(new(1m, "money"));
         // 股數的單位常在列名，不能沿用財報整頁的仟元，也不能擴散到下一個 EPS／金額列。
         var shareRanges = ShareHeaderValues().Matches(text).Select(m => m.Groups["values"]).ToArray();
         var shareNumbers = numbers.Where(n => n.Kind == "plain"

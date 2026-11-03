@@ -34,12 +34,14 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         var diagnosis = PortfolioDiagnosisBlackboard.Context(board);
         var answer = board["portfolioLoopAnswer"]?.Deserialize<LoopAnswer>(AgentNodeJson.SerializerOptions);
         var facts = board["agentLoopFacts"]?.Deserialize<List<LoopDataFact>>(AgentNodeJson.SerializerOptions) ?? [];
-        var issues = Check(answer, facts);
+        var rejectedNumbers = new List<string>();
+        var issues = Check(answer, facts, rejectedNumbers);
         var attribution = board[AgentBlackboardKeys.PerformanceAttribution]?.Deserialize<PortfolioPerformanceAttribution>(AgentNodeJson.SerializerOptions);
         var metrics = PortfolioRiskMetricsReader.FromMathResults(board[AgentBlackboardKeys.MathResults]);
         var comparison = board[PortfolioScenarioCalculator.ResultKey]?.Deserialize<PortfolioScenarioComparison>(AgentNodeJson.SerializerOptions);
         if (RequiresScenario(board) && comparison?.Status != "Calculated")
             issues.Add((board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>() ?? 0) >= 120 ? "OptimizationScenarioRequired" : "OptimizationDataUnavailable");
+        if (comparison?.ScenarioErrors is { Count: > 0 }) issues.Add("PartialScenarioFailure");
         var limited = issues.Count > 0 || attribution?.CoverageStatus != "complete";
         var summary = issues.Count > 0 ? "模型答案未通過品質檢查；以下僅列出已保存的工具資料，請確認資料限制。" : answer!.Markdown;
         if (issues.Contains("OptimizationScenarioRequired")) summary = "優化問題尚未取得同一快照的完整情境比較，無法提供改善幅度。";
@@ -48,12 +50,12 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         var output = new PortfolioDiagnosisOutput(summary, attribution?.PortfolioReturn, attribution?.BenchmarkReturn, attribution?.ActiveReturn,
             attribution?.Holdings.Where(x => x.Contribution < 0).OrderBy(x => x.Contribution).Take(3).ToArray() ?? [],
             attribution?.Holdings.Where(x => x.Contribution > 0).OrderByDescending(x => x.Contribution).Take(3).ToArray() ?? [], [],
-            limited ? "Limited" : "complete", metrics, issues.Count == 0 && comparison is null ? answer?.Markdown : null, comparison, diagnosis,
+            limited ? "Limited" : "complete", metrics, issues.Count == 0 ? answer?.Markdown : comparison?.Status == "Calculated" && issues.All(i => i is "UntraceableNumbers" or "MixedRiskBasis") ? VerifiedParagraphs(answer, facts) : null, comparison, diagnosis,
             "Unvalidated", board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>(),
             "既有持股歷史重建；情境採固定權重、含現金的共同快照；模型未經回測驗證", attribution?.CoverageStatus,
             (board[AgentBlackboardKeys.MathResults] as JsonArray)?.OfType<JsonObject>()
-                .Select(x => new PortfolioMetricBasis(x["operation"]?.ToString() ?? "unknown", x["provenance"]?["measurementBasis"]?.DeepClone())).ToList());
-        board["portfolioQualityGate"] = JsonSerializer.SerializeToNode(new { passed = issues.Count == 0, blockingIssues = issues, limited }, AgentNodeJson.SerializerOptions);
+                .Select(x => new PortfolioMetricBasis(x["operation"]?.ToString() ?? "unknown", x["provenance"]?["measurementBasis"]?.DeepClone())).ToList(), issues);
+        board["portfolioQualityGate"] = JsonSerializer.SerializeToNode(new { passed = issues.Count == 0, blockingIssues = issues, rejectedNumbers, limited }, AgentNodeJson.SerializerOptions);
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioDiagnosisDraft, output);
         context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
         context.Node.OutputJson = board["portfolioQualityGate"]!.ToJsonString();
@@ -74,49 +76,147 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             $"{s.Name}：減碼資金{(s.RemainderPolicy == "holding" ? "轉入 " + s.TransferToTicker : "留作現金")}；" +
             string.Join("、", s.Weights.Select(w => $"{w.Key} 權重 {w.Value:P2}")) + $"；現金 {s.CashWeight:P2}" +
             (s.Metrics is { } m ? "；調整後：" + Metrics(m) : "") +
-            (s.DifferenceFromBaseline is { } d ? "；相較原組合差異（百分點）：" + Metrics(d) : ""))) +
+            (s.DifferenceFromBaseline is { } d ? "；相較原組合差異（百分點）：" + $"年化波動 {d.AnnualizedVolatility * 100:F2}、VaR {d.HistoricalVaR * 100:F2}、ES {d.ExpectedShortfall * 100:F2}、最大回撤 {d.HypotheticalMaxDrawdown * 100:F2}" : ""))) +
             (comparison.Status == "Calculated" ? "。情境不代表未來績效或保證改善。" : "。資料不足，風險指標無法計算。") +
             $"方法：{comparison.Method}；有效日報酬 {comparison.ObservationCount} 筆、VaR 信心水準 {comparison.ConfidenceLevel:P0}、期間 {comparison.HorizonDays} 日。";
     }
 
-    internal static List<string> Check(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts)
+    internal static List<string> Check(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts, List<string>? rejectedNumbers = null)
     {
         var issues = new List<string>();
         if (answer is null || string.IsNullOrWhiteSpace(answer.Markdown) || answer.Markdown == AgentLoopEngine.Refusal) return ["InsufficientEvidence"];
         var byId = facts.ToDictionary(x => x.Id, StringComparer.Ordinal);
         if (facts.Count == 0) issues.Add("MissingToolEvidence");
         if (answer.CitedEvidenceIds.Any(x => !byId.ContainsKey(x))) issues.Add("UnknownToolEvidence");
-        foreach (var sentence in Regex.Split(answer.Markdown, @"[。！？\n]"))
+        foreach (var sentence in Regex.Split(WithTableCitations(answer.Markdown.Normalize(System.Text.NormalizationForm.FormKC).Replace('−', '-')), @"[\n]"))
         {
             var ids = Regex.Matches(sentence, @"\[(P\d+)\]").Select(x => x.Groups[1].Value).ToArray();
             if (ids.Any(x => !byId.ContainsKey(x))) issues.Add("UnknownToolEvidence");
             var text = Regex.Replace(sentence, @"\[P\d+\]", "");
-            var citations = ids.Where(byId.ContainsKey).SelectMany(id => Values(byId[id].Data)).ToHashSet(StringComparer.Ordinal);
-            foreach (Match number in Regex.Matches(text, @"(?<![A-Za-z\d])[-+]?\d+(?:,\d{3})*(?:\.\d+)?\s*[%％]?"))
+            // Markdown 編號不是數據；標題裡真正的指標數字仍須引用。
+            text = Regex.Replace(text, @"^\s*(?:#{1,6}\s*)?\d+[.)、]\s+", "");
+            var cited = ids.Where(byId.ContainsKey).Select(id => byId[id]).ToArray();
+            // 日期是分析範圍而非金額；必須在本句引用的事實中確實存在。
+            text = Regex.Replace(text, @"(?<!\d)20\d{2}-\d{2}-\d{2}(?!\d)", m =>
+                cited.Any(f => f.Data.ToJsonString().Contains(m.Value, StringComparison.Ordinal)) ? "日期" : m.Value);
+            var tickers = facts.SelectMany(f => Tickers(f.Data)).ToHashSet(StringComparer.Ordinal);
+            text = Regex.Replace(text, @"(?<![\d.])\d{4,6}(?![\d.]|\s*(?:%|％|元|股|百分點))", m => tickers.Contains(m.Value) ? "標的" : m.Value);
+            var separatesBases = Regex.IsMatch(text, @"計算基礎不同|(?:不宜|不可|不能).{0,8}(?:直接|交叉)?比較")
+                && !Regex.IsMatch(text, @"→|差異|百分點|降至|增至");
+            var comparisonClaim = !separatesBases && facts.Any(f => f.Tool == "simulate_weight_scenario")
+                && Regex.IsMatch(text, @"波動|VaR|ES|回撤", RegexOptions.IgnoreCase)
+                && (Regex.IsMatch(text, @"比較|情境|原組合|基準|調整|差異|差額|→|前後") || text.Contains('|'));
+            if (comparisonClaim && cited.Any(f => f.Tool is "run_risk_analysis" or "get_risk_report")) issues.Add("MixedRiskBasis");
+            var citations = cited.Where(f => !comparisonClaim || f.Tool == "simulate_weight_scenario").SelectMany(f => Values(f.Data)).ToArray();
+            foreach (Match number in Regex.Matches(text, @"(?<![A-Za-z\d])(?<value>[-+]?\d+(?:,\d{3})*(?:\.\d+)?)(?:\s*(?<unit>[%％]|個百分點|百分點))?"))
             {
-                if (!decimal.TryParse(number.Value.Trim().TrimEnd('%', '％'), NumberStyles.Number, CultureInfo.InvariantCulture, out var value)) continue;
-                var percent = number.Value.TrimEnd().EndsWith('%') || number.Value.TrimEnd().EndsWith('％');
-                if (!citations.Contains(Key(value, percent))) issues.Add("UntraceableNumbers");
+                var token = number.Groups["value"].Value;
+                if (!decimal.TryParse(token, NumberStyles.Number, CultureInfo.InvariantCulture, out var value)) continue;
+                var percent = number.Groups["unit"].Success;
+                var precision = token.Contains('.') ? token.Length - token.IndexOf('.') - 1 : 0;
+                // 依顯示的小數位四捨五入，沒有任意相對誤差；整數主張仍須精確。
+                if (!citations.Any(v => Matches(v, value, percent, precision)))
+                { issues.Add("UntraceableNumbers"); rejectedNumbers?.Add(number.Value); }
             }
         }
         if (Regex.IsMatch(answer.Markdown, @"(?<!不)(?<!無法)(?<!不能)保證獲利")) issues.Add("GuaranteedProfitClaim");
         return issues.Distinct().ToList();
     }
 
-    private static string Key(decimal value, bool percent) => (percent ? "p:" : "n:") + value.ToString("G29", CultureInfo.InvariantCulture);
-    private static IEnumerable<string> Values(JsonNode? node)
+    internal static string RepairHints(IReadOnlyList<string> rejected, IReadOnlyList<LoopDataFact> facts)
     {
-        if (node is JsonObject obj) { foreach (var item in obj) foreach (var v in Values(item.Value)) yield return v; }
-        else if (node is JsonArray array) { foreach (var item in array) foreach (var v in Values(item)) yield return v; }
-        else if (node is JsonValue scalar)
+        var hints = new List<string>();
+        foreach (var token in rejected.Distinct().Take(12))
         {
-            if (decimal.TryParse(scalar.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var number))
+            var match = Regex.Match(token, @"[-+]?\d+(?:,\d{3})*(?:\.\d+)?");
+            if (!decimal.TryParse(match.Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var claim)) continue;
+            if (claim < -1_000_000_000_000m || claim > 1_000_000_000_000m) continue;
+            var percent = token.Contains('%') || token.Contains('％') || token.Contains("百分點");
+            var decimals = match.Value.Contains('.') ? match.Value.Length - match.Value.IndexOf('.') - 1 : 0;
+            var candidates = facts.SelectMany(f => Values(f.Data).Select(v => (f.Id, Raw: v)))
+                .Where(v => Math.Abs(v.Raw) < 1_000_000_000_000m)
+                .Select(v => (v.Id, v.Raw, Display: percent ? v.Raw * 100m : v.Raw))
+                .Where(v => Math.Abs(v.Display - claim) <= Math.Max(Math.Abs(claim) * .05m, .0001m))
+                .OrderBy(v => Math.Abs(v.Display - claim)).DistinctBy(v => (v.Id, v.Raw)).Take(3)
+                .Select(v => $"[{v.Id}] raw={v.Raw.ToString(CultureInfo.InvariantCulture)}, rounded={decimal.Round(v.Display, Math.Min(decimals, 8), MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture)}{(percent ? "%/百分點" : "")}");
+            hints.Add(token + " candidates (核對語義後引用，不可只挑相同數字): " + string.Join("; ", candidates));
+        }
+        return string.Join("\n", hints);
+    }
+
+    private static string? VerifiedParagraphs(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts)
+    {
+        if (answer is null || answer.Markdown == AgentLoopEngine.Refusal) return null;
+        var valid = Regex.Split(WithTableCitations(answer.Markdown), @"\n\s*\n")
+            .Where(p => Regex.IsMatch(p, @"\[P\d+\]") && !p.Contains('|')
+                && Check(new LoopAnswer(p, Regex.Matches(p, @"\[(P\d+)\]").Select(m => m.Groups[1].Value).Distinct().ToArray()), facts).Count == 0).ToArray();
+        return valid.Length == 0 ? null : "以下保留通過數字與引用檢查的說明；其餘草稿已省略：\n\n" + string.Join("\n\n", valid);
+    }
+
+    private static string WithTableCitations(string markdown)
+    {
+        var lines = markdown.Split('\n');
+        // 小標題與其緊接的引用段落屬同一說明區塊，不把標題的配置數字當成孤立主張。
+        for (var h = 0; h < lines.Length; h++)
+        {
+            if (!Regex.IsMatch(lines[h], @"^\s*(?:#{1,6}\s|\*\*.+\*\*\s*$)") || Regex.IsMatch(lines[h], @"\[P\d+\]")) continue;
+            var next = h + 1; while (next < lines.Length && string.IsNullOrWhiteSpace(lines[next])) next++;
+            if (next < lines.Length && !Regex.IsMatch(lines[next], @"^\s*#"))
+                lines[h] += string.Concat(Regex.Matches(lines[next], @"\[P\d+\]").Select(m => m.Value).Distinct());
+        }
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (!lines[i].TrimStart().StartsWith('|')) continue;
+            var start = i;
+            while (i + 1 < lines.Length && lines[i + 1].TrimStart().StartsWith('|')) i++;
+            var previous = start - 1; while (previous >= 0 && string.IsNullOrWhiteSpace(lines[previous])) previous--;
+            var next = i + 1; while (next < lines.Length && string.IsNullOrWhiteSpace(lines[next])) next++;
+            var source = previous >= 0 ? lines[previous] : "";
+            if (next < lines.Length && Regex.IsMatch(lines[next], @"^(?:以上|表中|上述|來源|Source|\[P\d+\])")) source += lines[next];
+            var refs = string.Concat(Regex.Matches(source, @"\[P\d+\]").Select(m => m.Value).Distinct());
+            // 表頭的情境名稱屬於本表；只繼承本表資料列明列的來源，不擴散到其他段落。
+            if (!Regex.IsMatch(lines[start], @"\[P\d+\]"))
+                lines[start] += string.Concat(lines.Skip(start + 1).Take(i - start)
+                    .SelectMany(line => Regex.Matches(line, @"\[P\d+\]").Select(m => m.Value)).Distinct());
+            for (var row = start; row <= i; row++)
+                if (!Regex.IsMatch(lines[row], @"\[P\d+\]")) lines[row] += refs;
+        }
+        return string.Join('\n', lines);
+    }
+
+    private static IEnumerable<string> Tickers(JsonNode? node)
+    {
+        if (node is JsonObject obj)
+            foreach (var item in obj)
             {
-                yield return Key(number, false);
-                yield return Key(decimal.Round(number * 100, 2), true);
-                yield return Key(decimal.Round(number * 100, 1), true);
-                yield return Key(decimal.Round(number * 100, 4), true);
+                if (item.Key == "ticker" && item.Value is JsonValue ticker) yield return ticker.ToString();
+                foreach (var value in Tickers(item.Value)) yield return value;
+            }
+        else if (node is JsonArray array) foreach (var item in array) foreach (var value in Tickers(item)) yield return value;
+    }
+
+    private static bool Matches(decimal evidence, decimal claim, bool percent, int precision)
+    {
+        try
+        {
+            var value = percent ? evidence * 100m : evidence;
+            return value == claim || ((precision > 0 || percent) && precision <= 8 && decimal.Round(value, precision, MidpointRounding.AwayFromZero) == claim);
+        }
+        catch (OverflowException) { return false; }
+    }
+
+    private static IEnumerable<decimal> Values(JsonNode? node)
+    {
+        if (node is JsonObject obj) {
+            foreach (var item in obj) {
+                if (item.Key == "method" && item.Value is JsonValue method)
+                    foreach (Match m in Regex.Matches(method.ToString(), @"(?:cashReturn|annualization)=([0-9]+)(?:;|$)"))
+                        yield return decimal.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
+                foreach (var v in Values(item.Value)) yield return v;
             }
         }
+        else if (node is JsonArray array) { foreach (var item in array) foreach (var v in Values(item)) yield return v; }
+        else if (node is JsonValue scalar && decimal.TryParse(scalar.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var number))
+            yield return number;
     }
 }

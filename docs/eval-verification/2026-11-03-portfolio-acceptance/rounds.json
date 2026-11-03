@@ -1,0 +1,90 @@
+[
+  {
+    "round": 1,
+    "original_directory": "portfolio-eval-20261103",
+    "strict_passed": 5,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "e34384249c42d38ad2cb5ae5b785cb9c68424f58312d2bd7d6fb2276df6e698b",
+    "raw_bytes": 8532008
+  },
+  {
+    "round": 2,
+    "original_directory": "portfolio-eval-20261103-v2",
+    "strict_passed": 6,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "c62a20254f1bb11ce3d15588fc3432ef6a38c7a26f0166a9057bbe1de52fc148",
+    "raw_bytes": 6897514
+  },
+  {
+    "round": 3,
+    "original_directory": "portfolio-eval-20261103-v3",
+    "strict_passed": 8,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "49dddcad312a0c43a646a795d36a676ee7b9100fc9bc77902caddb0571822e39",
+    "raw_bytes": 6893837
+  },
+  {
+    "round": 4,
+    "original_directory": "portfolio-eval-20261103-final",
+    "strict_passed": 7,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "0cd58c05ac57c5a7eed170f6dd0227ba3335bf563d88f9d65190e6ee290efdd5",
+    "raw_bytes": 6953624
+  },
+  {
+    "round": 5,
+    "original_directory": "portfolio-eval-20261103-display",
+    "strict_passed": 8,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "f28903de58d1c507635182dfb49f4b24d96104a840d2031a9d5797acef06bbf1",
+    "raw_bytes": 6923541
+  },
+  {
+    "round": 6,
+    "original_directory": "portfolio-eval-20261103-verified",
+    "strict_passed": null,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": false,
+    "reason": "Isolation setup: missing JWT audience; no AI calls",
+    "raw_sha256": "155a388384fb76a55922db103f918ca799ca4966c39e03c2f9cbabd6331c3ff5",
+    "raw_bytes": 768
+  },
+  {
+    "round": 7,
+    "original_directory": "portfolio-eval-20261103-release",
+    "strict_passed": null,
+    "attempted_cases": 5,
+    "not_run": 9,
+    "eligible_for_quality_comparison": false,
+    "reason": "Provider 503; not an answer-quality evaluation",
+    "raw_sha256": "60535c28a9d53244ddba2209d03023e86a3796061920126af5997787fd3653ac",
+    "raw_bytes": 27216
+  },
+  {
+    "round": 8,
+    "original_directory": "portfolio-eval-20261103-acceptance",
+    "strict_passed": null,
+    "attempted_cases": 1,
+    "not_run": 13,
+    "eligible_for_quality_comparison": false,
+    "reason": "Provider 503; not an answer-quality evaluation",
+    "raw_sha256": "2af20c8ce17ec312d411993979934cf68c9ced3ddf139053edfe2c4f7c480399",
+    "raw_bytes": 5458
+  }
+]

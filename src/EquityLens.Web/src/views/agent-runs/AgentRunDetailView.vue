@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AgentLoopRunSummary from "../../components/agents/AgentLoopRunSummary.vue"
 import RiskMeasurementBasis from '../../components/agents/RiskMeasurementBasis.vue'
 import type { RiskMeasurementBasis as MeasurementBasis } from '../../services/risk'
 import { legacyWorkflow, type LegacyRevisionOutput } from "../../services/legacyWorkflows"
@@ -237,7 +238,7 @@ const draftOutput = computed((): LegacyRevisionOutput | null => {
 const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null => {
   if (!run.value || run.value.run.workflowType !== 'PortfolioDiagnosis') return null
   if (run.value.run.status === 'Cancelled') return null
-  const output = run.value.outputJson as unknown as (PortfolioDiagnosisOutput & { rejected?: boolean }) | null
+  const output = (run.value.outputJson ?? (pendingApproval.value ? run.value.blackboardJson.portfolioDiagnosisDraft : null)) as unknown as (PortfolioDiagnosisOutput & { rejected?: boolean }) | null
   if (!output || output.rejected === true) return null
   return output
 })
@@ -329,7 +330,7 @@ const nextActionLabel = computed(() => {
             <div v-if="!isTerminalStatus || run.run.errorMessage" class="live-row">
               <span v-if="!isTerminalStatus" class="live-status">
                 <span class="live-dot" />
-                {{ run.run.status === 'Pending' ? '已加入背景執行佇列，正在等待執行' : run.run.status === 'WaitingForApproval' ? '等待人工批准，尚未執行高風險節點' : '背景執行中，頁面會自動更新' }}
+                {{ run.run.status === 'Pending' ? '已加入背景執行佇列，正在等待執行' : ['WaitingForApproval', 'WaitingForFeedback'].includes(run.run.status) ? '已暫停，等待人工審閱' : '背景執行中，頁面會自動更新' }}
               </span>
               <span v-if="run.run.errorMessage" class="run-error">{{ run.run.errorMessage }}</span>
             </div>
@@ -389,7 +390,8 @@ const nextActionLabel = computed(() => {
             :completed-at-utc="run.run.completedAtUtc"
           />
 
-          <div v-if="run.loopSummary && run.run.workflowType !== 'ResearchAgent'" class="prestige-panel prestige-panel-pad result-panel" data-testid="loop-summary">
+<AgentLoopRunSummary :detail="run" />
+          <div v-if="!run.nodes.some(n => ['PortfolioAgentLoop', 'ResearchAgentLoop'].includes(n.nodeType)) && run.loopSummary && run.run.workflowType !== 'ResearchAgent'" class="prestige-panel prestige-panel-pad result-panel" data-testid="loop-summary">
             <h3 class="panel-title">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? 'Portfolio Diagnosis Loop' : 'Research Quality Loop' }}</h3>
             <div class="stat-grid">
               <div><div class="prestige-label stat-caption">狀態</div><div class="stat-value">{{ run.loopSummary.status }}</div></div>
@@ -422,7 +424,7 @@ const nextActionLabel = computed(() => {
           />
 
           <!-- Waiting for output -->
-          <div v-if="run.run.workflowType !== 'ResearchAgent' && (!isTerminalStatus || run.outputJson === null)" class="prestige-empty waiting-block">
+          <div v-if="run.run.workflowType !== 'ResearchAgent' && !isTerminalStatus && !pendingApproval && !['WaitingForFeedback', 'WaitingForApproval'].includes(run.run.status)" class="prestige-empty waiting-block">
             <div style="font-size: 14px; margin-bottom: 8px">等待背景工作完成</div>
             <div style="font-size: 12px">結果產出後會自動顯示在這裡</div>
           </div>
@@ -530,6 +532,7 @@ const nextActionLabel = computed(() => {
               </div>
               <RiskMeasurementBasis v-if="!portfolioDiagnosisOutput.metricBases?.length" />
             </details>
+            <p v-if="portfolioDiagnosisOutput.scenarioComparison" class="body-text">情境前後採固定權重與同一份歷史快照；一般風險分析可能採固定股數，兩者數字不可直接相減。</p>
             <PortfolioScenarioComparison v-if="portfolioDiagnosisOutput.scenarioComparison" :comparison="portfolioDiagnosisOutput.scenarioComparison" />
             <div class="stat-grid">
               <div><div class="prestige-label stat-caption">投組報酬</div><div class="stat-value">{{ formatPercent(portfolioDiagnosisOutput.portfolioReturn) }}</div></div>

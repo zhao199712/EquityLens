@@ -18,6 +18,20 @@ namespace EquityLens.Api.Tests.Services.Agents;
 public sealed class PortfolioLoopToolsTests
 {
     [Fact]
+    public void RiskDisplayKeepsSourceSpecificRounding()
+    {
+        var metrics = new PortfolioRiskMetrics(null, null, null, null, .2453m, null, null, null,
+            [new("9001", .8m, .24m, .99774663m)]);
+        var display = PortfolioLoopTools.DisplayMetrics(metrics);
+        Assert.Equal("99.77%", display["contributions"]![0]!["componentRiskShare"]!.GetValue<string>());
+        Assert.Equal("24.53%", display["portfolioVolatility"]!.GetValue<string>());
+        var facts = new[] { new LoopDataFact("P1", "risk", "run_risk_analysis", new JsonObject {
+            ["display"] = display, ["componentRiskShare"] = .99774663m }) };
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("風險貢獻 99.77% [P1]", ["P1"]), facts));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(new("風險貢獻 99.78% [P1]", ["P1"]), facts));
+    }
+
+    [Fact]
     public void OnlyTaskToolsAreExposed_AndAllMathOperationsAreDenied()
     {
         using var services = new ServiceCollection().BuildServiceProvider();
@@ -103,6 +117,20 @@ public sealed class PortfolioLoopToolsTests
         Assert.Empty(await db.PortfolioTransactions.ToListAsync());
     }
 
+    [Fact]
+    public void MissingDestinationHasActionableFeedback_AndDoesNotRejectValidSibling()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var tools = new PortfolioLoopTools(services.GetRequiredService<IServiceScopeFactory>());
+        var scope = new LoopToolScope(Guid.NewGuid(), new("", "給我優化建議"), [], false,
+            DomainContext: new() { [PortfolioLoopTools.SnapshotKey] = new JsonObject() });
+        var bad = new PortfolioScenarioRequest("a", new Dictionary<string, decimal> { ["2327"] = .1m }, "holding");
+        LoopToolCall Call(params PortfolioScenarioRequest[] scenarios) => new("s", "simulate_weight_scenario", new() {
+            ["scenarios"] = JsonSerializer.SerializeToNode(scenarios, AgentNodeJson.SerializerOptions) });
+        Assert.Contains("transferToTicker", tools.Validate(scope, Call(bad)));
+        Assert.Null(tools.Validate(scope, Call(bad, bad with { Name = "b", RemainderPolicy = "cash" })));
+    }
+
     private sealed class CachedRisk : IPortfolioRiskRunResolver
     {
         public Task<(PortfolioRiskEvidenceSnapshot Evidence, IReadOnlyList<JsonObject> Results)> ResolveAsync(PortfolioDiagnosisContext context, Guid userId, CancellationToken ct)
@@ -141,6 +169,12 @@ public sealed class PortfolioLoopToolsTests
         Assert.Equal(expected.InputHash, actual.InputHash);
         Assert.Equal(expected.Scenarios[0].Metrics!.AnnualizedVolatility, actual.Scenarios[0].Metrics!.AnnualizedVolatility);
         Assert.Null(board[PortfolioScenarioCalculator.ResultKey]);
+        var partial = PortfolioLoopTools.CalculateAvailable(snapshot, [requests[0], new("bad", new Dictionary<string, decimal> { ["2330"] = .9m })]);
+        Assert.Single(partial.Scenarios);
+        Assert.Single(partial.ScenarioErrors!);
+        Assert.Contains("targetWeights", partial.ScenarioErrors![0]);
+        Assert.Equal(1m, partial.Scenarios[0].Weights.Values.Sum() + partial.Scenarios[0].CashWeight);
+
         var denied = await tools.InvokeAsync(scope with { UserId = Guid.NewGuid() }, call, default);
         Assert.Equal("portfolio_not_found", denied.Error);
         Assert.Null(denied.Data);

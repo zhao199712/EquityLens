@@ -62,6 +62,7 @@ public sealed class ResearchLoopState
     public decimal CostUsd { get; set; }
     public int NoProgressTurns { get; set; }
     public int ProtocolErrors { get; set; }
+    public int AnswerRepairCount { get; set; }
     public DateTime StartedAtUtc { get; set; }
     public string? StopReason { get; set; }
     public LoopAnswer? Answer { get; set; }

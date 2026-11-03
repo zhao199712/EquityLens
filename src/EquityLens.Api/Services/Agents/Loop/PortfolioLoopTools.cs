@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Globalization;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
@@ -22,9 +23,24 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             "get_risk_report" => "重用同期間且輸入相符的已存風險結果；沒有時明確回 cache miss。",
             "run_risk_analysis" => "以快照補算 Core、TailRisk 或 RiskContribution；不可輸入數值資料。",
             "get_performance_attribution" => "取得持股與產業的正負績效貢獻。",
-            "simulate_weight_scenario" => "比較最多三個假設目標權重情境，不改變持倉。",
+            "simulate_weight_scenario" => "比較一至三個減碼情境；targetWeights 僅列減碼來源、使用 0 到 1 的最終權重且不得高於目前權重。cash 留現金不指定 transferToTicker；holding 必須指定另一檔既有持股 transferToTicker，不把轉入股放在 targetWeights。未指定情境的優化問題可自行提出假設；不改變持倉。",
             _ => "讀取使用者已保存的風險偏好；缺少時回 unavailable，不推測。"
         }, Schema(name))).ToArray();
+
+    // 顯示值由同一份工具結果確定性產生，原始數值仍保留供 gate 驗證。
+    internal static JsonObject DisplayMetrics(PortfolioRiskMetrics metrics)
+    {
+        static string? Percent(decimal? value) => value is null ? null
+            : decimal.Round(value.Value * 100m, 2, MidpointRounding.AwayFromZero).ToString("F2", CultureInfo.InvariantCulture) + "%";
+        return Object(new {
+            annualizedVolatility = Percent(metrics.AnnualizedVolatility),
+            portfolioVolatility = Percent(metrics.PortfolioVolatility),
+            maxDrawdown = Percent(metrics.MaxDrawdown),
+            historicalVaR = Percent(metrics.HistoricalVaR),
+            expectedShortfall = Percent(metrics.ExpectedShortfall),
+            contributions = metrics.Contributions?.Select(c => new { c.Ticker, weight = Percent(c.Weight), componentRiskShare = Percent(c.ComponentRiskShare) })
+        });
+    }
 
     private static JsonObject Schema(string name)
     {
@@ -59,12 +75,17 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 if (call.Arguments["scenarios"] is not JsonArray scenarios) return "ScenariosRequired";
                 if (scenarios.Any(x => x is not JsonObject obj || obj.Any(p => p.Key is not ("name" or "targetWeights" or "remainderPolicy" or "preserveOtherHoldings" or "transferToTicker")))) return "UnexpectedScenarioArgument";
                 var requests = scenarios.Deserialize<List<PortfolioScenarioRequest>>(AgentNodeJson.SerializerOptions)!;
-                PortfolioScenarioCalculator.ValidateRequests(requests);
+                if (requests.Any(r => r is null || r.TargetWeights is null)) return "scenarios[].targetWeights: non-empty object required";
+                if (requests.Count is < 1 or > 3 || requests.Select(r => r.Name).Distinct().Count() != requests.Count)
+                    return "scenarios: provide 1..3 uniquely named scenarios";
                 var requested = scope.DomainContext?[AgentBlackboardKeys.RoutingContext]?["scenarios"]?.Deserialize<List<PortfolioScenarioRequest>>(AgentNodeJson.SerializerOptions);
                 if (requested is { Count: > 0 } && (requested.Count != requests.Count || requested.Any(r => !requests.Any(a =>
                     a.RemainderPolicy == r.RemainderPolicy && a.TransferToTicker == r.TransferToTicker && a.TargetWeights.Count == r.TargetWeights.Count
                     && r.TargetWeights.All(w => a.TargetWeights.TryGetValue(w.Key, out var value) && value == w.Value))))) return "RequestedScenarioMismatch";
                 if (scope.DomainContext?[SnapshotKey] is null) return "SnapshotRequired";
+                var failures = requests.Select((r, i) => ScenarioError(r, i)).Where(x => x is not null).ToList();
+                if (failures.Count == requests.Count || requested is { Count: > 0 } && failures.Count > 0)
+                    return string.Join("; ", failures);
             }
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException) { return "InvalidArguments"; }
@@ -128,7 +149,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 var executor = serviceScope.ServiceProvider.GetRequiredService<IPortfolioRiskMathExecutor>();
                 var results = operations.Select(op => executor.Execute(op, inputs, new(), run.Id)).ToList();
                 patch[AgentBlackboardKeys.MathResults] = JsonSerializer.SerializeToNode(results, AgentNodeJson.SerializerOptions);
-                data = Object(new { analysis, results, inputs.CommonTradingDays, diagnosis });
+                data = Object(new { analysis, display = DisplayMetrics(PortfolioRiskMetricsReader.FromMathResults(patch[AgentBlackboardKeys.MathResults])), results, inputs.CommonTradingDays, diagnosis });
                 break;
             }
             case "get_performance_attribution":
@@ -142,7 +163,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             {
                 var snapshot = board[SnapshotKey]!.Deserialize<PortfolioScenarioSnapshot>(AgentNodeJson.SerializerOptions)!;
                 var requests = call.Arguments["scenarios"]!.Deserialize<List<PortfolioScenarioRequest>>(AgentNodeJson.SerializerOptions)!;
-                var comparison = PortfolioScenarioCalculator.Calculate(snapshot, requests);
+                var comparison = CalculateAvailable(snapshot, requests);
                 patch[PortfolioScenarioCalculator.ResultKey] = JsonSerializer.SerializeToNode(comparison, AgentNodeJson.SerializerOptions);
                 data = Object(comparison with { Snapshot = null });
                 break;
@@ -154,6 +175,37 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 break;
         }
         return new([], call.Tool + " completed", Data: data, BlackboardPatch: patch);
+    }
+
+    private static string? ScenarioError(PortfolioScenarioRequest request, int index)
+    {
+        try { PortfolioScenarioCalculator.ValidateRequests([request]); return null; }
+        catch (AgentWorkflowQueryException e)
+        {
+            return $"scenarios[{index}].targetWeights/remainderPolicy/transferToTicker: {e.Message} " +
+                "targetWeights only contains reductions (fractions 0..1); holding requires transferToTicker for another existing holding; cash requires no destination.";
+        }
+    }
+
+    internal static PortfolioScenarioComparison CalculateAvailable(PortfolioScenarioSnapshot snapshot, IReadOnlyList<PortfolioScenarioRequest> requests)
+    {
+        var accepted = new List<PortfolioScenarioRequest>();
+        var errors = new List<string>();
+        for (var i = 0; i < requests.Count; i++)
+        {
+            try
+            {
+                PortfolioScenarioCalculator.Calculate(snapshot, [requests[i]]);
+                accepted.Add(requests[i]);
+            }
+            catch (AgentWorkflowQueryException e)
+            {
+                errors.Add(ScenarioError(requests[i], i) ?? $"scenarios[{i}].targetWeights/transferToTicker: {e.Message}");
+            }
+        }
+        if (accepted.Count == 0) throw new AgentWorkflowQueryException("scenario_invalid", string.Join("; ", errors));
+        var comparison = PortfolioScenarioCalculator.Calculate(snapshot, accepted);
+        return comparison with { Warnings = comparison.Warnings.Concat(errors).ToArray(), ScenarioErrors = errors };
     }
 
     private static JsonObject Object(object value) => JsonSerializer.SerializeToNode(value, AgentNodeJson.SerializerOptions)!.AsObject();

@@ -20,7 +20,7 @@ public sealed record PortfolioScenarioResult(string Name, string Status, IReadOn
     ScenarioMetrics? Metrics, ScenarioMetrics? DifferenceFromBaseline, string RemainderPolicy = "cash", string? TransferToTicker = null);
 public sealed record PortfolioScenarioComparison(string Status, string Method, string InputHash, PortfolioScenarioSnapshot? Snapshot,
     int ObservationCount, decimal ConfidenceLevel, int HorizonDays, PortfolioScenarioResult? Baseline,
-    IReadOnlyList<PortfolioScenarioResult> Scenarios, IReadOnlyList<string> Warnings);
+    IReadOnlyList<PortfolioScenarioResult> Scenarios, IReadOnlyList<string> Warnings, IReadOnlyList<string>? ScenarioErrors = null);
 
 /// <summary>以同一快照比較減碼留現金或轉入既有持股情境，不變更帳戶持倉。</summary>
 public static class PortfolioScenarioCalculator

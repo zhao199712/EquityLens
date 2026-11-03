@@ -173,7 +173,7 @@ function statusColor(status: string) {
               <div v-if="showCorrection" class="correction-form">
                 <textarea v-model="feedbackComment" class="prestige-input correction-input" maxlength="2000" placeholder="請指出需要修正的結論、證據、數字或分析方式…" />
                 <button class="prestige-btn prestige-btn-solid" :disabled="feedbackSubmitting || feedbackComment.trim().length < 5" @click="sendFeedback('NeedsCorrection')">
-                  {{ feedbackSubmitting ? '建立修訂中…' : '建立動態修訂' }}
+                  {{ feedbackSubmitting ? '建立修訂中…' : '建立修訂' }}
                 </button>
               </div>
               <div v-if="feedbackMessage" class="feedback-success">{{ feedbackMessage }}</div>
@@ -183,6 +183,8 @@ function statusColor(status: string) {
           <div v-else-if="activeTab === 'answer' && (runDetail.run.status === 'Failed' || runDetail.run.status === 'Cancelled')" class="prestige-error">
             研究流程未完成。<button v-if="investigationRun" class="prestige-btn" @click="router.push({ name: 'agent-run-detail', params: { id: investigationRun.id } })">查看錯誤詳情</button>
           </div>
+          <div v-else-if="activeTab === 'answer' && agentRunDetail && ['Succeeded', 'Failed', 'Cancelled'].includes(agentRunDetail.run.status)" class="prestige-empty panel-empty">流程已結束，但尚無可顯示的研究答案。請查看 Agent Run 的品質檢查與錯誤詳情。</div>
+          <div v-else-if="activeTab === 'answer' && agentRunDetail && ['WaitingForFeedback', 'WaitingForApproval'].includes(agentRunDetail.run.status)" class="prestige-empty panel-empty">流程已暫停，等待人工審閱。</div>
           <div v-else-if="activeTab === 'answer'" class="prestige-empty panel-empty">研究仍在背景執行，完成後答案會自動顯示。</div>
 
           <!-- Tab: Citations -->

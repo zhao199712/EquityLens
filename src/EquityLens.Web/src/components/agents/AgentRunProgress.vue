@@ -51,6 +51,9 @@ const elapsed = computed(() => {
   return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`
 })
 const currentStageLabel = computed(() => {
+  if (['WaitingForApproval', 'WaitingForFeedback'].includes(props.runStatus)) return '等待人工審閱'
+  if (['Failed', 'Cancelled'].includes(props.runStatus)) return props.runStatus
+  if (props.runStatus === 'Succeeded') return '已完成'
   if (currentNode.value) return stageLabel(currentNode.value.stage)
   if (props.runStatus === 'Succeeded') return '已完成'
   if (props.runStatus === 'Running') return '規劃下一階段'

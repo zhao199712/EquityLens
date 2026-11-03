@@ -663,26 +663,46 @@ async function selectTimeRange(range: string) {
   await loadPeriodData()
 }
 
+let securitySearchVersion = 0
+let closePriceVersion = 0
+function invalidateSecuritySelection() {
+  securitySearchVersion++
+  closePriceVersion++
+  loadingClosePrice.value = false
+  selectedSecurity.value = null
+  securityResults.value = []
+  searchingSecurities.value = false
+  closingPriceStatus.value = ''
+  if (priceSource.value === 'Close') addStockForm.value.price = 0
+}
+
 async function handleSearchSecurities() {
+  invalidateSecuritySelection()
+  const version = securitySearchVersion
+  const query = securityQuery.value.trim()
   if (!securityQuery.value.trim()) return
   searchingSecurities.value = true
   addStockError.value = ''
   try {
-    securityResults.value = await searchSecurities(securityQuery.value.trim())
+    const results = await searchSecurities(query)
+    if (version !== securitySearchVersion) return
+    securityResults.value = results
     if (securityResults.value.length === 1) {
+      searchingSecurities.value = false
       selectSecurity(securityResults.value[0])
     } else if (securityResults.value.length === 0) {
       selectedSecurity.value = null
       addStockError.value = '找不到符合的股票，請確認代號或交易所。'
     }
   } catch (e) {
-    addStockError.value = '搜尋股票失敗，請稍後再試。'
+    if (version === securitySearchVersion) addStockError.value = '搜尋股票失敗，請稍後再試。'
   } finally {
-    searchingSecurities.value = false
+    if (version === securitySearchVersion) searchingSecurities.value = false
   }
 }
 
 async function selectSecurity(security: SecuritySearchResult) {
+  securitySearchVersion++
   selectedSecurity.value = security
   securityQuery.value = `${security.ticker} ${security.exchange}`
   securityResults.value = []
@@ -693,12 +713,15 @@ async function selectSecurity(security: SecuritySearchResult) {
 }
 
 async function useClosingPrice() {
-  const security = selectedSecurity.value ?? securityResults.value[0] ?? null
+  const security = selectedSecurity.value
   if (!security) {
     addStockError.value = '請先搜尋並選擇股票，才能帶入收盤價。'
     return
   }
 
+  const version = securitySearchVersion
+  const requestedDate = addStockForm.value.transactionDate
+  const priceVersion = ++closePriceVersion
   loadingClosePrice.value = true
   addStockError.value = ''
   closingPriceStatus.value = ''
@@ -710,9 +733,10 @@ async function useClosingPrice() {
     })
     await syncSecurityPrices(resolved.securityId, 365, false)
     const prices = await getSecurityPrices(resolved.securityId, {
-      from: dateDaysBefore(addStockForm.value.transactionDate, 14),
-      to: addStockForm.value.transactionDate,
+      from: dateDaysBefore(requestedDate, 14),
+      to: requestedDate,
     })
+    if (priceVersion !== closePriceVersion || version !== securitySearchVersion || requestedDate !== addStockForm.value.transactionDate || selectedSecurity.value?.ticker !== security.ticker) return
     const closingPrice = [...prices]
       .filter((price) => price.interval === '1d' && price.priceTime.slice(0, 10) <= addStockForm.value.transactionDate)
       .sort((a, b) => b.priceTime.localeCompare(a.priceTime))[0]
@@ -729,9 +753,9 @@ async function useClosingPrice() {
     addStockForm.value.price = closingPrice.close
     closingPriceStatus.value = `已帶入 ${closingPrice.priceTime.slice(0, 10)} 收盤價。`
   } catch (e) {
-    addStockError.value = getApiErrorMessage(e, '無法取得收盤價，請改用自訂成交價或稍後再試。')
+    if (priceVersion === closePriceVersion && version === securitySearchVersion) addStockError.value = getApiErrorMessage(e, '無法取得收盤價，請改用自訂成交價或稍後再試。')
   } finally {
-    loadingClosePrice.value = false
+    if (priceVersion === closePriceVersion) loadingClosePrice.value = false
   }
 }
 
@@ -935,18 +959,8 @@ async function handleDeleteAllTransaction(transaction: TransactionResponse) {
 }
 
 async function handleAddStock() {
-  let security = selectedSecurity.value ?? securityResults.value[0] ?? null
-  if (!security && securityQuery.value.trim()) {
-    try {
-      const results = await searchSecurities(securityQuery.value.trim())
-      securityResults.value = results
-      security = results[0] ?? null
-    } catch (e) {
-      addStockError.value = '搜尋股票失敗，請稍後再試。'
-      return
-    }
-  }
-
+  if (addingStock.value || searchingSecurities.value || loadingClosePrice.value) return
+  const security = selectedSecurity.value
   if (!security) {
     addStockError.value = '請先搜尋股票，或從搜尋結果選擇一筆股票。'
     return
@@ -1305,6 +1319,7 @@ onMounted(loadPortfolioData)
                 <div style="display: grid; grid-template-columns: 2fr auto; gap: 12px; margin-bottom: 12px">
                   <input
                     v-model="securityQuery"
+                    @input="invalidateSecuritySelection"
                     class="prestige-input"
                     placeholder="搜尋股票代號或名稱，例如 TSM / AAPL / 2330"
                     @keyup.enter="handleSearchSecurities"
@@ -1388,7 +1403,7 @@ onMounted(loadPortfolioData)
                     <span class="field-label">備註</span>
                     <input v-model="addStockForm.note" class="prestige-input" placeholder="選填，例如首次買入" />
                   </label>
-                  <button class="prestige-btn prestige-btn-solid small" :disabled="addingStock" @click="handleAddStock">
+                  <button class="prestige-btn prestige-btn-solid small" :disabled="addingStock || searchingSecurities || loadingClosePrice || !selectedSecurity" @click="handleAddStock">
                     {{ addingStock ? 'ADDING...' : 'ADD' }}
                   </button>
                 </div>
