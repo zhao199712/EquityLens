@@ -68,31 +68,3 @@ public sealed class ResearchLoopState
     public List<Guid> ResumedApprovalIds { get; set; } = [];
     public bool ForcedDraft { get; set; }
 }
-
-internal static class LoopProtocol
-{
-    public static LoopAction Parse(string content)
-    {
-        var root = JsonNode.Parse(content)?.AsObject() ?? throw new JsonException("Expected JSON object.");
-        var action = root["action"]?.GetValue<string>() ?? throw new JsonException("action is required.");
-        if (action is not ("call_tools" or "submit_answer" or "give_up" or "ask_human")) throw new JsonException("Unknown action.");
-        var summary = root["thoughtSummary"]?.GetValue<string>() ?? "";
-        if (summary.Length > 400) throw new JsonException("Summary exceeds 400 characters.");
-        var calls = (root["toolCalls"]?.AsArray() ?? []).Select(x => new LoopToolCall(
-            x?["callId"]?.GetValue<string>() ?? throw new JsonException("callId required"),
-            x?["tool"]?.GetValue<string>() ?? throw new JsonException("tool required"),
-            x?["arguments"]?.AsObject().DeepClone().AsObject() ?? new JsonObject())).ToList();
-        if (calls.Count > 32 || calls.Any(x => string.IsNullOrWhiteSpace(x.CallId) || x.CallId.Length > 100)
-            || calls.Select(x => x.CallId).Distinct().Count() != calls.Count) throw new JsonException("Invalid or duplicate calls.");
-        if (action == "call_tools" && calls.Count == 0) throw new JsonException("At least one call required.");
-        LoopAnswer? answer = null;
-        if (action == "submit_answer")
-        {
-            var a = root["answer"]?.AsObject() ?? throw new JsonException("answer required");
-            var markdown = a["markdown"]?.GetValue<string>() ?? "";
-            if (string.IsNullOrWhiteSpace(markdown) || markdown.Length > 20000) throw new JsonException("Invalid answer length.");
-            answer = new(markdown, (a["citedEvidenceIds"]?.AsArray() ?? []).Select(x => x!.GetValue<string>()).ToList());
-        }
-        return new(action, summary, calls, answer);
-    }
-}

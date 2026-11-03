@@ -22,6 +22,103 @@ public sealed class ResearchAgentLoopTests
     private const string Search = """{"action":"call_tools","thoughtSummary":"先找證據","toolCalls":[{"callId":"c1","tool":"search_local","arguments":{"query":"營收"}}]}""";
     private const string Submit = """{"action":"submit_answer","thoughtSummary":"已有資料","answer":{"markdown":"營收 100 元 [E1]。","citedEvidenceIds":["E1"]}}""";
 
+    [Theory]
+    [InlineData("{\"action\":\"submit_answer\",\"answer\":\"private@example.invalid\"}", "$.answer", "object", "string")]
+    [InlineData("{\"action\":\"submit_answer\",\"answer\":{\"markdown\":\"ok\",\"citedEvidenceIds\":\"E1\"}}", "$.answer.citedEvidenceIds", "array", "string")]
+    [InlineData("{\"action\":\"submit_answer\",\"answer\":{\"markdown\":\"ok\",\"citedEvidenceIds\":[123]}}", "$.answer.citedEvidenceIds[0]", "string", "number")]
+    [InlineData("{\"action\":\"call_tools\",\"toolCalls\":[{\"callId\":\"x\",\"tool\":\"search_local\",\"arguments\":[]}]} ", "$.toolCalls[0].arguments", "object", "array")]
+    [InlineData("{\"action\":\"call_tools\",\"toolCalls\":[\"private@example.invalid\"]}", "$.toolCalls[0]", "object", "string")]
+    [InlineData("[]", "$", "object", "array")]
+    public void ProtocolErrors_ReportFieldAndTypesWithoutValues(string response, string path, string expected, string actual)
+    {
+        var error = Assert.ThrowsAny<JsonException>(() => LoopProtocol.Parse(response));
+        Assert.Contains(path, error.Message);
+        Assert.Contains("expected " + expected, error.Message);
+        Assert.Contains("received " + actual, error.Message);
+        Assert.DoesNotContain("private@example.invalid", error.Message);
+    }
+
+    [Fact]
+    public async Task ProtocolRepair_SurvivesInterruptionWithoutRepeatingSearchOrLeakingValues()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var tools = new FakeTools();
+        var malformed = """{"action":"submit_answer","answer":"private@example.invalid"}""";
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Loop(new FakeChat(Search, malformed), tools).RunAsync(context, "Research", default));
+        var turn = await db.AgentLlmTurns.SingleAsync(x => x.Action == "parse_error");
+        Assert.Contains("$.answer", turn.ErrorMessage);
+        Assert.DoesNotContain("private@example.invalid", turn.ActionJson);
+        Assert.Contains("string", turn.ActionJson);
+        var repair = new FakeChat(Submit);
+        var state = await Loop(repair, tools).RunAsync(context, "Research", default);
+        Assert.Equal("AnswerSubmitted", state.StopReason);
+        Assert.Equal(1, tools.Calls);
+        Assert.Contains("$.answer", repair.Prompts.Single());
+        Assert.DoesNotContain("private@example.invalid", repair.Prompts.Single());
+        Assert.Contains(context.Run.Events, x => x.EventType == "AgentLoopProtocolRejected");
+    }
+
+    [Fact]
+    public void InvalidJson_DoesNotEchoUntrustedPropertyNames()
+    {
+        var error = Assert.ThrowsAny<JsonException>(() => LoopProtocol.Parse("{\"private@example.invalid\": secret}"));
+        Assert.DoesNotContain("private@example.invalid", error.Message);
+        Assert.DoesNotContain("secret", error.Message);
+        Assert.Contains("InvalidJson", error.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SharedProtocolPrompt_ProvidesValidTypedExamplesForBothRoles(bool portfolio)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var chat = new FakeChat("""{"action":"give_up"}""");
+        await new AgentLoopEngine(chat, new FakeTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio).RunAsync(await Context(db), portfolio ? "Portfolio" : "Research", default);
+        var examples = chat.SystemPrompts[0].Split('\n').Where(x => x.TrimStart().StartsWith("{\"action\"")) .Select(x => LoopProtocol.Parse(x.Trim())).ToArray();
+        Assert.Contains(examples, x => x.Action == "call_tools" && x.ToolCalls.Count > 0);
+        Assert.Contains(examples, x => x.Action == "submit_answer" && x.Answer?.CitedEvidenceIds.Count > 0);
+        Assert.Contains(examples, x => x.Action == "give_up");
+    }
+
+    [Fact]
+    public async Task PreviouslyCommittedAnswer_RestoresOptionalCitationIdsWithoutAnotherLlmCall()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var turn = new AgentLlmTurn { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            Turn = 1, PromptVersion = 4, Action = "submit_answer", ActionJson = """{"action":"submit_answer","answer":{"markdown":"已提交內容"}}""" };
+        db.Add(turn);
+        db.Add(new AgentLoopCheckpoint { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            StateJson = AgentNodeJson.Serialize(new ResearchLoopState { PendingTurnId = turn.Id, StartedAtUtc = DateTime.UtcNow }) });
+        await db.SaveChangesAsync();
+        var chat = new FakeChat();
+        var state = await Loop(chat, new FakeTools()).RunAsync(context, "Research", default);
+        Assert.Empty(chat.Prompts);
+        Assert.Equal("已提交內容", state.Answer!.Markdown);
+        Assert.Empty(state.Answer.CitedEvidenceIds);
+        // 新輸出必須符合明確協定，既有已提交決策才保留舊預設。
+        Assert.Throws<LoopProtocolException>(() => LoopProtocol.Parse(turn.ActionJson));
+    }
+
+    [Fact]
+    public async Task EvidenceWindow_PreservesHighRankedTableAndItsSourceMetadata()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var table = Evidence() with { Result = Evidence().Result with { DocumentChunkId = Guid.NewGuid(),
+            DocumentTitle = "Example Annual Report", PageNumber = 112, Content = "產品別外部收入\n" + new string('表', 1000) + "\n產品甲 120 產品乙 80", RelevanceScore = 1 } };
+        var lowRanked = Enumerable.Range(0, 24).Select(_ => Evidence() with { Result = Evidence().Result with {
+            DocumentChunkId = Guid.NewGuid(), Content = new string('其', 1000), RelevanceScore = 0 } });
+        var tools = new FakeTools { Results = lowRanked.Append(table).ToArray() };
+        var chat = new FakeChat(Search, Submit);
+        await Loop(chat, tools).RunAsync(await Context(db), "Research", default);
+        var shown = JsonNode.Parse(chat.Prompts[1])!["evidence"]!.AsArray();
+        var item = Assert.Single(shown, x => x!["documentTitle"]!.GetValue<string>() == "Example Annual Report")!;
+        Assert.Equal(table.Result.Content, item["content"]!.GetValue<string>());
+        Assert.Equal(112, item["pageNumber"]!.GetValue<int>());
+    }
+
     [Fact]
     public async Task StructuredToolResults_AreDurableAndReusedAfterInterruption()
     {

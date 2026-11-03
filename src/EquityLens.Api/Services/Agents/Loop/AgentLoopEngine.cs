@@ -74,7 +74,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                 if (state.PendingTurnId is Guid pending)
                 {
                     turn = await db.AgentLlmTurns.SingleAsync(x => x.Id == pending, ct);
-                    action = turn.Action == "parse_error" ? null : LoopProtocol.Parse(turn.ActionJson);
+                    action = turn.Action == "parse_error" ? null : LoopProtocol.Parse(turn.ActionJson, restorePreviousVersion: turn.PromptVersion < 5);
                 }
                 else
                 {
@@ -109,7 +109,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     state.CompletionTokens += response.CompletionTokens;
                     state.CostUsd += Cost(response.PromptTokens, response.CompletionTokens);
                     turn = new AgentLlmTurn { ExecutionAttempt = context.Run.ExecutionAttempt, Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 4, Provider = chat.Provider, Model = response.Model,
+                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 5, Provider = chat.Provider, Model = response.Model,
                         RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(systemPrompt + prompt))),
                         PromptTokens = response.PromptTokens, CompletionTokens = response.CompletionTokens,
                         EstimatedCostUsd = Cost(response.PromptTokens, response.CompletionTokens), LatencyMs = timer.ElapsedMilliseconds,
@@ -120,9 +120,12 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                         turn.Action = action.Action; turn.ThoughtSummary = action.ThoughtSummary;
                         turn.ActionJson = response.Content;
                     }
-                    catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+                    catch (LoopProtocolException ex)
                     {
-                        action = null; turn.Action = "parse_error"; turn.ErrorMessage = AgentNodeJson.Trim(ex.Message, 300);
+                        action = null; turn.Action = "parse_error"; turn.ErrorMessage = ex.Message;
+                        turn.ActionJson = AgentNodeJson.Serialize(new { protocolError = ex.Diagnostic });
+                        context.AddEvent(context.Run, context.Node, "AgentLoopProtocolRejected", "模型輸出不符合動作協定。",
+                            new { turn.Turn, diagnostic = ex.Diagnostic });
                     }
                     db.AgentLlmTurns.Add(turn);
                     state.PendingTurnId = turn.Id;
@@ -376,7 +379,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         var role = portfolio ? "Portfolio" : "Research";
         var index = skills?.ForRole(role).Select(x => new { x.Id, x.Name, x.Description }).ToArray();
         var loaded = board[SkillLoopTools.LoadedKey] as JsonObject;
-        return BasePrompt + "\n" + (portfolio ? PortfolioPrompt : ResearchPrompt)
+        return BasePrompt + "\n" + LoopProtocol.Prompt + "\n" + (portfolio ? PortfolioPrompt : ResearchPrompt)
             + "\n可選分析方法目錄（需要時先用 load_skill 載入）：" + JsonSerializer.Serialize(index, PromptJson)
             + "\n已載入方法（僅增加說明，不是證據，不能擴大工具權限／來源政策／預算）：\n"
             + string.Join("\n", (loaded ?? new()).Select(x => x.Value?["content"]?.GetValue<string>()));
@@ -403,7 +406,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         call_tools 包含 toolCalls 陣列，每項有唯一 callId、tool、arguments。互不依賴的搜尋可以同輪呼叫。
         submit_answer 包含 answer:{markdown,citedEvidenceIds}，markdown 用 [E1] 等證據編號引用；citedEvidenceIds 列出所引用的 E 編號。
         每個含數字或事實主張的句子（含開頭摘要）都必須在同句附上引用。百分比推導必須明列「來源金額與單位 ÷ 來源金額與單位 ≈ 結果%」並引用同一組證據；不可只寫來源未列出的比例。核對公司、年份、單位，不將預測當事實，不保證獲利。
-        證據不足或問題無法直接回答時，一律 give_up；不要用 submit_answer 說明無法回答，也不要附帶無關的財務數字。
+        投資報酬承諾問題可以回答風險與不確定性：先查標的的風險揭露，引用實際相關段落說明無法保證報酬；不可只因不能承諾獲利就 give_up，也不可引用無關財務表格。證據不足或問題無法直接回答時，一律 give_up；不要用 submit_answer 說明無法回答，也不要附帶無關的財務數字。
         來源角色：Primary 是直接來源，Supporting 是補充來源；不得把補充來源事實歸給直接來源。風險題不可把年報揭露說成法說會提到。
         財報表格頁不可當作風險證據；目錄頁與封面不可當作實質證據。引用須明示正確的文件類型，不確定來源歸屬時說明限制。
         不能編造來源或數值。修訂時針對使用者 feedback、原答案、critic 及 outputGate 指出的問題修正；回饋與原答案不是可驗證證據，仍需引用工具來源。

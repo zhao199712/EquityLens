@@ -357,3 +357,13 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - 原始回答、逐題結果、持久化軌跡、費用與比較保存在 docs/eval-verification/2026-11-03-three-workflows-live/。37 次 LLM 呼叫保守估價 US$0.052676，另留 embedding US$0.10；總上界 US$0.152676。未做額外重跑。
 - 完整 R27（eval-live-final）通過：build、879/879 後端（0 skipped、隔離 PostgreSQL）、EF 無變更、pytest 83、前端 build／127 tests。測試結果不掩蓋 live eval 品質退步。
 - 僅交付驗證產物與進度；未修改程式、合併 main、部署或修改正式 DB。
+
+### R26 退步修正：動作協定與可恢復診斷
+
+- 修正前新增 10 個重現案例全數失敗（`/tmp/protocol-repro-before.log`）：錯誤 answer／tool arguments／引用陣列形狀只得到泛用例外，JSON 語法錯誤可能回顯原始欄位名稱，兩角色缺少可解析的完整動作範例。
+- 抽出共用 LoopProtocol，逐欄位驗證並回傳固定錯誤分類、欄位路徑、expected／actual 型別；parse_error 的 ActionJson 與事件僅保存診斷，不保存錯誤回覆原文。下一輪歷史包含可修正的欄位資訊，仍連續兩次失敗停止，不增加輪數或預算。
+- prompt v5 加入完整合法 JSON 範例。已提交 v4 決策在恢復時保留原省略欄位的預設，不重問 LLM 或重做成功工具；新輸出使用嚴格格式。
+- 檢查鴻海舊失敗 ledger：2025 產品別收入表在 E10、年報 112 頁，長 1,079 字元、相關性排序第 2。新回歸測試確認高排序表格在預算縮減證據視窗後仍包含完整內容與頁碼；未重現選取／截斷缺陷，因此沒有改檢索演算法或寫死題目／答案。
+- 一般報酬承諾問句改以風險揭露為可回答範圍，提示先檢索並引用真實段落；沒有降低 gate、修改 scorer 或替安全回覆附上無關引用。
+- 完整 R27（protocol-fix）：後端 build、891/891（隔離 PostgreSQL，0 skipped）、EF 無模型變更、pytest 83、前端 build／127 tests；targeted loop 40 tests。新增 12 個測試，包含錯誤後中斷恢復、舊決策恢復與證據視窗。
+- R26 live 分數在重跑前仍維持 6/8 未通過；接著在同一獨立 US$1 上限的剩餘額度中重跑原 8 題，保存獨立報告。只改功能分支，不合併 main、不部署。
