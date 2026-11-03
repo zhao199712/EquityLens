@@ -36,6 +36,7 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 - Backend tests use xUnit, EF InMemory, and hand-written fakes; no Moq/NSubstitute dependency is present.
 - Existing `NU1510 System.Text.Encoding.CodePages` warning is non-blocking.
 - PR CI runs real ParadeDB integration tests and fails if TRX results are missing or skipped. Browser smoke uses isolated fixed API responses; it does not validate live AI quality or full-stack HTTP behavior. Setup and scope: `docs/testing/pr-validation.md`.
+- Risk contracts and the real DB → C# → Redis → Python → DB chain run separately in `tests/EquityLens.Risk.IntegrationTests`. Install the Mathematics Python package and set `RISK_TEST_POSTGRES`, `RISK_TEST_REDIS`, and `RISK_TEST_REDIS_URL` to isolated services; missing dependencies fail rather than skip. The suite starts its own Python worker and C# result worker; do not point it at production services. See `docs/testing/pr-validation.md` for commands.
 
 ## Infra And Env
 - `docker-compose.yml` starts ParadeDB `paradedb/paradedb:0.24.1-pg18`, Redis, Garage S3, Garage WebUI, and Aspire Dashboard.
