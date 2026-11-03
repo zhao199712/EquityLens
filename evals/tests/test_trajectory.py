@@ -75,3 +75,28 @@ def test_trajectory_rates_use_observed_calls_and_known_loop_stops():
     summary = summarize([build_record(case(), output, None)], {})
     assert summary["trajectory"]["guard_denial_rate"] is None
     assert summary["trajectory"]["budget_exhausted_rate"] is None
+
+
+def test_loaded_skills_are_audited_without_recording_method_text():
+    data = {"skillId": "conference-call-takeaways", "version": "1", "contentHash": "hash", "content": "not evidence"}
+    trajectory = parse_trajectory({"toolCalls": [
+        {"toolName": "load_skill", "status": "Succeeded", "resultJson": {"data": data}},
+        {"toolName": "load_skill", "status": "Denied", "resultJson": {"data": data}},
+        {"toolName": "load_skill", "status": "Succeeded", "resultJson": "bad-json"},
+    ]})
+    assert trajectory["loaded_skills"] == [{"skillId": "conference-call-takeaways", "version": "1", "contentHash": "hash"}]
+
+
+def test_live_cli_rejects_retired_engine_before_loading_cases():
+    from equitylens_eval.cli import main
+    with pytest.raises(SystemExit) as error:
+        main(["run", "--cases", "missing.jsonl", "--label", "retired", "--engine", "DynamicDag"])
+    assert error.value.code == 2
+
+
+def test_client_defaults_to_current_engine_and_rejects_retired_engine():
+    with EquityLensClient("http://localhost") as client:
+        assert client._engine == "AgentLoop"
+        assert client.build_request(case(), False, client._engine)["engine"] == "AgentLoop"
+    with pytest.raises(ValueError, match="Only AgentLoop"):
+        EquityLensClient("http://localhost", engine="DynamicDag")

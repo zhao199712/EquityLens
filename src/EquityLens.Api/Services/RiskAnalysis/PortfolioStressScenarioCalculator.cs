@@ -1,3 +1,4 @@
+using EquityLens.Api.Domain.Calculations;
 using EquityLens.Api.Contracts.MarketPrices;
 using EquityLens.Api.Contracts.PortfolioHoldings;
 using EquityLens.Api.Contracts.Risk;
@@ -36,7 +37,9 @@ internal static class PortfolioStressScenarioCalculator
             var series = prices.GetValueOrDefault(h.SecurityId) ?? Array.Empty<Contracts.MarketPrices.MarketPriceResponse>();
             var start = series.Where(p => DateOnly.FromDateTime(p.PriceTime) >= from).OrderBy(p => p.PriceTime).FirstOrDefault();
             var end = series.Where(p => DateOnly.FromDateTime(p.PriceTime) <= to).OrderByDescending(p => p.PriceTime).FirstOrDefault();
-            if (start is null || end is null || start.Close <= 0) return new(id, name, "historical", "insufficient_prices", "共同價格不足，無法回放此歷史情境", from, to, 0, Array.Empty<PortfolioStressHoldingResponse>(), Array.Empty<PortfolioStressIndustryResponse>());
+            if (start is null || end is null || start.PriceTime >= end.PriceTime || DateOnly.FromDateTime(start.PriceTime) > to || DateOnly.FromDateTime(end.PriceTime) < from) return new(id, name, "historical", "insufficient_prices", "共同價格不足，無法回放此歷史情境", from, to, 0, Array.Empty<PortfolioStressHoldingResponse>(), Array.Empty<PortfolioStressIndustryResponse>());
+            if (start.Close <= 0 || end.Close <= 0)
+                return new(id, name, "historical", "invalid_prices", "歷史價格含非正值，無法計算", from, to, 0, [], []);
             var shock = end.Close / start.Close - 1;
             details.Add(new(h.Ticker, h.SecurityName, ResolveIndustry(h), weights.GetValueOrDefault(h.SecurityId), start.Close, end.Close, shock, weights.GetValueOrDefault(h.SecurityId) * shock));
         }
@@ -45,7 +48,11 @@ internal static class PortfolioStressScenarioCalculator
 
     private static PortfolioStressScenarioResponse BuildWorstTwentyDayStress(IReadOnlyList<EquityLens.Api.Contracts.PortfolioHoldings.PortfolioHoldingResponse> holdings, IReadOnlyDictionary<Guid, decimal> weights, IReadOnlyDictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>> prices)
     {
-        var common = prices.Values.Select(series => series.Select(p => DateOnly.FromDateTime(p.PriceTime)).ToHashSet()).Aggregate((left, right) => { left.IntersectWith(right); return left; }).Order().ToList();
+        if (holdings.Count == 0 || holdings.Any(h => !prices.TryGetValue(h.SecurityId, out var series) || series.Count == 0))
+            return new("worst_20d", "資料期間最差 20 日", "historical", "insufficient_prices", "部分持股缺少價格", null, null, 0, [], []);
+        if (holdings.Any(h => prices[h.SecurityId].Any(p => p.Close <= 0)))
+            return new("worst_20d", "資料期間最差 20 日", "historical", "invalid_prices", "歷史價格含非正值，未刪除日期或持股重算", null, null, 0, [], []);
+        var common = holdings.Select(h => prices[h.SecurityId]).Select(series => series.Select(p => DateOnly.FromDateTime(p.PriceTime)).ToHashSet()).Aggregate((left, right) => { left.IntersectWith(right); return left; }).Order().ToList();
         if (common.Count < 21) return new("worst_20d", "資料期間最差 20 日", "historical", "insufficient_prices", "共同價格不足 21 日", null, null, 0, Array.Empty<PortfolioStressHoldingResponse>(), Array.Empty<PortfolioStressIndustryResponse>());
         decimal best = 1m; DateOnly from = common[0], to = common[20];
         for (var i = 20; i < common.Count; i++) { decimal impact = 0; foreach (var h in holdings) { var s = prices[h.SecurityId]; var a = s.First(p => DateOnly.FromDateTime(p.PriceTime) == common[i - 20]).Close; var b = s.First(p => DateOnly.FromDateTime(p.PriceTime) == common[i]).Close; impact += weights.GetValueOrDefault(h.SecurityId) * (b / a - 1); } if (impact < best) { best = impact; from = common[i - 20]; to = common[i]; } }
@@ -54,7 +61,7 @@ internal static class PortfolioStressScenarioCalculator
 
     private static PortfolioStressScenarioResponse BuildHypotheticalStress(string id, string name, IReadOnlyList<EquityLens.Api.Contracts.PortfolioHoldings.PortfolioHoldingResponse> holdings, IReadOnlyDictionary<Guid, decimal> weights, IReadOnlyDictionary<Guid, decimal> latest, decimal semiconductor, decimal finance, decimal other)
     {
-        var details = holdings.Select(h => { var industry = ResolveIndustry(h); var shock = industry.Contains("半導體") ? semiconductor : industry.Contains("金融") ? finance : other; var weight = weights.GetValueOrDefault(h.SecurityId); var price = latest.GetValueOrDefault(h.SecurityId); return new PortfolioStressHoldingResponse(h.Ticker, h.SecurityName, industry, weight, price, price * (1 + shock), shock, weight * shock); }).ToList();
+        var details = holdings.Select(h => { var industry = ResolveIndustry(h); var rawIndustry = IndustryClassification.Raw(h.Industry, h.Sector) ?? ""; var shock = rawIndustry.Contains("半導體") ? semiconductor : rawIndustry.Contains("金融") ? finance : other; var weight = weights.GetValueOrDefault(h.SecurityId); var price = latest.GetValueOrDefault(h.SecurityId); return new PortfolioStressHoldingResponse(h.Ticker, h.SecurityName, industry, weight, price, price * (1 + shock), shock, weight * shock); }).ToList();
         return BuildStressResponse(id, name, "hypothetical", "ready", $"半導體 {semiconductor:P0}；金融保險 {finance:P0}；其他／未分類 {other:P0}。假設情境，非發生機率預測。", null, null, details);
     }
 

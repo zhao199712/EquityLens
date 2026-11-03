@@ -1,0 +1,9 @@
+{
+  "label": "three-workflows-fixed",
+  "mode": "investigation",
+  "engine": "AgentLoop",
+  "base_url": "http://127.0.0.1:5535",
+  "system_commit": "54bdfd336f73558abdf7ca0f0d92d8ba248679fc",
+  "started_at": "2026-11-03T03:23:11+00:00",
+  "notes": "Original eight verified non-excluded cases; isolated corpus; reranker and thinking disabled; independent user-authorized USD1 cap, USD0.50 LLM admission cap; prior rounds upper USD0.3156797 included in shared USD1 cap and USD0.10 embedding reserve. Single run; no scorer changes."
+}

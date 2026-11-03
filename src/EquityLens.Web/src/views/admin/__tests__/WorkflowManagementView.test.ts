@@ -21,23 +21,13 @@ import WorkflowManagementView from '../WorkflowManagementView.vue'
 import { listWorkflows, saveWorkflow } from '../../../services/agentWorkflowAdmin'
 
 const workflow: WorkflowAdmin = {
-  workflowType: 'ResearchQualityReview', displayName: '研究品質審查', description: '檢查研究答案與證據品質後產生修正版。', agentType: 'CriticAgent', isEnabled: true,
-  nodeTypes: ['LoadResearchRun', 'BuildEvidencePacket', 'CheckEvidence', 'CritiqueAnswer', 'FinalizeCriticReport', 'DraftRevisedAnswer', 'FinalizeRevision'],
-  edges: [
-    { from: 'LoadResearchRun', to: 'BuildEvidencePacket' }, { from: 'BuildEvidencePacket', to: 'CheckEvidence' }, { from: 'CheckEvidence', to: 'CritiqueAnswer' },
-    { from: 'CritiqueAnswer', to: 'FinalizeCriticReport' }, { from: 'FinalizeCriticReport', to: 'DraftRevisedAnswer' }, { from: 'DraftRevisedAnswer', to: 'FinalizeRevision' },
-  ],
-  orchestrationMode: 'DynamicStateful',
-  initialNodes: [
-    { nodeKey: 'loadResearchRun', nodeType: 'LoadResearchRun' }, { nodeKey: 'buildEvidencePacket', nodeType: 'BuildEvidencePacket' },
-    { nodeKey: 'checkEvidence', nodeType: 'CheckEvidence' }, { nodeKey: 'critiqueAnswer', nodeType: 'CritiqueAnswer' },
-    { nodeKey: 'finalizeCriticReport', nodeType: 'FinalizeCriticReport' },
-  ],
-  initialEdges: [
-    { from: 'loadResearchRun', to: 'buildEvidencePacket' }, { from: 'buildEvidencePacket', to: 'checkEvidence' },
-    { from: 'checkEvidence', to: 'critiqueAnswer' }, { from: 'critiqueAnswer', to: 'finalizeCriticReport' },
-  ],
-  dynamicNodeTypes: ['DraftRevisedAnswer', 'FinalizeRevision', 'ExtractEvidenceClaims'],
+  workflowType: 'CriticReview', displayName: '研究品質審查', description: '檢查研究答案與證據品質後產生修正版。', agentType: 'CriticAgent', isEnabled: true,
+  nodeTypes: ['LoadResearchRun', 'QualityGate', 'FinalizeCriticReport'],
+  edges: [{ from: 'LoadResearchRun', to: 'QualityGate' }, { from: 'QualityGate', to: 'FinalizeCriticReport' }],
+  orchestrationMode: 'Static',
+  initialNodes: [{ nodeKey: 'loadResearchRun', nodeType: 'LoadResearchRun' }, { nodeKey: 'qualityGate', nodeType: 'QualityGate' }, { nodeKey: 'finalizeCriticReport', nodeType: 'FinalizeCriticReport' }],
+  initialEdges: [{ from: 'loadResearchRun', to: 'qualityGate' }, { from: 'qualityGate', to: 'finalizeCriticReport' }],
+  dynamicNodeTypes: [],
 }
 type TableColumn = { key: string; title: string; render?: (row: WorkflowAdmin) => any }
 
@@ -50,7 +40,7 @@ describe('WorkflowManagementView', () => {
     const columns = wrapper.findComponent({ name: 'NDataTable' }).props('columns') as TableColumn[]
     expect(columns.map(column => column.title)).toEqual(['Workflow', 'Agent', 'Flow', '狀態', '管理'])
     const flow = columns.find(column => column.key === 'flow')!.render!(workflow)
-    expect(flow.props.title).toContain('5 nodes · 4 edges')
+    expect(flow.props.title).toContain('3 nodes · 2 edges')
     expect(flow.props.title).toContain('LoadResearchRun → FinalizeCriticReport')
   })
 
@@ -66,16 +56,16 @@ describe('WorkflowManagementView', () => {
     expect(wrapper.text()).toContain('流程定義（唯讀）')
     expect(wrapper.text()).toContain('初始執行步驟（唯讀）')
     expect(wrapper.text()).toContain('初始 DAG Edges（唯讀）')
-    expect(wrapper.text()).toContain('動態 Stateful')
-    expect(wrapper.text()).toContain('可動態加入的 Node Types')
+    expect(wrapper.text()).toContain('固定 DAG')
+    expect(wrapper.text()).not.toContain('可動態加入的 Node Types')
     expect(wrapper.text()).toContain('LoadResearchRun')
     expect(wrapper.text()).toContain('FinalizeCriticReport')
-    expect(wrapper.text()).toContain('DraftRevisedAnswer')
+    expect(wrapper.text()).toContain('QualityGate')
     await wrapper.get('input').setValue('新的品質流程')
     await wrapper.get('button.prestige-btn-solid').trigger('click')
     await flushPromises()
 
-    expect(saveWorkflow).toHaveBeenCalledWith('ResearchQualityReview', { isEnabled: true, displayName: '新的品質流程', description: workflow.description })
+    expect(saveWorkflow).toHaveBeenCalledWith('CriticReview', { isEnabled: true, displayName: '新的品質流程', description: workflow.description })
     expect(message.success).toHaveBeenCalledWith('Workflow 設定已儲存')
   })
 })

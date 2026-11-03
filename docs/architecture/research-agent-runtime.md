@@ -753,16 +753,22 @@ v4 取代 v1 作為預設的條件（全部成立）：
 
 ---
 
-## 13. Roadmap（本期之後）
+## 13. 三工作流重構現況
 
-1. A/B 達標後，`ResearchEngine` 預設改為 `AgentLoop`。
-2. `FeedbackRevision`：使用者回饋作為 Revise 模式的輸入，取代 planner 組 DAG。
-3. `PortfolioDiagnosis`：`PortfolioRiskMath` 接成 `Compute` 工具（數值只從 provenance-backed Blackboard 讀取）；保留 always-on 人工審批。（Python 風險引擎目前為 shadow 模式：`RiskPythonShadowQueue`、`RiskShadowComparisonService`，接入前需先確認轉正計畫。）
-4. 全部 workflow 遷移完成後，移除 `LlmAgentWorkflowPlanner`、`DynamicPlanValidator`、`GraphMaterializer`、`AgentDynamicPlanCoordinator` 的 trigger 邏輯與相關 capability 定義。
-5. 外框分支平行（executor 一次執行多個 ready 節點）需先將 Blackboard 改為分區寫入；視需求評估，非必要。
-6. 長期可評估以 durable execution 平台承接 Runtime 層（Dapr Workflow / Durable Task），保留 Loop、Guard、Ledger、OutputGate 作為差異化核心。
+本文件前段保留 v4 初期計畫的歷史背景。現行實作與驗收以 [收斂規格](remove-dynamic-dag.md)、[補充規格](remove-dynamic-dag-addendum.md) 及 [進度表](remove-dynamic-dag-progress.md) 為準。
 
----
+| 項目 | 初始基準 | 收斂後 |
+|---|---|---|
+| 工作流 | 9 | ResearchAgent、PortfolioDiagnosis、CriticReview，共 3 |
+| catalog node type | 54 | 13 |
+| Services/Agents 行數 | 11,674 | 7,712（含協定診斷、數字追溯修正與 Loop 子目錄） |
+| 編排 | 可動態擴增圖 | 固定 DAG，研究／投組共用節點內迴圈 |
+
+研究包含品質檢查及最多一次修訂；投組包含六個任務型工具與固定人工審批；Critic 僅評分，不改原答案。品質階段及工具結果先保存，恢復重用已完成結果。圖拓撲、條件邊、租約 fencing、狀態機與 outbox 保留。
+
+方法設定由角色內 load_skill 載入，保存版本與 hash；不再有 capability 或 supporting skill 清單。統一路由只決定角色和參數，明確入口與既有追問免分類，所有路徑仍檢查權限和能力邊界。
+
+舊圖唯讀；續跑操作回 409，worker 取得有效租約後安全終止。新 investigation 僅接受 AgentLoop；舊回答仍可離線 rescore。本次只交付重構分支，未合併 main 或部署。後續是否增加並行工具、其他研究方法或大型任務分解，須另案驗收。
 
 ## 14. 風險與取捨
 
@@ -813,7 +819,7 @@ v4 取代 v1 作為預設的條件（全部成立）：
 | A2 | [AgentExecutorBoundaryTests](../../tests/EquityLens.Api.Tests/Services/Agents/AgentExecutorBoundaryTests.cs)：`ExpiredLease_RecoversInterruptedNode`、`RepeatedInterruption_StopsAtBudget` | 中斷恢復有上限；非冪等節點不盲目重跑 |
 | A3 | [AgentLeasePostgresTests](../../tests/EquityLens.Api.Tests/Integration/AgentLeasePostgresTests.cs) | 真實 PostgreSQL 的拒寫、過期續約、獨立 heartbeat、並行 claim 與長執行驗證 |
 | A4、A9、A10 | [ResearchAgentWorkflowTests](../../tests/EquityLens.Api.Tests/Services/Agents/ResearchAgentWorkflowTests.cs)：`FixedWorkflow_AcceptsOrRevisesOnce_WithoutCallingPlanner`、`OutputGate_BlocksInvalidEvidence` | 固定圖不呼叫動態 planner；修訂再驗收；正式預設已經使用者授權切成 AgentLoop，覆蓋 A4 原先預設 v1 的要求 |
-| A5–A8 | [ResearchAgentLoopTests](../../tests/EquityLens.Api.Tests/Services/Agents/ResearchAgentLoopTests.cs) 與 [ResearchAgentLoop](../../src/EquityLens.Api/Services/Agents/Loop/ResearchAgentLoop.cs) | 平行工具、來源／參數 guard、已提交結果重用、協定與預算上限有測試。NoProgress 有程式停止路徑，但目前沒有獨立命名的 NoProgress 邊界測試；不把其他 workflow 的同名測試當此迴圈證據 |
+| A5–A8 | [ResearchAgentLoopTests](../../tests/EquityLens.Api.Tests/Services/Agents/ResearchAgentLoopTests.cs) 與 [ResearchAgentLoop](../../src/EquityLens.Api/Services/Agents/Loop/ResearchAgentLoop.cs) | 平行工具、來源／參數 guard、已提交結果重用、協定與預算上限有測試。07:11 在 `test/research-loop-no-progress` 補上兩個 NoProgress 專項案例：空結果停止後恢復不再呼叫；重複證據最多最後一次起草。該檔 20 項通過，尚未合併 main |
 | A11 | 同上 `TwoTurns_RecordDecisionsEvidenceAndToolResults`；[正式 UI 驗收](../eval-verification/2026-11-03-ui-smoke/README.md) | turn 與工具可查詢；UI 成本僅涵蓋已記錄迴圈，不是完整供應商帳單 |
 | A12 | [test_trajectory.py](../../evals/tests/test_trajectory.py)、[test_pipeline.py](../../evals/tests/test_pipeline.py)；[題目範圍核對](../eval-verification/2026-11-02-agent-loop-ab/scope-audit-20261103.json) | 舊輸出無 trajectory 時表示未知，不冒充零違規；原始題庫計分八題 |
 | A13 | [ToolApprovalTests](../../tests/EquityLens.Api.Tests/Services/Agents/ToolApprovalTests.cs)、[ToolApprovalPostgresTests](../../tests/EquityLens.Api.Tests/Integration/ToolApprovalPostgresTests.cs) | 測試工具驗證參數綁定、拒絕、恢復冪等；正式 Research Loop 不註冊副作用工具 |

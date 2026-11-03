@@ -51,7 +51,8 @@ public sealed record PortfolioRiskResponse(
     decimal LargestHoldingWeight = 0,
     IReadOnlyList<PortfolioIndustryRiskResponse>? Industries = null,
     decimal RiskSourceAnnualizedVolatility = 0,
-    IReadOnlyList<decimal>? DailyLogReturns = null);
+    IReadOnlyList<decimal>? DailyLogReturns = null,
+    RiskMeasurementBasis? MeasurementBasis = null);
 
 /// <summary>
 /// 投資組合中單一持倉的風險貢獻摘要。
@@ -75,7 +76,9 @@ public sealed record PortfolioHoldingRiskResponse(
     decimal ComponentVolatility = 0,
     decimal ComponentRiskShare = 0,
     decimal MarginalVolatility = 0,
-    decimal IncrementalVolatility = 0);
+    decimal IncrementalVolatility = 0,
+    string? RawIndustry = null,
+    string ClassificationVersion = "broad-industry-v1");
 
 /// <summary>以產業彙總的投資組合波動率風險來源。</summary>
 public sealed record PortfolioIndustryRiskResponse(

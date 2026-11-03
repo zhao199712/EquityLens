@@ -46,4 +46,4 @@ public sealed record AgentWorkflowQueryCreatedResponse(
     IReadOnlyList<string> ClarifyingQuestions);
 
 /// <summary>唯讀減碼情境；未指定持股維持股數，差額保留現金。</summary>
-public sealed record PortfolioScenarioRequest(string Name, IReadOnlyDictionary<string, decimal> TargetWeights, string RemainderPolicy = "cash", bool PreserveOtherHoldings = true);
+public sealed record PortfolioScenarioRequest(string Name, IReadOnlyDictionary<string, decimal> TargetWeights, string RemainderPolicy = "cash", bool PreserveOtherHoldings = true, string? TransferToTicker = null);

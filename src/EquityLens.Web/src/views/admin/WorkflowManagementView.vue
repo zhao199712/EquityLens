@@ -20,9 +20,7 @@ function initialEndpoints(workflow: WorkflowAdmin) {
   return `${entries.join(', ') || '—'} → ${terminals.join(', ') || '—'}`
 }
 
-function modeLabel(mode: string) {
-  if (mode === 'DynamicStateful') return '動態 Stateful'
-  if (mode === 'Stateful') return 'Stateful'
+function modeLabel(_mode: string) {
   return '固定 DAG'
 }
 
@@ -68,7 +66,7 @@ async function save() {
 const columns: DataTableColumns<WorkflowAdmin> = [
   { title: 'Workflow', key: 'displayName', render: row => h('div', { class: 'wf-name' }, [h('strong', row.displayName), h('code', row.workflowType)]) },
   { title: 'Agent', key: 'agentType' },
-  { title: 'Flow', key: 'flow', render: row => h('span', { class: 'wf-flow-summary', title: flowSummary(row) }, [h('span', { class: 'wf-flow-heading' }, [h('strong', `初始 ${row.initialNodes.length} nodes · ${row.initialEdges.length} edges`), row.orchestrationMode === 'DynamicStateful' ? h(NTag, { size: 'small', type: 'info' }, () => '動態') : null]), h('span', initialEndpoints(row))]) },
+  { title: 'Flow', key: 'flow', render: row => h('span', { class: 'wf-flow-summary', title: flowSummary(row) }, [h('span', { class: 'wf-flow-heading' }, [h('strong', `初始 ${row.initialNodes.length} nodes · ${row.initialEdges.length} edges`)]), h('span', initialEndpoints(row))]) },
   { title: '狀態', key: 'isEnabled', render: row => h(NTag, { type: row.isEnabled ? 'success' : 'error' }, () => row.isEnabled ? '啟用' : '停用') },
   { title: '管理', key: 'action', render: row => h(NButton, { size: 'small', onClick: () => edit(row) }, () => '設定') },
 ]
@@ -111,11 +109,6 @@ onMounted(load)
           <ul class="wf-edges"><li v-for="edge in editing.initialEdges" :key="`${edge.from}-${edge.to}`"><code>{{ edge.from }}</code> <span>→</span> <code>{{ edge.to }}</code></li></ul>
         </details>
 
-        <details v-if="editing.orchestrationMode === 'DynamicStateful'" class="wf-details" open>
-          <summary>可動態加入的 Node Types</summary>
-          <ul class="wf-dynamic-nodes"><li v-for="nodeType in editing.dynamicNodeTypes" :key="nodeType"><code>{{ nodeType }}</code></li></ul>
-          <p class="wf-detail-note">實際執行圖由 Planner 依執行狀態建立，請以個別 Agent Run 的持久化 Workflow Definition 為準。</p>
-        </details>
 
         <aside class="wf-notice">停用 Workflow 會拒絕建立新的 Agent Run。Node 的 timeout、retry、side effect 與 contract 請至 Node 管理查看與設定。</aside>
         <button class="prestige-btn prestige-btn-solid" @click="save">儲存有效設定</button>

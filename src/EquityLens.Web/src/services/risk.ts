@@ -34,9 +34,12 @@ export interface PortfolioDetail {
 }
 
 export interface RiskHorizonResult {
+  effectiveHistoricalObservations?: number | null
+  historicalStatus?: string
+  minimumHistoricalObservations?: number
   horizonDays: number
-  historicalVaR: number
-  historicalES: number
+  historicalVaR: number | null
+  historicalES: number | null
   monteCarloVaR: number
   monteCarloES: number
   monteCarloMeanFinalValue: number
@@ -46,6 +49,8 @@ export interface RiskHorizonResult {
 }
 
 export interface PortfolioHoldingRisk {
+  rawIndustry?: string | null
+  classificationVersion?: string
   securityId: string
   ticker: string
   exchange: string
@@ -70,7 +75,13 @@ export interface PortfolioIndustryRisk {
   holdingCount: number
 }
 
+export interface RiskMeasurementBasis {
+  from?: string | null; to?: string | null; weighting: string; cashTreatment: string
+  returnMethod: string; volatilityMethod: string; observationCount?: number | null
+  sampleDefinition: string; confidenceLevel?: number | null; horizonDays?: number | null
+}
 export interface PortfolioRiskResponse {
+  measurementBasis?: RiskMeasurementBasis | null
   portfolioId: string
   from: string
   to: string
@@ -202,6 +213,7 @@ export interface PortfolioRiskBacktestRun {
 
 export type RiskCalculationOperation = 'risk' | 'monte-carlo' | 'backtest' | 'scenario' | 'governance' | 'report'
 export interface RiskCalculationRun {
+  inputSnapshot?: { from?: string; to?: string; simulations?: number } | null
   id:string; portfolioId:string; operation:RiskCalculationOperation
   status:'Queued'|'Running'|'FallbackRunning'|'Completed'|'Failed'; progressPercent:number
   requestedModel:string; selectedModel:string|null; algorithmVersion:string; inputHash:string|null
@@ -354,8 +366,8 @@ export interface PortfolioRiskReportSnapshotListItem {
 export interface PortfolioRiskReportSnapshotDetail extends PortfolioRiskReportSnapshotListItem {
   portfolioId:string; snapshot:Record<string, unknown>
 }
-export async function createPortfolioRiskReportSnapshot(portfolioId:string): Promise<PortfolioRiskReportSnapshotDetail> {
-  const response = await http.post<PortfolioRiskReportSnapshotDetail>(`/portfolios/${portfolioId}/risk/reports`)
+export async function createPortfolioRiskReportSnapshot(portfolioId:string, runId?:string): Promise<PortfolioRiskReportSnapshotDetail> {
+  const response = await http.post<PortfolioRiskReportSnapshotDetail>(`/portfolios/${portfolioId}/risk/reports${runId ? `/from-calculation/${runId}` : ''}`)
   return response.data
 }
 export async function getPortfolioRiskReportSnapshots(portfolioId:string): Promise<PortfolioRiskReportSnapshotListItem[]> {

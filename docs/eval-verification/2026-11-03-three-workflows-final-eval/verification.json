@@ -1,0 +1,53 @@
+{
+  "branch": "refactor/three-workflows",
+  "baseline": "8903e48",
+  "verification_date": "2026-11-03",
+  "checks": {
+    "backend_build": "passed",
+    "backend_tests": {
+      "passed": 911,
+      "failed": 0,
+      "skipped": 0,
+      "postgres_integration": "isolated PostgreSQL configured"
+    },
+    "ef_pending_model_changes": false,
+    "eval_pytest": 83,
+    "frontend_build": "passed",
+    "frontend_tests": 127,
+    "git_diff_check": "passed"
+  },
+  "architecture": {
+    "workflows": 3,
+    "node_types": 13,
+    "production_handler_types": 13,
+    "agent_cs_lines_before": 11674,
+    "agent_cs_lines_after": 7712,
+    "research_tools": 3,
+    "portfolio_tools": 6,
+    "shared_method_tool": 1,
+    "method_files": 3
+  },
+  "boundaries": {
+    "main_merged": false,
+    "deployed": false,
+    "production_data_modified": false,
+    "app_vue_changed": false,
+    "appsettings_json_changed": false,
+    "new_paid_api_calls": 34
+  },
+  "not_verified": [
+    "supplementary live answers and A/C ablation",
+    "live router accuracy"
+  ],
+  "local_suite_log_prefix": "/tmp/final-eval-acceptance-",
+  "reviewer_summary": "docs/architecture/remove-dynamic-dag-progress.md",
+  "live_eval": {
+    "system_commit": "31a6a2b",
+    "passed": 7,
+    "total": 8,
+    "baseline_passed": 7,
+    "non_regression": true,
+    "parse_errors": 0,
+    "remaining_failed_case": "2330-no-guaranteed-profit"
+  }
+}

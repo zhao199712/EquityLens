@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
@@ -10,6 +12,8 @@ namespace EquityLens.Api.Services.Agents;
 public interface IAgentWorkflowQueryService
 {
     Task<AgentWorkflowQueryCreatedResponse> CreateAsync(Guid userId, CreateAgentWorkflowQueryRequest request, CancellationToken cancellationToken = default);
+    Task<AgentWorkflowQueryCreatedResponse> CreateFromDecisionAsync(Guid userId, CreateAgentWorkflowQueryRequest request, InvestmentResearchRouteDecision decision, CancellationToken cancellationToken = default)
+        => CreateAsync(userId, request, cancellationToken);
 }
 
 public sealed class AgentWorkflowQueryException(string code, string message) : InvalidOperationException(message)
@@ -20,9 +24,13 @@ public sealed class AgentWorkflowQueryException(string code, string message) : I
 public sealed class AgentWorkflowQueryService(
     EquityLensDbContext db,
     IInvestmentResearchRouter router,
-    IAgentRunService agentRuns) : IAgentWorkflowQueryService
+    IAgentRunService agentRuns, ILogger<AgentWorkflowQueryService>? logger = null) : IAgentWorkflowQueryService
 {
-    public async Task<AgentWorkflowQueryCreatedResponse> CreateAsync(Guid userId, CreateAgentWorkflowQueryRequest request, CancellationToken cancellationToken = default)
+    public Task<AgentWorkflowQueryCreatedResponse> CreateAsync(Guid userId, CreateAgentWorkflowQueryRequest request, CancellationToken cancellationToken = default)
+        => CreateCoreAsync(userId, request, null, cancellationToken);
+    public Task<AgentWorkflowQueryCreatedResponse> CreateFromDecisionAsync(Guid userId, CreateAgentWorkflowQueryRequest request, InvestmentResearchRouteDecision decision, CancellationToken cancellationToken = default)
+        => CreateCoreAsync(userId, request, decision, cancellationToken);
+    private async Task<AgentWorkflowQueryCreatedResponse> CreateCoreAsync(Guid userId, CreateAgentWorkflowQueryRequest request, InvestmentResearchRouteDecision? selected, CancellationToken cancellationToken)
     {
         var question = request.Question?.Trim();
         if (string.IsNullOrWhiteSpace(question)) throw new AgentWorkflowQueryException("question_required", "請輸入問題。");
@@ -34,24 +42,46 @@ public sealed class AgentWorkflowQueryService(
             .Select(x => new InvestmentResearchPortfolioOption(x.Id, x.Name, x.BaseCurrency, x.Holdings.Count))
             .ToListAsync(cancellationToken);
         PortfolioDiagnosisInput? parentInput = null;
+        string? parentResearchTicker = null;
+        string? parentWorkflow = null;
         if (request.ParentAgentRunId is Guid parentId)
         {
             var parent = await db.AgentRuns.AsNoTracking().SingleOrDefaultAsync(x => x.Id == parentId && x.UserId == userId, cancellationToken);
-            if (parent is null || parent.WorkflowType != AgentWorkflowTypes.PortfolioDiagnosis || parent.Status != AgentRunStatuses.Succeeded)
-                throw new AgentWorkflowQueryException("previous_run_not_ready", "原投組診斷尚未完成或無法存取。");
-            parentInput = PortfolioDiagnosisWorkflowDefinitionProvider.ParseInput(parent.InputJson);
-            question = $"投資組合 {parentInput.PortfolioId} 的後續診斷：{question}";
+            if (parent is null || parent.Status != AgentRunStatuses.Succeeded || parent.WorkflowType is not (AgentWorkflowTypes.PortfolioDiagnosis or AgentWorkflowTypes.ResearchAgent))
+                throw new AgentWorkflowQueryException("previous_run_not_ready", "原分析尚未完成或無法存取。");
+            parentWorkflow = parent.WorkflowType;
+            if (parent.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
+                parentInput = PortfolioDiagnosisWorkflowDefinitionProvider.ParseInput(parent.InputJson);
+            else
+            {
+                var research = await db.ResearchRuns.AsNoTracking().SingleOrDefaultAsync(x => x.Id == parent.ResearchRunId && x.UserId == userId, cancellationToken)
+                    ?? throw new AgentWorkflowQueryException("previous_run_not_ready", "無法存取原研究。");
+                parentResearchTicker = research.Ticker;
+                question = $"原研究問題：{research.Question}。追問：{question}";
+            }
         }
-        var decision = await router.RouteAsync(question, portfolios, cancellationToken);
-        if (parentInput is not null && decision.WorkflowType != AgentWorkflowTypes.PortfolioDiagnosis)
-            throw new AgentWorkflowQueryException("portfolio_followup_required", "請明確說明此投組要補充的分析或情境。");
+        var securities = await db.Securities.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.Ticker, x.Name }).ToListAsync(cancellationToken);
+        var candidates = securities.Where(x => !string.IsNullOrWhiteSpace(x.Name) && request.Question!.Contains(x.Name, StringComparison.OrdinalIgnoreCase)
+            || Regex.IsMatch(request.Question!, $@"(?<![A-Za-z0-9]){Regex.Escape(x.Ticker)}(?![A-Za-z0-9])", RegexOptions.IgnoreCase)).Take(10).ToArray();
+        if (parentResearchTicker is not null && candidates.Length == 1) parentResearchTicker = candidates[0].Ticker;
+        var decision = parentWorkflow is not null
+            ? InvestmentResearchRouter.Fixed(parentWorkflow, question, parentInput?.PortfolioId, parentResearchTicker)
+            : selected ?? await router.RouteWithCandidatesAsync(question, portfolios, JsonSerializer.SerializeToNode(candidates, AgentNodeJson.SerializerOptions)!.AsArray(), cancellationToken);
+        if (decision.RoutingContext.Confidence == "low" || decision.RoutingContext.ClarifyingQuestions.Count > 0)
+            throw new AgentWorkflowQueryException("routing_clarification_required", decision.RoutingContext.ClarifyingQuestions.Count > 0 ? string.Join(" ", decision.RoutingContext.ClarifyingQuestions) : "請明確說明研究標的或投組與調整目標。");
+        if (decision.PortfolioId is Guid selectedId && !portfolios.Any(p => p.Id == selectedId))
+        {
+            logger?.LogWarning("Routing rejected: {Category}; field={Field}", "unauthorized_portfolio", "params.portfolioId");
+            throw new AgentWorkflowQueryException("portfolio_forbidden", "無法使用未授權的投資組合。");
+        }
 
         if (string.Equals(decision.WorkflowType, AgentWorkflowTypes.PortfolioDiagnosis, StringComparison.OrdinalIgnoreCase))
         {
             if (decision.RoutingContext.ClarifyingQuestions.Count > 0)
                 throw new AgentWorkflowQueryException("scenario_clarification_required", string.Join(" ", decision.RoutingContext.ClarifyingQuestions));
-            var portfolioId = parentInput?.PortfolioId ?? ResolvePortfolio(decision.PortfolioId, portfolios);
+            var portfolioId = parentInput?.PortfolioId ?? ResolvePortfolio(decision.PortfolioId, portfolios, question);
             PortfolioScenarioCalculator.ValidateRequests(decision.RoutingContext.Scenarios);
+            await ValidateScenarioIntentAsync(portfolioId, question, decision.RoutingContext.Scenarios, cancellationToken);
             var (from, to) = ResolveDiagnosisWindow(decision.RoutingContext.ContextEnvelope.Horizon, question);
             if (parentInput is not null) { from = parentInput.From; to = parentInput.To; }
             var routing = decision.RoutingContext with { ParentAgentRunId = request.ParentAgentRunId };
@@ -59,9 +89,9 @@ public sealed class AgentWorkflowQueryService(
             return Response(created.Id, null, created.WorkflowType, created.Status, decision.RoutingContext);
         }
 
-        if (string.Equals(decision.WorkflowType, AgentWorkflowTypes.ResearchInvestigation, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(decision.WorkflowType, AgentWorkflowTypes.ResearchAgent, StringComparison.OrdinalIgnoreCase))
         {
-            var ticker = await ResolveTickerAsync(decision.SecurityQuery, question, cancellationToken);
+            var ticker = parentResearchTicker ?? await ResolveTickerAsync(decision.SecurityQuery, question, cancellationToken);
             var created = await agentRuns.CreateResearchInvestigationAsync(userId, new ResearchAskRequest(ticker, question, SourcePolicy: SourcePolicy.Auto), decision.RoutingContext, cancellationToken);
             return Response(created.AgentRun.Id, created.ResearchRunId, created.AgentRun.WorkflowType, created.AgentRun.Status, decision.RoutingContext);
         }
@@ -79,12 +109,34 @@ public sealed class AgentWorkflowQueryService(
             routing.LeadSkill, routing.LeadSkillDisplayName, routing.Confidence, routing.Objective,
             routing.ContextEnvelope, routing.InferredFields, routing.ClarifyingQuestions);
 
-    private static Guid ResolvePortfolio(Guid? selected, IReadOnlyList<InvestmentResearchPortfolioOption> portfolios)
+    private static Guid ResolvePortfolio(Guid? selected, IReadOnlyList<InvestmentResearchPortfolioOption> portfolios, string question)
     {
         if (portfolios.Count == 1) return portfolios[0].Id;
         if (portfolios.Count == 0) throw new AgentWorkflowQueryException("portfolio_required", "目前沒有可供診斷的投資組合。");
-        if (selected.HasValue && portfolios.Any(x => x.Id == selected.Value)) return selected.Value;
-        throw new AgentWorkflowQueryException("portfolio_required", "問題被判定為 Portfolio Diagnosis；請在問題中寫明要診斷的投資組合名稱。");
+        var named = portfolios.Where(p => question.Contains(p.Name, StringComparison.OrdinalIgnoreCase) || question.Contains(p.Id.ToString(), StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (named.Length == 1 && (selected is null || named[0].Id == selected)) return named[0].Id;
+        throw new AgentWorkflowQueryException("portfolio_required", "請指定要診斷的投資組合：" + string.Join("、", portfolios.Select(p => p.Name)));
+    }
+
+    private async Task ValidateScenarioIntentAsync(Guid portfolioId, string question, IReadOnlyList<PortfolioScenarioRequest>? scenarios, CancellationToken ct)
+    {
+        if (Regex.IsMatch(question, @"放空|借款|槓桿|融資"))
+            throw new AgentWorkflowQueryException("scenario_clarification_required", "情境只支援減碼留現金或轉入既有持股，請確認調整方式。");
+        var holdings = await db.PortfolioHoldings.AsNoTracking().Where(h => h.PortfolioId == portfolioId)
+            .Select(h => new { h.Security.Ticker, h.Security.Name }).ToListAsync(ct);
+        if (scenarios is { Count: > 0 } && scenarios.Any(s => s.TargetWeights.Keys.Any(t => !holdings.Any(h => h.Ticker == t))
+            || s.TransferToTicker is not null && !holdings.Any(h => h.Ticker == s.TransferToTicker)))
+            throw new AgentWorkflowQueryException("scenario_clarification_required", "請使用此投組的既有持股作為減碼與轉入標的。");
+        var transfer = Regex.Match(question, @"(?:轉入|轉到|移到|移入|移至|轉成|轉為)\s*([^，。；？\s]+)");
+        if (transfer.Success)
+        {
+            var target = transfer.Groups[1].Value;
+            var destination = holdings.Where(h => target.Contains(h.Ticker, StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrWhiteSpace(h.Name) && target.Contains(h.Name, StringComparison.OrdinalIgnoreCase))).ToArray();
+            var cash = target.Contains("現金");
+            if (scenarios is null || scenarios.Count == 0 || (!cash && destination.Length != 1)
+                || scenarios.Any(s => cash ? s.RemainderPolicy != "cash" : s.RemainderPolicy != "holding" || s.TransferToTicker != destination[0].Ticker))
+                throw new AgentWorkflowQueryException("scenario_clarification_required", "請確認減碼目標權重及轉入對象；不會以其他情境代替。");
+        }
     }
 
     private static (DateOnly? From, DateOnly? To) ResolveDiagnosisWindow(string? horizon, string question)

@@ -113,7 +113,7 @@ public sealed class PortfolioRiskCalculator(
                 source.ComponentVolatility,
                 source.ComponentRiskShare,
                 source.MarginalVolatility,
-                source.IncrementalVolatility));
+                source.IncrementalVolatility, IndustryClassification.Raw(m.Holding.Industry, m.Holding.Sector)));
         }
 
         var (concentrationHhi, largestHoldingWeight) = RiskMath.CalculateConcentration(
@@ -181,7 +181,12 @@ public sealed class PortfolioRiskCalculator(
             LargestHoldingWeight: largestHoldingWeight,
             Industries: industryRiskSources,
             RiskSourceAnnualizedVolatility: riskSourceAnnualizedVolatility,
-            DailyLogReturns: portfolioReturns);
+            DailyLogReturns: portfolioReturns,
+            MeasurementBasis: new(commonDates.FirstOrDefault(), commonDates.LastOrDefault(),
+                targetWeights is null ? "當期已定價持股市值固定權重；缺歷史持股不重配" : "指定固定權重；缺歷史持股不重配",
+                "不含帳戶現金；未配置權重視為零報酬", "個股對數報酬加權；回撤由此序列重建",
+                "EWMA 年化；風險貢獻採同權重協方差", portfolioReturns.Count,
+                "有足夠價格之持股共同交易日；歷史尾部另見每期限有效視窗", confidenceLevel));
         return Result<PortfolioRiskResponse>.Success(response);
     }
 }

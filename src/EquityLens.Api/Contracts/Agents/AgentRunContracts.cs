@@ -2,11 +2,7 @@ namespace EquityLens.Api.Contracts.Agents;
 
 public sealed record CreateCriticReviewRequest(Guid ResearchRunId);
 
-public sealed record CreateDraftRevisionRequest(Guid CriticReviewRunId);
 
-public sealed record CreateResearchQualityReviewRequest(Guid ResearchRunId);
-public sealed record CreateEvidenceRemediationRequest(Guid CriticReviewRunId);
-public sealed record CreateEvidenceReanalysisRequest(Guid EvidenceRemediationRunId);
 
 public sealed record CreatePortfolioDiagnosisRequest(DateOnly? From = null, DateOnly? To = null);
 
@@ -48,7 +44,8 @@ public sealed record AgentRunSummaryResponse(
     int TotalInputTokens,
     int TotalOutputTokens,
     decimal TotalEstimatedCostUsd,
-    Guid? ParentAgentRunId = null);
+    Guid? ParentAgentRunId = null,
+    string? QuestionSummary = null, string? Ticker = null, string? PortfolioName = null);
 
 public sealed record AgentRunNodeResponse(
     Guid Id,

@@ -1,3 +1,4 @@
+import { legacyWorkflow } from '../../../services/legacyWorkflows'
 import { mount } from '@vue/test-utils'
 import { computed, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -37,7 +38,6 @@ vi.mock('../../../composables/useAgentRunPolling', () => ({
 
 vi.mock('../../../services/agentRuns', () => ({
   cancelAgentRun: vi.fn(),
-  createDraftRevision: vi.fn(),
   decideAgentApproval: vi.fn(),
   retryAgentRun: vi.fn(),
 }))
@@ -86,6 +86,24 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
     state.error.value = null
   })
 
+  it('distinguishes no negative contributors from incomplete coverage', () => {
+    const run = diagnosisRun(null)
+    run.outputJson!.attributionCoverage = 'complete'
+    state.agentRun.value = run
+    expect(mount(AgentRunDetailView, { global: { stubs } }).text()).toContain('本期沒有負貢獻持股')
+    run.outputJson!.attributionCoverage = 'partial'
+    state.agentRun.value = { ...run }
+    expect(mount(AgentRunDetailView, { global: { stubs } }).text()).toContain('資料涵蓋不足')
+  })
+
+  it('keeps a long report visible without an intersection callback', () => {
+    state.agentRun.value = diagnosisRun(null, '長報告內容。'.repeat(2000))
+    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
+    const report = wrapper.get('.interpretation').element
+    expect(report.closest('.kimi-reveal:not(.visible)')).toBeNull()
+    wrapper.unmount()
+  })
+
   it('renders risk metrics when present', () => {
     state.agentRun.value = diagnosisRun({
       annualizedVolatility: 0.3871, maxDrawdown: -0.0858, historicalVaR: -0.0729,
@@ -101,7 +119,7 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
 
   it('renders the bounded research quality loop summary', () => {
     const value = diagnosisRun(null)
-    value.run.workflowType = 'ResearchQualityReview'
+    value.run.workflowType = legacyWorkflow.quality
     value.loopSummary = {
       status: 'Stopped', currentIteration: 2, maxIterations: 2,
       lastAction: 'Complete', stopReason: 'MAX_ITERATIONS',

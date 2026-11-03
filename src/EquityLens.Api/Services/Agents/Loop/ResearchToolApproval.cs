@@ -18,7 +18,7 @@ internal static class ResearchToolApproval
     };
 
     internal static async Task<bool> PrepareAsync(AgentNodeExecutionContext context, IReadOnlyList<AgentToolCall> records,
-        LoopToolScope scope, IResearchLoopTools tools, ResearchAgentLoopOptions options, ResearchLoopState state, DateTime now, CancellationToken ct)
+        LoopToolScope scope, IAgentLoopTools tools, ResearchAgentLoopOptions options, ResearchLoopState state, DateTime now, CancellationToken ct)
     {
         foreach (var record in records.Where(x => x.GuardDecision == "RequireApproval" && x.Status is "AwaitingApproval" or "Running"))
         {

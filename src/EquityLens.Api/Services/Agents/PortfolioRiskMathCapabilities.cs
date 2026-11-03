@@ -88,8 +88,10 @@ public sealed record FilteredResidualArguments(decimal Lambda) : IPortfolioRiskM
     public JsonObject ToJson() => new() { ["lambda"] = Lambda };
 }
 
+public sealed record RiskMathFunction(string Id, string Description, JsonObject ParametersSchema, string InputMode);
+
 public sealed record PortfolioRiskMathCapabilityDefinition(
-    NodeCapability Capability,
+    RiskMathFunction Capability,
     Func<JsonObject, IPortfolioRiskMathArguments> ParseArguments);
 
 public static class PortfolioRiskMathCapabilities
@@ -152,7 +154,7 @@ public static class PortfolioRiskMathCapabilities
             args => new FilteredResidualArguments(Decimal(args, "lambda", .94m, .80m, .999m)))
     ];
 
-    public static IReadOnlyList<NodeCapability> All { get; } = Definitions.Select(x => x.Capability).ToList();
+    public static IReadOnlyList<RiskMathFunction> All { get; } = Definitions.Select(x => x.Capability).ToList();
 
     public static PortfolioRiskMathCapabilityDefinition GetDefinition(string id) =>
         Definitions.SingleOrDefault(x => x.Capability.Id == id)
@@ -165,9 +167,7 @@ public static class PortfolioRiskMathCapabilities
         Define(id, description, mode, contract, Schema(), _ => new NoPortfolioRiskMathArguments());
 
     private static PortfolioRiskMathCapabilityDefinition Define(string id, string description, string mode, string contract, JsonObject schema, Func<JsonObject, IPortfolioRiskMathArguments> parser) =>
-        new(new NodeCapability(id, PortfolioRiskMathNodeTypes.Execute, description, contract,
-            [AgentBlackboardKeys.MathInputs], [AgentBlackboardKeys.MathResults], "ReadOnly", true, false, 1,
-            schema, mode), args =>
+        new(new RiskMathFunction(id, description, schema, mode), args =>
         {
             ValidateKeys(args, schema["properties"]!.AsObject().Select(x => x.Key));
             return parser(args);

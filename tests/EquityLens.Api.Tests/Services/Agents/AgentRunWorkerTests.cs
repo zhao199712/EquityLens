@@ -59,7 +59,7 @@ public sealed class AgentRunWorkerTests
     public async Task ProcessNextAsync_WhenStalePendingExists_ProcessesPendingBeforeNewMessage()
     {
         var pendingMessage = new AgentRunQueueMessage(Guid.NewGuid(), Guid.NewGuid(), AgentWorkflowTypes.CriticReview, DateTime.UtcNow);
-        var newMessage = new AgentRunQueueMessage(Guid.NewGuid(), Guid.NewGuid(), AgentWorkflowTypes.DraftRevision, DateTime.UtcNow);
+        var newMessage = new AgentRunQueueMessage(Guid.NewGuid(), Guid.NewGuid(), AgentWorkflowTypes.ResearchAgent, DateTime.UtcNow);
         var queue = new FakeAgentRunQueue(
             stalePendingMessage: new AgentRunQueueItem("pending-1", pendingMessage),
             newMessage: new AgentRunQueueItem("new-1", newMessage));

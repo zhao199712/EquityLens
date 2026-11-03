@@ -33,6 +33,11 @@ public sealed class WaitForHumanApprovalNodeHandler : IAgentNodeHandler
         run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
         node.InputJson = AgentNodeJson.Serialize(new { approvalType, prompt, nodeKey = node.NodeKey, subjectKey });
         context.AddEvent(run, node, AgentEventTypes.ApprovalRequested, "Human approval requested.", new { approvalType, prompt });
+        if (run.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
+            context.DbContext.AgentApprovalRequests.Add(new AgentApprovalRequest {
+                Id = Guid.NewGuid(), AgentRunId = run.Id, AgentRunNodeId = node.Id, NodeKey = node.NodeKey, NodeType = node.NodeType,
+                Scope = "WorkflowGate", Status = AgentApprovalStatuses.Pending, Reason = prompt ?? "請審閱投組診斷。",
+                SideEffectLevel = "ReadOnly", ExecutionAttempt = run.ExecutionAttempt, RequestedAtUtc = DateTime.UtcNow });
         context.RequestApproval();
         return Task.CompletedTask;
     }

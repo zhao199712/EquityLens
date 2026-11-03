@@ -318,7 +318,14 @@ public sealed class RiskCalculationRunService : IRiskCalculationRunService
             run.CreatedAtUtc, run.StartedAtUtc, run.CompletedAtUtc,
             run.ErrorCode, run.ErrorMessage, result,
             run.QualityEvaluations.Where(x => x.PolicyVersion == RiskQualityPolicy.Version)
-                .OrderByDescending(x => x.CreatedAtUtc).Select(RiskQualityValidationService.ToResponse).FirstOrDefault());
+                .OrderByDescending(x => x.CreatedAtUtc).Select(RiskQualityValidationService.ToResponse).FirstOrDefault(),
+            ParseSnapshot(run.InputSnapshotJson));
+    }
+
+    private static JsonElement? ParseSnapshot(string? json)
+    {
+        try { return string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<JsonElement>(json); }
+        catch (JsonException) { return null; }
     }
 
     private sealed record CalculationSnapshot(

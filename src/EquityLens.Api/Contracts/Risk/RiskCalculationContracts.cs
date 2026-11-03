@@ -28,7 +28,8 @@ public sealed record RiskCalculationRunResponse(
     string? ErrorCode,
     string? ErrorMessage,
     JsonElement? Result,
-    RiskQualityEvaluationResponse? QualityEvaluation = null);
+    RiskQualityEvaluationResponse? QualityEvaluation = null,
+    JsonElement? InputSnapshot = null);
 
 public sealed record RiskQualityEvaluationResponse(
     Guid Id, Guid RiskCalculationRunId, Guid RiskBacktestRunId,

@@ -131,5 +131,5 @@ export const aiFeed: AiFeedItem[] = [
   { title: 'CriticReview:半導體配置證據檢查', kind: 'Agent Run', status: 'running', time: '進行中' },
   { title: '科技成長組合 Monte Carlo 風險試算', kind: 'Risk Run', status: 'completed', time: '5 小時前' },
   { title: '鴻海 FII 供應鏈研究備忘錄', kind: 'Report', status: 'completed', time: '1 天前' },
-  { title: 'DraftRevision:月報答案修訂', kind: 'Agent Run', status: 'failed', time: '2 天前' },
+  { title: 'ResearchAgent:月報答案修訂', kind: 'Agent Run', status: 'failed', time: '2 天前' },
 ]

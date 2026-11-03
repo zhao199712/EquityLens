@@ -40,19 +40,19 @@ python -m equitylens_eval rescore --responses runs/prompt-v4/responses.jsonl \
 pytest   # harness 自己的測試，全部離線
 ```
 
-### 比較兩個研究引擎
+### 比較固定工作流與保存的基準
 
 ```bash
 python -m equitylens_eval run --cases cases/research_v1.jsonl --mode investigation \
-    --engine DynamicDag --label dynamic-dag --no-judge
-python -m equitylens_eval run --cases cases/research_v1.jsonl --mode investigation \
-    --engine AgentLoop --label agent-loop --no-judge
-python -m equitylens_eval compare runs/dynamic-dag runs/agent-loop
+    --engine AgentLoop --label three-workflows --no-judge
+python -m equitylens_eval compare runs/saved-agent-loop-baseline runs/three-workflows
 ```
 
-兩邊必須固定 corpus、模型、thinking 設定與 reranker。`--engine` 僅用於 investigation，會覆蓋 case 中的 engine；未提供則沿用伺服器預設。`trajectory` 保留 planner 模式、loop 輪數、工具、guard 拒絕、Web 呼叫與節點耗時。LocalOnly 的已派送 Web 呼叫會使政策分數失敗；被 guard 擋下的呼叫不算外連。舊 responses 缺少 trajectory 時，政策指標為未知，仍可 rescore。
+新 investigation 僅接受 AgentLoop，省略參數也明確送出 AgentLoop，覆蓋舊 case 的 engine。比較時固定 corpus、模型、thinking 與 reranker；原始 8 題與補充題分開計分。舊引擎的 responses 仍可離線 rescore，不能用目前 API 重跑已退役引擎。
 
-`llm_turns` 是新 loop 的決策數；v1 的 0 不表示沒有 LLM 呼叫。兩套引擎的工具記錄粒度不同，不能把總 tool count 當同質成本。run 的 token / cost 摘要目前未涵蓋所有既有 Critic 呼叫；完整成本比較須另保存 provider usage，不能直接視為帳單。
+`trajectory` 保留 loop 輪數、工具、Guard 拒絕、Web 呼叫、節點耗時與載入方法的 id／版本／hash；歷史 planner 指標保留供重算。LocalOnly 已派送 Web 呼叫會使政策分數失敗；Guard 擋下不算外連。缺少 trajectory 的舊回答指標為未知，不能視為零違規。
+
+run 的 token／cost 摘要未涵蓋所有既有 Critic 呼叫；完整成本須另保存 provider usage，不能直接視為帳單。
 
 每次 `run` 會產生 `runs/<label>/`：
 

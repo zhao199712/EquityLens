@@ -16,9 +16,28 @@ namespace EquityLens.Api.Tests.Services.Agents;
 
 public sealed class ResearchAgentWorkflowTests
 {
+    [Fact]
+    public void CoarseQualityGate_IsSharedAndBoundsResearchToSevenNodes()
+    {
+        var research = new ResearchAgentWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var critic = new CriticReviewWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        Assert.Equal(7, research.Nodes.Count);
+        Assert.Equal(3, critic.Nodes.Count);
+        Assert.Equal(2, research.Nodes.Count(n => n.NodeType == "QualityGate"));
+        Assert.Single(critic.Nodes.Where(n => n.NodeType == "QualityGate"));
+    }
+
+    [Fact]
+    public async Task RetiredEngine_IsRejectedBeforeAnyPersistence()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(db).CreateResearchInvestigationAsync(Guid.NewGuid(), new("2330", "營收", Engine: "DynamicDag")));
+        Assert.Empty(await db.AgentRuns.ToListAsync());
+        Assert.Empty(await db.ResearchRuns.ToListAsync());
+    }
+
     [Theory]
-    [InlineData(null, AgentWorkflowTypes.ResearchInvestigation)]
-    [InlineData("DynamicDag", AgentWorkflowTypes.ResearchInvestigation)]
+    [InlineData(null, AgentWorkflowTypes.ResearchAgent)]
     [InlineData("AgentLoop", AgentWorkflowTypes.ResearchAgent)]
     public async Task Engine_SelectsWorkflow_AndUserIsolationIsPreserved(string? engine, string type)
     {
@@ -47,13 +66,11 @@ public sealed class ResearchAgentWorkflowTests
         {
             new NoOpValidation(), new DetectResearchIntentNodeHandler(new IntentDetector()),
             new ResearchAgentLoopNodeHandler(new ResearchAgentLoop(chat, new EvidenceTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System)),
-            new ResearchOutputGateNodeHandler(), new BuildEvidencePacketNodeHandler(), new CheckEvidenceNodeHandler(),
-            new CritiqueAnswerNodeHandler(critic), new FinalizeCriticReportNodeHandler([new ResearchAgentPolicyEvaluator()]),
-            new RouteResearchAgentQualityNodeHandler(), new FinalizeResearchAgentNodeHandler()
+            new QualityGateNodeHandler(critic, [new ResearchAgentPolicyEvaluator()]), new FinalizeResearchAgentNodeHandler()
         };
         var executor = AgentExecutorTestFactory.Create(db, new WorkflowGraphTopologyService(), new AgentRunGraphValidator(),
             new AgentRunStateMachine(), new AgentNodeStateMachine(), handlers, NullLogger<AgentRunExecutor>.Instance,
-            catalog: new AgentWorkflowCatalog(), dynamicPlanner: new ForbiddenPlanner());
+            catalog: new AgentWorkflowCatalog());
         for (var batch = 0; batch < 10 && run.Status is "Pending" or "Running"; batch++)
             await executor.ExecuteAsync(run.Id, run.UserId);
         Assert.Equal(AgentRunStatuses.Succeeded, run.Status);
@@ -61,11 +78,27 @@ public sealed class ResearchAgentWorkflowTests
         Assert.Equal(status, artifact.Status);
         Assert.Equal(criticCalls, critic.Calls);
         Assert.Equal(invalidFirst ? "Succeeded" : "Skipped", run.Nodes.Single(x => x.NodeKey == "reviseAgent").Status);
-        if (invalidRevision) Assert.Equal(ResearchAgentLoop.Refusal, artifact.Answer);
+        if (invalidRevision)
+        {
+            Assert.Equal(ResearchAgentLoop.Refusal, artifact.Answer);
+            Assert.Equal("quality_gate_rejected", artifact.ErrorMessage);
+            Assert.Equal("quality_gate_rejected", JsonNode.Parse(run.OutputJson!)!["errorCode"]!.GetValue<string>());
+            Assert.Contains(run.Events, e => e.EventType == "QualityGateRejected");
+        }
         else Assert.Contains("[1]", artifact.Answer);
         Assert.Equal(3, await db.ResearchRunCandidates.CountAsync());
         var detail = await Service(db).GetByIdAsync(run.Id, run.UserId);
         Assert.NotEmpty(detail!.LlmTurns!);
+        // 模擬已提交評論後、節點完成前的恢復：不得重新呼叫評論服務。
+        var gate = run.Nodes.Single(n => n.NodeKey == (invalidFirst ? "reviseQualityGate" : "qualityGate"));
+        var persisted = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var checkpointKey = $"qualityGate:{gate.NodeKey}:{run.ExecutionAttempt}";
+        persisted[checkpointKey]!.AsObject().Remove("route");
+        run.BlackboardJson = persisted.ToJsonString();
+        await db.SaveChangesAsync();
+        var beforeResume = critic.Calls;
+        await new QualityGateNodeHandler(critic, [new ResearchAgentPolicyEvaluator()]).ExecuteAsync(new(db, run, gate, (_, _, _, _, _) => { }));
+        Assert.Equal(beforeResume, critic.Calls);
         Assert.Contains(detail.ToolCalls, x => x.AgentLlmTurnId.HasValue);
     }
 
@@ -109,6 +142,40 @@ public sealed class ResearchAgentWorkflowTests
         }
     }
 
+    [Theory]
+    [InlineData("台積電（2330）於2025年每股盈餘為66.26元[1]。", "每股盈餘是多少？", true)]
+    [InlineData("截至2025/12/31，股票代號2330的每股盈餘為66.26元[1]。", "每股盈餘是多少？", true)]
+    [InlineData("依題目所述100萬元配置，每股盈餘為66.26元[1]。", "假設100萬元配置，請查每股盈餘。", true)]
+    [InlineData("每股盈餘為2330元[1]。", "每股盈餘是多少？", false)]
+    [InlineData("2025年每股盈餘為999元[1]。", "每股盈餘是多少？", false)]
+    public void OutputGate_ExcludesContextNumbersButKeepsFinancialClaims(string answer, string question, bool expected)
+    {
+        var board = new JsonObject {
+            ["answer"] = answer,
+            ["researchRequest"] = JsonSerializer.SerializeToNode(new ResearchAskRequest("2330", question), AgentNodeJson.SerializerOptions),
+            ["citations"] = new JsonArray(new JsonObject { ["citationIndex"] = 1, ["sourceType"] = "LocalDocument", ["quoteText"] = "每股盈餘66.26元" })
+        };
+        Assert.Equal(expected, ResearchOutputCheck.Check(board).Passed);
+    }
+
+    [Theory]
+    [InlineData("法說會指出匯率風險[1]。", "AnnualReport", "匯率風險影響營運", "SourceAttributionMismatch")]
+    [InlineData("公司面臨匯率風險[1]。", "AnnualReport", "目錄\n風險管理", "NonSubstantiveSourcePage")]
+    [InlineData("公司面臨匯率風險[1]。", "AnnualReport", "封面\n公司年報", "NonSubstantiveSourcePage")]
+    [InlineData("公司面臨匯率風險[1]。", "AnnualReport", "合併資產負債表\n資產總計", "FinancialTableNotRiskEvidence")]
+    [InlineData("年報補充揭露匯率風險[1]。", "AnnualReport", "匯率風險影響營運", null)]
+    [InlineData("法說會指出匯率風險[1]。", "EarningsPresentation", "匯率風險影響營運", null)]
+    public void OutputGate_ValidatesSourceRoles(string answer, string documentType, string quote, string? expected)
+    {
+        var board = new JsonObject { ["answer"] = answer,
+            ["researchRequest"] = JsonSerializer.SerializeToNode(new ResearchAskRequest("2330", "主要風險？"), AgentNodeJson.SerializerOptions),
+            ["citations"] = new JsonArray(new JsonObject { ["citationIndex"] = 1, ["sourceType"] = "LocalDocument",
+                ["documentType"] = documentType, ["sourceRole"] = "Supporting", ["quoteText"] = quote }) };
+        var result = ResearchOutputCheck.Check(board);
+        if (expected is null) Assert.True(result.Passed);
+        else Assert.Contains(expected, result.BlockingIssues);
+    }
+
     [Fact]
     public void Definition_HasCompleteStaticGraphAndRegisteredContracts()
     {
@@ -130,7 +197,7 @@ public sealed class ResearchAgentWorkflowTests
         var board = new JsonObject { ["answer"] = answer,
             ["researchRequest"] = JsonSerializer.SerializeToNode(new ResearchAskRequest("2330", "營收", SourcePolicy: SourcePolicy.LocalOnly), AgentNodeJson.SerializerOptions),
             ["citations"] = new JsonArray(new JsonObject { ["citationIndex"] = 1, ["sourceType"] = source }) };
-        var result = ResearchOutputGateNodeHandler.Check(board);
+        var result = ResearchOutputCheck.Check(board);
         Assert.False(result.Passed);
         Assert.Contains(issue, result.BlockingIssues);
     }
@@ -159,6 +226,26 @@ public sealed class ResearchAgentWorkflowTests
     [InlineData("金額 3,255,827 百萬元 ÷ 金額 8,103,105 百萬元 ≈ 90%[1]", "單位：新台幣百萬元；3,255,827、8,103,105", true)]
     [InlineData("金額 1.1341 十億元[1]", "金額 11.341 億元", false)]
     [InlineData("營收增加[1]", "營收增加", false)]
+    [InlineData("股數 25,928,262 仟股[1]", "普通股加權平均股數（仟股） 25,928,262 25,927,556 基本每股盈餘（元）66.26", false)]
+    [InlineData("股數 25,928,262 千股[1]", "普通股加權平均股數(千股) 25,928,262 25,927,556", false)]
+    [InlineData("金額 25,928,262 仟元[1]", "普通股加權平均股數（仟股）25,928,262 25,927,556", true)]
+    [InlineData("金額 25,928,262 元[1]", "普通股加權平均股數（仟股）25,928,262 25,927,556", true)]
+    [InlineData("EPS 66,260 元[1]", "普通股加權平均股數（仟股）25,928,262 基本每股盈餘（元）66.26", true)]
+    [InlineData("淨利 1,717,882,627 仟元[1]", "歸屬淨利 $1,717,882,627 股數（仟股）25,928,262", true)]
+    [InlineData("營收 100 仟元[1]", "單位：新台幣仟元 營收 100；股數（仟股）100", false)]
+    [InlineData("金額 100 仟元[1]", "單位：新台幣仟元 營收 500；股數（仟股）100", true)]
+    [InlineData("甲 600 百萬元 ÷ 1000 百萬元 ≈ 60%；乙 400 百萬元 ÷ 1000 百萬元 ≈ 40%[1]。", "收入（百萬元）甲 600 乙 400 合計1000", false)]
+    [InlineData("甲 600 百萬元 ÷ 1000 百萬元 ≈ 80%；乙 400 百萬元 ÷ 1000 百萬元 ≈ 40%[1]。", "收入（百萬元）甲 600 乙 400 合計1000", true)]
+    [InlineData("收入由 500 百萬元增至 600 百萬元，年增率約 20%[1]。", "收入（百萬元）600 500", false)]
+    [InlineData("收入由 500 百萬元增至 600 百萬元，年增率約 30%[1]。", "收入（百萬元）600 500", true)]
+    [InlineData("收入由 500 百萬元降至 400 百萬元，年增率約 -20%[1]。", "收入（百萬元）400 500", false)]
+    [InlineData("收入由 500 百萬元增至 600 百萬元，年增率約 20%[1]。", "收入（百萬元）600 400", true)]
+    [InlineData("收入由 0 元增至 600 元，年增率約 20%[1]。", "收入 600 元 0 元", true)]
+    [InlineData("收入 100 元。來源[1]。", "收入 100 元 200 元", true)]
+    [InlineData("收入 100 元\n來源[1]。", "收入 100 元 200 元", true)]
+    [InlineData("收入由 100 百萬元增至 120 百萬元，年增率約 20%[1]。", "收入（百萬元）電腦終端產品 120 100 元件及其他產品 30 20", false)]
+    [InlineData("收入 100 百萬元[1]。", "收入（百萬元）電腦終端產品120 100元件及其他產品30 20", false)]
+    [InlineData("營收 100 仟元[1]", "單位：新台幣仟元 營收 100 股數（仟股）100", false)]
     public void NumberGate_ChecksCitedQuote_WithNormalizationAndUnits(string answer, string quote, bool blocking)
     {
         var result = ResearchNumberTraceability.Check(answer,
@@ -175,6 +262,34 @@ public sealed class ResearchAgentWorkflowTests
         var result = ResearchNumberTraceability.Check(answer, [new JsonObject { ["citationIndex"] = 1, ["quoteText"] = quote }]);
         Assert.DoesNotContain("VerifiedRatioExpression", result.Warnings);
         Assert.True(result.Blocking);
+    }
+
+    [Fact]
+    public void NumberGate_ReplaysBrowserFinancialComparison()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Services/Agents/Fixtures/financial-comparison.json");
+        var fixture = JsonNode.Parse(File.ReadAllText(path))!;
+        var result = ResearchNumberTraceability.Check(fixture["answer"]!.GetValue<string>(),
+            fixture["citations"]!.AsArray().Select(x => x!.AsObject()).ToArray(),
+            "台積電2025年營業收入淨額、毛利率與2024年比較", "2330");
+        Assert.False(result.Blocking, string.Join("; ", result.Warnings));
+        Assert.Contains("VerifiedDifferenceExpression", result.Warnings);
+    }
+
+    [Theory]
+    [InlineData("收入 600 元 − 500 元 = 100 元[1]", "收入 600 元、500 元", false)]
+    [InlineData("收入 600 元 − 500 元 = 200 元[1]", "收入 600 元、500 元、200 元", true)]
+    [InlineData("收入 600 元 − 500 元 = 100 元[1]", "收入 600 元、400 元", true)]
+    [InlineData("收入 600 仟元 − 500 仟元 = 100 元[1]", "收入 600 仟元、500 仟元", true)]
+    [InlineData("毛利率 60% − 50% = 10 個百分點[1]", "毛利率 60%、50%", false)]
+    [InlineData("毛利率 60% − 50% = 20 個百分點[1]", "毛利率 60%、50%、20%", true)]
+    [InlineData("毛利率 60% − 50% = 10%[1]", "毛利率 60%、50%", true)]
+    [InlineData("600 元 ÷ 1000 元 ≈ 60%[1]。60% − 50% = 10 個百分點[2]", "600 元、1000 元", true)]
+    public void NumberGate_VerifiesDifferencesWithoutTrustingClaimedResults(string answer, string quote, bool blocking)
+    {
+        var result = ResearchNumberTraceability.Check(answer, [new JsonObject { ["citationIndex"] = 1, ["quoteText"] = quote },
+            new JsonObject { ["citationIndex"] = 2, ["quoteText"] = "50%" }]);
+        Assert.Equal(blocking, result.Blocking);
     }
 
     [Fact]
@@ -195,7 +310,7 @@ public sealed class ResearchAgentWorkflowTests
     }
 
     private static AgentRunService Service(EquityLensDbContext db) => new(db,
-        [new ResearchAgentWorkflowDefinitionProvider(), new ResearchInvestigationWorkflowDefinitionProvider()],
+        [new ResearchAgentWorkflowDefinitionProvider()],
         new AgentRunStateMachine(), new AgentNodeStateMachine(), new Queue());
     private sealed class Queue : IAgentRunQueue
     {
@@ -206,13 +321,10 @@ public sealed class ResearchAgentWorkflowTests
     }
     private sealed class NoOpValidation : IAgentNodeHandler
     {
-        public string NodeType => ResearchInvestigationNodeTypes.Validate;
+        public string NodeType => ResearchEntryNodeTypes.Validate;
         public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
-    private sealed class ForbiddenPlanner : IAgentWorkflowPlanner
-    {
-        public Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Static workflow must never call planner");
-    }
+
     private sealed class CountingCritic : ICriticReviewAgent
     {
         public int Calls;

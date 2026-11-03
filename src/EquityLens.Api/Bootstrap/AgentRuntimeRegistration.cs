@@ -11,18 +11,21 @@ public static class AgentRuntimeRegistration
     public static void AddEquityLensAgents(this WebApplicationBuilder builder, bool e2eTestMode)
     {
         builder.Services.AddOptions<ResearchAgentLoopOptions>().Bind(builder.Configuration.GetSection(ResearchAgentLoopOptions.SectionName))
-            .PostConfigure(x => x.DefaultEngine = builder.Configuration["AgentRuntime:ResearchEngine"] ?? x.DefaultEngine)
+            .PostConfigure(x => x.DefaultEngine = "AgentLoop")
             .Validate(x => x.MaxTurns >= 2 && x.MaxRevisionTurns >= 2 && x.MaxToolCalls > 0 && x.MaxToolCallsPerTurn > 0
                 && x.MaxWallClockSeconds > 0 && x.ToolTimeoutSeconds > 0 && x.ApprovalExpiryHours > 0 && x.MaxCostUsd > 0
                 && x.InputUsdPerMillion > 0 && x.OutputUsdPerMillion > 0 && x.MaxOutputTokens > 0
-                && x.DefaultEngine is "DynamicDag" or "AgentLoop", "Invalid research loop limits.");
+                && x.MaxSkills >= 0 && x.DefaultEngine == "AgentLoop", "Invalid research loop limits.");
         builder.Services.AddScoped<IResearchLoopTools, ResearchLoopTools>();
+        builder.Services.AddSingleton(new AgentMethodCatalog(Path.Combine(builder.Environment.ContentRootPath, "AgentSkills")));
         builder.Services.AddScoped<ResearchAgentLoop>();
+        builder.Services.AddScoped<PortfolioLoopTools>();
+        builder.Services.AddScoped<IAgentNodeHandler, PortfolioAgentLoopNodeHandler>();
+        builder.Services.AddScoped<IAgentNodeHandler, PortfolioQualityGateNodeHandler>();
         builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchAgentWorkflowDefinitionProvider>();
         builder.Services.AddScoped<IWorkflowPolicyEvaluator, ResearchAgentPolicyEvaluator>();
         builder.Services.AddScoped<IAgentNodeHandler, ResearchAgentLoopNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, ResearchOutputGateNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, RouteResearchAgentQualityNodeHandler>();
+        builder.Services.AddScoped<IAgentNodeHandler, QualityGateNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, FinalizeResearchAgentNodeHandler>();
         builder.Services.AddScoped<ICriticReviewAgent, LlmCriticReviewAgent>();
         if (e2eTestMode) builder.Services.AddSingleton<IAgentWorkflowCatalog, E2EAgentWorkflowCatalog>();
@@ -32,23 +35,7 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<IPromptManagementService, PromptManagementService>();
         builder.Services.AddScoped<IAgentPromptSnapshotService, AgentPromptSnapshotService>();
         builder.Services.AddScoped<PromptManagementBootstrapService>();
-        builder.Services.AddScoped<IDraftRevisionAgent, LlmDraftRevisionAgent>();
-        builder.Services.AddScoped<IPortfolioDiagnosisNarrativeAgent, LlmPortfolioDiagnosisNarrativeAgent>();
-        builder.Services.AddScoped<LlmEvidenceRemediationAgent>();
-        builder.Services.AddScoped<IClaimExtractionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
-        builder.Services.AddSingleton<IClaimSetValidator, ClaimSetValidator>();
-        builder.Services.AddSingleton<IAnswerQualityValidator, AnswerQualityValidator>();
-        builder.Services.AddScoped<IEvidenceBackedRevisionAgent>(sp => sp.GetRequiredService<LlmEvidenceRemediationAgent>());
-        builder.Services.AddScoped<IEvidenceAssessor, LlmEvidenceAssessor>();
-        builder.Services.AddScoped<IInvestmentReanalysisAgent, LlmInvestmentReanalysisAgent>();
-        builder.Services.AddScoped<IEvidenceRetrievalPlanAgent, EvidenceRetrievalPlanAgent>();
         builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, CriticReviewWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, DraftRevisionWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchQualityReviewWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchInvestigationWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, FeedbackRevisionWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceRemediationWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceReanalysisWorkflowDefinitionProvider>();
         if (e2eTestMode)
         {
             builder.Services.AddScoped<E2EApprovalGateWorkflowDefinitionProvider>();
@@ -57,82 +44,28 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<PortfolioDiagnosisWorkflowDefinitionProvider>();
         builder.Services.AddScoped<IAgentWorkflowDefinitionProvider>(sp => sp.GetRequiredService<PortfolioDiagnosisWorkflowDefinitionProvider>());
         builder.Services.AddSingleton<IWorkflowGraphTopologyService, WorkflowGraphTopologyService>();
-        builder.Services.AddSingleton<IWorkflowSkillCatalog, WorkflowSkillCatalog>();
-        builder.Services.AddSingleton<INodeCapabilityRegistry, NodeCapabilityRegistry>();
         builder.Services.AddScoped<IPortfolioRiskMathInputProvider, PortfolioRiskMathInputProvider>();
         builder.Services.AddScoped<IPortfolioRiskRunResolver, PortfolioRiskRunResolver>();
         builder.Services.AddSingleton<IPortfolioRiskMathExecutor, PortfolioRiskMathExecutor>();
-        builder.Services.AddScoped<IAgentWorkflowPlanner, LlmAgentWorkflowPlanner>();
-        builder.Services.AddSingleton<IAgentLoopPolicy, ResearchQualityReviewLoopPolicy>();
-        builder.Services.AddSingleton<IAgentLoopPolicy, PortfolioDiagnosisLoopPolicy>();
-        builder.Services.AddSingleton<IAgentLoopController, AgentLoopController>();
-        builder.Services.AddScoped<IInvestmentResearchRouter, InvestmentResearchRouter>();
-        builder.Services.AddScoped<IWebCapabilityRequestAgent, LlmWebCapabilityRequestAgent>();
+        builder.Services.AddScoped<InvestmentResearchRouter>();
+        builder.Services.AddScoped<IInvestmentResearchRouter>(sp => sp.GetRequiredService<InvestmentResearchRouter>());
         builder.Services.AddScoped<IAgentWorkflowQueryService, AgentWorkflowQueryService>();
-        builder.Services.AddScoped<IDynamicPlanValidator, DynamicPlanValidator>();
-        builder.Services.AddScoped<IGraphMaterializer, GraphMaterializer>();
         builder.Services.AddScoped<IAgentRunGraphValidator, AgentRunGraphValidator>();
+        builder.Services.AddScoped<WorkflowExecutionCompatibility>();
         builder.Services.AddSingleton<IAgentRunStateMachine, AgentRunStateMachine>();
         builder.Services.AddSingleton<IAgentNodeStateMachine, AgentNodeStateMachine>();
         builder.Services.AddScoped<IWorkflowPolicyEvaluator, CriticReviewPolicyEvaluator>();
-        builder.Services.AddScoped<IWorkflowPolicyEvaluator, ResearchQualityReviewPolicyEvaluator>();
-        builder.Services.AddScoped<IWorkflowPolicyEvaluator, ResearchInvestigationPolicyEvaluator>();
-        builder.Services.AddScoped<IWorkflowPolicyEvaluator, FeedbackRevisionPolicyEvaluator>();
-        builder.Services.AddScoped<IWorkflowPolicyEvaluator, EvidenceReanalysisPolicyEvaluator>();
         builder.Services.AddScoped<IAgentNodeHandler, LoadResearchRunNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, BuildEvidencePacketNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, CheckEvidenceNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, CritiqueAnswerNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, FinalizeCriticReportNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, LoadCriticReviewRunNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, DraftRevisedAnswerNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, FinalizeRevisionNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, LoadPortfolioDiagnosisContextNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, EvaluatePortfolioScenariosNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, ResolvePortfolioRiskEvidenceNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, PreparePortfolioRiskMathInputsNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, ExecutePortfolioRiskMathNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, CalculatePerformanceAttributionNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, LoadRiskProfileNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, PrioritizeRiskAnalysesNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, EvaluatePortfolioDiagnosisQualityNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, BuildPortfolioEvidencePacketNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, DraftPortfolioDiagnosisNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, FinalizePortfolioDiagnosisNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, FinalizeRejectedPortfolioDiagnosisNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, LoadEvidenceRemediationContextNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, PlanEvidenceRetrievalNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, RetrieveRemediationEvidenceNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, RetrieveWebEvidenceNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, ExtractAnswerClaimsNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, AssessClaimSupportNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, ValidateEvidenceMappingsNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, RouteEvidenceRemediationNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, BuildRemediatedEvidencePacketNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, DraftEvidenceBackedRevisionNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, FinalizeEvidenceRemediationNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, LoadEvidenceRemediationNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, ValidateReanalysisRequestNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, BuildAnalysisContextNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, ReanalyzeAnswerNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, CritiqueReanalysisNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, ReviseReanalysisNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, FinalizeReanalysisNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, ValidateResearchRequestNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, DetectResearchIntentNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, PlanResearchRetrievalNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, RetrieveLocalResearchEvidenceNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, EvaluateInitialEvidencePolicyNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, RetrieveWebResearchEvidenceNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, RankAndSelectResearchEvidenceNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, DraftResearchAnswerNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, LoadFeedbackRevisionContextNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, ValidateFeedbackRevisionContextNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, WaitForHumanApprovalNodeHandler>();
         if (e2eTestMode) builder.Services.AddScoped<IAgentNodeHandler, E2EApprovalGateNodeHandler>();
         builder.Services.AddScoped<AgentWorkflowPolicyReader>();
         builder.Services.AddScoped<IAgentNodeRunner, AgentNodeRunner>();
-        builder.Services.AddScoped<IAgentDynamicPlanCoordinator, AgentDynamicPlanCoordinator>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped<AgentRunLeaseHeartbeat>();
         builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();

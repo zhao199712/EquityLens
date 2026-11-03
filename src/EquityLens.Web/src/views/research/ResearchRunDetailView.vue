@@ -21,7 +21,7 @@ const feedbackSubmitting = ref(false)
 const feedbackMessage = ref('')
 const feedbackError = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
-const investigationRun = computed(() => agentRuns.value.find(run => run.workflowType === 'FeedbackRevision') ?? agentRuns.value.find(run => run.workflowType === 'ResearchInvestigation') ?? agentRuns.value.find(run => run.workflowType === 'ResearchQualityReview') ?? null)
+const investigationRun = computed(() => agentRuns.value.find(run => run.workflowType === 'ResearchAgent') ?? null)
 const isTerminal = computed(() => ['Answered', 'Failed', 'Cancelled'].includes(runDetail.value?.run.status ?? ''))
 
 onMounted(() => { loadRun(true); pollTimer = setInterval(() => loadRun(false), 2000) })
@@ -49,7 +49,7 @@ async function loadAgentRuns(researchRunId: string) {
   try {
     const all = await listAgentRuns({ limit: 50, researchRunId })
     agentRuns.value = all
-    const investigation = all.find(run => run.workflowType === 'FeedbackRevision') ?? all.find(run => run.workflowType === 'ResearchInvestigation') ?? all.find(run => run.workflowType === 'ResearchQualityReview')
+    const investigation = all.find(run => run.workflowType === 'ResearchAgent')
     agentRunDetail.value = investigation ? await getAgentRun(investigation.id) : null
   } catch {
     // non-critical

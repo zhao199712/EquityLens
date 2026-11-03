@@ -11,14 +11,15 @@ onUnmounted(() => clearInterval(timer))
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const text = (value: unknown) => typeof value === 'string' ? value : '未提供'
 const labels: Record<string, string> = { Pending: '等待啟動', Running: '執行中', Succeeded: '執行完成', Failed: '執行失敗', Cancelled: '已取消', WaitingForFeedback: '等待回饋', WaitingForApproval: '等待批准', Answered: '已回答', InsufficientEvidence: '證據不足', CitationValidationFailed: '引用驗證失敗' }
-const phaseDefinitions = [
+const coarseQuality = computed(() => props.detail.nodes.some(node => ['qualityGate', 'reviseQualityGate'].includes(node.nodeKey)))
+const phaseDefinitions = computed(() => [
   { label: '準備與意圖辨識', keys: ['validate', 'detectIntent'] },
   { label: '研究迴圈', keys: ['researchAgent'] },
-  { label: '品質檢查', keys: ['outputGate', 'buildEvidencePacket', 'checkEvidence', 'critiqueAnswer', 'finalizeCriticReport', 'routeQuality'] },
-  { label: '修訂與複查', keys: ['reviseAgent', 'reviseOutputGate', 'reviseEvidencePacket', 'reviseCheckEvidence', 'reviseCritiqueAnswer', 'reviseCriticReport'] },
+  { label: '品質檢查', keys: coarseQuality.value ? ['qualityGate'] : ['outputGate', 'buildEvidencePacket', 'checkEvidence', 'critiqueAnswer', 'finalizeCriticReport', 'routeQuality'] },
+  { label: '修訂與複查', keys: coarseQuality.value ? ['reviseAgent', 'reviseQualityGate'] : ['reviseAgent', 'reviseOutputGate', 'reviseEvidencePacket', 'reviseCheckEvidence', 'reviseCritiqueAnswer', 'reviseCriticReport'] },
   { label: '完成', keys: ['finalizeResearch'] },
-]
-const phases = computed(() => phaseDefinitions.map(phase => {
+])
+const phases = computed(() => phaseDefinitions.value.map(phase => {
   const nodes = props.detail.nodes.filter(node => phase.keys.includes(node.nodeKey))
   const statuses = nodes.map(node => node.status)
   let state = '等待'
@@ -69,6 +70,8 @@ const artifactLabel = computed(() => output.value?.policyResponse === true ? '�
       <details v-for="(citation, index) in citations" :key="index"><summary>[{{ citation.citationIndex ?? index + 1 }}] {{ citation.title }} · 第 {{ citation.pageNumber ?? '未提供' }} 頁</summary><blockquote>{{ citation.quoteText }}</blockquote></details>
       <RouterLink v-if="typeof researchId === 'string'" :to="{ name: 'research-run-detail', params: { id: researchId } }">查看完整研究資料 →</RouterLink>
       <h4>品質檢查</h4>
+      <p v-if="output?.errorCode === 'quality_gate_rejected'" class="error">品質檢查拒絕：模型答案未通過，已改為拒答或系統風險說明。</p>
+      <ul v-if="Array.isArray(output?.rejectedNumbers)"><li v-for="number in output.rejectedNumbers" :key="String(number)">未能追溯：{{ number }}</li></ul>
       <p>OutputGate：{{ gate.passed === true ? '通過' : gate.passed === false ? '未通過' : '未提供' }} · Critic：{{ critic.recommendedNextAction === 'AcceptAnswer' ? '接受答案' : text(critic.recommendedNextAction) }}</p>
       <ul v-if="Array.isArray(gate.blockingIssues)"><li v-for="issue in gate.blockingIssues" :key="String(issue)">{{ issue }}</li></ul>
       <ul v-if="Array.isArray(gate.warnings)"><li v-for="warning in gate.warnings" :key="String(warning)">{{ warning }}</li></ul>

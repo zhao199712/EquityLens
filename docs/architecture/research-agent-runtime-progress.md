@@ -37,21 +37,21 @@
 | A1 | 租約被他人持有時不 ack | MUST | ✅ | AgentRunWorkerTests | Phase 1 | lease lost 亦不 ack |
 | A2 | 執行中斷的節點可被接手，run 不失敗 | MUST | ✅ | AgentExecutorBoundaryTests | Phase 1 | 含中斷預算耗盡 |
 | A3 | 租約續約；失去租約者無法寫入 | MUST | ✅ | AgentLeasePostgresTests | Phase 1 | 真實 PostgreSQL，5 個測試 |
-| A4 | AgentLoop 引擎不呼叫 graph planner；預設仍 v1 | MUST | ✅ | ResearchAgentWorkflowTests.Engine / ForbiddenPlanner | Phase 2–4 | |
+| A4 | AgentLoop 引擎不呼叫 graph planner；預設依部署設定 | MUST | ✅ | ResearchAgentWorkflowTests.Engine / ForbiddenPlanner | Phase 2–4 | 正式已授權啟用 AgentLoop |
 | A5 | LLM 自主選工具；同輪平行；每次呼叫有紀錄 | MUST | ✅ | ResearchAgentLoopTests.ToolCalls_RunConcurrently | Phase 2–4 | |
 | A6 | 違規呼叫被拒絕、記錄、回饋 | MUST | ✅ | GuardDenial / ToolBudget / SourcePolicy tests | Phase 2–4 | |
 | A7 | 中斷後從下一輪續跑，不重做工具 | MUST | ✅ | CrashAfterCommittedTurn / CrashWithinTurn | Phase 2–4 | |
-| A8 | 預算／無進展／格式錯誤時優雅停止 | MUST | ✅ | ProtocolFailure / TokenBudget tests | Phase 2–4 | |
-| A9 | 輸出與 v1 相容（Critic、harness 不改） | MUST | ✅ | FixedWorkflow end-to-end tests | Phase 2–4 | |
+| A8 | 預算／無進展／格式錯誤時優雅停止 | MUST | ✅ | ProtocolFailure / TokenBudget / NoProgress tests | Phase 2–4 / 6f0f5f9 | NoProgress 補測尚在測試分支 |
+| A9 | 輸出契約與既有 Critic／harness 相容 | MUST | ✅ | FixedWorkflow end-to-end tests | Phase 2–4 | |
 | A10 | 確定性關卡攔截 → 修訂一次 → 仍失敗則拒答 | MUST | ✅ | FixedWorkflow revision / OutputGate / NumberGate tests | Phase 2–4 | |
 | A11 | 每輪 LLM 決策可查詢 | MUST | ✅ | TwoTurns / detail LlmTurns tests | Phase 2–4 | |
 | A12 | harness `--engine` 與軌跡指標；舊檔可 rescore | SHOULD | ✅ | evals/tests/test_trajectory.py | Phase 2–4 | |
 | A13 | 副作用工具審批（參數綁定、冪等、Reject 附理由） | SHOULD | ✅ | ToolApprovalTests / ToolApprovalPostgresTests | Phase 4 | 測試工具；正式工具仍唯讀 |
 | A14 | OTel span 與 metrics | SHOULD | ✅ | Telemetry_ParentsParallelToolsToTurn | Phase 2–4 | |
 | A15 | 依風險觸發人工審閱 | COULD | ⬜ | | | |
-| A16 | 實際 A/B 報告 | COULD | ✅ | 限定公司 8 題與完整原始結果 | docs 階段 | 最新兩輪數值門檻達標；仍保留舊引擎預設 |
+| A16 | 實際 A/B 報告 | COULD | ✅ | 限定公司 8 題與完整原始結果 | docs 階段 | 最新兩輪數值門檻達標；正式已授權切換，非 holdout |
 | — | 合併為單一 `QualityGate`、DAG 縮為約 6 節點 | COULD | ⬜ | | | |
-| A17 | build / test / migration / pytest 全綠 | 每次 commit | ✅ | 958 backend / 75 pytest / 無 pending model | 53b5db1 / 379022b | 後續修改仍需再驗證 |
+| A17 | build / test / migration / pytest 全綠 | 每次 commit | ✅ | 979 backend / 75 pytest / 無 pending model | 6f0f5f9 | 08:12 隔離驗證，零 skipped；測試分支 |
 
 ## 每次 commit 的驗證紀錄
 
@@ -61,6 +61,8 @@
 | 2026-11-02 | A4–A12、A14 | 通過（test build） | 915 / 915，0 skipped | 無 pending；隔離 DB migration 成功 | 69 通過 |
 | 2026-11-02 | A13 / 數字 gate 實測修正 | 通過 | 924 / 924，0 skipped | 無 pending；隔離 DB migration 成功 | 69 通過 |
 | 2026-11-02 | 明示算式、單位與風險回覆；同步 exclusions | 通過（test build） | 958 / 958，0 skipped | 無 pending（無模型修改） | 75 通過 |
+
+08:12 收尾驗證：測試分支 `6f0f5f9`，test build 成功，後端 **979/979、0 skipped**，EF 無 pending model，eval harness **75/75**。後端整合測試連線指向隔離 PostgreSQL 55432，未使用正式資料庫。
 
 ## Migration 清單
 
@@ -217,3 +219,21 @@
 - 明示 A4 的預設 v1 已被後續使用者部署授權覆蓋；A7 恢復先處理 pending turn，而非直接略過；A9 是輸出契約相容，不是 harness 完全零變更。
 - 保留未完成與覆蓋限制：A15 研究結果風險觸發人工審閱尚未實作；ResearchAgentLoop NoProgress 有停止路徑，但目前沒有獨立命名的專項邊界測試，不能拿其他 workflow 的 NoProgress 測試代替；CI success 不等於所有 PostgreSQL 整合測試未 skip。
 - 本次只補證據索引，不重跑已完成套件、不改產品程式與 README、不操作正式服務。外部 API 新增費用 US$0。
+
+
+## 07:11 NoProgress 邊界測試補齊
+
+- 從乾淨 main `a73886d` 建立 `test/research-loop-no-progress`，只新增測試及更新證據索引，沒有修改 runtime 或部署正式服務。
+- `NoProgress_EmptySearches_StopWithoutAnotherModelCall_AndRemainStoppedOnResume`：兩輪空結果以 NoProgress 停止、標準拒答、checkpoint 保存停止原因；恢復不新增模型／工具呼叫。
+- `NoProgress_DuplicateEvidence_AllowsOneFinalDraft_WithNoFurtherTools`：首次取得證據後兩輪重複證據，提供一次不含工具的最終起草機會，停止原因仍為 NoProgress，保留唯一證據與回答。
+- `dotnet test ... --filter FullyQualifiedName~ResearchAgentLoopTests`：20/20 通過，0 skipped。這是 fake provider／工具與記憶體 DB 的確定性邊界測試，不代表程序崩潰或真實模型測試。
+- 功能分支推送供後續合併；沒有重跑財報 A/B，原分數不變，外部 API 新增費用 US$0。
+
+
+## 08:12 測試分支完整驗證
+
+- 起始 `test/research-loop-no-progress`／`6f0f5f9` 乾淨且與 origin 同步。完整 dotnet test 含隔離 PostgreSQL：979 passed、0 failed、0 skipped；建置成功。
+- EF `migrations has-pending-model-changes --no-build`：無模型變更，不需 migration；未執行 database update。
+- eval harness 使用既有 `/tmp/equitylens-runtime-venv`：75 passed。系統 Python 未安裝 pytest，切回既有驗證環境後成功，沒有安裝或變更專案依賴。
+- 更新上方驗收表的部署預設、A8 測試與 A17 最新數字。仍不把 CI、mock 測試、隔離 PostgreSQL、合成行情及正式行情混為同一證據。
+- 本輪沒有改產品程式、README、財報題庫或正式服務；測試分支尚未合併。模型呼叫 0，新增費用 US$0。原 0050 全成分股資料門檻與 UI 缺陷、A15 及實際行情情境回歸等未完成事項維持揭露。

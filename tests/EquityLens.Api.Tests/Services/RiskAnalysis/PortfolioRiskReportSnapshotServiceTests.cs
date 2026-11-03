@@ -57,6 +57,7 @@ public sealed class PortfolioRiskReportSnapshotServiceTests
         var result = await service.CreatePortfolioRiskReportSnapshotAsync(portfolio.Id, portfolio.OwnerUserId, default);
 
         Assert.Equal("risk.snapshot_unavailable", result.ErrorCode);
+        Assert.Contains(unavailable.Replace("Failure", "").Replace("Unavailable", ""), result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(new[] { "risk", "governance", "stress", "monteCarlo", "backtest" }, operations.Calls);
         Assert.Empty(await db.RiskReportSnapshots.ToListAsync());
     }
@@ -84,6 +85,58 @@ public sealed class PortfolioRiskReportSnapshotServiceTests
         Assert.Empty(operations.Calls);
         Assert.Single(await db.RiskReportSnapshots.ToListAsync());
         Assert.False(db.ChangeTracker.HasChanges());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CalculationSnapshot_PreservesExactRunAndQualityWithoutRecalculation(bool failedQuality)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var portfolio = await SeedPortfolioAsync(db);
+        var operations = new ReportOperations("riskFailure");
+        var service = new PortfolioRiskReportSnapshotService(new PortfolioRepository(db), operations, operations, operations, operations, operations, db);
+        var run = new RiskCalculationRun { Id = Guid.NewGuid(), PortfolioId = portfolio.Id, RequestedByUserId = portfolio.OwnerUserId,
+            Status = "Completed", SelectedModel = "selected-fixture-model", InputHash = "original-hash", InputSnapshotJson = "{\"from\":\"2025-11-03\",\"to\":\"2026-11-02\"}",
+            ResultJson = "{\"dataAsOfDate\":\"2026-11-02\",\"historicalAnnualizedVolatility\":0.4415,\"horizons\":[]}" };
+        db.RiskCalculationRuns.Add(run);
+        if (failedQuality) db.RiskQualityEvaluations.Add(new RiskQualityEvaluation { Id = Guid.NewGuid(), RiskCalculationRunId = run.Id,
+            Status = "Failed", FailureCodesJson = "[\"CHRISTOFFERSEN_FAILED\"]" });
+        await db.SaveChangesAsync();
+        var created = await service.CreateFromCalculationAsync(portfolio.Id, run.Id, portfolio.OwnerUserId, default);
+        Assert.True(created.IsSuccess, created.ErrorMessage);
+        Assert.Equal(run.SelectedModel, created.Value!.Model);
+        Assert.Equal(new DateOnly(2026, 11, 2), created.Value.DataAsOfDate);
+        Assert.Equal(failedQuality ? "Failed" : "Unvalidated", created.Value.OverallStatus);
+        Assert.Equal(.4415m, created.Value.Snapshot.GetProperty("risk").GetProperty("historicalAnnualizedVolatility").GetDecimal());
+        Assert.Equal(run.Id, created.Value.Snapshot.GetProperty("source").GetProperty("runId").GetGuid());
+        Assert.Empty(operations.Calls);
+        run.ResultJson = "{}";
+        await db.SaveChangesAsync();
+        var read = await service.GetPortfolioRiskReportSnapshotAsync(portfolio.Id, created.Value.Id, portfolio.OwnerUserId, default);
+        Assert.Equal(created.Value.Snapshot.GetRawText(), read.Value!.Snapshot.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("other-user", "risk.calculation_not_found")]
+    [InlineData("other-portfolio", "risk.calculation_not_found")]
+    [InlineData("running", "risk.snapshot_unavailable")]
+    [InlineData("missing-result", "risk.snapshot_unavailable")]
+    [InlineData("other-operation", "risk.snapshot_unavailable")]
+    public async Task CalculationSnapshot_RejectsUnownedOrIncompleteRuns(string kind, string error)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var portfolio = await SeedPortfolioAsync(db);
+        var operations = new ReportOperations();
+        var service = new PortfolioRiskReportSnapshotService(new PortfolioRepository(db), operations, operations, operations, operations, operations, db);
+        var run = new RiskCalculationRun { Id = Guid.NewGuid(), PortfolioId = kind == "other-portfolio" ? Guid.NewGuid() : portfolio.Id,
+            RequestedByUserId = kind == "other-user" ? Guid.NewGuid() : portfolio.OwnerUserId,
+            Status = kind == "running" ? "Running" : "Completed", SelectedModel = "fixture",
+            Operation = kind == "other-operation" ? "monte-carlo" : "risk", ResultJson = kind == "missing-result" ? null : "{}" };
+        db.RiskCalculationRuns.Add(run); await db.SaveChangesAsync();
+        Assert.Equal(error, (await service.CreateFromCalculationAsync(portfolio.Id, run.Id, portfolio.OwnerUserId, default)).ErrorCode);
+        Assert.Equal("portfolio.not_found", (await service.CreateFromCalculationAsync(portfolio.Id, run.Id, Guid.NewGuid(), default)).ErrorCode);
+        Assert.Empty(operations.Calls); Assert.Empty(db.RiskReportSnapshots);
     }
 
     private static async Task<Portfolio> SeedPortfolioAsync(RefactorTestDbContext db)

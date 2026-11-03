@@ -5,6 +5,7 @@ using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Domain.Calculations;
 using EquityLens.Api.Services.Agents;
+using EquityLens.Api.Services.Agents.Loop;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Tests.Services.Agents;
@@ -26,15 +27,67 @@ public sealed class PortfolioScenarioTests
     private static PortfolioScenarioRequest Request(decimal target) => new("國巨情境", new Dictionary<string, decimal> { ["2327"] = target });
 
     [Fact]
+    public void ScenarioLabel_DoesNotTrustModelStockNames()
+    {
+        var named = Snapshot() with { Assets = Snapshot().Assets.Select(a => a with { SecurityName = a.Ticker == "2327" ? "國巨" : "台積電" }).ToArray() };
+        var comparison = PortfolioScenarioCalculator.Calculate(named,
+            [Request(.3m) with { Name = "國建 2327 轉入台達電", RemainderPolicy = "holding", TransferToTicker = "2330" }]);
+        Assert.DoesNotContain("國建", comparison.Scenarios[0].Name);
+        Assert.DoesNotContain("台達電", comparison.Scenarios[0].Name);
+        Assert.Contains("國巨（2327）", comparison.Scenarios[0].Name);
+        Assert.Contains("台積電（2330）", comparison.Scenarios[0].Name);
+        Assert.DoesNotContain("國建", PortfolioQualityGateNodeHandler.ScenarioSummary(comparison));
+    }
+
+    [Fact]
     public void ScenarioWorkflow_PassesContracts_AndOrdersToolAfterOwnershipCheck()
     {
         var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid(), new(2025, 1, 1), new(2026, 1, 1), Routing([Request(.3m)]));
         var order = new AgentWorkflowPlanner().GetExecutionOrder(run.WorkflowDefinitionJson);
         new AgentRunGraphValidator().Validate(run, order);
         Assert.Equal(PortfolioDiagnosisNodeKeys.LoadContext, order[0]);
-        Assert.Equal("evaluatePortfolioScenarios", order[1]);
-        Assert.Equal(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, order[2]);
+        Assert.Equal("portfolioAgent", order[1]);
+        Assert.Equal("portfolioQualityGate", order[2]);
+        Assert.Equal(6, run.Nodes.Count);
 
+    }
+
+    [Fact]
+    public void TransferReductionToExistingHolding_ConservesNavAndCash()
+    {
+        var request = JsonSerializer.Deserialize<PortfolioScenarioRequest>("""{"name":"轉入台積電","targetWeights":{"2327":0.3},"remainderPolicy":"holding","preserveOtherHoldings":true,"transferToTicker":"2330"}""", AgentNodeJson.SerializerOptions)!;
+        var snapshot = Snapshot() with { Assets = [.. Snapshot().Assets, new("2317", 10, 100, Snapshot().Assets[0].Prices)] };
+        var result = PortfolioScenarioCalculator.Calculate(snapshot, [request]).Scenarios.Single();
+        Assert.Equal(.3m, result.Weights["2327"]);
+        Assert.Equal(10, result.Quantities["2317"]);
+        Assert.Equal(0, result.CashWeight);
+        Assert.InRange(Math.Abs(11000m - snapshot.Assets.Sum(a => result.Quantities[a.Ticker] * a.ValuationPrice)), 0, .00000001m);
+        Assert.InRange(result.Weights["2330"], .609090m, .609091m);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("9999")]
+    [InlineData("2327")]
+    public void TransferRejectsMissingUnknownOrSameDestination(string? receiver)
+    {
+        Assert.Throws<AgentWorkflowQueryException>(() => PortfolioScenarioCalculator.Calculate(Snapshot(),
+            [Request(.3m) with { RemainderPolicy = "holding", TransferToTicker = receiver }]));
+    }
+
+    [Fact]
+    public void ScenarioReplyUsesSavedDestinationAndWeights()
+    {
+        var comparison = PortfolioScenarioCalculator.Calculate(Snapshot(), [Request(.3m) with { RemainderPolicy = "holding", TransferToTicker = "2330" }]);
+        var reply = PortfolioQualityGateNodeHandler.ScenarioSummary(comparison);
+        Assert.Contains("轉入 2330", reply);
+        Assert.Contains($"2330 權重 {comparison.Scenarios[0].Weights["2330"]:P2}", reply);
+        Assert.Contains("未變更實際持倉", reply);
+        Assert.DoesNotContain("留作現金", reply);
+        foreach (var metric in new[] { "年化波動", "VaR", "ES", "最大回撤" }) Assert.Contains(metric, reply);
+        Assert.Contains("同一快照原組合", reply);
+        Assert.Contains("相較原組合差異", reply);
+        Assert.Contains($"{comparison.Scenarios[0].Metrics!.ExpectedShortfall:P2}", reply);
     }
 
     [Fact]
@@ -113,25 +166,7 @@ public sealed class PortfolioScenarioTests
         Assert.NotEqual(a.InputHash, PortfolioScenarioCalculator.Calculate(snapshot with { Cash = 100 }, [Request(.3m)]).InputHash);
     }
 
-    [Fact]
-    public async Task Handler_ResumesPersistedSnapshot_WithoutDuplicateCallsOrTransactions()
-    {
-        await using var db = new TestDb(new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var snapshot = Snapshot();
-        var routing = Routing([Request(.3m)]);
-        var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), snapshot.PortfolioId, snapshot.From, snapshot.To, routing);
-        var node = run.Nodes.Single(n => n.NodeType == PortfolioScenarioCalculator.NodeType);
-        node.InputJson = AgentNodeJson.Serialize(new { snapshot });
-        db.AgentRuns.Add(run); await db.SaveChangesAsync();
-        var context = new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { });
-        var handler = new EvaluatePortfolioScenariosNodeHandler();
-        await handler.ExecuteAsync(context); await db.SaveChangesAsync();
-        var original = node.OutputJson;
-        await handler.ExecuteAsync(context); await db.SaveChangesAsync();
-        Assert.Equal(original, node.OutputJson); Assert.Single(db.AgentToolCalls);
-        Assert.Empty(db.PortfolioTransactions); Assert.Empty(db.PortfolioHoldings); Assert.Empty(db.PortfolioCashFlows);
-        Assert.NotNull(JsonNode.Parse(run.BlackboardJson)![PortfolioScenarioCalculator.ResultKey]);
-    }
+
 
     [Fact]
     public async Task Handler_RejectsOtherUsersPortfolioWithoutWritingTransactions()
@@ -143,9 +178,9 @@ public sealed class PortfolioScenarioTests
         var board = JsonNode.Parse(run.BlackboardJson)!.AsObject();
         board[AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(new PortfolioDiagnosisContext(portfolio.Id, "private", "TWD", new(2025, 1, 1), new(2026, 1, 1), 0), AgentNodeJson.SerializerOptions);
         run.BlackboardJson = board.ToJsonString(); db.AgentRuns.Add(run); await db.SaveChangesAsync();
-        var node = run.Nodes.Single(n => n.NodeType == PortfolioScenarioCalculator.NodeType);
-        await new EvaluatePortfolioScenariosNodeHandler().ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
-        Assert.Contains("Unavailable", node.OutputJson); Assert.Empty(db.PortfolioTransactions);
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = "PortfolioAgentLoop" };
+        db.AgentRunNodes.Add(node);
+        await Assert.ThrowsAsync<AgentWorkflowQueryException>(() => PortfolioScenarioSnapshotReader.CaptureAsync(new(db, run, node, (_, _, _, _, _) => { }), default)); Assert.Empty(db.PortfolioTransactions);
     }
 
     [Theory]
@@ -159,7 +194,7 @@ public sealed class PortfolioScenarioTests
         var portfolio = new Portfolio { Id = snapshot.PortfolioId, OwnerUserId = user, Name = "fixture" };
         foreach (var (asset, index) in snapshot.Assets.Select((a, i) => (a, i)))
         {
-            var security = new Security { Id = Guid.NewGuid(), Ticker = asset.Ticker, Currency = mixedCurrency && index == 1 ? "USD" : "TWD" };
+            var security = new Security { Id = Guid.NewGuid(), Ticker = asset.Ticker, Name = asset.Ticker == "2327" ? "國巨" : "台積電", Currency = mixedCurrency && index == 1 ? "USD" : "TWD" };
             portfolio.Holdings.Add(new PortfolioHolding { Id = Guid.NewGuid(), Security = security, SecurityId = security.Id, Quantity = asset.Quantity, PortfolioId = portfolio.Id });
             if (missingPrices && index == 1) continue;
             foreach (var date in snapshot.Dates)
@@ -170,15 +205,17 @@ public sealed class PortfolioScenarioTests
         var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(user, portfolio.Id, snapshot.From, snapshot.To, Routing([Request(.3m)]));
         db.AgentRuns.Add(run); await db.SaveChangesAsync();
         await new LoadPortfolioDiagnosisContextNodeHandler().ExecuteAsync(new(db, run, run.Nodes.Single(n => n.NodeType == PortfolioDiagnosisNodeTypes.LoadContext), (_, _, _, _, _) => { }));
-        var node = run.Nodes.Single(n => n.NodeType == PortfolioScenarioCalculator.NodeType);
-        await new EvaluatePortfolioScenariosNodeHandler().ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
-        var result = JsonSerializer.Deserialize<PortfolioScenarioComparison>(node.OutputJson!, AgentNodeJson.SerializerOptions)!;
-        Assert.Equal(expected, result.Status);
-        if (expected == "Calculated")
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = "PortfolioAgentLoop" };
+        db.AgentRunNodes.Add(node);
+        if (expected == "Unavailable")
+            await Assert.ThrowsAsync<AgentWorkflowQueryException>(() => PortfolioScenarioSnapshotReader.CaptureAsync(new(db, run, node, (_, _, _, _, _) => { }), default));
+        else
         {
-            Assert.Equal(2500, result.Snapshot!.Cash);
-            Assert.Equal(.2m, result.Baseline!.CashWeight);
-            Assert.Equal(.3m, result.Scenarios[0].CashWeight);
+            var captured = await PortfolioScenarioSnapshotReader.CaptureAsync(new(db, run, node, (_, _, _, _, _) => { }), default);
+            var result = PortfolioScenarioCalculator.Calculate(captured, [Request(.3m)]);
+            Assert.Equal(expected, result.Status); Assert.Equal(2500, captured.Cash);
+            Assert.Contains("國巨（2327）", result.Scenarios[0].Name);
+            Assert.Equal(.2m, result.Baseline!.CashWeight); Assert.Equal(.3m, result.Scenarios[0].CashWeight);
             Assert.Equal(50, result.Scenarios[0].Quantities["2330"]);
         }
         Assert.Empty(db.PortfolioTransactions);

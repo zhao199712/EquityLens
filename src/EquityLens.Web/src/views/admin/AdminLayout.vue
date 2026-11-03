@@ -15,7 +15,6 @@ import {
   FlaskOutline,
   GitNetworkOutline,
   CubeOutline,
-  LibraryOutline,
   ChatboxEllipsesOutline,
 } from '@vicons/ionicons5'
 import { renderIcon } from '../../utils/icons'
@@ -34,7 +33,6 @@ function handleMenuSelect(key: string) {
 const menuOptions = computed(() => [
   { label: 'Workflows', key: 'workflows', icon: renderIcon(GitNetworkOutline), path: '/admin/workflows' },
   { label: 'Node Catalog', key: 'nodes', icon: renderIcon(CubeOutline), path: '/admin/nodes' },
-  { label: 'Skill Registry', key: 'registry', icon: renderIcon(LibraryOutline), path: '/admin/registry' },
   { label: 'Prompt 管理', key: 'prompts', icon: renderIcon(ChatboxEllipsesOutline), path: '/admin/prompts' },
   {
     label: 'Agent Runs',

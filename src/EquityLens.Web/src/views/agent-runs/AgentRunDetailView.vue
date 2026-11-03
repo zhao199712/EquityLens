@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import RiskMeasurementBasis from '../../components/agents/RiskMeasurementBasis.vue'
+import type { RiskMeasurementBasis as MeasurementBasis } from '../../services/risk'
+import { legacyWorkflow, type LegacyRevisionOutput } from "../../services/legacyWorkflows"
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import PortfolioScenarioComparison, { type ScenarioComparison, type HoldingRisk } from '../../components/agents/PortfolioScenarioComparison.vue'
 import ResearchAgentSummary from '../../components/agents/ResearchAgentSummary.vue'
 import AgentRunProgress from '../../components/agents/AgentRunProgress.vue'
 import CapabilityRequestStatus from '../../components/agents/CapabilityRequestStatus.vue'
 import {
   cancelAgentRun,
-  createDraftRevision,
   decideAgentApproval,
   retryAgentRun,
   type AgentRunNodeDto,
@@ -35,13 +36,6 @@ interface CriticReviewOutput {
   suggestedAnswerRevision?: string | null
 }
 
-interface DraftRevisionOutput {
-  sourceAnswer?: string | null
-  revisedAnswer?: string
-  revisionSummary?: string
-  revisionRequired?: boolean
-  appliedRecommendation?: string | null
-}
 
 interface AttributionItem {
   evidenceId: string
@@ -65,6 +59,8 @@ interface PortfolioRiskMetrics {
 }
 
 interface PortfolioDiagnosisOutput {
+  metricBases?: Array<{ operation: string; basis: MeasurementBasis | null }>
+  attributionCoverage?: string | null
   scenarioComparison?: ScenarioComparison | null
   analysisPeriod?: { from: string; to: string } | null
   observationCount?: number | null
@@ -140,27 +136,13 @@ async function handleCancel() {
   }
 }
 
-async function handleCreateDraftRevision() {
-  if (!run.value) return
-  actionLoading.value = true
-  error.value = ''
-  try {
-    const created = await createDraftRevision(run.value.run.id)
-    router.push({ name: 'agent-run-detail', params: { id: created.id } })
-  } catch {
-    error.value = '建立 DraftRevision 失敗。'
-  } finally {
-    actionLoading.value = false
-  }
-}
-
 async function handleApproval(decision: 'approve' | 'reject') {
   if (!run.value || !pendingApproval.value) return
   if (decision === 'reject' && !approvalComment.value.trim()) {
     error.value = '拒絕時必須填寫原因。'
     return
   }
-  if (decision === 'reject' && !window.confirm('拒絕後會取消整個 Agent Run，確定繼續？')) return
+  if (decision === 'reject' && !window.confirm(pendingApproval.value.scope === 'WorkflowGate' ? '拒絕此診斷並保留原因，確定繼續？' : '拒絕後會取消整個 Agent Run，確定繼續？')) return
   actionLoading.value = true
   error.value = ''
   try {
@@ -242,21 +224,14 @@ const duration = computed(() => {
 
 const pendingApproval = computed(() => run.value?.approvals.find(item => item.status === 'Pending') ?? null)
 
-const canCreateDraftRevision = computed(() => {
-  if (!run.value || run.value.run.workflowType !== 'CriticReview' || run.value.run.status !== 'Succeeded') return false
-  const output = run.value.outputJson as CriticReviewOutput | null
-  if (!output) return true
-  return output.recommendedNextAction === 'ReviseAnswer' || output.recommendedNextAction === 'CollectMoreEvidenceThenReviseAnswer'
-})
-
 const criticOutput = computed((): CriticReviewOutput | null => {
   if (!run.value || run.value.run.workflowType !== 'CriticReview') return null
   return (run.value.outputJson as CriticReviewOutput) ?? null
 })
 
-const draftOutput = computed((): DraftRevisionOutput | null => {
-  if (!run.value || run.value.run.workflowType !== 'DraftRevision') return null
-  return (run.value.outputJson as DraftRevisionOutput) ?? null
+const draftOutput = computed((): LegacyRevisionOutput | null => {
+  if (!run.value || run.value.run.workflowType !== legacyWorkflow.draft) return null
+  return (run.value.outputJson as LegacyRevisionOutput) ?? null
 })
 
 const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null => {
@@ -324,7 +299,7 @@ const nextActionLabel = computed(() => {
       <div v-else-if="error || pollError" class="prestige-error">{{ error || pollError }}</div>
 
       <template v-else-if="run">
-        <ScrollReveal>
+        <div class="run-detail-content">
           <!-- Header -->
           <div class="prestige-panel prestige-panel-pad header-panel">
             <div class="run-tags">
@@ -342,7 +317,6 @@ const nextActionLabel = computed(() => {
               <button v-if="run.run.parentAgentRunId" class="prestige-btn" @click="router.push({ name: 'agent-run-detail', params: { id: run.run.parentAgentRunId } })">查看父版本</button>
               <button v-if="run.run.status === 'Failed'" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
               <button v-if="run.run.status === 'Running' || run.run.status === 'Pending' || run.run.status === 'WaitingForApproval'" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
-              <button v-if="canCreateDraftRevision" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleCreateDraftRevision">產生修訂稿</button>
               <button class="prestige-btn" :disabled="actionLoading" @click="refresh">重新整理</button>
             </div>
 
@@ -378,7 +352,7 @@ const nextActionLabel = computed(() => {
             <textarea v-model="approvalComment" class="prestige-input approval-comment" rows="3" placeholder="批准可選填備註；拒絕必須填寫原因" />
             <div class="action-row">
               <button class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleApproval('approve')">批准並繼續</button>
-              <button class="prestige-btn btn-danger" :disabled="actionLoading || !approvalComment.trim()" @click="handleApproval('reject')">拒絕並取消 Run</button>
+              <button class="prestige-btn btn-danger" :disabled="actionLoading || !approvalComment.trim()" @click="handleApproval('reject')">{{ pendingApproval.scope === 'WorkflowGate' ? '拒絕此診斷' : '拒絕並取消 Run' }}</button>
             </div>
           </div>
 
@@ -512,7 +486,7 @@ const nextActionLabel = computed(() => {
             </div>
           </div>
 
-          <!-- DraftRevision Result -->
+          <!-- Historical revision result, read only -->
           <div v-if="draftOutput" class="prestige-panel prestige-panel-pad result-panel">
             <h3 class="panel-title">修訂結果</h3>
 
@@ -548,6 +522,14 @@ const nextActionLabel = computed(() => {
             <h3 class="panel-title">AI 投組診斷報告</h3>
             <p v-if="portfolioDiagnosisOutput.analysisPeriod" class="body-text">分析期間：{{ portfolioDiagnosisOutput.analysisPeriod.from }} ～ {{ portfolioDiagnosisOutput.analysisPeriod.to }} · 觀測筆數：{{ portfolioDiagnosisOutput.observationCount ?? '未提供' }}</p>
             <p class="body-text">模型品質：{{ portfolioDiagnosisOutput.modelQuality === 'Unvalidated' ? '尚未回測驗證' : portfolioDiagnosisOutput.modelQuality ?? '未提供' }} · {{ portfolioDiagnosisOutput.method ?? '計算方法請見技術明細' }}</p>
+            <details>
+              <summary>風險數字的計算口徑</summary>
+              <div v-for="item in portfolioDiagnosisOutput.metricBases ?? []" :key="item.operation">
+                <strong>{{ ({ 'calculate-annualized-volatility': '年化波動', 'calculate-max-drawdown': '最大回撤', 'calculate-historical-var': '歷史 VaR', 'calculate-expected-shortfall': '歷史 ES', 'calculate-concentration': '集中度', 'calculate-portfolio-volatility': '投組波動', 'calculate-volatility-risk-contribution': '風險貢獻' } as Record<string, string>)[item.operation] ?? '其他指標' }}</strong>
+                <RiskMeasurementBasis :basis="item.basis" />
+              </div>
+              <RiskMeasurementBasis v-if="!portfolioDiagnosisOutput.metricBases?.length" />
+            </details>
             <PortfolioScenarioComparison v-if="portfolioDiagnosisOutput.scenarioComparison" :comparison="portfolioDiagnosisOutput.scenarioComparison" />
             <div class="stat-grid">
               <div><div class="prestige-label stat-caption">投組報酬</div><div class="stat-value">{{ formatPercent(portfolioDiagnosisOutput.portfolioReturn) }}</div></div>
@@ -580,12 +562,12 @@ const nextActionLabel = computed(() => {
             </div>
             <div class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">主要拖累</div>
-              <div v-if="portfolioDiagnosisOutput.mainDrags.length === 0" class="body-text">資料不足，無法列出拖累來源。</div>
+              <div v-if="portfolioDiagnosisOutput.mainDrags.length === 0" class="body-text">{{ portfolioDiagnosisOutput.attributionCoverage === 'complete' ? '本期沒有負貢獻持股。' : '資料涵蓋不足，已取得資料未列出負貢獻來源。' }}</div>
               <div v-for="item in portfolioDiagnosisOutput.mainDrags" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.name }}</div><div class="finding-rec">貢獻：{{ formatPercent(item.contribution) }} · 報酬：{{ formatPercent(item.return) }} · 權重：{{ formatPercent(item.weight) }}</div></div>
             </div>
             <div class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">主要貢獻</div>
-              <div v-if="portfolioDiagnosisOutput.mainContributors.length === 0" class="body-text">資料不足，無法列出貢獻來源。</div>
+              <div v-if="portfolioDiagnosisOutput.mainContributors.length === 0" class="body-text">{{ portfolioDiagnosisOutput.attributionCoverage === 'complete' ? '本期沒有正貢獻持股。' : '資料涵蓋不足，已取得資料未列出正貢獻來源。' }}</div>
               <div v-for="item in portfolioDiagnosisOutput.mainContributors" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.name }}</div><div class="finding-rec">貢獻：{{ formatPercent(item.contribution) }} · 報酬：{{ formatPercent(item.return) }} · 權重：{{ formatPercent(item.weight) }}</div></div>
             </div>
             <div class="finding-list" style="margin-top: 18px">
@@ -710,7 +692,7 @@ const nextActionLabel = computed(() => {
               </div>
             </template>
           </div>
-        </ScrollReveal>
+        </div>
       </template>
     </div>
   </div>

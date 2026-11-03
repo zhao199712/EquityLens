@@ -201,12 +201,6 @@ internal static class PortfolioRiskRunResultAdapter
                 .FirstOrDefault(x => x["horizonDays"]?.GetValue<int>() == 1);
             var historicalVar = Decimal(oneDay?["historicalVaR"]);
             var historicalEs = Decimal(oneDay?["historicalES"]);
-            if (oneDay?["confidenceLevels"] is JsonArray levels)
-            {
-                var level = levels.OfType<JsonObject>().OrderBy(x => Math.Abs((double)((Decimal(x["confidenceLevel"]) ?? 0m) - .95m))).FirstOrDefault();
-                historicalVar ??= Decimal(level?["var"]);
-                historicalEs ??= Decimal(level?["expectedShortfall"]);
-            }
             historicalVar ??= Decimal(root["historical"]?["var95"]);
             historicalEs ??= Decimal(root["historical"]?["es95"]);
             Add(adapted, "calculate-historical-var", historicalVar, run);
@@ -246,8 +240,26 @@ internal static class PortfolioRiskRunResultAdapter
             ["source"] = PortfolioRiskEvidenceSources.PersistedRiskRun,
             ["riskRunId"] = run.Id,
             ["algorithmVersion"] = run.AlgorithmVersion,
-            ["dataFactorVersion"] = run.DataFactorVersion
+            ["dataFactorVersion"] = run.DataFactorVersion,
+            ["provenance"] = new JsonObject {
+                ["sourceRunId"] = run.Id,
+                ["measurementBasis"] = ReadBasis(run)
+            }
         });
+    }
+
+    private static JsonNode ReadBasis(RiskCalculationRun run)
+    {
+        var root = JsonNode.Parse(run.ResultJson!);
+        if (root?["measurementBasis"] is { } basis) return basis.DeepClone();
+        JsonNode? snapshot = null;
+        try { snapshot = JsonNode.Parse(run.InputSnapshotJson); } catch (JsonException) { }
+        return new JsonObject {
+            ["from"] = snapshot?["from"]?.DeepClone(), ["to"] = snapshot?["to"]?.DeepClone(),
+            ["weighting"] = "舊結果未提供權重口徑", ["cashTreatment"] = "舊結果未提供現金口徑",
+            ["returnMethod"] = "歷史欄位沿用來源，未以模擬 VaR 代替",
+            ["volatilityMethod"] = "沿用來源報告；舊結果未提供估計口徑", ["sampleDefinition"] = "未知；請查來源 Risk Run"
+        };
     }
 
     private static decimal? Decimal(JsonNode? node)
@@ -259,26 +271,4 @@ internal static class PortfolioRiskRunResultAdapter
 
     private static DateOnly? ReadDate(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<string>(out var text) && DateOnly.TryParse(text, out var date) ? date : null;
-}
-
-public sealed class ResolvePortfolioRiskEvidenceNodeHandler(IPortfolioRiskRunResolver resolver) : IAgentNodeHandler
-{
-    public string NodeType => PortfolioDiagnosisNodeTypes.ResolveRiskEvidence;
-
-    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
-    {
-        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
-        var diagnosis = PortfolioDiagnosisBlackboard.Context(board);
-        var resolved = await resolver.ResolveAsync(diagnosis, context.Run.UserId, cancellationToken);
-        var existing = board[AgentBlackboardKeys.MathResults] as JsonArray ?? new JsonArray();
-        foreach (var result in resolved.Results) existing.Add(result.DeepClone());
-        board[AgentBlackboardKeys.MathResults] = existing;
-        PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioRiskEvidence, resolved.Evidence);
-        board[AgentBlackboardKeys.CoreRiskCalculationRequired] = resolved.Evidence.CoreCalculationRequired ? "true" : "false";
-        context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
-        context.Node.OutputJson = AgentNodeJson.Serialize(resolved.Evidence);
-        context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated,
-            $"Portfolio Risk Run cache: {resolved.Evidence.CacheStatus}.",
-            new { resolved.Evidence.CacheStatus, resolved.Evidence.SourceRiskRunIds, resolved.Evidence.ReusedCapabilities, resolved.Evidence.CoreCalculationRequired });
-    }
 }

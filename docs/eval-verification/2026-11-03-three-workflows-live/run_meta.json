@@ -1,0 +1,9 @@
+{
+  "label": "three-workflows-live",
+  "mode": "investigation",
+  "engine": "AgentLoop",
+  "base_url": "http://127.0.0.1:5535",
+  "system_commit": "404df167e5a79e752bc148f496a3d514f0b0b486",
+  "started_at": "2026-11-03T03:01:42+00:00",
+  "notes": "Original eight verified non-excluded cases; isolated corpus; reranker and thinking disabled; independent user-authorized USD1 cap, USD0.90 LLM admission cap and USD0.10 embedding reserve. Single run; no scorer changes."
+}

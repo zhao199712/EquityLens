@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RiskMeasurementBasis from '../../components/agents/RiskMeasurementBasis.vue'
 import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
@@ -213,7 +214,24 @@ async function runTargetWeightScenario() {
 }
 const reportStatusLabel = (status: string) => ({ ready: '資料正常', warning: '資料需注意', critical: '資料嚴重不足' }[status] ?? status)
 const reportCreatedAt = (value: string) => new Date(value).toLocaleString('zh-TW', { hour12: false })
-async function createReportSnapshot() { reportCreating.value = true; reportActionMessage.value = ''; try { const report = await createPortfolioRiskReportSnapshot(portfolioId.value); selectedReportSnapshot.value = report; reportSnapshots.value = await getPortfolioRiskReportSnapshots(portfolioId.value); reportActionMessage.value = '風險報告快照已建立；內容已固定，不會隨後續價格更新而改變。' } catch (e) { reportActionMessage.value = riskErrorMessage(e) } finally { reportCreating.value = false } }
+async function createReportSnapshot() {
+  const run = calculationRun.value
+  if (!run || run.status !== 'Completed') {
+    reportActionMessage.value = '請先完成風險計算，再保存快照。'
+    return
+  }
+  reportCreating.value = true
+  reportActionMessage.value = ''
+  try {
+    const report = await createPortfolioRiskReportSnapshot(portfolioId.value, run.id)
+    selectedReportSnapshot.value = report
+    reportSnapshots.value = [report, ...reportSnapshots.value.filter(item => item.id !== report.id)]
+    reportActionMessage.value = '風險報告快照已建立；已保存此 Run 的結果與品質狀態。'
+    try { reportSnapshots.value = await getPortfolioRiskReportSnapshots(portfolioId.value) }
+    catch { reportActionMessage.value += ' 歷史清單更新失敗，本次快照已保存，請勿重複建立。' }
+  } catch (e) { reportActionMessage.value = riskErrorMessage(e) }
+  finally { reportCreating.value = false }
+}
 async function openReportSnapshot(reportId: string) { try { selectedReportSnapshot.value = await getPortfolioRiskReportSnapshot(portfolioId.value, reportId) } catch (e) { reportActionMessage.value = riskErrorMessage(e) } }
 function printReportSnapshot() { window.print() }
 
@@ -375,13 +393,17 @@ const esTableRows = computed(() =>
     })),
 )
 
+function historicalPercent(value: number | null | undefined) {
+  return value == null ? '資料不足／未提供' : `${(value * 100).toFixed(2)}%`
+}
+
 const diagnosticVarTableRows = computed(() => {
   const h95 = risk.value?.horizons.find((h) => h.horizonDays === 1)
   const h99 = risk99.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma99 = riskEwma99.value?.horizons.find((h) => h.horizonDays === 1)
   return [
-    { method: '歷史模擬法', var95: h95?.historicalVaR ?? 0, var99: h99?.historicalVaR ?? 0, note: '1日' },
+    { method: '歷史模擬法', var95: h95?.historicalVaR ?? null, var99: h99?.historicalVaR ?? null, note: `1日；有效視窗 ${h95?.effectiveHistoricalObservations ?? '未知'}` },
     { method: 'MVEWMA-FHS', var95: h95?.monteCarloVaR ?? 0, var99: h99?.monteCarloVaR ?? 0, note: '1日' },
     { method: 'EWMA 常態蒙地卡羅', var95: ewma95?.monteCarloVaR ?? 0, var99: ewma99?.monteCarloVaR ?? 0, note: 'λ=0.94' },
   ]
@@ -392,7 +414,7 @@ const diagnosticEsTableRows = computed(() => {
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma99 = riskEwma99.value?.horizons.find((h) => h.horizonDays === 1)
   return [
-    { method: '歷史模擬法', es95: h95?.historicalES ?? 0, es99: h99?.historicalES ?? 0 },
+    { method: '歷史模擬法', es95: h95?.historicalES ?? null, es99: h99?.historicalES ?? null },
     { method: 'MVEWMA-FHS', es95: h95?.monteCarloES ?? 0, es99: h99?.monteCarloES ?? 0 },
     { method: 'EWMA 常態蒙地卡羅', es95: ewma95?.monteCarloES ?? 0, es99: ewma99?.monteCarloES ?? 0 },
   ]
@@ -660,12 +682,15 @@ function isReusableRun(run: RiskCalculationRun): boolean {
 onMounted(async () => {
   loading.value = true
   try {
-    const [portfolio, calculations, governanceData] = await Promise.all([
-      getPortfolio(portfolioId.value),
-      listRiskCalculations(portfolioId.value),
-      getPortfolioRiskGovernance(portfolioId.value),
-    ])
+    const portfolio = await getPortfolio(portfolioId.value)
     portfolioName.value = portfolio.name
+    if (!portfolio.holdings?.length) {
+      error.value = '投資組合尚無持倉，加入持股後即可計算風險。'
+      return
+    }
+    const [calculations, governanceData] = await Promise.all([
+      listRiskCalculations(portfolioId.value), getPortfolioRiskGovernance(portfolioId.value),
+    ])
     governance.value = governanceData
     try {
       const valuation = await getPortfolioValuation(portfolioId.value)
@@ -748,6 +773,12 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
       </ScrollReveal>
 
       <template v-if="!loading && calculationRun?.status === 'Completed'">
+        <section class="prestige-panel prestige-panel-pad">
+          <h2 class="panel-title">計算口徑</h2>
+          <p>請求期間 {{ calculationRun.inputSnapshot?.from ?? '未保存' }} ～ {{ calculationRun.inputSnapshot?.to ?? '未保存' }}；方法 {{ calculationRun.selectedModel ?? '未提供' }}；估計樣本 {{ calculationLookback ?? '未知' }}。</p>
+          <RiskMeasurementBasis :basis="fallbackResult?.measurementBasis" />
+          <p>情境比較只使用同一計算快照、方法與期間；歷史回撤、條件波動、模型路徑回撤和帳戶實際績效不可互換。</p>
+        </section>
         <!-- Fallback banner -->
         <ScrollReveal v-if="isFallback" style="margin-bottom: 24px">
           <div class="warn-box">
@@ -792,7 +823,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
             <!-- Report snapshots -->
             <div class="sub-block">
               <div class="btn-row">
-                <button class="prestige-btn" :disabled="reportCreating" @click="createReportSnapshot">{{ reportCreating ? '建立中…' : '建立風險報告快照' }}</button>
+                <button class="prestige-btn" :disabled="reportCreating || calculationRun?.status !== 'Completed'" @click="createReportSnapshot">{{ reportCreating ? '建立中…' : '建立風險報告快照' }}</button>
                 <span v-if="reportActionMessage" class="muted-text snap-msg">{{ reportActionMessage }}</span>
               </div>
               <div v-if="reportSnapshots.length" class="snap-list">
@@ -873,7 +904,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
             <div class="panel-head">
               <div>
                 <h2 class="panel-title">風險報告快照</h2>
-                <span class="prestige-label">{{ reportCreatedAt(selectedReportSnapshot.createdAtUtc) }} · 資料截止 {{ selectedReportSnapshot.dataAsOfDate ?? '—' }} · {{ selectedReportSnapshot.model }} · {{ selectedReportSnapshot.thresholdVersion }}</span>
+                <span class="prestige-label">{{ reportCreatedAt(selectedReportSnapshot.createdAtUtc) }} · 資料截止 {{ selectedReportSnapshot.dataAsOfDate ?? '—' }} · {{ selectedReportSnapshot.model }} · {{ selectedReportSnapshot.thresholdVersion }} · 品質 {{ selectedReportSnapshot.overallStatus }}</span>
               </div>
               <button class="prestige-btn" @click="printReportSnapshot">列印／另存 PDF</button>
             </div>
@@ -1145,8 +1176,8 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                     <tbody>
                       <tr v-for="(v, i) in diagnosticVarTableRows" :key="i">
                         <td>{{ v.method }}</td>
-                        <td class="prestige-mono td-num">{{ (v.var95 * 100).toFixed(2) }}%</td>
-                        <td class="prestige-mono td-num">{{ (v.var99 * 100).toFixed(2) }}%</td>
+                        <td class="prestige-mono td-num">{{ historicalPercent(v.var95) }}</td>
+                        <td class="prestige-mono td-num">{{ historicalPercent(v.var99) }}</td>
                         <td class="td-muted" style="padding-left: 16px">{{ v.note }}</td>
                       </tr>
                     </tbody>
@@ -1164,12 +1195,18 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                     <tbody>
                       <tr v-for="(e, i) in diagnosticEsTableRows" :key="i">
                         <td>{{ e.method }}</td>
-                        <td class="prestige-mono td-num">{{ (e.es95 * 100).toFixed(2) }}%</td>
-                        <td class="prestige-mono td-num">{{ (e.es99 * 100).toFixed(2) }}%</td>
+                        <td class="prestige-mono td-num">{{ historicalPercent(e.es95) }}</td>
+                        <td class="prestige-mono td-num">{{ historicalPercent(e.es99) }}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
+                <p v-for="h in risk?.horizons ?? []" :key="`historical-${h.horizonDays}`" class="table-note">
+                  歷史 {{ h.horizonDays }} 日：有效滾動視窗 {{ h.effectiveHistoricalObservations ?? '未知' }}，門檻 {{ h.minimumHistoricalObservations ?? 100 }}；
+                  VaR {{ historicalPercent(h.historicalVaR) }}，ES {{ historicalPercent(h.historicalES) }}。
+                  {{ h.historicalStatus === 'InsufficientData' ? '樣本不足，停用該期限歷史數字。' : '' }}
+                </p>
+                <p class="table-note">重疊視窗不代表獨立樣本；不同期限使用不同樣本，不保證 VaR 單調。模擬數字另依每日資料估計，不能替代歷史樣本品質。</p>
                 <p class="table-note">以上為同步 EWMA 端點的歷史診斷資料，不作為正式風險決策依據。正式模型為 {{ calculationRun?.selectedModel ?? '—' }}。</p>
               </div>
             </div>

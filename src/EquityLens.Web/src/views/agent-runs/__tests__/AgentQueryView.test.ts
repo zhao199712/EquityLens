@@ -1,3 +1,4 @@
+import { legacyWorkflow } from '../../../services/legacyWorkflows'
 import { flushPromises, mount } from '@vue/test-utils'
 import { reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -114,11 +115,11 @@ describe('AgentQueryView', () => {
   it('renders a linked agent run card', async () => {
     chat.messages = [{
       id: 'm1', role: 'assistant', content: '已建立研究。',
-      runCard: { agentRunId: 'run-1', workflowType: 'ResearchInvestigation', status: 'Running', currentStageDisplayName: '檢索本地證據', completedNodes: 2, totalNodes: 8, finalAnswer: null, errorMessage: null },
+      runCard: { agentRunId: 'run-1', workflowType: legacyWorkflow.research, status: 'Running', currentStageDisplayName: '檢索本地證據', completedNodes: 2, totalNodes: 8, finalAnswer: null, errorMessage: null },
     }]
     const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
     const card = wrapper.get('.run-card')
-    expect(card.text()).toContain('ResearchInvestigation')
+    expect(card.text()).toContain(legacyWorkflow.research)
     expect(card.text()).toContain('檢索本地證據')
     expect(card.get('.run-status').classes()).toContain('run-status--running')
   })
@@ -126,7 +127,7 @@ describe('AgentQueryView', () => {
   it('renders the final answer in a succeeded run card', async () => {
     chat.messages = [{
       id: 'm1', role: 'assistant', content: '研究完成。',
-      runCard: { agentRunId: 'run-1', workflowType: 'ResearchInvestigation', status: 'Succeeded', currentStageDisplayName: null, completedNodes: 8, totalNodes: 8, finalAnswer: '**結論**：基本面穩健。', errorMessage: null },
+      runCard: { agentRunId: 'run-1', workflowType: legacyWorkflow.research, status: 'Succeeded', currentStageDisplayName: null, completedNodes: 8, totalNodes: 8, finalAnswer: '**結論**：基本面穩健。', errorMessage: null },
     }]
     const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
     const answer = wrapper.get('.final-answer')
