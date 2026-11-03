@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EquityLens.Api.Contracts.Agents;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Research;
@@ -37,11 +38,31 @@ public sealed class ResearchAgentWorkflowDefinitionProvider : IAgentWorkflowDefi
         ("finalizeResearch", ResearchAgentNodes.Finalize, false)
     ];
     public AgentRun CreateRun(Guid userId, Guid sourceRunId) => CreateRun(userId, sourceRunId, new("", ""));
-    public string CreateInitialBlackboardJson(Guid sourceRunId) => new ResearchInvestigationWorkflowDefinitionProvider().CreateInitialBlackboardJson(sourceRunId);
+    public string CreateInitialBlackboardJson(Guid sourceRunId) => CreateInitialBlackboardJson(sourceRunId, new("", ""));
+    public string CreateInitialBlackboardJson(Guid sourceRunId, ResearchAskRequest request, InvestmentResearchRoutingContext? routingContext = null) => new JsonObject
+    {
+        ["blackboardVersion"] = 0,
+        [AgentBlackboardKeys.ResearchRunId] = sourceRunId,
+        [AgentBlackboardKeys.Ticker] = request.Ticker.Trim().ToUpperInvariant(),
+        [AgentBlackboardKeys.Question] = request.Question,
+        [AgentBlackboardKeys.ResearchRequest] = JsonSerializer.SerializeToNode(request, AgentNodeJson.SerializerOptions),
+        [AgentBlackboardKeys.Answer] = null,
+        [AgentBlackboardKeys.Citations] = new JsonArray(),
+        [AgentBlackboardKeys.Candidates] = new JsonArray(),
+        [AgentBlackboardKeys.Steps] = new JsonArray(),
+        [AgentBlackboardKeys.LeadSkill] = routingContext?.LeadSkill,
+        [AgentBlackboardKeys.RoutingContext] = JsonSerializer.SerializeToNode(routingContext, AgentNodeJson.SerializerOptions)
+    }.ToJsonString(AgentNodeJson.SerializerOptions);
     public AgentRun CreateRun(Guid userId, Guid sourceRunId, ResearchAskRequest request, InvestmentResearchRoutingContext? routingContext = null)
     {
-        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(userId, sourceRunId, request, routingContext);
-        run.WorkflowType = WorkflowType;
+        var run = new AgentRun
+        {
+            Id = Guid.NewGuid(), UserId = userId, ResearchRunId = sourceRunId,
+            WorkflowType = WorkflowType, AgentType = AgentTypes.Research, Status = AgentRunStatuses.Pending,
+            InputJson = AgentNodeJson.Serialize(new { request, routingContext }),
+            BlackboardJson = CreateInitialBlackboardJson(sourceRunId, request, routingContext),
+            CreatedAtUtc = DateTime.UtcNow, EnableBlackboardSnapshots = true
+        };
         run.Nodes = Steps.Select(x => new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id,
             NodeKey = x.Key, NodeType = x.Type, Status = AgentNodeStatuses.Pending }).ToList();
         run.WorkflowDefinitionJson = new JsonObject

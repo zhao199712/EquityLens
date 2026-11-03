@@ -76,9 +76,9 @@ public sealed class AgentRunService : IAgentRunService
         InvestmentResearchRoutingContext? routingContext = null,
         CancellationToken cancellationToken = default)
     {
-        var engine = request.Engine ?? _loopOptions.DefaultEngine;
-        if (engine is not ("DynamicDag" or "AgentLoop")) throw new ArgumentException("Unknown research engine.", nameof(request));
-        var workflowType = engine == "AgentLoop" ? AgentWorkflowTypes.ResearchAgent : AgentWorkflowTypes.ResearchInvestigation;
+        if (request.Engine == "DynamicDag") throw new ArgumentException("DynamicDag 已停用，請使用 AgentLoop。", nameof(request));
+        if (request.Engine is not (null or "AgentLoop")) throw new ArgumentException("Unknown research engine.", nameof(request));
+        var workflowType = AgentWorkflowTypes.ResearchAgent;
         if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(workflowType, cancellationToken);
         var researchRun = new ResearchRun
         {
@@ -90,12 +90,11 @@ public sealed class AgentRunService : IAgentRunService
         var run = GetWorkflowProvider(workflowType) switch
         {
             ResearchAgentWorkflowDefinitionProvider loop => loop.CreateRun(userId, researchRun.Id, request, routingContext),
-            ResearchInvestigationWorkflowDefinitionProvider dag => dag.CreateRun(userId, researchRun.Id, request, routingContext),
             _ => throw new InvalidOperationException("Research workflow provider is not registered.")
         };
         await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.ResearchRuns.Add(researchRun); _dbContext.AgentRuns.Add(run);
-        AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchInvestigation run created.", new { researchRunId = researchRun.Id });
+        AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchAgent run created.", new { researchRunId = researchRun.Id });
         AddRoutingEvent(run, routingContext);
         await _dbContext.SaveChangesAsync(cancellationToken); await EnqueueAsync(run, userId, cancellationToken);
         return (MapSummary(run), researchRun.Id);
@@ -487,7 +486,7 @@ public sealed class AgentRunService : IAgentRunService
         var provider = GetWorkflowProvider(run.WorkflowType);
         if (run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.ResearchAgent)
         {
-            var investigationProvider = new ResearchInvestigationWorkflowDefinitionProvider();
+            var investigationProvider = new ResearchAgentWorkflowDefinitionProvider();
             var input = ResearchInvestigationWorkflowDefinitionProvider.ParseInput(run.InputJson);
             var researchRunId = run.ResearchRunId
                 ?? throw new InvalidOperationException("ResearchInvestigation run is missing its ResearchRun link.");

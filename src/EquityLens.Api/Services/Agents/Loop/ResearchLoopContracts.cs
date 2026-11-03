@@ -8,7 +8,7 @@ namespace EquityLens.Api.Services.Agents.Loop;
 public sealed class ResearchAgentLoopOptions
 {
     public const string SectionName = "AgentRuntime:ResearchAgentLoop";
-    public string DefaultEngine { get; set; } = "DynamicDag";
+    public string DefaultEngine { get; set; } = "AgentLoop";
     public int MaxTurns { get; set; } = 6;
     public int MaxRevisionTurns { get; set; } = 3;
     public int MaxToolCalls { get; set; } = 16;

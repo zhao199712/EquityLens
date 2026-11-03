@@ -18,7 +18,7 @@ public sealed class ResearchInvestigationWorkflowTests
     public async Task CreateResearchInvestigation_WithRoutingContext_PersistsInputBlackboardAndRouteEvent()
     {
         await using var db = CreateDbContext();
-        var provider = new ResearchInvestigationWorkflowDefinitionProvider();
+        var provider = new EquityLens.Api.Services.Agents.Loop.ResearchAgentWorkflowDefinitionProvider();
         var queue = new RecordingQueue();
         var service = new AgentRunService(db, [provider], new AgentRunStateMachine(), new AgentNodeStateMachine(), queue);
         var routing = RoutingContext();

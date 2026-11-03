@@ -16,9 +16,17 @@ namespace EquityLens.Api.Tests.Services.Agents;
 
 public sealed class ResearchAgentWorkflowTests
 {
+    [Fact]
+    public async Task RetiredEngine_IsRejectedBeforeAnyPersistence()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(db).CreateResearchInvestigationAsync(Guid.NewGuid(), new("2330", "營收", Engine: "DynamicDag")));
+        Assert.Empty(await db.AgentRuns.ToListAsync());
+        Assert.Empty(await db.ResearchRuns.ToListAsync());
+    }
+
     [Theory]
-    [InlineData(null, AgentWorkflowTypes.ResearchInvestigation)]
-    [InlineData("DynamicDag", AgentWorkflowTypes.ResearchInvestigation)]
+    [InlineData(null, AgentWorkflowTypes.ResearchAgent)]
     [InlineData("AgentLoop", AgentWorkflowTypes.ResearchAgent)]
     public async Task Engine_SelectsWorkflow_AndUserIsolationIsPreserved(string? engine, string type)
     {
