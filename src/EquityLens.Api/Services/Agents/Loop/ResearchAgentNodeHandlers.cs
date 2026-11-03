@@ -114,6 +114,7 @@ public sealed class ResearchOutputGateNodeHandler : IAgentNodeHandler
             if ((request.SourcePolicy == SourcePolicy.LocalOnly && !local) || (request.SourcePolicy == SourcePolicy.WebOnly && local)) issues.Add("SourcePolicyViolation");
         }
         if (answer != ResearchAgentLoop.Refusal && citations.Count == 0) issues.Add("MissingCitations");
+        issues.AddRange(ResearchSourceRoleGate.Check(answer, request.Question, citations));
         var numberCheck = ResearchNumberTraceability.Check(answer, citations, request.Question, request.Ticker);
         warnings.AddRange(numberCheck.Warnings);
         if (numberCheck.Blocking) issues.Add("UntraceableNumbers");

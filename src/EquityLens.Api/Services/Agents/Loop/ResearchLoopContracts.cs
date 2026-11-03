@@ -30,22 +30,27 @@ public sealed record LoopEvidence(string Id, RetrievedDocumentChunk Chunk);
 public sealed record LoopToolCall(string CallId, string Tool, JsonObject Arguments);
 public sealed record LoopAnswer(string Markdown, IReadOnlyList<string> CitedEvidenceIds);
 public sealed record LoopAction(string Action, string ThoughtSummary, IReadOnlyList<LoopToolCall> ToolCalls, LoopAnswer? Answer);
-public sealed record LoopToolResult(IReadOnlyList<RetrievedDocumentChunk> Evidence, string Summary, string? Error = null);
-public sealed record LoopToolScope(Guid UserId, ResearchAskRequest Request, IReadOnlyList<LoopEvidence> Ledger, bool LocalSearchCompleted, string? IdempotencyKey = null);
+public sealed record LoopToolResult(IReadOnlyList<RetrievedDocumentChunk> Evidence, string Summary, string? Error = null, JsonObject? Data = null, JsonObject? BlackboardPatch = null);
+public sealed record LoopToolScope(Guid UserId, ResearchAskRequest Request, IReadOnlyList<LoopEvidence> Ledger, bool LocalSearchCompleted, string? IdempotencyKey = null, Guid? RunId = null, string? InputJson = null, JsonObject? DomainContext = null);
 public sealed record LoopToolDefinition(string Name, string Description, JsonObject Parameters, decimal EstimatedCostUsd = 0, bool RequiresApproval = false);
 
-public interface IResearchLoopTools
+public interface IResearchLoopTools : IAgentLoopTools { }
+
+public interface IAgentLoopTools
 {
     IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope);
     string? Validate(LoopToolScope scope, LoopToolCall call);
     Task<LoopToolResult> InvokeAsync(LoopToolScope scope, LoopToolCall call, CancellationToken ct);
 }
 
+public sealed record LoopDataFact(string Id, string Key, string Tool, JsonObject Data);
+
 public sealed class ResearchLoopState
 {
     public int Turn { get; set; }
     public Guid? PendingTurnId { get; set; }
     public List<LoopEvidence> Ledger { get; set; } = [];
+    public List<LoopDataFact> Facts { get; set; } = [];
     public List<string> History { get; set; } = [];
     public bool LocalSearchCompleted { get; set; }
     public int ToolCalls { get; set; }

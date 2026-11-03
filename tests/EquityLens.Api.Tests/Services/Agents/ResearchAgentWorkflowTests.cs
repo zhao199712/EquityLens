@@ -158,6 +158,24 @@ public sealed class ResearchAgentWorkflowTests
         Assert.Equal(expected, ResearchOutputGateNodeHandler.Check(board).Passed);
     }
 
+    [Theory]
+    [InlineData("法說會指出匯率風險[1]。", "AnnualReport", "匯率風險影響營運", "SourceAttributionMismatch")]
+    [InlineData("公司面臨匯率風險[1]。", "AnnualReport", "目錄\n風險管理", "NonSubstantiveSourcePage")]
+    [InlineData("公司面臨匯率風險[1]。", "AnnualReport", "封面\n公司年報", "NonSubstantiveSourcePage")]
+    [InlineData("公司面臨匯率風險[1]。", "AnnualReport", "合併資產負債表\n資產總計", "FinancialTableNotRiskEvidence")]
+    [InlineData("年報補充揭露匯率風險[1]。", "AnnualReport", "匯率風險影響營運", null)]
+    [InlineData("法說會指出匯率風險[1]。", "EarningsPresentation", "匯率風險影響營運", null)]
+    public void OutputGate_ValidatesSourceRoles(string answer, string documentType, string quote, string? expected)
+    {
+        var board = new JsonObject { ["answer"] = answer,
+            ["researchRequest"] = JsonSerializer.SerializeToNode(new ResearchAskRequest("2330", "主要風險？"), AgentNodeJson.SerializerOptions),
+            ["citations"] = new JsonArray(new JsonObject { ["citationIndex"] = 1, ["sourceType"] = "LocalDocument",
+                ["documentType"] = documentType, ["sourceRole"] = "Supporting", ["quoteText"] = quote }) };
+        var result = ResearchOutputGateNodeHandler.Check(board);
+        if (expected is null) Assert.True(result.Passed);
+        else Assert.Contains(expected, result.BlockingIssues);
+    }
+
     [Fact]
     public void Definition_HasCompleteStaticGraphAndRegisteredContracts()
     {

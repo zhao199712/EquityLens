@@ -23,6 +23,37 @@ public sealed class ResearchAgentLoopTests
     private const string Submit = """{"action":"submit_answer","thoughtSummary":"已有資料","answer":{"markdown":"營收 100 元 [E1]。","citedEvidenceIds":["E1"]}}""";
 
     [Fact]
+    public async Task StructuredToolResults_AreDurableAndReusedAfterInterruption()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var tools = new StructuredTools();
+        var chat = new FakeChat("""{"action":"call_tools","toolCalls":[{"callId":"p1","tool":"get_portfolio_snapshot","arguments":{}}]}""");
+        var loop = new AgentLoopEngine(chat, tools, Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio: true);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => loop.RunAsync(context, "Portfolio", default));
+        Assert.Single(await db.AgentToolCalls.Where(x => x.Status == "Succeeded").ToListAsync());
+        Assert.Equal(1, tools.Calls);
+        var resume = new AgentLoopEngine(new FakeChat("""{"action":"submit_answer","answer":{"markdown":"持倉已確認 [P1]","citedEvidenceIds":["P1"]}}"""), tools,
+            Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio: true);
+        var state = await resume.RunAsync(context, "Portfolio", default);
+        Assert.Equal(1, tools.Calls);
+        Assert.Single(state.Facts);
+        Assert.Equal(42, AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson)["verifiedValue"]!.GetValue<int>());
+    }
+
+    private sealed class StructuredTools : IAgentLoopTools
+    {
+        public int Calls;
+        public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("get_portfolio_snapshot", "Snapshot", new())];
+        public string? Validate(LoopToolScope scope, LoopToolCall call) => null;
+        public Task<LoopToolResult> InvokeAsync(LoopToolScope scope, LoopToolCall call, CancellationToken ct)
+        {
+            Calls++;
+            return Task.FromResult(new LoopToolResult([], "snapshot", Data: new JsonObject { ["holdingCount"] = 2 }, BlackboardPatch: new JsonObject { ["verifiedValue"] = 42 }));
+        }
+    }
+
+    [Fact]
     public async Task RevisionPrompt_IncludesFeedbackAndOriginalAnswer()
     {
         await using var db = RefactorTestDbContext.Create();
@@ -308,6 +339,21 @@ public sealed class ResearchAgentLoopTests
         Assert.Equal(allowed, tools.Validate(scope, new("c", "search_local", new JsonObject { ["query"] = "EPS", ["documentType"] = type })) is null);
     }
 
+    [Fact]
+    public async Task ResearchPrompt_ExplainsSourceRolesAndIncludesEvidenceMetadata()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var chat = new FakeChat(Search, Submit);
+        await Loop(chat, new FakeTools()).RunAsync(await Context(db), "Research", default);
+        Assert.Contains("Primary", chat.SystemPrompts[0]);
+        Assert.Contains("Supporting", chat.SystemPrompts[0]);
+        Assert.Contains("風險題不可把年報揭露說成法說會提到", chat.SystemPrompts[0]);
+        Assert.Contains("目錄頁與封面", chat.SystemPrompts[0]);
+        var item = JsonNode.Parse(chat.Prompts[1])!["evidence"]![0]!;
+        Assert.Equal("AnnualReport", item["documentType"]!.GetValue<string>());
+        Assert.Equal("Primary", item["sourceRole"]!.GetValue<string>());
+    }
+
     private static ResearchAgentLoop Loop(FakeChat chat, FakeTools tools, ResearchAgentLoopOptions? options = null) =>
         new(chat, tools, Options.Create(options ?? new ResearchAgentLoopOptions()), TimeProvider.System);
 
@@ -329,11 +375,13 @@ public sealed class ResearchAgentLoopTests
     {
         private readonly Queue<string> _responses = new(responses);
         public List<string> Prompts { get; } = [];
+        public List<string> SystemPrompts { get; } = [];
         public string Provider => "test";
         public string Model => "fixture";
         public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default)
         {
             Prompts.Add(request.UserPrompt);
+            SystemPrompts.Add(request.SystemPrompt);
             if (_responses.Count == 0) throw new OperationCanceledException("simulated process interruption");
             return Task.FromResult(new ChatCompletionResult(_responses.Dequeue(), Model, 10, 10));
         }
