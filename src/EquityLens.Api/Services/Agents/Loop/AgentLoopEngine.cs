@@ -109,7 +109,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     state.CompletionTokens += response.CompletionTokens;
                     state.CostUsd += Cost(response.PromptTokens, response.CompletionTokens);
                     turn = new AgentLlmTurn { ExecutionAttempt = context.Run.ExecutionAttempt, Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 15, Provider = chat.Provider, Model = response.Model,
+                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 16, Provider = chat.Provider, Model = response.Model,
                         RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(systemPrompt + prompt))),
                         PromptTokens = response.PromptTokens, CompletionTokens = response.CompletionTokens,
                         EstimatedCostUsd = Cost(response.PromptTokens, response.CompletionTokens), LatencyMs = timer.ElapsedMilliseconds,
@@ -412,6 +412,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         方法、情境假設與最後建議若提權重，仍需同句引用情境工具；最後待確認段只問定性偏好，不重述任何風險數字、權重或現金範圍；若使用者要求必須重述，仍須引用情境來源，不能只引用偏好工具。
         不必重複列出其他口徑的風險表；必要時分段說明口徑不同。數字計算交給工具，文字著重已驗證的取捨。
         工具的 display 是由同一份原始數值四捨五入的顯示值，引用該工具時直接使用，不得挪用另一工具的相近數字。
+        現況個股權重優先引用 get_portfolio_snapshot 的 holdings[ticker].weight；Core 的 HHI／最大權重不代表已提供每檔權重。風險貢獻引用 RiskContribution；情境權重與差異引用 simulate_weight_scenario。分句標註各自來源，不讓段末的一個引用代替不同指標的來源。修正提示若指出現況權重欄位，核對 ticker 後修正引用；找不到來源就省略，不更改數字湊來源。
         每段數值主張都要標註包含該數值的工具引用；標題裡的日期與樣本數也需引用真正包含期間的分析工具，持倉快照不能代替分析期間來源。風險偏好工具只支持偏好是否存在，不能支持情境權重；解讀段落若再提權重，仍須引用情境工具。
         未取得使用者可承受風險門檻時，不可聲稱現況在其可承受範圍；只能說明量化取捨並詢問偏好。現況診斷與情境快照口徑不同時須明確標示。
         數學函式與演算法由後端決定，不自行選擇底層運算。優化問題必須呼叫 simulate_weight_scenario，比較同一基準與情境。

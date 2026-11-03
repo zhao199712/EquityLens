@@ -5,6 +5,69 @@ using EquityLens.Api.Services.Agents.Loop;
 namespace EquityLens.Api.Tests.Services.Agents;
 public class AcceptanceNumberRegressionTests
 {
+    [Fact]
+    public void Round17AllocationTradeoffDoesNotMixRiskBases()
+    {
+        var (answer, facts) = Round17("lower-volatility");
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(answer, facts));
+        Assert.Contains("MixedRiskBasis", PortfolioQualityGateNodeHandler.Check(answer with {
+            Markdown = answer.Markdown + "\n波動從 24.53% [P5] 降至 15.25% [P8]，改善 9.09 個百分點。" }, facts));
+    }
+
+    [Fact]
+    public void Round17WeightRepairOffersExactHoldingField_WithoutAcceptingWrongCitation()
+    {
+        var (answer, facts) = Round17("unprompted");
+        var rejected = new List<string>();
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(answer, facts, rejected));
+        var hints = PortfolioQualityGateNodeHandler.RepairHints(rejected, facts, answer);
+        Assert.Contains("get_portfolio_snapshot", hints);
+        Assert.Contains("9002", hints); Assert.Contains("9003", hints); Assert.Contains(".weight", hints);
+        Assert.Contains("[P1]", hints);
+        // Editorial test expectation only; production must never append citations automatically.
+        var corrected = answer with { Markdown = answer.Markdown.Replace("9003 標的C 10.00%，", "9003 標的C 10.00% [P1]，") };
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(corrected, facts));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(corrected with {
+            Markdown = corrected.Markdown.Replace("9003 標的C 10.00%", "9003 標的C 13.57%") }, facts));
+    }
+
+    [Theory]
+    [InlineData("降低波動的代價是把 30% 權重留現金 [P2]。兩者口徑不同，不宜比較 [P1][P2]。")]
+    [InlineData("改善回撤的代價是 30% 的資金留現金 [P2]。不同口徑不可相減 [P1][P2]。")]
+    [InlineData("降低波動時現金權重為 30% [P2]。不同口徑不可互換 [P1][P2]。")]
+    public void AllocationNumbersDoNotImplyRiskDeltas_ButRealDeltasStillDo(string text)
+    {
+        var facts = new[] {
+            new LoopDataFact("P1", "risk", "run_risk_analysis", new JsonObject { ["volatility"] = .2453m }),
+            new LoopDataFact("P2", "scenario", "simulate_weight_scenario", new JsonObject { ["cashWeight"] = .3m, ["volatility"] = .1525m, ["delta"] = -.0909m }) };
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new(text, ["P1", "P2"]), facts));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(new(text.Replace("30%", "31.57%"), ["P1", "P2"]), facts));
+        Assert.Contains("MixedRiskBasis", PortfolioQualityGateNodeHandler.Check(new(
+            text + " 波動降低 9.09 個百分點，由 24.53% 至 15.25% [P1][P2]。", ["P1", "P2"]), facts));
+    }
+
+    [Fact]
+    public void HoldingHintsDoNotSupplyScenarioWeightsOrNearbyValues()
+    {
+        var (answer, facts) = Round17("unprompted");
+        var hints = PortfolioQualityGateNodeHandler.RepairHints(["13.57%"], facts,
+            new("現況 9002 權重 13.57% [P5]", ["P5"]));
+        Assert.DoesNotContain("holdings[", hints);
+        hints = PortfolioQualityGateNodeHandler.RepairHints(["10.00%"], facts,
+            new("9002 風險貢獻權重 10.00% [P5]", ["P5"]));
+        Assert.DoesNotContain("holdings[", hints);
+        hints = PortfolioQualityGateNodeHandler.RepairHints(["10.00%"], facts,
+            new("情境 9002 權重 10.00% [P5]", ["P5"]));
+        Assert.DoesNotContain("holdings[", hints);
+    }
+
+    private static (LoopAnswer Answer, List<LoopDataFact> Facts) Round17(string id)
+    {
+        var fixture = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "portfolio-round17-quality.json")))![id]!;
+        return (fixture["answer"]!.Deserialize<LoopAnswer>(AgentNodeJson.SerializerOptions)!,
+            fixture["facts"]!.Deserialize<List<LoopDataFact>>(AgentNodeJson.SerializerOptions)!);
+    }
+
     [Theory]
     [InlineData("lower-volatility")]
     [InlineData("concentration")]

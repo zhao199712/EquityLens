@@ -1,6 +1,6 @@
 {
   "backend": {
-    "passed": 1017,
+    "passed": 1023,
     "postgres_integration": 18,
     "skipped": 0
   },
@@ -23,5 +23,6 @@
   "benchmark_isolation_verified_from_round": 12,
   "evaluated_code": "5c7bb24671c3b1ed153f4d02a715481f0933df12 (round 17 clean checkout, prompt 15)",
   "recovery_observed": "round 13 cash: per-turn ToolBudgetExceeded then identical arguments succeeded next turn; invalid-argument recovery not observed",
-  "additional_authorized_usd": 0.2
+  "additional_authorized_usd": 0.2,
+  "latest_offline_fix": "Prompt 16: typed holding-weight source repair hints and allocation-versus-risk classification; live validation pending"
 }
