@@ -761,7 +761,7 @@ v4 取代 v1 作為預設的條件（全部成立）：
 |---|---|---|
 | 工作流 | 9 | ResearchAgent、PortfolioDiagnosis、CriticReview，共 3 |
 | catalog node type | 54 | 13 |
-| Services/Agents 行數 | 11,674 | 7,687（含協定診斷與股數單位修正、Loop 子目錄） |
+| Services/Agents 行數 | 11,674 | 7,712（含協定診斷、數字追溯修正與 Loop 子目錄） |
 | 編排 | 可動態擴增圖 | 固定 DAG，研究／投組共用節點內迴圈 |
 
 研究包含品質檢查及最多一次修訂；投組包含六個任務型工具與固定人工審批；Critic 僅評分，不改原答案。品質階段及工具結果先保存，恢復重用已完成結果。圖拓撲、條件邊、租約 fencing、狀態機與 outbox 保留。

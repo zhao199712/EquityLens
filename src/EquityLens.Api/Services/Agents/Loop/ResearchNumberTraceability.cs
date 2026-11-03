@@ -18,7 +18,8 @@ internal static partial class ResearchNumberTraceability
         var warnings = new HashSet<string>();
         // 常見「句子。[1]」格式仍屬同句引用。
         answer = Regex.Replace(answer.Normalize(NormalizationForm.FormKC), @"([。！？!?；;])\s*((?:\[\d+\])+)", "$2$1");
-        foreach (var sentence in Regex.Split(answer, @"[。！？!?；;\n]"))
+        // 分號分隔的是同一句的子句；句尾引用涵蓋整句，句號與換行仍是引用邊界。
+        foreach (var sentence in Regex.Split(answer, @"[。！？!?\n]"))
         {
             var contextual = Regex.Replace(sentence, @"(?<!\d)(?:19|20)\d{2}[-/年]\d{1,2}[-/月]\d{1,2}日?(?!\d)", m =>
             {
@@ -65,6 +66,27 @@ internal static partial class ResearchNumberTraceability
                 catch (OverflowException) { }
                 if (!verified) { invalidRatio = true; warnings.Add("InvalidRatioExpression"); }
             }
+            // 「由舊值增／降至新值，年增率 p%」明示了運算元；用同句來源重算，不接受模型自報結果。
+            foreach (Match expression in GrowthExpression().Matches(sentence))
+            {
+                var oldValue = Extract(expression.Groups["old"].Value).SingleOrDefault();
+                var newValue = Extract(expression.Groups["new"].Value).SingleOrDefault();
+                var verified = false;
+                if (oldValue is not null && newValue is not null && oldValue.Value > 0 && oldValue.Kind == newValue.Kind
+                    && quotes.Any(q => q.Kind == oldValue.Kind && q.Value == oldValue.Value)
+                    && quotes.Any(q => q.Kind == newValue.Kind && q.Value == newValue.Value))
+                {
+                    try
+                    {
+                        var calculated = (newValue.Value / oldValue.Value - 1m) * 100m;
+                        var claimed = Extract(expression.Groups["result"].Value).Single();
+                        verified = Math.Abs(calculated - claimed.Value) <= Math.Abs(calculated) * .005m;
+                        if (verified) { quotes.Add(new(calculated, "percent")); warnings.Add("VerifiedGrowthExpression"); }
+                    }
+                    catch (OverflowException) { }
+                }
+                if (!verified) { invalidRatio = true; warnings.Add("UntraceableGrowthExpression"); }
+            }
             foreach (var number in numbers)
             {
                 total++;
@@ -99,7 +121,7 @@ internal static partial class ResearchNumberTraceability
         }
         // 財報通常在表頭一次宣告單位，欄位中的數字不重複標示。
         var compact = Regex.Replace(text.Normalize(NormalizationForm.FormKC), @"\s+", "");
-        var header = Regex.Match(compact[..Math.Min(compact.Length, 800)], @"(?:新台幣|新臺幣)(十億|百萬|仟|千|億|萬)元");
+        var header = Regex.Match(compact[..Math.Min(compact.Length, 800)], @"(?:新台幣|新臺幣|(?:收入|金額|單位[:：]?)\(?)(十億|百萬|仟|千|億|萬)元");
         if (!header.Success) return numbers;
         var scale = header.Groups[1].Value switch
         {
@@ -139,6 +161,9 @@ internal static partial class ResearchNumberTraceability
     // 數字後允許單位；除號後只允許短標籤，必須有等號及百分比結果。
     [GeneratedRegex(@"(?<left>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:÷|除以|/)\s*[^\d\r\n=≈]{0,40}?(?<right>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:(?:×|\*)\s*100\s*)?(?:=|≈|約為|等於)\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)")]
     private static partial Regex RatioExpression();
+
+    [GeneratedRegex(@"由\s*(?<old>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:增至|降至|成長至|下降至|至)\s*(?<new>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*[，,]?\s*年增率\s*(?:約為|約|為|=|≈)?\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)")]
+    private static partial Regex GrowthExpression();
 
     [GeneratedRegex(@"\[(\d+)\]")]
     private static partial Regex Reference();

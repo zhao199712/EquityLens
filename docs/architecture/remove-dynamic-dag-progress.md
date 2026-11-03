@@ -137,7 +137,7 @@ R1–R25、R28–R32、R34–R35 均完成。R26 已獲本次獨立 US$1 授權�
 |---|---|---|
 | 可建立的工作流 | 9 | 3 |
 | catalog node type | 54 | 13 |
-| `Services/Agents` 行數 | 11,674 | 7,687（遞迴計算所有 .cs，含 Loop；減少 3,987，約 34.2%） |
+| `Services/Agents` 行數 | 11,674 | 7,712（遞迴計算所有 .cs，含 Loop；減少 3,962，約 33.9%） |
 | 編排模式 | Static／Stateful／DynamicStateful | 固定 DAG＋節點內 Agent loop |
 
 ## 阻塞
@@ -153,7 +153,7 @@ R1–R25、R28–R32、R34–R35 均完成。R26 已獲本次獨立 US$1 授權�
 
 交付分支：`refactor/three-workflows`，基準 `8903e48`。所有實作與驗證提交推至同分支；未合併 main、未部署、未新增 migration、未改正式資料，也未恢復排程。`src/App.vue` 與 `appsettings.json` 相對基準零差異。
 
-**已完成**：R1–R25、R28–R32、R34–R35。三工作流／13 種 node type／13 個正式 handler；共用 durable loop、六個投組任務工具、三個研究工具與共用 load_skill、三個方法設定檔。原 planner capability 與 Supporting skill registry 已移除。Services/Agents 由 11,674 減為 7,687 行（含 Loop 子目錄），約減少 34.2%。
+**已完成**：R1–R25、R28–R32、R34–R35。三工作流／13 種 node type／13 個正式 handler；共用 durable loop、六個投組任務工具、三個研究工具與共用 load_skill、三個方法設定檔。原 planner capability 與 Supporting skill registry 已移除。Services/Agents 由 11,674 減為 7,712 行（含 Loop 子目錄），約減少 33.9%。
 
 **未完成**：R26 不退步驗收未通過：本次獨立 US$1 授權下執行原 8 題，6/8，較舊基準少鴻海產品線題；詳見新 live 報告。37 次 LLM 呼叫保守估價 US$0.052676，加完整 embedding 預留後上界 US$0.152676，沒有追加重跑。R33 補充題／拆解實驗與 R36 真實 Router 準確率仍未執行；本次授權不涵蓋它們，歷史 US$10 累計仍不完整。Router 26 題與評分工具已交付，0/26 observed、accuracy:null。C 的操作定義也未在引用報告中找到。
 
@@ -375,3 +375,10 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - prompt v6 明示即使 Critic 接受，也要處理 outputGate 阻擋；缺乏單位來源時移除不必要的附加數字或補證據。風險回答直接陳述風險，不複述承諾獲利前提。
 - 完整 R27（unit-context-release）：build、899/899（隔離 PostgreSQL，0 skipped）、EF 無模型變更、pytest 83、前端 build／127 tests。此階段新增 8 個數字回歸。
 - 前兩輪 LLM 加各輪 embedding 預留的累計上界 US$0.315680；最後重跑仍受同一 US$1 額度限制。R26 在最後重跑前仍為未通過。
+
+### R26 第三輪與可追溯衍生比例
+
+- `54bdfd3` 原 8 題重跑仍為 6/8，EPS 恢復通過；鴻海答案數值與來源相符，但受分號引用邊界、收入表頭單位及衍生年增率辨識限制而拒答。保證獲利的否定句仍觸發舊禁詞規則。完整中間結果保存於 docs/eval-verification/2026-11-03-three-workflows-fixed/。
+- 新增一般格式重現案例：收入（百萬元）、同句分號後引用、由舊值增／降至新值的年增率。以精確來源運算元重算衍生百分比；缺少來源、零分母、錯誤比例、跨句號／換行引用均保持拒絕。未修改 scorer 或產生人工引用。
+- 完整 R27（derived-context-release）：build、908/908（隔離 PostgreSQL，0 skipped）、EF 無模型變更、pytest 83、前端 build／127 tests。新增 9 個數字案例。
+- 前三輪保守累計上界 US$0.475104；下一輪 LLM admission cap US$0.30，另保留 embedding US$0.10，總上界不超過原獨立 US$1。R26 待此版本整套原 8 題驗證，不拼接不同輪次結果。

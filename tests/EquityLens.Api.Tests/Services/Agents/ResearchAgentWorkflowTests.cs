@@ -234,6 +234,15 @@ public sealed class ResearchAgentWorkflowTests
     [InlineData("淨利 1,717,882,627 仟元[1]", "歸屬淨利 $1,717,882,627 股數（仟股）25,928,262", true)]
     [InlineData("營收 100 仟元[1]", "單位：新台幣仟元 營收 100；股數（仟股）100", false)]
     [InlineData("金額 100 仟元[1]", "單位：新台幣仟元 營收 500；股數（仟股）100", true)]
+    [InlineData("甲 600 百萬元 ÷ 1000 百萬元 ≈ 60%；乙 400 百萬元 ÷ 1000 百萬元 ≈ 40%[1]。", "收入（百萬元）甲 600 乙 400 合計1000", false)]
+    [InlineData("甲 600 百萬元 ÷ 1000 百萬元 ≈ 80%；乙 400 百萬元 ÷ 1000 百萬元 ≈ 40%[1]。", "收入（百萬元）甲 600 乙 400 合計1000", true)]
+    [InlineData("收入由 500 百萬元增至 600 百萬元，年增率約 20%[1]。", "收入（百萬元）600 500", false)]
+    [InlineData("收入由 500 百萬元增至 600 百萬元，年增率約 30%[1]。", "收入（百萬元）600 500", true)]
+    [InlineData("收入由 500 百萬元降至 400 百萬元，年增率約 -20%[1]。", "收入（百萬元）400 500", false)]
+    [InlineData("收入由 500 百萬元增至 600 百萬元，年增率約 20%[1]。", "收入（百萬元）600 400", true)]
+    [InlineData("收入由 0 元增至 600 元，年增率約 20%[1]。", "收入 600 元 0 元", true)]
+    [InlineData("收入 100 元。來源[1]。", "收入 100 元 200 元", true)]
+    [InlineData("收入 100 元\n來源[1]。", "收入 100 元 200 元", true)]
     public void NumberGate_ChecksCitedQuote_WithNormalizationAndUnits(string answer, string quote, bool blocking)
     {
         var result = ResearchNumberTraceability.Check(answer,
