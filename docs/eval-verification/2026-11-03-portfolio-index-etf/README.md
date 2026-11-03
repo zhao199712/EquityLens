@@ -19,3 +19,5 @@
 同版本 CI [41639905538](https://github.com/zhao199712/EquityLens/actions/runs/41639905538) 已成功。這次僅新增驗證證據及文件，未改程式或 prompt。
 
 後續比較方向修正及離線驗證見 [offline-fix.md](offline-fix.md)；上方保留原始真實 AI 結果，不回寫為通過。
+
+修正後同題真實 AI 結果： [retest-295f77e](retest-295f77e/README.md)。原 VaR 問題本次通過，但人工仍記錄兩處表達問題。
