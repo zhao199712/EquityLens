@@ -19,6 +19,7 @@
 | D11 | **工具粒度** | 給 LLM 的工具以**任務為單位**：研究迴圈維持約 3 個（`search_local`、`search_web`、`get_document_page`）＋ `load_skill`；投組迴圈 **≤ 8 個**，建議形狀：持股快照、讀取既有風險報告、補算指定類型的風險分析（類型為 enum）、績效歸因、權重情境模擬、風險偏好，再加 `load_skill`（不計入 8 個上限）。`PortfolioRiskMathCapabilities` 的 37 個底層函式**不得直接作為工具暴露**，只能在工具內部使用。既有的 `evaluate_portfolio_scenario` 與 `EvaluatePortfolioScenarios` 節點（已部署）納入投組迴圈的情境工具，不要另做一套。 |
 | D12 | **來源角色規則** | 研究角色 prompt 補回 v1 的來源角色規則：區分直接來源與補充來源；不可把補充來源的事實歸給直接來源；風險題不可把年報揭露說成法說會提到；財報表格頁不可當作風險證據，目錄頁與封面不可當作實質證據。若 OutputGate 能以確定性方式檢查其中一部分（例如引用頁的文件類型與題目意圖不符），一併實作。 |
 | D13 | **風險與法說會 eval 題** | 新增 **2330／2317 範圍內**的風險題與法說會題（至少各 1 題）。**標準答案必須對照原始 PDF 核實**（記錄文件、實體頁碼、摘錄），核實前保持 `verified: false`，不可憑模型記憶或搜尋摘要填答案。放在新的題庫檔（例如 `evals/cases/research_risk_conference.jsonl`），不併入既有 8 題的 pass_rate。 |
+| D14 | **路由決策分層** | Router 只回答「研究或投組」，依序：<br>**第 0 層 入口決定**：研究頁 → Research；投組頁診斷 → Portfolio；既有對話追問 → 沿用上一個 run 的角色。這些情況**不呼叫 LLM 路由**。<br>**第 1 層 程式訊號**：使用者沒有投組 → 不可走 Portfolio；訊息含使用者投組名稱 → 強烈偏向 Portfolio；股票查詢比對到的 ticker 作為參數候選提供給 LLM。<br>**第 2 層 LLM 分類**（只處理模糊情況）：結構化輸出 `{ action: route\|clarify\|direct_reply\|reject, workflow, params{ticker, portfolioId, scenarios, period}, missing[], confidence }`。判斷標準：主詞是「我的持股／配置」、問風險與配置、要採取行動 → Portfolio；主詞是公司、問財報／法說會／新聞、要了解事實 → Research。<br>**第 3 層 程式驗證**（不得跳過）：多個投組且未指明 → 澄清並列出選項；ticker 查不到 → 澄清；投組 ID 不屬於該使用者 → 拒絕並記錄；`confidence` 為 low → 澄清；情境超出工具能力 → 澄清，**不得改用其他情境代替**（B3）；解析失敗 → 重試一次後澄清並記 warning（B4）。原則：寧可多問一次，不猜角色。<br>**混合問題**（同時涉及財報與持股調整）：依主要意圖選一個角色作答，並在回覆結尾提議另開另一個角色的 run；**不可**讓單一 run 跨角色使用另一角色的工具。 |
 
 ## 驗收清單
 
@@ -30,7 +31,11 @@
 | R31 | D12：來源角色規則補回研究角色 prompt；有測試證明 prompt 含這些規則；可確定性檢查的部分有 OutputGate 測試 | MUST |
 | R32 | D13：新題庫檔與核實紀錄（`docs/eval-verification/<日期>-risk-conference-cases/`）；`validate` 通過 | SHOULD |
 | R33 | 若環境可用：用新題庫跑（trajectory 需含載入的 skill） `--mode investigation`，記錄結果；並依 A/B 報告「建議的拆解實驗」執行實驗 A（`MaxTurns=1`）與 C，結果寫入報告 | COULD |
+| R34 | D14 第 0、1、3 層：入口與追問不呼叫 LLM 路由；沒有投組時不可走 Portfolio；投組 ID 越權被拒並記錄；多投組未指明、ticker 查不到、低信心、超出工具能力的情境皆回澄清；每一種情況都有測試 | MUST |
+| R35 | 將 `LlmConversationAgent` 與 `InvestmentResearchRouter` 合併為**一次** LLM 呼叫，直接輸出 D14 的結構；既有對話行為（直接回覆、澄清、拒絕、重置、修訂上一次 run）不退步 | SHOULD |
+| R36 | Router eval：新題庫（例如 `evals/cases/router_v1.jsonl`）約 20～30 句使用者訊息，每句標註預期 action／workflow／關鍵參數，涵蓋研究、投組、混合、模糊、越權、無投組、超出情境能力；全部以程式評分（不用 LLM judge），輸出準確率與混淆矩陣；結果存 `docs/eval-verification/<日期>-router/` | SHOULD |
 
 ## 建議插入的執行順序
 
-主規格順序中，在 **R5–R7（投組迴圈）之前**先做 R30（決定工具形狀），在 **R9（Ask Agent）時**一併做 R28、R29；R31 在 R16（OutputGate 誤判）之後做；R32、R33 放在 R26（eval）之前或一起做。
+主規格順序中，在 **R5–R7（投組迴圈）之前**先做 R30（決定工具形狀），在 **R9（Ask Agent）時**一併做 R28、R29、R34、R35；R31 在 R16（OutputGate 誤判）之後做；R32、R33 放在 R26（eval）之前或一起做。
+R36 放在 R26（eval）之前或一起做。
