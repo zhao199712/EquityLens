@@ -159,3 +159,7 @@
 ### R10 API 操作名稱的相容性界線
 
 `CreateResearchInvestigationAsync` 與前端同名函式、Created DTO 保留既有 investigation API 操作名稱，回應 JSON／HTTP 路徑不變；這些不是 workflow provider／node／catalog 註冊，實際只建立 ResearchAgent。廢棄工作流的字串值與停用引擎識別集中至 legacy 相容檔（明確拒絕舊引擎，不啟動它）；錯誤文字與 UI fixture 不再散布舊型別值。
+
+### 使用者授權整合前端分支（2026-11-03）
+
+使用者在本串要求把先前分支合併至目前分支，並明確選擇 `fix/frontend-public-ux`。因此本次將該分支的 App.vue 導覽列變更原樣整合（檔案 hash 與來源一致）；這是 §5.8 原先避免跨分支衝突限制的使用者授權整合，不額外重設導覽列。`jev` 不在本次範圍；不 merge main、不部署。

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { NConfigProvider, darkTheme } from 'naive-ui'
 import { enUS, zhTW } from 'naive-ui'
@@ -12,7 +12,13 @@ const authStore = useAuthStore()
 const { t, locale } = useI18n()
 
 const isAuthPage = computed(() => route.name === 'login' || route.name === 'register')
+const isAuthenticated = computed(() => authStore.isAuthenticated)
 const isAdmin = computed(() => authStore.user?.role === 'Admin')
+const mobileNavOpen = ref(false)
+
+watch(() => route.fullPath, () => {
+  mobileNavOpen.value = false
+})
 
 const naiveLocale = computed(() => locale.value === 'zh-TW' ? zhTW : enUS)
 
@@ -102,6 +108,7 @@ const activeMenuKey = computed(() => {
 })
 
 function handleMenuSelect(key: string) {
+  mobileNavOpen.value = false
   if (key !== activeMenuKey.value) {
     router.push({ name: key })
   }
@@ -118,13 +125,27 @@ function handleMenuSelect(key: string) {
           <span class="kimi-brand-text">EQUITYLENS</span>
         </RouterLink>
 
-        <nav class="kimi-main-nav">
+        <button
+          class="kimi-nav-toggle"
+          type="button"
+          :aria-label="t('nav.menu')"
+          :aria-expanded="mobileNavOpen"
+          aria-controls="kimi-main-nav"
+          @click="mobileNavOpen = !mobileNavOpen"
+        >
+          <span class="kimi-nav-toggle-bar" />
+          <span class="kimi-nav-toggle-bar" />
+          <span class="kimi-nav-toggle-bar" />
+        </button>
+
+        <nav id="kimi-main-nav" :class="['kimi-main-nav', mobileNavOpen && 'open']">
           <button
             :class="['kimi-nav-item', activeMenuKey === 'home' && 'active']"
             @click="handleMenuSelect('home')"
           >
             {{ t('nav.home') }}
           </button>
+          <template v-if="isAuthenticated">
           <button
             :class="['kimi-nav-item', activeMenuKey === 'portfolios' && 'active']"
             @click="handleMenuSelect('portfolios')"
@@ -162,11 +183,18 @@ function handleMenuSelect(key: string) {
           >
             Admin
           </button>
+          </template>
         </nav>
 
         <div class="kimi-header-right">
-          <RouterLink class="kimi-admin-link" to="/settings">{{ t('nav.settings') }}</RouterLink>
-          <button class="kimi-logout-btn" @click="handleLogout">{{ t('nav.logout') }}</button>
+          <template v-if="isAuthenticated">
+            <RouterLink class="kimi-admin-link" to="/settings">{{ t('nav.settings') }}</RouterLink>
+            <button class="kimi-logout-btn" @click="handleLogout">{{ t('nav.logout') }}</button>
+          </template>
+          <template v-else>
+            <RouterLink class="kimi-admin-link" to="/login">{{ t('nav.login') }}</RouterLink>
+            <RouterLink class="kimi-logout-btn" to="/register">{{ t('nav.register') }}</RouterLink>
+          </template>
         </div>
       </header>
 
@@ -311,6 +339,30 @@ function handleMenuSelect(key: string) {
   font-family: 'Inter', 'Noto Sans TC', sans-serif;
 }
 
+.kimi-logout-btn {
+  text-decoration: none;
+}
+
+.kimi-nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  background: none;
+  border: 1px solid rgba(201, 168, 106, 0.25);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.kimi-nav-toggle-bar {
+  display: block;
+  height: 1px;
+  background: #c9a86a;
+}
+
 .kimi-logout-btn:hover {
   color: #c9a86a;
   border-color: #c9a86a;
@@ -326,7 +378,33 @@ function handleMenuSelect(key: string) {
     gap: 16px;
     padding: 0 16px;
   }
+  .kimi-brand-text {
+    display: none;
+  }
+  .kimi-nav-toggle {
+    display: inline-flex;
+  }
   .kimi-main-nav {
+    display: none;
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 8px 16px 16px;
+    background: #0b1220;
+    border-bottom: 1px solid rgba(201, 168, 106, 0.18);
+  }
+  .kimi-main-nav.open {
+    display: flex;
+  }
+  .kimi-nav-item {
+    padding: 12px 2px;
+    text-align: left;
+  }
+  .kimi-nav-item::after {
     display: none;
   }
 }

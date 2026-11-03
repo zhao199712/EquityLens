@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const LoginView = () => import('../views/auth/LoginView.vue')
@@ -33,6 +33,52 @@ const ResearchRunListView = () => import('../views/research/ResearchRunListView.
 const ResearchRunDetailView = () => import('../views/research/ResearchRunDetailView.vue')
 const AgentRunManagementView = () => import('../views/admin/AgentRunManagementView.vue')
 const ResearchRunManagementView = () => import('../views/admin/ResearchRunManagementView.vue')
+const NotFoundView = () => import('../views/NotFoundView.vue')
+
+const styleLabRoutes: RouteRecordRaw[] = [
+  {
+    path: '/home',
+    name: 'home-neon',
+    component: HomeView,
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/home/lab',
+    name: 'home-lab',
+    component: StyleLabView,
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/home/aurora',
+    name: 'home-aurora',
+    component: AuroraHomeView,
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/home/swiss',
+    name: 'home-swiss',
+    component: SwissHomeView,
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/home/prestige',
+    name: 'home-prestige',
+    component: PrestigeHomeView,
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/home/analyst',
+    name: 'home-analyst',
+    component: AnalystHomeView,
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/home/zen',
+    name: 'home-zen',
+    component: ZenHomeView,
+    meta: { requiresAuth: false },
+  },
+]
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -51,48 +97,8 @@ export const router = createRouter({
       component: RegisterView,
       meta: { requiresAuth: false },
     },
-    {
-      path: '/home',
-      name: 'home-neon',
-      component: HomeView,
-      meta: { requiresAuth: false },
-    },
-    {
-      path: '/home/lab',
-      name: 'home-lab',
-      component: StyleLabView,
-      meta: { requiresAuth: false },
-    },
-    {
-      path: '/home/aurora',
-      name: 'home-aurora',
-      component: AuroraHomeView,
-      meta: { requiresAuth: false },
-    },
-    {
-      path: '/home/swiss',
-      name: 'home-swiss',
-      component: SwissHomeView,
-      meta: { requiresAuth: false },
-    },
-    {
-      path: '/home/prestige',
-      name: 'home-prestige',
-      component: PrestigeHomeView,
-      meta: { requiresAuth: false },
-    },
-    {
-      path: '/home/analyst',
-      name: 'home-analyst',
-      component: AnalystHomeView,
-      meta: { requiresAuth: false },
-    },
-    {
-      path: '/home/zen',
-      name: 'home-zen',
-      component: ZenHomeView,
-      meta: { requiresAuth: false },
-    },
+    // Style lab 只在開發環境提供，正式站不註冊這些路由
+    ...(import.meta.env.DEV ? styleLabRoutes : []),
     {
       path: '/',
       name: 'home',
@@ -214,6 +220,12 @@ export const router = createRouter({
           component: AISettingsView,
         },
       ],
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: NotFoundView,
+      meta: { requiresAuth: false },
     },
   ],
 })

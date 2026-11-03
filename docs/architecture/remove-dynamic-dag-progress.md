@@ -434,3 +434,13 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - 完成四項修正：引用算式差額／百分點追溯、長報告可見性、指定 Run 不重算的風險快照及壓力價格防護、可信股票名稱。沒有重寫歷史 run，也沒有新增工作流／node／工具。
 - 仍為 3 workflows、13 node types；本輪未刪除檔案，無 migration、無外部 API 費用。原 8 題線上 eval 仍是前次 7/8，本輪是保存回答回放與完整 harness 測試，不宣稱新的線上分數。
 - 未部署、未 merge main、未恢復排程；正式站仍是舊版本。發布時先後端再前端，因新前端快照呼叫新 endpoint。沿用前文備份／停止舊 worker／舊圖退役／smoke／回復步驟；額外 smoke 檢查指定 Run 快照模型、日期、品質與原結果一致。回退後新快照仍可由原 GET JSON 顯示。
+
+## 分支整合驗證（2026-11-03）
+
+- 合併前 `git fetch origin --prune`，工作目錄乾淨，基準 `6f9fe16`。
+- 本串先前六個工作分支都已為目前分支的祖先（各 0 個缺少提交）：`codex/eval-retrieval-policy`、`feat/research-agent-runtime`、`feat/agent-loop-ui`、`feat/portfolio-scenario-analysis`、`test/research-loop-no-progress`、`integrate/backend-main`。不建立無意義的重複合併。
+- 使用者明確指定加入 `fix/frontend-public-ux`（`4c3fe11`）；合併至 `refactor/three-workflows`，無衝突。導覽列／手機選單／404／正式版隱藏樣式頁及分包修正完整保留，三工作流的新路由與移除舊 Admin 目錄的結果不變。`jev` 不合併，Claude 補充規格分支不整支覆蓋本分支。
+- 新增 6 個整合回歸：訪客／User／Admin 導覽、手機選單選取與路由變化關閉、實際 router 的公開 404、production 不註冊 style lab／廢棄 catalog。
+- 合併後完整 R27：後端 **931/931、0 skipped**（含隔離 PostgreSQL），pytest **83**，前端 **135**，後端 build、前端 production build、EF pending-model 全部通過；日誌 `/tmp/frontend-merge-r27-*.log`。
+- 真實瀏覽器以本機 production preview 驗證：訪客只有 Home／Login／Register、390px 手機選單展開／點選後關閉、`/home/lab` 顯示 404 而非登入頁。`dist/index.html` 不含 ECharts modulepreload。截圖 `exports/browser-smoke/2026-11-03-merge/mobile-404.png`（不 commit）；測試後已恢復預設視窗尺寸。
+- 沒有付費 AI 呼叫、正式資料變更、部署或 main 合併；收斂數量仍為 3 工作流／13 node types。本次只交付整合分支。
