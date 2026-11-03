@@ -1,6 +1,6 @@
 # 手動部署 API 與 Mathematics
 
-入口：`scripts/deploy/deploy.sh`；流程實作：同目錄 `deploy.py`（Python 標準函式庫）。目前沒有部署 workflow、runner 或自動部署。合併 PR 不會透過這支腳本重啟正式服務。
+入口：`scripts/deploy/deploy.sh`；流程實作：同目錄 `deploy.py`（Python 標準函式庫）。GitHub 手動 workflow 與專用 runner 的安裝見[操作指南](github-manual-deployment.md)。合併 PR 不會透過這支腳本重啟正式服務。
 
 ## 使用前
 
@@ -98,11 +98,11 @@ bash -n scripts/deploy/deploy.sh
 python3 -m unittest discover -s scripts/deploy -v
 ```
 
-測試涵蓋計畫模式零副作用、精確 CI／最新結果／必要 jobs、migration 差異、基礎設施變更、環境覆寫、私有設定、備份先於停機、各階段失敗、健康失敗不自動回復及回復時 schema 阻擋。Compose escaping 用真實 CLI 離線解析，其餘部署外部操作使用 fake，不接正式主機或資料庫。測試已加入既有 CI，不新增部署 workflow。
+測試涵蓋計畫模式零副作用、精確 CI／最新結果／必要 jobs、migration 差異、基礎設施變更、環境覆寫、私有設定、備份先於停機、各階段失敗、健康失敗不自動回復及回復時 schema 阻擋。Compose escaping 用真實 CLI 離線解析，其餘部署外部操作使用 fake，不接正式主機或資料庫。測試已加入既有 CI；部署 workflow 只接受手動啟動。
 
 Smoke 的邊界：引擎測試使用合成資料，不寫正式隊列、不呼叫 AI。它不驗證成功登入後的授權查詢、真實 retrieval、Python consumer 實際消費訊息或 agent 回答品質；`/healthz` 本身只代表 API 能回應。真實 DB／Redis／worker 串接由 PR 的隔離整合測試補充，發布後仍需依變更做使用者流程驗收。
 
-已完成實際隔離 Docker daemon 的部署、備份還原、映像回復與登入後投組讀取驗證；詳見[演練紀錄](deployment-rehearsal-2026-11-03.md)。沒有使用此腳本部署正式服務。
+已完成實際隔離 Docker daemon 的部署、備份還原、映像回復與登入後投組讀取驗證；詳見[演練紀錄](deployment-rehearsal-2026-11-03.md)。2026-11-03 已以此腳本部署正式版本 `3f264a7`，API／Mathematics 健康與實際登入、五檔持股、Python 非同步風險計算通過；未執行 migration。私有 release 紀錄 `20261103T063144Z-e71c367e`。
 
 參考：[Docker Compose production](https://docs.docker.com/compose/how-tos/production/)、[Compose config](https://docs.docker.com/reference/cli/docker/compose/config/)、[GitHub workflow runs API](https://docs.github.com/en/rest/actions/workflow-runs)。
 
