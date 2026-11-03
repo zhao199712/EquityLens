@@ -78,7 +78,13 @@ public sealed class ResearchAgentWorkflowTests
         Assert.Equal(status, artifact.Status);
         Assert.Equal(criticCalls, critic.Calls);
         Assert.Equal(invalidFirst ? "Succeeded" : "Skipped", run.Nodes.Single(x => x.NodeKey == "reviseAgent").Status);
-        if (invalidRevision) Assert.Equal(ResearchAgentLoop.Refusal, artifact.Answer);
+        if (invalidRevision)
+        {
+            Assert.Equal(ResearchAgentLoop.Refusal, artifact.Answer);
+            Assert.Equal("quality_gate_rejected", artifact.ErrorMessage);
+            Assert.Equal("quality_gate_rejected", JsonNode.Parse(run.OutputJson!)!["errorCode"]!.GetValue<string>());
+            Assert.Contains(run.Events, e => e.EventType == "QualityGateRejected");
+        }
         else Assert.Contains("[1]", artifact.Answer);
         Assert.Equal(3, await db.ResearchRunCandidates.CountAsync());
         var detail = await Service(db).GetByIdAsync(run.Id, run.UserId);
@@ -134,6 +140,22 @@ public sealed class ResearchAgentWorkflowTests
             Assert.Contains("無法保證", answer);
             Assert.DoesNotContain("保證獲利", answer);
         }
+    }
+
+    [Theory]
+    [InlineData("台積電（2330）於2025年每股盈餘為66.26元[1]。", "每股盈餘是多少？", true)]
+    [InlineData("截至2025/12/31，股票代號2330的每股盈餘為66.26元[1]。", "每股盈餘是多少？", true)]
+    [InlineData("依題目所述100萬元配置，每股盈餘為66.26元[1]。", "假設100萬元配置，請查每股盈餘。", true)]
+    [InlineData("每股盈餘為2330元[1]。", "每股盈餘是多少？", false)]
+    [InlineData("2025年每股盈餘為999元[1]。", "每股盈餘是多少？", false)]
+    public void OutputGate_ExcludesContextNumbersButKeepsFinancialClaims(string answer, string question, bool expected)
+    {
+        var board = new JsonObject {
+            ["answer"] = answer,
+            ["researchRequest"] = JsonSerializer.SerializeToNode(new ResearchAskRequest("2330", question), AgentNodeJson.SerializerOptions),
+            ["citations"] = new JsonArray(new JsonObject { ["citationIndex"] = 1, ["sourceType"] = "LocalDocument", ["quoteText"] = "每股盈餘66.26元" })
+        };
+        Assert.Equal(expected, ResearchOutputGateNodeHandler.Check(board).Passed);
     }
 
     [Fact]

@@ -11,15 +11,24 @@ internal static partial class ResearchNumberTraceability
     internal sealed record Result(bool Blocking, IReadOnlyList<string> Warnings);
     private sealed record Number(decimal Value, string Kind, bool AllowUnitlessMoney = true);
 
-    internal static Result Check(string answer, IReadOnlyList<JsonObject> citations)
+    internal static Result Check(string answer, IReadOnlyList<JsonObject> citations, string? question = null, string? ticker = null)
     {
+        var questionNumbers = Extract(question ?? "");
         var total = 0; var missing = 0; var missingMoney = false; var invalidRatio = false;
         var warnings = new HashSet<string>();
         // 常見「句子。[1]」格式仍屬同句引用。
         answer = Regex.Replace(answer.Normalize(NormalizationForm.FormKC), @"([。！？!?；;])\s*((?:\[\d+\])+)", "$2$1");
         foreach (var sentence in Regex.Split(answer, @"[。！？!?；;\n]"))
         {
-            var numbers = Extract(sentence);
+            var contextual = Regex.Replace(sentence, @"(?<!\d)(?:19|20)\d{2}[-/年]\d{1,2}[-/月]\d{1,2}日?(?!\d)", m =>
+            {
+                var date = m.Value.Replace('年', '/').Replace('月', '/').Replace("日", "");
+                return DateOnly.TryParse(date, CultureInfo.InvariantCulture, DateTimeStyles.None, out _) ? "日期" : m.Value;
+            });
+            contextual = Regex.Replace(contextual, @"(?<!\d)(?:19|20)\d{2}\s*年", "年度");
+            var numbers = Extract(contextual).Where(n =>
+                !(n.Kind == "plain" && decimal.TryParse(ticker, out var code) && n.Value == code)
+                && !questionNumbers.Any(q => q.Value == n.Value && q.Kind == n.Kind)).ToList();
             if (numbers.Count == 0) continue;
             var ids = Reference().Matches(sentence).Select(x => int.TryParse(x.Groups[1].Value, out var id) ? id : -1).ToHashSet();
             if (ids.Count == 0)

@@ -43,7 +43,7 @@
 
 | # | 問題 | 優先 | 狀態 | 重現測試 | 修正測試 | Commit | 備註 |
 |---|---|---|---|---|---|---|---|
-| R16 | B1 OutputGate 誤判年份／代號 | MUST | ⬜ | | | | |
+| R16 | B1 OutputGate 誤判年份／代號 | MUST | ✅ | OutputGate_ExcludesContextNumbersButKeepsFinancialClaims：3 個正案例先失敗 | 5 個正反案例、拒答事件與 artifact、UI 新舊圖及原因顯示 | 本項提交 | 不忽略代號同值的財務金額 |
 | R17 | B3 情境偷換＋澄清 | MUST | ⬜ | | | | |
 | R18 | B2 優化建議 | MUST | ⬜ | | | | |
 | R19 | B4 路由重試＋log | MUST | ⬜ | | | | |
@@ -119,3 +119,10 @@
 - 只複製父 run 的必要研究資料與證據；不繼承品質階段 checkpoint。原答案與使用者回饋出現在模型輸入且明示不是證據，仍須引用工具取得的來源。建立時保存 revisionSeed，retry 保留相同回饋與證據。
 - 原 requestId 去重、父子研究／Agent 關聯及回應形狀保留；研究詳情頁定位新工作流供回饋使用。
 - 兩項新增／調整測試先確認失敗再修正。完整 R27：build PASS、988/988（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／124 tests。外部 API 費用 0。
+
+### R16／B1 OutputGate 誤判
+
+- 重現：有同句引用的 EPS 答案，包含年份、日期／股票代號、題目已提供的金額時，3 個正案例修正前全被擋下；2 個錯誤財務金額案例仍被正確攔截。
+- 加入語境數字排除，保留金額單位、比率算式與引用檢查；不把股票代號 2330 的排除規則套到 2330 元。
+- 最終拒答或系統風險說明保存 quality_gate_rejected、被擋數字、ResearchRun.ErrorMessage 與 QualityGateRejected 事件；前端明確區分執行完成與答案未通過。品質階段支援新粗粒度圖與歷史圖。
+- 完整 R27：build PASS、993/993（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。無模型呼叫，費用 0。

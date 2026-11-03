@@ -35,6 +35,19 @@ describe('ResearchAgentSummary', () => {
     expect(wrapper.text()).toContain('未通過')
     expect(wrapper.text()).not.toContain('已回答')
   })
+  it('renders the coarse quality gate and optional revision', () => {
+    const detail = fixture()
+    detail.nodes = [node('qualityGate'), node('reviseAgent', 'Skipped'), node('reviseQualityGate', 'Skipped'), node('finalizeResearch')]
+    const wrapper = render(detail)
+    expect(wrapper.text()).toContain('不需要修訂')
+    expect(wrapper.text()).toContain('品質檢查完成')
+  })
+  it('shows quality rejection reason and blocked numbers separately from execution success', () => {
+    const detail = fixture()
+    detail.outputJson = { answer: '資料不足', status: 'CitationValidationFailed', errorCode: 'quality_gate_rejected', rejectedNumbers: ['999 (money)'], outputGate: { passed: false } }
+    expect(render(detail).text()).toContain('品質檢查拒絕')
+    expect(render(detail).text()).toContain('999 (money)')
+  })
   it('does not describe policy response as quality success', () => {
     const detail = fixture(); detail.outputJson = { answer: '投資有風險', status: 'Answered', policyResponse: true, outputGate: { passed: false } }
     expect(render(detail).text()).toContain('系統風險說明')
