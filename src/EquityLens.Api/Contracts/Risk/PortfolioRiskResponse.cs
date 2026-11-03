@@ -51,7 +51,8 @@ public sealed record PortfolioRiskResponse(
     decimal LargestHoldingWeight = 0,
     IReadOnlyList<PortfolioIndustryRiskResponse>? Industries = null,
     decimal RiskSourceAnnualizedVolatility = 0,
-    IReadOnlyList<decimal>? DailyLogReturns = null);
+    IReadOnlyList<decimal>? DailyLogReturns = null,
+    RiskMeasurementBasis? MeasurementBasis = null);
 
 /// <summary>
 /// 投資組合中單一持倉的風險貢獻摘要。

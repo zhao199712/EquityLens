@@ -49,7 +49,7 @@
 | R19 | B4 路由重試＋log | MUST | ✅ | | | | |
 | R20 | B8 拖累正負號 | SHOULD | ✅ | | | | |
 | R21 | B6 VaR 樣本不足 | SHOULD | ✅ | | | | |
-| R22 | B5 數字口徑 | SHOULD | ⬜ | | | | |
+| R22 | B5 數字口徑 | SHOULD | ✅ | | | | |
 | R23 | B7 產業分類 | SHOULD | ⬜ | | | | |
 | R24 | B9、B10 前端 | COULD | ⬜ | | | | |
 | R25 | B11 log 等級 | COULD | ⬜ | | | | |
@@ -280,3 +280,10 @@
 - 個股與兩種投組計算路徑均揭露每期限有效視窗數／門檻／狀態；少於既有政策 100 筆時歷史 VaR、ES 回 null。模擬結果仍是每日資料校準的獨立方法，UI 明示不可替代歷史樣本品質。未強迫各期限 VaR 單調。
 - UI 不把 null 當成 0%，原首頁小圖排除不可用的數字。報告快照保留每期限品質欄位。
 - 完整 R27：build PASS、869/869（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／122 tests。初輪前端 nullable 編譯失敗已修復並重跑全部。無外部 API 呼叫。
+
+### R22／B5 計算口徑與錯誤映射
+
+- 重現測試證明 Risk Run adapter 會將模擬分位數塞入歷史 VaR／ES；移除此替代，來源沒有歷史估計時保持缺值。
+- 同步 Risk API 新增 measurementBasis，Agent 每項數字保存 provenance，Risk Run 讀取回傳原請求 inputSnapshot；舊結果未記錄的權重／現金／樣本口徑一律未知，不補造。前端共用元件顯示期間、權重、現金、方法、樣本、信心與期限。
+- 口徑差異詳見 portfolio-risk-measurement-basis.md。情境比較沿用同快照同方法的原組合／調整組合，四指標的差異不與其他頁面混算。
+- 完整 R27：build PASS、870/870（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／124 tests。無外部 API 呼叫。

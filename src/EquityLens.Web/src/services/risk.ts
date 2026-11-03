@@ -73,7 +73,13 @@ export interface PortfolioIndustryRisk {
   holdingCount: number
 }
 
+export interface RiskMeasurementBasis {
+  from?: string | null; to?: string | null; weighting: string; cashTreatment: string
+  returnMethod: string; volatilityMethod: string; observationCount?: number | null
+  sampleDefinition: string; confidenceLevel?: number | null; horizonDays?: number | null
+}
 export interface PortfolioRiskResponse {
+  measurementBasis?: RiskMeasurementBasis | null
   portfolioId: string
   from: string
   to: string
@@ -205,6 +211,7 @@ export interface PortfolioRiskBacktestRun {
 
 export type RiskCalculationOperation = 'risk' | 'monte-carlo' | 'backtest' | 'scenario' | 'governance' | 'report'
 export interface RiskCalculationRun {
+  inputSnapshot?: { from?: string; to?: string; simulations?: number } | null
   id:string; portfolioId:string; operation:RiskCalculationOperation
   status:'Queued'|'Running'|'FallbackRunning'|'Completed'|'Failed'; progressPercent:number
   requestedModel:string; selectedModel:string|null; algorithmVersion:string; inputHash:string|null

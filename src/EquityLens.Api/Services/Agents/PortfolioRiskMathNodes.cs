@@ -155,7 +155,13 @@ public sealed class PortfolioRiskMathExecutor : IPortfolioRiskMathExecutor
             _ => throw new InvalidOperationException()
         };
         var unit = operation.Contains("value", StringComparison.Ordinal) || operation.Contains("pnl", StringComparison.Ordinal) ? "currency" : operation.Contains("return", StringComparison.Ordinal) || operation.Contains("volatility", StringComparison.Ordinal) || operation.Contains("var", StringComparison.Ordinal) || operation.Contains("shortfall", StringComparison.Ordinal) || operation.Contains("drawdown", StringComparison.Ordinal) ? "ratio" : null;
-        return new(operation, value, unit, parsed.ToJson(), new { input.Mode, input.PortfolioId, input.Ticker, input.From, input.To, input.CommonTradingDays, input.Source, commonTradingDateFrom = input.CommonTradingDates.FirstOrDefault(), commonTradingDateTo = input.CommonTradingDates.LastOrDefault(), assets = input.Assets.Select(x => x.Ticker) }, input.Warnings, operation.StartsWith("run-", StringComparison.Ordinal) ? seed : null);
+        return new(operation, value, unit, parsed.ToJson(), new { input.Mode, input.PortfolioId, input.Ticker, input.From, input.To, input.CommonTradingDays, input.Source,
+            measurementBasis = new EquityLens.Api.Contracts.Risk.RiskMeasurementBasis(input.From, input.To,
+                operation.Contains("concentration") || operation.Contains("risk-contribution") || operation == "calculate-portfolio-volatility" ? "期末市值固定權重" : "現有股數固定，歷史權重隨價格變動",
+                "不含帳戶現金；未換匯的不同幣別不得直接比較", "日簡單報酬；風險貢獻採對數報酬協方差",
+                "樣本標準差年化（252日）；不是 EWMA", input.CommonTradingDays, "最多252筆共同交易日日報酬",
+                operation == "calculate-historical-var" ? Args<HistoricalVarArguments>().ConfidenceLevel : operation == "calculate-expected-shortfall" ? Args<HistoricalExpectedShortfallArguments>().ConfidenceLevel : null,
+                operation is "calculate-historical-var" or "calculate-expected-shortfall" ? 1 : null), commonTradingDateFrom = input.CommonTradingDates.FirstOrDefault(), commonTradingDateTo = input.CommonTradingDates.LastOrDefault(), assets = input.Assets.Select(x => x.Ticker) }, input.Warnings, operation.StartsWith("run-", StringComparison.Ordinal) ? seed : null);
     }
 
     private static object RunSingleSimulation(MathAssetInput asset, MonteCarloArguments arguments, int seed)

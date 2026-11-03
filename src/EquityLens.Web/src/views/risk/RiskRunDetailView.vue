@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RiskMeasurementBasis from '../../components/agents/RiskMeasurementBasis.vue'
 import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
@@ -752,6 +753,12 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
       </ScrollReveal>
 
       <template v-if="!loading && calculationRun?.status === 'Completed'">
+        <section class="prestige-panel prestige-panel-pad">
+          <h2 class="panel-title">計算口徑</h2>
+          <p>請求期間 {{ calculationRun.inputSnapshot?.from ?? '未保存' }} ～ {{ calculationRun.inputSnapshot?.to ?? '未保存' }}；方法 {{ calculationRun.selectedModel ?? '未提供' }}；估計樣本 {{ calculationLookback ?? '未知' }}。</p>
+          <RiskMeasurementBasis :basis="fallbackResult?.measurementBasis" />
+          <p>情境比較只使用同一計算快照、方法與期間；歷史回撤、條件波動、模型路徑回撤和帳戶實際績效不可互換。</p>
+        </section>
         <!-- Fallback banner -->
         <ScrollReveal v-if="isFallback" style="margin-bottom: 24px">
           <div class="warn-box">

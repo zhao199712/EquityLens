@@ -11,6 +11,17 @@ namespace EquityLens.Api.Tests.Services.Agents;
 public sealed class PortfolioRiskRunReuseTests
 {
     [Fact]
+    public void Adapter_DoesNotRelabelSimulationAsHistoricalTailRisk()
+    {
+        var run = new RiskCalculationRun { Id = Guid.NewGuid(), ResultJson = """
+            {"historicalAnnualizedVolatility":0.2,"horizons":[{"horizonDays":1,"confidenceLevels":[{"confidenceLevel":0.95,"var":-0.1,"expectedShortfall":-0.2}]}]}
+            """ };
+        Assert.True(PortfolioRiskRunResultAdapter.TryAdapt(run, out var results, out _, out _));
+        Assert.DoesNotContain(results, x => x["operation"]!.ToString() == "calculate-historical-var");
+        Assert.DoesNotContain(results, x => x["operation"]!.ToString() == "calculate-expected-shortfall");
+    }
+
+    [Fact]
     public async Task ExactInputHashAndCompleteResult_IsFullCacheHit()
     {
         await using var db = CreateDb();

@@ -201,12 +201,6 @@ internal static class PortfolioRiskRunResultAdapter
                 .FirstOrDefault(x => x["horizonDays"]?.GetValue<int>() == 1);
             var historicalVar = Decimal(oneDay?["historicalVaR"]);
             var historicalEs = Decimal(oneDay?["historicalES"]);
-            if (oneDay?["confidenceLevels"] is JsonArray levels)
-            {
-                var level = levels.OfType<JsonObject>().OrderBy(x => Math.Abs((double)((Decimal(x["confidenceLevel"]) ?? 0m) - .95m))).FirstOrDefault();
-                historicalVar ??= Decimal(level?["var"]);
-                historicalEs ??= Decimal(level?["expectedShortfall"]);
-            }
             historicalVar ??= Decimal(root["historical"]?["var95"]);
             historicalEs ??= Decimal(root["historical"]?["es95"]);
             Add(adapted, "calculate-historical-var", historicalVar, run);
@@ -246,8 +240,26 @@ internal static class PortfolioRiskRunResultAdapter
             ["source"] = PortfolioRiskEvidenceSources.PersistedRiskRun,
             ["riskRunId"] = run.Id,
             ["algorithmVersion"] = run.AlgorithmVersion,
-            ["dataFactorVersion"] = run.DataFactorVersion
+            ["dataFactorVersion"] = run.DataFactorVersion,
+            ["provenance"] = new JsonObject {
+                ["sourceRunId"] = run.Id,
+                ["measurementBasis"] = ReadBasis(run)
+            }
         });
+    }
+
+    private static JsonNode ReadBasis(RiskCalculationRun run)
+    {
+        var root = JsonNode.Parse(run.ResultJson!);
+        if (root?["measurementBasis"] is { } basis) return basis.DeepClone();
+        JsonNode? snapshot = null;
+        try { snapshot = JsonNode.Parse(run.InputSnapshotJson); } catch (JsonException) { }
+        return new JsonObject {
+            ["from"] = snapshot?["from"]?.DeepClone(), ["to"] = snapshot?["to"]?.DeepClone(),
+            ["weighting"] = "舊結果未提供權重口徑", ["cashTreatment"] = "舊結果未提供現金口徑",
+            ["returnMethod"] = "歷史欄位沿用來源，未以模擬 VaR 代替",
+            ["volatilityMethod"] = "沿用來源報告；舊結果未提供估計口徑", ["sampleDefinition"] = "未知；請查來源 Risk Run"
+        };
     }
 
     private static decimal? Decimal(JsonNode? node)

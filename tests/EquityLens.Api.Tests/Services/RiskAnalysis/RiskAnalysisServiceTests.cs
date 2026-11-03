@@ -227,6 +227,9 @@ public sealed class RiskAnalysisServiceTests
         Assert.Equal("ZeroDrift", response.DriftAssumption);
         Assert.Equal(new[] { 1, 7, 30 }, response.SupportedHorizons);
         Assert.Equal(3, response.Horizons.Count);
+        Assert.NotNull(response.MeasurementBasis);
+        Assert.Contains("不含帳戶現金", response.MeasurementBasis.CashTreatment);
+        Assert.Equal(response.AlignedReturnCount, response.MeasurementBasis.ObservationCount);
         foreach (var horizon in response.Horizons)
         {
             Assert.True(horizon.HistoricalVaR <= 0);

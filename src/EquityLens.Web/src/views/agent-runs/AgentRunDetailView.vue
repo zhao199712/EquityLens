@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RiskMeasurementBasis from '../../components/agents/RiskMeasurementBasis.vue'
+import type { RiskMeasurementBasis as MeasurementBasis } from '../../services/risk'
 import { legacyWorkflow, type LegacyRevisionOutput } from "../../services/legacyWorkflows"
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -58,6 +60,7 @@ interface PortfolioRiskMetrics {
 }
 
 interface PortfolioDiagnosisOutput {
+  metricBases?: Array<{ operation: string; basis: MeasurementBasis | null }>
   attributionCoverage?: string | null
   scenarioComparison?: ScenarioComparison | null
   analysisPeriod?: { from: string; to: string } | null
@@ -520,6 +523,14 @@ const nextActionLabel = computed(() => {
             <h3 class="panel-title">AI 投組診斷報告</h3>
             <p v-if="portfolioDiagnosisOutput.analysisPeriod" class="body-text">分析期間：{{ portfolioDiagnosisOutput.analysisPeriod.from }} ～ {{ portfolioDiagnosisOutput.analysisPeriod.to }} · 觀測筆數：{{ portfolioDiagnosisOutput.observationCount ?? '未提供' }}</p>
             <p class="body-text">模型品質：{{ portfolioDiagnosisOutput.modelQuality === 'Unvalidated' ? '尚未回測驗證' : portfolioDiagnosisOutput.modelQuality ?? '未提供' }} · {{ portfolioDiagnosisOutput.method ?? '計算方法請見技術明細' }}</p>
+            <details>
+              <summary>風險數字的計算口徑</summary>
+              <div v-for="item in portfolioDiagnosisOutput.metricBases ?? []" :key="item.operation">
+                <strong>{{ ({ 'calculate-annualized-volatility': '年化波動', 'calculate-max-drawdown': '最大回撤', 'calculate-historical-var': '歷史 VaR', 'calculate-expected-shortfall': '歷史 ES', 'calculate-concentration': '集中度', 'calculate-portfolio-volatility': '投組波動', 'calculate-volatility-risk-contribution': '風險貢獻' } as Record<string, string>)[item.operation] ?? '其他指標' }}</strong>
+                <RiskMeasurementBasis :basis="item.basis" />
+              </div>
+              <RiskMeasurementBasis v-if="!portfolioDiagnosisOutput.metricBases?.length" />
+            </details>
             <PortfolioScenarioComparison v-if="portfolioDiagnosisOutput.scenarioComparison" :comparison="portfolioDiagnosisOutput.scenarioComparison" />
             <div class="stat-grid">
               <div><div class="prestige-label stat-caption">投組報酬</div><div class="stat-value">{{ formatPercent(portfolioDiagnosisOutput.portfolioReturn) }}</div></div>
