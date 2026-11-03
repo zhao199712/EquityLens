@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { adminEmail, adminPassword } from './credentials'
 
 const apiBaseUrl = 'http://127.0.0.1:5036/api'
 const nodeType = 'E2EExecuteDeterministicSideEffect'
@@ -7,8 +8,8 @@ type NodeSetting = { nodeType: string; isEnabled: boolean; displayName: string; 
 
 async function login(page: Page) {
   await page.goto('/login')
-  await page.locator('input[type="email"]').fill('playwright-admin-test@example.com')
-  await page.locator('input[type="password"]').fill('Test1234!')
+  await page.locator('input[type="email"]').fill(adminEmail)
+  await page.locator('input[type="password"]').fill(adminPassword())
   await page.locator('button[type="submit"]').click()
   await page.waitForURL('/admin/agent-runs')
 }
