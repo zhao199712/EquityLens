@@ -13,11 +13,16 @@ def report(outcome='Passed', integration=True, include_result=True):
 
 
 class TrxGuardTests(unittest.TestCase):
-    def check(self, xml):
+    def check(self, xml, required_classes=()):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'tests.trx'
             path.write_text(xml)
-            validate(path)
+            validate(path, required_classes)
+
+    def test_required_suite_is_checked(self):
+        self.check(report(), ["AgentLeasePostgresTests"])
+        with self.assertRaises(ValueError):
+            self.check(report(), ["RiskPipelineTests"])
 
     def test_passed_postgres_is_accepted(self):
         self.check(report())
