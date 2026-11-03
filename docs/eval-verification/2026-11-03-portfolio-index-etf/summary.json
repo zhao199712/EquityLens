@@ -1,0 +1,38 @@
+{
+  "suite": "portfolio-v1",
+  "scorer_version": 2,
+  "attempted": 1,
+  "passed": 1,
+  "not_run": [],
+  "results": [
+    {
+      "case_id": "etf-unprompted",
+      "passed": true,
+      "checks": {
+        "provider_healthy": true,
+        "no_side_effects": true,
+        "completed_or_clarified": true,
+        "scenario_calculated": true,
+        "quality_passed": true,
+        "snapshot_present": true,
+        "conservation": true,
+        "independent_risk_math": true,
+        "same_basis_deltas": true
+      },
+      "recovery_after_rejection": null,
+      "llm_turns": 4,
+      "quality_issues": [],
+      "cost_usd": 0.0094032,
+      "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+      "scorer_version": 2
+    }
+  ],
+  "observed_models": [
+    "deepseek-flash"
+  ],
+  "limitations": [
+    "Numeric prose is checked by the production gate, not an independent semantic judge.",
+    "No denial means recovery was not observed, not that it passed.",
+    "Qualitative recommendation suitability still requires review."
+  ]
+}
