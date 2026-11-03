@@ -10,6 +10,7 @@ public static class AgentRuntimeRegistration
 {
     public static void AddEquityLensAgents(this WebApplicationBuilder builder, bool e2eTestMode)
     {
+        if (e2eTestMode) EquityLens.Api.Services.Auth.E2ETestAccess.RequireEnabled(builder.Configuration, builder.Environment);
         builder.Services.AddOptions<ResearchAgentLoopOptions>().Bind(builder.Configuration.GetSection(ResearchAgentLoopOptions.SectionName))
             .PostConfigure(x => x.DefaultEngine = "AgentLoop")
             .Validate(x => x.MaxTurns >= 2 && x.MaxRevisionTurns >= 2 && x.MaxToolCalls > 0 && x.MaxToolCallsPerTurn > 0

@@ -1,12 +1,13 @@
 using System.Text;
 using EquityLens.Api.Bootstrap;
 using EquityLens.Api.Services.Agents;
+using EquityLens.Api.Services.Auth;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseDefaultServiceProvider(o => o.ValidateOnBuild = false);
-var e2eTestMode = string.Equals(builder.Configuration["E2E_TEST_MODE"], "1", StringComparison.Ordinal);
+var e2eTestMode = E2ETestAccess.IsEnabled(builder.Configuration, builder.Environment);
 
 builder.AddEquityLensObservability();
 builder.AddEquityLensInfrastructure();

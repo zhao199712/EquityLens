@@ -45,6 +45,7 @@ public static class HttpRegistration
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
+                options.EventsType = typeof(AccountJwtBearerEvents);
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
@@ -86,5 +87,7 @@ public static class HttpRegistration
         builder.Services.AddScoped<ITokenService, TokenService>();
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
+        builder.Services.AddSingleton<AccountAccessPolicy>();
+        builder.Services.AddScoped<AccountJwtBearerEvents>();
     }
 }

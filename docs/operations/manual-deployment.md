@@ -31,6 +31,22 @@ JWT_KEY 仍由明確指定的環境檔提供。**不要把含密鑰的 appsettin
 
 ## 預覽與部署
 
+### 測試管理員帳號外洩的處置
+
+`playwright-admin-test@example.com` 是保留的 E2E 帳號。修補版在一般環境拒絕其登入、刷新及既有 JWT，即使資料庫內仍為啟用中的 Admin 也不能使用。`E2E_TEST_MODE=1` 只允許 `Testing` 環境且必須提供至少 32 字元的 `E2E_ADMIN_PASSWORD`；在 Production、Staging、Development 啟用會在連線資料庫前中止啟動。正式部署不得使用 Testing 環境。
+
+確認受影響的資料庫與正式執行設定後，使用既有的安全連線方式執行 `scripts/security/disable-e2e-admin.sql`（psql 加 `-v ON_ERROR_STOP=1 -f scripts/security/disable-e2e-admin.sql`）。此腳本停用保留帳號、移除管理員權限與密碼，撤銷 refresh tokens，保留帳號及稽核紀錄，可重複執行。部署腳本不會自動執行此處置。
+
+舊版 API 只驗證 JWT 簽章和期限，**只停用帳號或改密碼無法撤銷已發出的 access token**。須部署本次 JWT 帳號檢查修補；若無法立即部署，先限制公開存取，或輪替 JWT 簽章金鑰並重啟所有 API 實例（所有使用者的 access token 將失效）。先撤銷受影響帳號的 refresh tokens，避免換發新 token。
+
+部署後驗證舊帳號登入、刷新、攜帶其既有 JWT 存取受保護端點均回 401，正常帳號仍可使用。帳號停用不會自動取消已排程的工作：應檢查該 user ID 的 agent runs、匯入工作、管理員變更及供應商用量，透過既有取消流程處理異常工作。上述程式碼修補與腳本本身不代表正式環境已完成處置。
+
+2026-11-03 已完成正式帳號停用與 12 筆 refresh token 撤銷，另輪替 JWT 簽章金鑰及 Git 歷史曾出現的正式資料庫密碼。兩次操作只以相同映像重建 API，其他容器保持不變；runner 的正式 env／override 與舊 `.env` 已同步。公開站點舊帳密登入與刷新回 401、E2E 端點回 404；同一枚舊金鑰 JWT 由 200 變成 401。可公開的遮蔽紀錄見 [事件驗證 JSON](security-incident-2026-11-03.json)。這次是執行設定與憑證處置，尚未部署本機的 E2E／JWT 程式碼修補。
+
+**歷史 release／rollback 快照仍含已撤銷的舊憑證，不能直接回復。** 需要回復程式版本時，保留目前 runner runtime 的 JWT、資料庫密碼與 `E2E_TEST_MODE=0`，再產生並驗證相容的回復設定；不要讓自動或人工回復重新啟用舊金鑰。私有原始紀錄保留於正式 state-dir 的 `incident-jwt-*`、`incident-db-*` 目錄，不提交至 Git。
+
+### 一般部署流程
+
 先取得欲部署的 main 提交完整 SHA。以下路徑與 SHA 都是需要替換的範例：
 
 ```bash

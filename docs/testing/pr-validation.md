@@ -88,7 +88,9 @@ npm run test:e2e:ci
 - Ask Agent 財報問題：SSE → run card 輪詢 → 詳情；未完成草稿不顯示。
 
 每個案例有獨立 context 與資料狀態，未捕捉的瀏覽器例外會使測試失敗。CI 禁止 `.only`，不自動 retry 掩蓋不穩定；失敗保留 screenshot／trace，HTML report 與結果上傳 14 天。本機產物在 `.gitignore`。
-原 `npm run test:e2e` 是歷史 live-backend 套件，仍獨立保留；它需要舊版測試帳號與 E2E runtime，不納入此 CI job，也不宣稱已驗證。
+原 `npm run test:e2e` 是歷史 live-backend 套件，仍獨立保留，不納入此 CI job，也不宣稱已驗證。它會啟動 `Testing` 環境的 API，要求明確提供 `E2E_POSTGRES_CONNECTION_STRING` 與 `E2E_REDIS_CONNECTION_STRING`，必須指向已套用 migrations 的隔離測試資料庫與獨立 Redis，不能使用正式或共用開發資料。其他服務與供應商也應使用隔離測試設定；此歷史套件可能建立匯入工作，並非無外部副作用的 smoke suite。
+
+Playwright 每次執行會產生隨機管理員密碼，透過 `E2E_ADMIN_PASSWORD` 同時傳給 API 與測試 worker；也可由受保護環境提供至少 32 字元的隨機值。沒有固定密碼 fallback。API 的測試 seed、路由和 runtime 註冊各自檢查 `E2E_TEST_MODE=1`、`Testing` 環境與明確密碼。保留測試 email 不允許公開註冊或 Google 綁定，非 E2E 環境拒絕它的登入、刷新和既有 JWT。歷史外洩帳號的正式資料清理見[部署操作指南](../operations/manual-deployment.md#測試管理員帳號外洩的處置)。
 
 ## 合併與發布
 

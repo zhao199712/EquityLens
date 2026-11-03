@@ -26,6 +26,7 @@ public class AuthController : ControllerBase
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IGoogleTokenValidator _googleTokenValidator;
     private readonly IConfiguration _configuration;
+    private readonly AccountAccessPolicy _accessPolicy;
 
     /// <summary>
     /// 初始化認證控制器。
@@ -36,7 +37,8 @@ public class AuthController : ControllerBase
         ITokenService tokenService,
         IPasswordHasher<AppUser> passwordHasher,
         IGoogleTokenValidator googleTokenValidator,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        AccountAccessPolicy accessPolicy)
     {
         _dbContext = dbContext;
         _userRepository = userRepository;
@@ -44,6 +46,7 @@ public class AuthController : ControllerBase
         _passwordHasher = passwordHasher;
         _googleTokenValidator = googleTokenValidator;
         _configuration = configuration;
+        _accessPolicy = accessPolicy;
     }
 
     /// <summary>
@@ -60,6 +63,9 @@ public class AuthController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Email))
             return BadRequest(new ApiError("auth.email_required", "Email is required."));
+
+        if (E2ETestAccess.IsReservedEmail(request.Email))
+            return BadRequest(new ApiError("auth.email_reserved", "Email is not available for registration."));
 
         if (string.IsNullOrWhiteSpace(request.Password))
             return BadRequest(new ApiError("auth.password_required", "Password is required."));
@@ -117,7 +123,7 @@ public class AuthController : ControllerBase
         if (user == null)
             return Unauthorized(new ApiError("auth.invalid_credentials", "Invalid email or password."));
 
-        if (!user.IsActive)
+        if (!_accessPolicy.CanAuthenticate(user))
             return Unauthorized(new ApiError("auth.account_disabled", "Account has been disabled."));
 
         // Google 登入建立的使用者沒有密碼，視為無效憑證
@@ -166,6 +172,9 @@ public class AuthController : ControllerBase
         if (!payload.EmailVerified)
             return Unauthorized(new ApiError("auth.google_email_not_verified", "Google account email is not verified."));
 
+        if (E2ETestAccess.IsReservedEmail(payload.Email))
+            return Unauthorized(new ApiError("auth.account_disabled", "Account has been disabled."));
+
         // 先以 Google Subject 尋找，再以 Email 尋找並綁定，最後建立新使用者
         var user = await _userRepository.GetByGoogleSubjectAsync(payload.Subject, cancellationToken);
         if (user == null)
@@ -173,6 +182,8 @@ public class AuthController : ControllerBase
             user = await _userRepository.GetByEmailAsync(payload.Email, cancellationToken);
             if (user != null)
             {
+                if (!_accessPolicy.CanAuthenticate(user))
+                    return Unauthorized(new ApiError("auth.account_disabled", "Account has been disabled."));
                 user.GoogleSubject = payload.Subject;
                 user.UpdatedAtUtc = DateTime.UtcNow;
                 await _dbContext.SaveChangesAsync(cancellationToken);
@@ -201,7 +212,7 @@ public class AuthController : ControllerBase
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        if (!user.IsActive)
+        if (!_accessPolicy.CanAuthenticate(user))
             return Unauthorized(new ApiError("auth.account_disabled", "Account has been disabled."));
 
         // 產生 tokens
@@ -265,7 +276,7 @@ public class AuthController : ControllerBase
 
         // 找到使用者
         var user = await _dbContext.Users.FindAsync(refreshToken.UserId);
-        if (user == null || !user.IsActive)
+        if (user == null || !_accessPolicy.CanAuthenticate(user))
             return Unauthorized(new ApiError("auth.user_not_found", "User not found or inactive."));
 
         // 產生新 tokens
