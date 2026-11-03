@@ -1,6 +1,6 @@
 # 收斂為 3 個工作流 — 實作進度
 
-> 對應規格：[`remove-dynamic-dag.md`](remove-dynamic-dag.md)。驗收以規格 §7 的 R1–R27 為準。
+> 對應規格：[`remove-dynamic-dag.md`](remove-dynamic-dag.md) 的 R1–R27，以及 [`remove-dynamic-dag-addendum.md`](remove-dynamic-dag-addendum.md) 的 R28–R36。主規格決策與邊界仍有效；角色／方法與路由分層依補充 D9、D10、D14 細化。
 
 ## 開工基準
 
@@ -27,9 +27,9 @@
 | R2 | 研究一律 ResearchAgent；DynamicDag → 400 | MUST | ✅ | 預設／AgentLoop 建立及隔離、停用引擎不落盤測試 | 本項提交 | controller 明確回 engine_retired；初始資料不再借用舊 provider |
 | R3 | qualityGate 合併 | MUST | ✅ | 7／3 節點契約、接受／修訂一次／拒答、已提交 Critic 恢復不重呼叫 | 本項提交 | 新版本研究／Critic 舊圖由 R1 判定唯讀 |
 | R4 | 回饋修訂併入 ResearchAgent | MUST | ✅ | 回饋 API 去重／父子關聯、三節點修訂圖、prompt 內容、retry 還原種子 | 本項提交 | 研究詳情改選 ResearchAgent 接收回饋 |
-| R5 | 投組 Agent 迴圈與工具 | MUST | ⬜ | | | |
+| R5 | 投組 Agent 迴圈與工具 | MUST | 🟨 | 任務型工具草稿尚未完成驗收 | | 補充規格到達後，先驗收 R31、R30 再接續 |
 | R6 | 投組人工審批不變 | MUST | ⬜ | | | |
-| R7 | 迴圈基礎設施共用、可續跑、可查詢 | MUST | ⬜ | | | |
+| R7 | 迴圈基礎設施共用、可續跑、可查詢 | MUST | 🟨 | 共用核心與結構化工具結果恢復測試草稿 | | 工作目錄 R27 已通過；未提交實作，尚未完成投組行為驗收 |
 | R8 | 刪除 4 個多餘工作流與前端呼叫 | MUST | ⬜ | | | |
 | R9 | Ask Agent 路由到 3 個工作流 | MUST | ⬜ | | | |
 | R10 | 移除型別零參照 | MUST | ⬜ | | | |
@@ -59,13 +59,39 @@
 | # | 驗收條件 | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
 | R26 | 8 題 eval 不退步 | SHOULD | ⬜ | | | |
-| R27 | 全部驗證全綠 | 每次 commit | ✅ | R1 完整驗證通過 | 本項提交 | 每項重新執行 |
+| R27 | 全部驗證全綠 | 每次 commit | ✅ | 補充規格同步時完整驗證通過，見下表 | 本項提交 | 每項重新執行 |
+
+### 補充規格：角色、方法、來源與路由
+
+| # | 驗收條件（摘要） | 優先 | 狀態 | 證明 | Commit | 備註 |
+|---|---|---|---|---|---|---|
+| R28 | 共用基礎＋角色＋本角色 skill 目錄＋已載入全文；唯讀 load_skill、至少 3 個 skill、載入上限與可追溯紀錄 | MUST | ⬜ | | | 與 R9 一併做；保留法說會原 prompt，刪 Supporting skill；不能擴大權限；記錄 id／版本／雜湊及 trajectory |
+| R29 | Router 只選工作流與參數，不選 skill／capability | MUST | ⬜ | | | 與 R9 一併做；取代先前 Router 選 playbook 的方案 |
+| R30 | 投組任務型工具 ≤ 8；37 個數學函式不可直接呼叫；重用情境計算 | MUST | 🟨 | 六個任務型工具草稿，待邊界測試 | | R5–R7 完成前先驗收；load_skill 不計入 8 個上限 |
+| R31 | 研究角色來源規則與可確定性檢查的 OutputGate | MUST | ⬜ | | | R16 後優先補做；直接／補充來源不可錯置，表格／目錄／封面不得充當風險或實質證據 |
+| R32 | 台積電／鴻海風險、法說會新題庫與原始 PDF 核實紀錄；validate 通過 | SHOULD | ⬜ | | | R26 前；至少各 1 題，Garage 原始 PDF 核對文件、實體頁碼、摘錄前保持 verified: false；與原 8 題分開計分 |
+| R33 | 新題庫 investigation、skill trajectory、拆解實驗 A（MaxTurns=1）與 C | COULD | ⬜ | | | R32 核實後、R26 前或一起做；沿用累計 US$10 預算，無法確認剩餘額度先記錄阻塞 |
+| R34 | 入口／追問免 LLM 路由、程式訊號、權限與參數驗證、低信心及不支援情境澄清 | MUST | ⬜ | | | 與 R9 一併做；每種情況均有測試，不猜投組或替換情境；混合問題單 run 不跨角色 |
+| R35 | 合併對話與 Router 為一次 LLM 呼叫，輸出 D14 結構 | SHOULD | ⬜ | | | 與 R9 一併做；保護直接回覆、澄清、拒絕、重置、修訂上次 run；明確入口仍為零次路由呼叫 |
+| R36 | 約 20–30 句 Router 題庫，程式評分與準確率／混淆矩陣 | SHOULD | ⬜ | | | R26 前或一起做；涵蓋研究、投組、混合、模糊、越權、無投組與超出情境能力；不用 LLM judge |
+
+## 更新後執行順序
+
+已完成 R2、R3、R4、R16；R1 防護基礎完成，待移除舊註冊後總驗收。R5／R7 僅有未提交草稿，不能視為已驗收。
+
+`R1 → R2 → R3 → R4 → R16 → R31 → R30 → R5–R7 → R17 → R18 → R6 再驗收 → R8 → R9＋R28＋R29＋R34＋R35 → R19 → R10 → R11 → R12 → R13–R15 → R20–R25 → R32 → R33（環境與預算允許）＋R36 → R26`
+
+- 每項仍須完整 R27 後更新進度、commit、push；未完成不標為通過。R9 的路由重試實作與 R19 共用，R19 再以重現／回歸、遮罩 log 驗收。
+- D14 第 0 層：研究頁、投組診斷入口、既有對話追問直接決定角色，不呼叫 LLM 路由。第 1 層提供有權限的投組／ticker 訊號；模糊情況才進第 2 層 LLM；所有路徑皆須第 3 層驗證。
+- 新題庫只採目前可信且最新的台積電（2330）與鴻海（2317）財報；原始 PDF 在 Garage。不能以模型記憶或搜尋摘要代替 PDF 核實。未核實題目保持 `verified: false`，不併入原 8 題 pass_rate。
+- 不重新啟用排程、不合併 main、不部署；既有未提交程式碼保留，主規格與進度表不從遠端覆蓋。
 
 ## 驗證紀錄
 
 | 時間 | 完成項目 | `dotnet build` | `dotnet test`（通過/總數） | `has-pending-model-changes` | `pytest` | 前端 build/test |
 |---|---|---|---|---|---|---|
 | 2026-11-03 09:20 | R1 防護基礎 | PASS | 986/986，0 skipped | 無變更 | 75 passed | build PASS／124 passed |
+| 2026-11-03 | 補充規格與排程同步（含未提交迴圈草稿的工作目錄） | PASS | 994/994，0 skipped；隔離 PostgreSQL | 無變更 | 75 passed | build PASS／126 passed |
 
 ## 刪除清單
 
@@ -111,7 +137,7 @@
 - 合併階段保留各自 input／output，以 node key＋execution attempt 存進 Blackboard。每階段與結果同次 fenced save；已提交評論在恢復時不重呼叫。只有 finalizer 發布 run.OutputJson，避免中間報告冒充最終結果。
 - 原證據輸入／輸出測試改查階段紀錄；保留圖驗證、缺 handler、缺持久化 node、狀態機、失敗 retry、引用及 Critic 行為覆蓋。新增粗粒度圖契約與恢復驗證。
 - 完整 R27：build PASS、987/987（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／124 tests。無外部 API 費用。
-- 使用者補充已納入規格：4 個 Lead skill 改 playbook，保留法說會方法 prompt；7 個 Supporting skill 移除；Router 改選工作流＋playbook＋參數。
+- 當時補充方案為 4 個 Lead skill 改 playbook、Router 選工作流＋playbook＋參數；此路由方案已由後續補充 D9／D10／D14 取代，按下方更新紀錄執行。
 
 ### R4 回饋修訂併入研究
 
@@ -126,3 +152,10 @@
 - 加入語境數字排除，保留金額單位、比率算式與引用檢查；不把股票代號 2330 的排除規則套到 2330 元。
 - 最終拒答或系統風險說明保存 quality_gate_rejected、被擋數字、ResearchRun.ErrorMessage 與 QualityGateRejected 事件；前端明確區分執行完成與答案未通過。品質階段支援新粗粒度圖與歷史圖。
 - 完整 R27：build PASS、993/993（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。無模型呼叫，費用 0。
+
+### 2026-11-03 補充規格同步
+
+- 從 `origin/ccr-1010e030-k3jmgi`（`7397f81`）只取 `docs/architecture/remove-dynamic-dag-addendum.md`，未合併分支、未覆蓋主規格與本進度表。新增 R28–R36 並按補充文件建議插入執行順序。
+- D9／D10／D14 將先前 playbook 路由方案細化為：Router 只決定固定角色與參數；Agent 在迴圈內自行透過 `load_skill` 載入本角色方法。工具／來源政策／審批邊界不能被 skill 放寬。
+- 原主規格中的 playbook 字樣此次不改寫；實作以新補充的角色／方法分層為準，並保留原決策與安全邊界。這是使用者更新規格，並非擅自偏離規格。
+- 本次提交僅含補充規格與進度表，迴圈草稿保留未提交。完整 R27 在目前工作目錄通過（含草稿新增 1 個測試），不代表 R5／R7／R30 已完成驗收；無外部 API 呼叫。補充檔 blob 與遠端一致，主規格相對 HEAD 無差異。
