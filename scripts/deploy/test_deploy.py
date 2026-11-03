@@ -28,6 +28,15 @@ def config():
 
 
 class GuardTests(unittest.TestCase):
+    def test_inventory_includes_data_only_migrations_without_designer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            migrations = source / "src/EquityLens.Api/Migrations"
+            migrations.mkdir(parents=True)
+            (migrations / "001_Schema.Designer.cs").write_text('[Migration("001_Schema")]')
+            (migrations / "002_Data.cs").write_text('[Migration("002_Data")]')
+            self.assertEqual(["001_Schema", "002_Data"], deploy.inventory(source))
+
     def test_plan_has_no_side_effects(self):
         with patch.object(deploy, "run") as command, patch.object(deploy, "github") as api, patch.object(deploy, "execute") as execute:
             with contextlib.redirect_stdout(io.StringIO()):
@@ -220,7 +229,7 @@ class GuardTests(unittest.TestCase):
 
 
 class LifecycleTests(unittest.TestCase):
-    def exercise(self, failure=None, rollback=False):
+    def exercise(self, failure=None, rollback=False, separate_overrides=False):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
             env = directory / "env"
@@ -230,6 +239,21 @@ class LifecycleTests(unittest.TestCase):
             live.write_text("services: {}")
             args = argparse.Namespace(state_dir=directory, sha=None if rollback else SHA, rollback=None,
                                       env_file=env, live_compose=live, health_url="https://example.invalid/healthz", timeout=10)
+            if separate_overrides:
+                args.compose_override = directory / "current.json"
+                args.target_compose_override = directory / "target.json"
+                for path in (args.compose_override, args.target_compose_override):
+                    path.write_text('{}')
+                    path.chmod(0o600)
+            resolved_calls = []
+            def resolve(file, env_file, override=None):
+                resolved_calls.append(override)
+                result = config()
+                result["services"]["api"]["environment"]["PHASE"] = "target" if file != live else "current"
+                return result
+            def assert_current(current):
+                self.assertEqual("current", current["services"]["api"]["environment"]["PHASE"])
+                return IMAGES
             if rollback:
                 args.rollback = "20260101T000000Z-12345678"
                 previous = directory / args.rollback
@@ -265,7 +289,7 @@ class LifecycleTests(unittest.TestCase):
                     "run": command, "inspect": lambda _: {"State": {"Running": True}},
                     "check_ci": lambda _: (_ for _ in ()).throw(deploy.DeploymentError("CI failed")) if failure == "ci" else "ci/1",
                     "inventory": lambda _: ["001"], "query_migrations": lambda: ["002"] if failure == "migration" else ["001"],
-                    "resolved_config": lambda *_: config(), "assert_current": lambda _: IMAGES,
+                    "resolved_config": resolve, "assert_current": assert_current,
                     "backup": backup, "wait_healthy": smoke,
                 }.items():
                     stack.enter_context(patch.object(deploy, name, replacement))
@@ -279,7 +303,16 @@ class LifecycleTests(unittest.TestCase):
             manifests = [json.loads(p.read_text()) for p in directory.glob("*/manifest.json") if p.parent.name != args.rollback]
             self.assertEqual(1, len(manifests))
             self.assertEqual("failed" if failure else "succeeded", manifests[0]["status"])
+            if separate_overrides and not failure:
+                self.assertEqual([args.compose_override, args.target_compose_override], resolved_calls)
+                release = next(p.parent for p in directory.glob("*/manifest.json"))
+                for filename, phase in [("rollback.compose.json", "current"), ("target.compose.json", "target")]:
+                    saved = json.loads((release / filename).read_text())
+                    self.assertEqual(phase, saved["services"]["api"]["environment"]["PHASE"])
             return events
+
+    def test_target_configuration_does_not_change_rollback_capture(self):
+        self.exercise(separate_overrides=True)
 
     def test_success_backup_precedes_stop_and_only_apps_updated(self):
         events = self.exercise()

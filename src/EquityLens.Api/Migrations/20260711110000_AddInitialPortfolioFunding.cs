@@ -1,9 +1,13 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using EquityLens.Api.Data;
 
 #nullable disable
 
 namespace EquityLens.Api.Migrations;
 
+[DbContext(typeof(EquityLensDbContext))]
+[Migration("20260711110000_AddInitialPortfolioFunding")]
 public partial class AddInitialPortfolioFunding : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
