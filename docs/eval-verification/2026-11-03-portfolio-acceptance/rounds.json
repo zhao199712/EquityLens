@@ -229,5 +229,89 @@
       "conservation": 9,
       "same_basis_deltas": 8
     }
+  },
+  {
+    "round": 18,
+    "original_directory": "portfolio-eval-20261103-stability-18",
+    "strict_passed": 13,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": "Full 14-case stability run on unchanged clean d57e5c3, prompt 16; no selective reruns.",
+    "raw_sha256": "29a415aba3c7662789914673c9685565f180cf90504b995deb6d9e320e3f1408",
+    "raw_bytes": 8843423,
+    "checks": {
+      "provider_healthy": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "no_side_effects": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "scenario_calculated": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "independent_risk_math": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "conservation": {
+        "passed": 10,
+        "evaluated": 10
+      },
+      "same_basis_deltas": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "quality_passed": {
+        "passed": 8,
+        "evaluated": 9
+      }
+    }
+  },
+  {
+    "round": 19,
+    "original_directory": "portfolio-eval-20261103-stability-19",
+    "strict_passed": 14,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": "Full 14-case stability run on unchanged clean d57e5c3, prompt 16; no selective reruns.",
+    "raw_sha256": "ed213a314186e46983d75bd71e1010f4d17f3c67c77cd108c4e79c9456e062e4",
+    "raw_bytes": 8798990,
+    "checks": {
+      "provider_healthy": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "no_side_effects": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "scenario_calculated": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "independent_risk_math": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "conservation": {
+        "passed": 10,
+        "evaluated": 10
+      },
+      "same_basis_deltas": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "quality_passed": {
+        "passed": 9,
+        "evaluated": 9
+      }
+    }
   }
 ]
