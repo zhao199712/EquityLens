@@ -1,0 +1,29 @@
+{
+  "checks": {
+    "same_fixture": true,
+    "same_question": true,
+    "scorer_pass": true,
+    "etf_and_cash_same_reduction": true,
+    "destination_0050": true,
+    "no_side_effects": true,
+    "var_direction_correct": true,
+    "es_direction_correct": true
+  },
+  "manual_review": {
+    "targeted_var_fix_passed": true,
+    "answer_fully_accepted": false,
+    "remaining_issues": [
+      {
+        "type": "delta_vs_improvement_wording",
+        "quote": "年化波動率改善 -5.76 個百分點",
+        "explanation": "帶符號變動是 -5.76 個百分點，但有利方向的改善幅度應為正 5.76；同文又稱負改善代表惡化，易造成矛盾。"
+      },
+      {
+        "type": "recommendation_not_supported_by_objective",
+        "quote": "若目標是優先壓低波動與尾端損失，維持不調整或採留現金方案較貼近量化結果",
+        "explanation": "依本次計算，維持原組合並未降低波動／尾端損失；若保留不調整選項，應另外說明風險偏好、交易成本等未量化考量，不能和減碼留現金一併歸因於降低風險的量化結果。"
+      }
+    ]
+  },
+  "raw_sha256": "776a4314135d562161eab76a334af35a63327d5a840b6a61252f50feab61fb55"
+}

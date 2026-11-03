@@ -132,12 +132,14 @@ public sealed class PortfolioLoopToolsTests
         Assert.Equal("UnexpectedArgument", tools.Validate(new(Guid.NewGuid(), new("", "test"), [], false), new("c", name, new() { [key] = new JsonArray(1, 2) })));
     }
 
-    [Fact]
-    public void ExplicitHoldingDestinationCannotBeReplacedWithCash()
+    [Theory]
+    [InlineData("holding", "2330")]
+    [InlineData("index_etf", "0050")]
+    public void ExplicitHoldingDestinationCannotBeReplacedWithCash(string policy, string destination)
     {
         using var services = new ServiceCollection().BuildServiceProvider();
         var tools = new PortfolioLoopTools(services.GetRequiredService<IServiceScopeFactory>());
-        var request = new PortfolioScenarioRequest("轉入", new Dictionary<string, decimal> { ["2327"] = .3m }, "holding", true, "2330");
+        var request = new PortfolioScenarioRequest("轉入", new Dictionary<string, decimal> { ["2327"] = .3m }, policy, true, destination);
         var board = new JsonObject { [AgentBlackboardKeys.RoutingContext] = new JsonObject {
             ["scenarios"] = JsonSerializer.SerializeToNode(new[] { request }, AgentNodeJson.SerializerOptions) }, [PortfolioLoopTools.SnapshotKey] = new JsonObject() };
         var scope = new LoopToolScope(Guid.NewGuid(), new("", "移到台積電"), [], false, DomainContext: board);

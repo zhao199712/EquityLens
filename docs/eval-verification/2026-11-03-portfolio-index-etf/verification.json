@@ -1,0 +1,22 @@
+{
+  "checks": {
+    "question_has_no_etf_or_weight_hint": true,
+    "original_scorer_passed": true,
+    "one_successful_scenario_call": true,
+    "etf_and_cash_same_reduction": true,
+    "approved_etf_destination": true,
+    "candidate_initial_quantity_zero": true,
+    "adjusted_price_basis": true,
+    "candidate_prices_exactly_seeded": true,
+    "other_holdings_quantities_unchanged": true,
+    "holdings_and_transactions_unchanged": true
+  },
+  "manual_answer_review": {
+    "passed": false,
+    "issue": "ETF_vs_cash_VaR_direction_reversed",
+    "quote": "其 VaR 與期望短缺的改善幅度小於留現金",
+    "expected": "ETF VaR 改善 0.625697911 個百分點，大於現金的 0.597655095；ES 改善則確實小於現金。",
+    "scope": "數字及工具行為通過，但比較方向的自然語言敘述有誤；現有 scorer/gate 未攔截。"
+  },
+  "raw_sha256": "a8b54ec26dd7b39c725de63fd442e5aaab3a0d9134cfbf9c4bb8a8075010af4e"
+}

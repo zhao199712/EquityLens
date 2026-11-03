@@ -528,6 +528,35 @@ public sealed class ResearchAgentLoopTests
             !call.Arguments["valid"]!.GetValue<bool>() ? new LoopToolResult([], "Tool failed", Reason) : new LoopToolResult([], "Calculated", Data: new() { ["status"] = "Calculated" }));
     }
 
+
+    [Fact]
+    public async Task PortfolioComparisonRepair_ReusesSavedToolsAcrossRecovery()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        const string call = """{"action":"call_tools","toolCalls":[{"callId":"s","tool":"simulate_weight_scenario","arguments":{}}]}""";
+        const string bad = """{"action":"submit_answer","answer":{"markdown":"ETF 的 VaR 與 ES 改善幅度小於現金 [P1]","citedEvidenceIds":["P1"]}}""";
+        AgentLoopEngine Engine(FakeChat chat) => new(chat, new ComparisonTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, true);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Engine(new(call, bad)).RunAsync(context, "Portfolio", default));
+        var resumed = new FakeChat("""{"action":"submit_answer","answer":{"markdown":"ETF 的 VaR 改善幅度大於現金 [P1]；ETF 的 ES 改善幅度小於現金 [P1]","citedEvidenceIds":["P1"]}}""");
+        var state = await Engine(resumed).RunAsync(context, "Portfolio", default);
+        Assert.Equal(1, state.AnswerRepairCount);
+        Assert.Contains("ScenarioComparisonDirectionMismatch", Assert.Single(resumed.Prompts));
+        Assert.Contains("VaR改善幅度大於", resumed.Prompts[0]);
+        Assert.Contains("期望短缺改善幅度小於", resumed.Prompts[0]);
+        Assert.Single(await db.AgentToolCalls.ToListAsync());
+        Assert.Equal("AnswerSubmitted", state.StopReason);
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(state.Answer, state.Facts));
+    }
+
+    private sealed class ComparisonTools : IAgentLoopTools
+    {
+        public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("simulate_weight_scenario", "saved comparison fixture", new())];
+        public string? Validate(LoopToolScope scope, LoopToolCall call) => null;
+        public Task<LoopToolResult> InvokeAsync(LoopToolScope scope, LoopToolCall call, CancellationToken ct) =>
+            Task.FromResult(new LoopToolResult([], "Calculated", Data: PortfolioLoopTools.ScenarioEvidence(PortfolioComparisonClaimTests.Fixture().Comparison)));
+    }
+
     [Fact]
     public async Task PortfolioNumericRepair_IsCheckpointedAndDoesNotRepeatTools()
     {

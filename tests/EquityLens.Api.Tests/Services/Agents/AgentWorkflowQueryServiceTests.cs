@@ -325,6 +325,35 @@ public sealed class AgentWorkflowQueryServiceTests
         Assert.Equal("scenario_clarification_required", error.Code); Assert.Null(runs.PortfolioId);
     }
 
+    [Theory]
+    [InlineData("0050", "index_etf", true)]
+    [InlineData("0050", "index_etf", false, "00501")]
+    [InlineData("0050", "index_etf", false, "元大台灣50正2")]
+    [InlineData("006208", "index_etf", true)]
+    [InlineData("0050", "holding", false)]
+    [InlineData("2330", "holding", false)]
+    public async Task NonheldApprovedEtfIsRoutedWithoutReplacingExplicitDestination(string ticker, string policy, bool allowed, string? explicitTarget = null)
+    {
+        await using var db = CreateDb(); var owner = Guid.NewGuid(); var id = Guid.NewGuid(); var securityId = Guid.NewGuid();
+        db.Portfolios.Add(new Portfolio { Id = id, OwnerUserId = owner, Name = "退休", Holdings = [new() { Id = Guid.NewGuid(), PortfolioId = id,
+            SecurityId = securityId, Security = new() { Id = securityId, Ticker = "2327", Name = "國巨", Currency = "TWD" }, Quantity = 100 }] });
+        await db.SaveChangesAsync();
+        var question = $"把國巨減至30%，轉入{explicitTarget ?? ticker}";
+        var scenarios = new[] { new PortfolioScenarioRequest("轉入", new Dictionary<string, decimal> { ["2327"] = .3m }, policy, true, ticker) };
+        var runs = new FakeAgentRuns(); var service = new AgentWorkflowQueryService(db, Router("unused"), runs);
+        var route = InvestmentResearchRouter.Fixed(AgentWorkflowTypes.PortfolioDiagnosis, question, id, scenarios: scenarios);
+        if (allowed)
+        {
+            await service.CreateFromDecisionAsync(owner, new(question), route);
+            Assert.Equal(ticker, Assert.Single(runs.RoutingContext!.Scenarios!).TransferToTicker);
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<AgentWorkflowQueryException>(() => service.CreateFromDecisionAsync(owner, new(question), route));
+            Assert.Equal("scenario_clarification_required", error.Code); Assert.Null(runs.PortfolioId);
+        }
+    }
+
     [Fact]
     public async Task MultiplePortfolios_CannotGuessEvenIfModelSelectsOne()
     {
