@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace EquityLens.Api.Services.Agents.Loop;
@@ -17,6 +18,28 @@ internal static class PortfolioComparisonClaims
     // 全部以同一 baseline 計算「有利方向的變化」，不能對負 VaR／ES／回撤取絕對值。
     private static decimal Improvement(ScenarioMetrics baseline, ScenarioMetrics result, int metric) =>
         (Metrics[metric].Value(result) - Metrics[metric].Value(baseline)) * (Metrics[metric].LowerIsBetter ? -1 : 1);
+
+    // SignedChange 與 Magnitude 均採原始報酬小數；Description 統一轉為百分點。
+    internal sealed record MetricChange(string Metric, decimal SignedChange, decimal Magnitude,
+        string Direction, string Assessment, string Description);
+
+    internal static IReadOnlyList<MetricChange> Changes(PortfolioScenarioComparison comparison, PortfolioScenarioResult scenario)
+    {
+        if (comparison.Status != "Calculated" || scenario.Status != "Calculated"
+            || comparison.Baseline?.Metrics is not { } baseline || scenario.Metrics is not { } result) return [];
+        return Metrics.Select(metric =>
+        {
+            var delta = metric.Value(result) - metric.Value(baseline);
+            var magnitude = Math.Abs(delta);
+            var direction = delta < 0 ? "下降" : delta > 0 ? "上升" : "不變";
+            var assessment = delta == 0 ? "持平" : (metric.LowerIsBetter ? delta < 0 : delta > 0) ? "改善" : "惡化";
+            var displayed = decimal.Round(magnitude * 100, 2, MidpointRounding.AwayFromZero);
+            var description = delta == 0 ? $"{metric.Label}不變（持平）"
+                : displayed == 0 ? $"{metric.Label}變化低於顯示精度，未顯示升降幅度"
+                : $"{metric.Label}{direction} {displayed.ToString("F2", CultureInfo.InvariantCulture)} 個百分點（{assessment}）";
+            return new MetricChange(metric.Label, delta, magnitude, direction, assessment, description);
+        }).ToArray();
+    }
 
     internal static IReadOnlyList<string> Statements(PortfolioScenarioComparison comparison)
     {

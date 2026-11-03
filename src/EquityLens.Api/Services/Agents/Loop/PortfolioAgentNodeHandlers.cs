@@ -76,7 +76,8 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             $"{s.Name}：減碼資金{(s.RemainderPolicy != "cash" ? "轉入 " + s.TransferToTicker : "留作現金")}；" +
             string.Join("、", s.Weights.Select(w => $"{w.Key} 權重 {w.Value:P2}")) + $"；現金 {s.CashWeight:P2}" +
             (s.Metrics is { } m ? "；調整後：" + Metrics(m) : "") +
-            (s.DifferenceFromBaseline is { } d ? "；相較原組合差異（百分點）：" + $"年化波動 {d.AnnualizedVolatility * 100:F2}、VaR {d.HistoricalVaR * 100:F2}、ES {d.ExpectedShortfall * 100:F2}、最大回撤 {d.HypotheticalMaxDrawdown * 100:F2}" : ""))) +
+            (PortfolioComparisonClaims.Changes(comparison, s) is { Count: > 0 } changes
+                ? "；相較原組合差異：" + string.Join("、", changes.Select(c => c.Description)) : ""))) +
             (comparison.Status == "Calculated" ? "。情境不代表未來績效或保證改善。" : "。資料不足，風險指標無法計算。") +
             $"方法：{comparison.Method}；有效日報酬 {comparison.ObservationCount} 筆、VaR 信心水準 {comparison.ConfidenceLevel:P0}、期間 {comparison.HorizonDays} 日。" +
             string.Join("", PortfolioComparisonClaims.Statements(comparison));
