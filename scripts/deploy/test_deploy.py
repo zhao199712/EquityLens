@@ -28,6 +28,17 @@ def config():
 
 
 class GuardTests(unittest.TestCase):
+    def test_origin_accepts_exact_repo_with_optional_suffix_only(self):
+        for base in ("git@github.com:zhao199712/EquityLens", "https://github.com/zhao199712/EquityLens"):
+            for suffix in ("", ".git"):
+                with patch.object(deploy, "run", return_value=(base + suffix).encode()):
+                    deploy.check_origin()
+        for origin in ("https://github.com/attacker/EquityLens", "https://github.com/zhao199712/EquityLens-other",
+                       "https://github.com.example/zhao199712/EquityLens", "https://github.com/zhao199712/EquityLens?x=1",
+                       "https://token@github.com/zhao199712/EquityLens", "/tmp/EquityLens"):
+            with self.subTest(origin=origin), patch.object(deploy, "run", return_value=origin.encode()), self.assertRaises(deploy.DeploymentError):
+                deploy.check_origin()
+
     def test_inventory_includes_data_only_migrations_without_designer(self):
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp)
@@ -229,7 +240,7 @@ class GuardTests(unittest.TestCase):
 
 
 class LifecycleTests(unittest.TestCase):
-    def exercise(self, failure=None, rollback=False, separate_overrides=False):
+    def exercise(self, failure=None, rollback=False, separate_overrides=False, origin=None):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
             env = directory / "env"
@@ -266,7 +277,7 @@ class LifecycleTests(unittest.TestCase):
                 if argv[:3] == ["docker", "context", "inspect"]:
                     return b'[{"Endpoints":{"docker":{"Host":"unix:///var/run/docker.sock"}}}]'
                 if argv[:3] == ["git", "remote", "get-url"]:
-                    return b"git@github.com:zhao199712/EquityLens.git"
+                    return (origin or "git@github.com:zhao199712/EquityLens.git").encode()
                 if argv[:2] == ["git", "archive"]:
                     with tarfile.open(fileobj=kwargs["output"], mode="w"):
                         pass
@@ -323,6 +334,10 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(("api", "mathematics"), up[-2:])
         for flag in ("--no-deps", "--no-build", "never"):
             self.assertIn(flag, up)
+        self.assertEqual(("SMOKE",), events[-1])
+
+    def test_actions_checkout_https_origin_without_suffix_deploys(self):
+        events = self.exercise(origin="https://github.com/zhao199712/EquityLens")
         self.assertEqual(("SMOKE",), events[-1])
 
     def test_preflight_build_and_backup_failures_never_stop_services(self):

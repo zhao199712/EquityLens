@@ -87,6 +87,15 @@ def github(path):
         return json.load(response)
 
 
+def check_origin():
+    origin = run(["git", "remote", "get-url", "origin"]).decode().strip()
+    # actions/checkout uses HTTPS without .git; accept only these exact identities.
+    allowed = {f"{base}{suffix}" for base in (
+        f"git@github.com:{REPOSITORY}", f"https://github.com/{REPOSITORY}"
+    ) for suffix in ("", ".git")}
+    require(origin in allowed, "Unexpected Git origin.")
+
+
 def check_ci(sha):
     runs = github(f"/actions/workflows/main.yml/runs?head_sha={sha}&event=push&branch=main&per_page=100")["workflow_runs"]
     matches = [r for r in runs if r["head_sha"] == sha and r["head_branch"] == "main" and r["event"] == "push"]
@@ -373,8 +382,7 @@ def execute(args):
                         "Compose override must be a regular private file (chmod 600).")
             override = override.resolve() if override else None
             target_override = target_override.resolve() if target_override else None
-            origin = run(["git", "remote", "get-url", "origin"]).decode().strip()
-            require(origin in (f"git@github.com:{REPOSITORY}.git", f"https://github.com/{REPOSITORY}.git"), "Unexpected Git origin.")
+            check_origin()
             run(["git", "fetch", "origin", "main"])
             run(["git", "merge-base", "--is-ancestor", args.sha, "origin/main"])
             manifest["ci_url"] = check_ci(args.sha)
