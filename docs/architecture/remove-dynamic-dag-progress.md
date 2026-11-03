@@ -382,3 +382,9 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - 新增一般格式重現案例：收入（百萬元）、同句分號後引用、由舊值增／降至新值的年增率。以精確來源運算元重算衍生百分比；缺少來源、零分母、錯誤比例、跨句號／換行引用均保持拒絕。未修改 scorer 或產生人工引用。
 - 完整 R27（derived-context-release）：build、908/908（隔離 PostgreSQL，0 skipped）、EF 無模型變更、pytest 83、前端 build／127 tests。新增 9 個數字案例。
 - 前三輪保守累計上界 US$0.475104；下一輪 LLM admission cap US$0.30，另保留 embedding US$0.10，總上界不超過原獨立 US$1。R26 待此版本整套原 8 題驗證，不拼接不同輪次結果。
+
+### R26 第四輪與 PDF 黏連文字單位辨識
+
+- `3d98904` 本輪 6/8；鴻海剩餘阻擋源自數值後接「元件及其他」被解析成「元」，導致表頭百萬元不能換算。3 個一般化重現案例在修正前失敗，修正後通過；不把產品名、股數／股東／股份當作單位後綴。
+- 離線重播第三、四輪鴻海 4 份實際初稿／修訂稿及原引文，全部 Blocking=false，VerifiedRatioExpression／VerifiedGrowthExpression；原 live 分數保持 6/8，不使用離線結果替換分數。見 docs/eval-verification/2026-11-03-three-workflows-recheck/quality-replay.json。
+- 完整 R27（unit-word-release）：build、911/911（隔離 PostgreSQL，0 skipped）、EF 無模型變更、pytest 83、前端 build／127 tests。前四輪累計保守費用上界 US$0.629965；最後重跑上限 LLM US$0.25＋embedding 預留 US$0.10，累計不超過 US$1。

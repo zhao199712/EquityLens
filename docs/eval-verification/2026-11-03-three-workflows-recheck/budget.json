@@ -1,0 +1,17 @@
+{
+  "authorization": "User approved independent USD1 for this eval",
+  "cap_usd": 1,
+  "llm_admission_cap_usd": 0.3,
+  "llm_upper_usd": 0.054861300000000016,
+  "embedding_reserve_usd": 0.1,
+  "total_upper_including_reserve_usd": 0.15486130000000004,
+  "prior_rounds_upper_usd": 0.4751037,
+  "cumulative_upper_usd": 0.629965,
+  "llm_calls": 37,
+  "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+  "input_upper_per_million": 0.3,
+  "output_upper_per_million": 1.2,
+  "embedding_pricing_source": "https://developers.openai.com/api/docs/models/text-embedding-3-small",
+  "embedding_note": "Not metered by provider proxy. Reserve exceeds 8 cases x 2 loops x 16 tools x 2 retrieval searches x 8192 input tokens x USD0.02/million = USD0.08388608. Each retrieval search embeds one query; planner uses at most 2 searches per tool; other tools do not embed. No import jobs submitted.",
+  "configured_model_sha256": "f61ff5cf8e1cc88da6944d6bcd3e2e7da5ff27dd3288a8781908018cb8240cd6"
+}

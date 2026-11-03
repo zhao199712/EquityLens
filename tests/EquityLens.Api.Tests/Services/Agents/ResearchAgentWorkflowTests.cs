@@ -243,6 +243,9 @@ public sealed class ResearchAgentWorkflowTests
     [InlineData("收入由 0 元增至 600 元，年增率約 20%[1]。", "收入 600 元 0 元", true)]
     [InlineData("收入 100 元。來源[1]。", "收入 100 元 200 元", true)]
     [InlineData("收入 100 元\n來源[1]。", "收入 100 元 200 元", true)]
+    [InlineData("收入由 100 百萬元增至 120 百萬元，年增率約 20%[1]。", "收入（百萬元）電腦終端產品 120 100 元件及其他產品 30 20", false)]
+    [InlineData("收入 100 百萬元[1]。", "收入（百萬元）電腦終端產品120 100元件及其他產品30 20", false)]
+    [InlineData("營收 100 仟元[1]", "單位：新台幣仟元 營收 100 股數（仟股）100", false)]
     public void NumberGate_ChecksCitedQuote_WithNormalizationAndUnits(string answer, string quote, bool blocking)
     {
         var result = ResearchNumberTraceability.Check(answer,

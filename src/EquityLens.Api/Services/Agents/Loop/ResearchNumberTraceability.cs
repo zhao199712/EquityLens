@@ -169,6 +169,6 @@ internal static partial class ResearchNumberTraceability
     private static partial Regex Reference();
     [GeneratedRegex(@"\((?:仟|千)股\)\s*(?<values>(?:\$?\s*[-+]?\d[\d,]*(?:\.\d+)?[\s|]*)+)")]
     private static partial Regex ShareHeaderValues();
-    [GeneratedRegex(@"([-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)\s*(十億|百萬|兆|億|萬|千|仟)?\s*(%|個百分點|百分點|美元|元|倍|股)?")]
+    [GeneratedRegex(@"([-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)\s*(十億|百萬|兆|億|萬|千|仟)?\s*(%|個百分點|百分點|美元|元(?!件)|倍|股(?!數|東|份))?")]
     private static partial Regex Numeric();
 }
