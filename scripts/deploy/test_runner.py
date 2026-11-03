@@ -56,7 +56,9 @@ class RunnerTests(unittest.TestCase):
             file = Path(temp) / 'private'; file.write_text('{}'); file.chmod(0o600)
             config = {k: str(file) for k in ('live_compose','env_file','compose_override','state_dir')}
             config['health_url'] = 'https://example.invalid/healthz'
-            with patch.dict(os.environ, CONTEXT), patch.object(deploy, 'run', return_value=SHA.encode()), patch.object(deploy, 'main') as main:
+            def command(args, **kwargs):
+                return SHA.encode() if args == ['git', 'rev-parse', 'HEAD'] else b'https://github.com/zhao199712/EquityLens'
+            with patch.dict(os.environ, CONTEXT), patch.object(deploy, 'run', side_effect=command), patch.object(deploy, 'main') as main:
                 runner_entry.execute('deploy', SHA, config)
                 self.assertIn('--execute', main.call_args.args[0])
                 main.reset_mock()
@@ -64,6 +66,18 @@ class RunnerTests(unittest.TestCase):
                     with self.assertRaises(deploy.DeploymentError):
                         runner_entry.execute('verify', SHA, config)
                 main.assert_not_called()
-                with self.assertRaises(deploy.DeploymentError):
-                    runner_entry.execute('unknown', SHA, config)
-                main.assert_not_called()
+
+    def test_verify_rejects_wrong_origin_before_ci_or_docker(self):
+        def command(args, **kwargs):
+            return SHA.encode() if args == ['git', 'rev-parse', 'HEAD'] else b'https://github.com/attacker/EquityLens'
+        with patch.dict(os.environ, CONTEXT), patch.object(deploy, 'run', side_effect=command) as commands, patch.object(deploy, 'check_ci') as ci:
+            with self.assertRaisesRegex(deploy.DeploymentError, 'Unexpected Git origin'):
+                runner_entry.execute('verify', SHA, {})
+            ci.assert_not_called()
+            self.assertEqual(2, commands.call_count)
+
+    def test_unknown_mode_is_rejected_before_commands(self):
+        with patch.object(deploy, 'run') as commands:
+            with self.assertRaises(deploy.DeploymentError):
+                runner_entry.execute('unknown', SHA, {})
+            commands.assert_not_called()

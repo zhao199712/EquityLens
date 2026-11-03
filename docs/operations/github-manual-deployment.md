@@ -63,6 +63,8 @@ sudo bash -c 'cd /opt/equitylens-actions-runner && ./svc.sh stop'
 
 正式 deploy 失敗不自動回復。使用失敗紀錄印出的回復命令，指定同一 state-dir，以 `sudo -u equitylens-runner` 執行；資料庫不自動還原。核准及部署記錄留在 GitHub，敏感紀錄留在主機。
 
+若失敗是部署腳本本身的問題，修正合併 main 並通過 CI 後，使用 **Run workflow** 建立新的執行。舊執行的 Re-run 仍使用原 SHA，不會取得新修正。2026-11-03 首次正式 runner 部署在建置前因 `Unexpected Git origin` 停止：actions/checkout 的 HTTPS remote 不帶 `.git`，檢查現已接受相同 repository 的有／無 `.git` 格式，verify 與 deploy 共用這項檢查；其他 repository、主機、credentials 或 query 仍拒絕。
+
 ## 已驗證與尚需驗證
 
 - 本機：官方套件校驗與可執行版本、Bash 語法、27 個部署／runner 防護測試。

@@ -17,6 +17,7 @@ def execute(mode, sha, config):
                    os.environ.get("GITHUB_REPOSITORY") == deploy.REPOSITORY and
                    os.environ.get("GITHUB_SHA") == sha, "Manual main workflow context required")
     deploy.require(deploy.run(["git", "rev-parse", "HEAD"]).decode().strip() == sha, "Checkout must match workflow SHA")
+    deploy.check_origin()
     compose = Path(config["live_compose"])
     env = Path(config["env_file"])
     override = Path(config["compose_override"])
