@@ -93,3 +93,13 @@ def test_budget_accounts_for_tool_schema_and_null_usage(tmp_path):
     reserved=budget.pending[key]
     budget.finish(key,None,502)
     assert budget.spent==reserved
+
+
+def test_unsettled_provider_call_stops_next_case_without_refunding_reservation():
+    from equitylens_eval.portfolio import provider_failures
+    pending = [{'id': 'a', 'reserved_usd': .02}]
+    assert provider_failures(pending) == ['unsettled_provider_call']
+    assert provider_failures(pending + [{'id': 'a', 'charged_upper_usd': .01, 'status': 200}]) == []
+    assert provider_failures(pending + [{'id': 'a', 'charged_upper_usd': .02, 'status': 503}]) == [503]
+    assert provider_failures([{'status': 402, 'admission_refused': True}]) == [402]
+    assert pending[0]['reserved_usd'] == .02

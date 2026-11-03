@@ -104,8 +104,9 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             var separatesBases = Regex.IsMatch(text, @"計算基礎不同|(?:不宜|不可|不能).{0,8}(?:直接|交叉)?比較")
                 && !Regex.IsMatch(text, @"→|差異|百分點|降至|增至");
             var comparisonClaim = !separatesBases && facts.Any(f => f.Tool == "simulate_weight_scenario")
+                && Regex.IsMatch(text, @"(?<![A-Za-z\d])[-+]?\d+(?:\.\d+)?")
                 && Regex.IsMatch(text, @"波動|VaR|ES|回撤", RegexOptions.IgnoreCase)
-                && (Regex.IsMatch(text, @"比較|情境|原組合|基準|調整|差異|差額|→|前後") || text.Contains('|'));
+                && (Regex.IsMatch(text, @"比較|情境|調整|差異|差額|→|前後|降至|增至") || text.Contains('|'));
             if (comparisonClaim && cited.Any(f => f.Tool is "run_risk_analysis" or "get_risk_report")) issues.Add("MixedRiskBasis");
             var citations = cited.Where(f => !comparisonClaim || f.Tool == "simulate_weight_scenario").SelectMany(f => Values(f.Data)).ToArray();
             foreach (Match number in Regex.Matches(text, @"(?<![A-Za-z\d])(?<value>[-+]?\d+(?:,\d{3})*(?:\.\d+)?)(?:\s*(?<unit>[%％]|個百分點|百分點))?"))
@@ -123,9 +124,17 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         return issues.Distinct().ToList();
     }
 
-    internal static string RepairHints(IReadOnlyList<string> rejected, IReadOnlyList<LoopDataFact> facts)
+    internal static string RepairHints(IReadOnlyList<string> rejected, IReadOnlyList<LoopDataFact> facts, LoopAnswer? answer = null)
     {
         var hints = new List<string>();
+        // 日期字串不是數值候選，回報完整日期與真正含有日期的來源供模型核對。
+        if (answer is not null)
+            foreach (var date in Regex.Matches(answer.Markdown, @"(?<!\d)20\d{2}-\d{2}-\d{2}(?!\d)").Select(m => m.Value).Distinct().Take(8))
+            {
+                if (!date.Split('-').Any(part => rejected.Contains(part) || rejected.Contains(part.TrimStart('0')))) continue;
+                var sources = facts.Where(f => f.Data.ToJsonString().Contains(date, StringComparison.Ordinal)).Select(f => "[" + f.Id + "]");
+                hints.Add("日期 " + date + " exact sources: " + string.Join(", ", sources) + "；核對該工具的期間語義，標題亦需引用；無來源就移除。");
+            }
         foreach (var token in rejected.Distinct().Take(12))
         {
             var match = Regex.Match(token, @"[-+]?\d+(?:,\d{3})*(?:\.\d+)?");
@@ -133,7 +142,12 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             if (claim < -1_000_000_000_000m || claim > 1_000_000_000_000m) continue;
             var percent = token.Contains('%') || token.Contains('％') || token.Contains("百分點");
             var decimals = match.Value.Contains('.') ? match.Value.Length - match.Value.IndexOf('.') - 1 : 0;
-            var candidates = facts.SelectMany(f => Values(f.Data).Select(v => (f.Id, Raw: v)))
+            // 優先修正該數字原本引用的來源，避免另一口徑的近似數字誘導模型換引用。
+            var sourceIds = answer is null ? [] : Regex.Split(WithTableCitations(answer.Markdown.Normalize(System.Text.NormalizationForm.FormKC).Replace('−', '-')), @"\n")
+                .Where(line => line.Contains(token, StringComparison.Ordinal))
+                .SelectMany(line => Regex.Matches(line, @"\[(P\d+)\]").Select(m => m.Groups[1].Value)).Distinct().ToArray();
+            var candidateFacts = sourceIds.Length == 0 ? facts : facts.Where(f => sourceIds.Contains(f.Id)).ToArray();
+            var candidates = candidateFacts.SelectMany(f => Values(f.Data).Select(v => (f.Id, Raw: v)))
                 .Where(v => Math.Abs(v.Raw) < 1_000_000_000_000m)
                 .Select(v => (v.Id, v.Raw, Display: percent ? v.Raw * 100m : v.Raw))
                 .Where(v => Math.Abs(v.Display - claim) <= Math.Max(Math.Abs(claim) * .05m, .0001m))

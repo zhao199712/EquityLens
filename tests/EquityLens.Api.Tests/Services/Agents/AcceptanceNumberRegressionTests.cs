@@ -6,6 +6,43 @@ namespace EquityLens.Api.Tests.Services.Agents;
 public class AcceptanceNumberRegressionTests
 {
     [Fact]
+    public void QualitativeFollowupDoesNotCompareNumericRiskBases()
+    {
+        var facts = new[] {
+            new LoopDataFact("P1", "risk", "get_risk_report", new JsonObject { ["status"] = "CacheMiss", ["volatility"] = .2453m }),
+            new LoopDataFact("P2", "scenario", "simulate_weight_scenario", new JsonObject { ["baseline"] = .2433m, ["after"] = .1827m }) };
+        const string text = "風險報告原為 cache miss，數值為本次補算 [P1]。所有工具皆為唯讀，未調整任何持倉。若您能提供可接受的波動或回撤上限，我可再比較其他情境。";
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new(text, ["P1"]), facts));
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("原組合年化波動為 24.53% [P1]", ["P1"]), facts));
+        Assert.Contains("MixedRiskBasis", PortfolioQualityGateNodeHandler.Check(new("調整前後波動 24.53% → 18.27% [P1][P2]", ["P1", "P2"]), facts));
+    }
+    [Fact]
+    public void DateRepairPointsToExactSourceWithoutAcceptingUncitedOrInventedDates()
+    {
+        var facts = new[] {
+            new LoopDataFact("P1", "snapshot", "get_portfolio_snapshot", new JsonObject { ["count"] = 3 }),
+            new LoopDataFact("P2", "risk", "run_risk_analysis", new JsonObject { ["start"] = "2025-11-14", ["observations"] = 252 }) };
+        var answer = new LoopAnswer("## 分析期間 2025-11-14，252 筆\n\n3 檔持股 [P1]", ["P1"]);
+        var rejected = new List<string>();
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(answer, facts, rejected));
+        var hints = PortfolioQualityGateNodeHandler.RepairHints(rejected, facts, answer);
+        Assert.Contains("2025-11-14", hints);
+        Assert.Contains("[P2]", hints);
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(answer with { Markdown = answer.Markdown.Replace("252 筆", "252 筆 [P2]") }, facts));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(answer with { Markdown = "期間 2025-11-15 [P2]" }, facts));
+    }
+    [Fact]
+    public void RoundingRepairHintsStayWithTheClaimedSource()
+    {
+        var facts = new[] {
+            new LoopDataFact("P1", "risk", "run_risk_analysis", new JsonObject { ["riskShare"] = .99774663m }),
+            new LoopDataFact("P2", "scenario", "simulate_weight_scenario", new JsonObject { ["riskShare"] = .9978m }) };
+        var hint = PortfolioQualityGateNodeHandler.RepairHints(["99.78%"], facts, new("風險貢獻 99.78% [P1]", ["P1"]));
+        Assert.Contains("[P1]", hint);
+        Assert.Contains("rounded=99.77", hint);
+        Assert.DoesNotContain("[P2]", hint);
+    }
+    [Fact]
     public void TableHeaderUsesItsOwnRowsSources_WithoutBorrowingOtherTables()
     {
         var facts = new[] { new LoopDataFact("P1", "scenario", "simulate_weight_scenario", new JsonObject { ["weight"] = .3m, ["volatility"] = .0924m }) };

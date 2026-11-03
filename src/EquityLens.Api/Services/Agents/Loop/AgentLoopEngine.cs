@@ -109,7 +109,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     state.CompletionTokens += response.CompletionTokens;
                     state.CostUsd += Cost(response.PromptTokens, response.CompletionTokens);
                     turn = new AgentLlmTurn { ExecutionAttempt = context.Run.ExecutionAttempt, Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 10, Provider = chat.Provider, Model = response.Model,
+                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 12, Provider = chat.Provider, Model = response.Model,
                         RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(systemPrompt + prompt))),
                         PromptTokens = response.PromptTokens, CompletionTokens = response.CompletionTokens,
                         EstimatedCostUsd = Cost(response.PromptTokens, response.CompletionTokens), LatencyMs = timer.ElapsedMilliseconds,
@@ -169,7 +169,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                                     state.AnswerRepairCount++;
                                     state.History.Add("AnswerQualityRepair: " + string.Join(",", issues) + "; numbers=" + string.Join(",", rejected.Distinct().Take(20)) +
                                         ". 請修正一次：只依已保存的工具原始值按顯示精度四捨五入，每句或表格標示正確引用，情境比較只用同一 simulate_weight_scenario。保留原本單位與有依據的建議；無法核對的數字移除，不重做相同工具。");
-                                    state.History.Add(PortfolioQualityGateNodeHandler.RepairHints(rejected, state.Facts));
+                                    state.History.Add(PortfolioQualityGateNodeHandler.RepairHints(rejected, state.Facts, action.Answer));
                                     context.AddEvent(context.Run, context.Node, "PortfolioAnswerRepairRequested", "Numeric or basis repair", new { issues, rejected });
                                     break;
                                 }
@@ -407,7 +407,8 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         你是繁體中文投資組合分析助理。只能使用提供的六個任務型工具，所有數值由工具取得，不能自行提供價格、報酬或風險數值給工具。
         先取得持倉快照與既有風險報告；缺少分析時呼叫 run_risk_analysis（Core、TailRisk、RiskContribution）。再查績效歸因與風險偏好。
         工具的 display 是由同一份原始數值四捨五入的顯示值，引用該工具時直接使用，不得挪用另一工具的相近數字。
-        每段數值主張都要標註包含該數值的工具引用。風險偏好工具只支持偏好是否存在，不能支持情境權重；解讀段落若再提權重，仍須引用情境工具。
+        每段數值主張都要標註包含該數值的工具引用；標題裡的日期與樣本數也需引用真正包含期間的分析工具，持倉快照不能代替分析期間來源。風險偏好工具只支持偏好是否存在，不能支持情境權重；解讀段落若再提權重，仍須引用情境工具。
+        未取得使用者可承受風險門檻時，不可聲稱現況在其可承受範圍；只能說明量化取捨並詢問偏好。現況診斷與情境快照口徑不同時須明確標示。
         數學函式與演算法由後端決定，不自行選擇底層運算。優化問題必須呼叫 simulate_weight_scenario，比較同一基準與情境。
         未指定情境時主動提出減碼假設（不是交易指令），先以一個簡單情境驗證。targetWeights 是減碼來源的最終權重（0 到 1），不能加碼來源；cash 不帶轉入股，holding 的 transferToTicker 必須是另一檔既有持股。
         Guard 拒絕或工具失敗後，依 history 的欄位與原因修正一次，不重送相同參數、不擅改使用者明確的轉入要求；仍失敗則澄清。部分情境失敗要揭露，不能聲稱全部完成。

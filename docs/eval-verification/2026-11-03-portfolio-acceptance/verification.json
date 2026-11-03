@@ -1,6 +1,6 @@
 {
   "backend": {
-    "passed": 949,
+    "passed": 995,
     "postgres_integration": 18,
     "skipped": 0
   },
@@ -10,13 +10,14 @@
   },
   "frontend_build": "pass",
   "vitest": 138,
-  "playwright_mock_api": 9,
+  "playwright_mock_api": 10,
   "mathematics_pytest": 36,
-  "eval_pytest": 90,
+  "eval_pytest": 91,
   "ef_pending_model_changes": false,
-  "live_code_final_verification": "blocked by repeated upstream 503",
+  "live_code_final_verification": "Round 9 complete 10/14; round 10 stopped on timeouts; latest date repair has offline verification only",
   "authorized_usd": 1,
-  "charged_or_reserved_upper_usd": 0.498177,
+  "charged_or_reserved_upper_usd": 0.6484806,
   "deployment": "none",
-  "original_research_cases": "unchanged"
+  "original_research_cases": "unchanged",
+  "integrated_main": "81c8809"
 }

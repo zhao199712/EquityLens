@@ -65,14 +65,38 @@ public sealed class S3ObjectStorageService : IObjectStorageService
     {
         var expiry = expiresIn ?? TimeSpan.FromMinutes(_options.PresignedUrlExpiryMinutes);
 
+        if (!Uri.TryCreate(_options.PublicServiceUrl, UriKind.Absolute, out var endpoint)
+            || endpoint.Scheme != Uri.UriSchemeHttps || endpoint.IsLoopback
+            || endpoint.HostNameType != UriHostNameType.Dns || !endpoint.Host.Contains('.'))
+            throw new InvalidOperationException("ObjectStorage:PublicServiceUrl must be an external HTTPS origin.");
+        if (!string.IsNullOrEmpty(endpoint.UserInfo)
+            || !string.IsNullOrEmpty(endpoint.Query)
+            || !string.IsNullOrEmpty(endpoint.Fragment) || endpoint.AbsolutePath != "/")
+            throw new InvalidOperationException("ObjectStorage:PublicServiceUrl must be an external HTTPS origin.");
+        if (expiry <= TimeSpan.Zero || expiry > TimeSpan.FromHours(1))
+            throw new ArgumentOutOfRangeException(nameof(expiresIn), "Download URLs must expire within one hour.");
+
+        // 簽署外部原點；不可事後替換內部 URL 的 host，否則簽章無效。
+        using var signer = new AmazonS3Client(_options.AccessKeyId, _options.SecretAccessKey, new AmazonS3Config
+        {
+            ServiceURL = endpoint.GetLeftPart(UriPartial.Authority),
+            ForcePathStyle = true,
+            AuthenticationRegion = _options.Region
+        });
         var request = new GetPreSignedUrlRequest
         {
             BucketName = _options.BucketName,
             Key = objectKey,
             Expires = DateTime.UtcNow.Add(expiry),
-            Verb = HttpVerb.GET
+            Verb = HttpVerb.GET,
+            Protocol = Protocol.HTTPS,
+            ResponseHeaderOverrides = new ResponseHeaderOverrides
+            {
+                ContentDisposition = "attachment",
+                ContentType = "application/octet-stream"
+            }
         };
 
-        return Task.FromResult(_s3Client.GetPreSignedURL(request));
+        return Task.FromResult(signer.GetPreSignedURL(request));
     }
 }

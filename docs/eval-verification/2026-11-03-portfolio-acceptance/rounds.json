@@ -86,5 +86,27 @@
     "reason": "Provider 503; not an answer-quality evaluation",
     "raw_sha256": "2af20c8ce17ec312d411993979934cf68c9ced3ddf139053edfe2c4f7c480399",
     "raw_bytes": 5458
+  },
+  {
+    "round": 9,
+    "original_directory": "portfolio-eval-20261103-main-recheck",
+    "strict_passed": 10,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "96996cb986caf9424a6134f1bf7295ed98a1ed5fa80290092d3b074e79c874a9",
+    "raw_bytes": 7004999
+  },
+  {
+    "round": 10,
+    "original_directory": "portfolio-eval-20261103-quality-recheck",
+    "strict_passed": null,
+    "attempted_cases": 7,
+    "not_run": 7,
+    "eligible_for_quality_comparison": false,
+    "reason": "Stopped after repeated provider/client timeouts; seven saved cases, additional in-flight case interrupted; latest date repair not live-tested",
+    "raw_sha256": "4a55ea95eeff5bb52fccf99f28a9dce105e883e7cee5453ab44f4cc9fd03fba7",
+    "raw_bytes": 2196152
   }
 ]

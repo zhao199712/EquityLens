@@ -148,7 +148,11 @@ public sealed class AuthControllerGoogleLoginTests
             new FakeTokenService(),
             new PasswordHasher<AppUser>(),
             googleTokenValidator,
-            configuration)
+            configuration,
+            new AccountAccessPolicy(configuration, new Microsoft.Extensions.Hosting.Internal.HostingEnvironment
+            {
+                EnvironmentName = "Production"
+            }))
         {
             ControllerContext = new ControllerContext
             {

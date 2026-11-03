@@ -189,6 +189,21 @@ def run_case(client, case, portfolio_id, timeout=360):
                 before={'portfolio':before,'transactions':before_tx},
                 after={'portfolio':get(f'/api/portfolios/{portfolio_id}'),'transactions':get(f'/api/portfolios/{portfolio_id}/transactions')})
 
+def provider_failures(entries):
+    """Stop before the next case if the previous API returned before its provider settled.
+
+    A client timeout can leave the proxy request alive without an HTTP status.
+    Its reservation still counts against the shared budget; do not submit more
+    cases while attributing the timeout to answer quality.
+    """
+    errors = [e['status'] for e in entries if isinstance(e.get('status'), int) and not 200 <= e['status'] < 300]
+    reserved = {e['id'] for e in entries if 'reserved_usd' in e}
+    settled = {e['id'] for e in entries if 'charged_upper_usd' in e}
+    if reserved - settled:
+        errors.append('unsettled_provider_call')
+    return errors
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command',choices=['validate','rescore','compare','run'])
@@ -233,7 +248,7 @@ def main():
                 try: raw=run_case(client,c,entry['portfolio_id'])
                 except (httpx.HTTPError,TimeoutError,ValueError) as e: raw={'case_id':c['id'],'error':type(e).__name__}
             entries=[json.loads(line) for line in args.usage_ledger.read_text().splitlines()[ledger_offset:]] if args.usage_ledger.exists() else []
-            errors=[e['status'] for e in entries if isinstance(e.get('status'),int) and not 200 <= e['status'] < 300]
+            errors=provider_failures(entries)
             if errors: raw['provider_errors']=errors
             with (args.out/'responses.jsonl').open('a') as f:f.write(json.dumps(raw,ensure_ascii=False)+'\n')
             print(c['id'],score(c,raw)['passed'],flush=True)

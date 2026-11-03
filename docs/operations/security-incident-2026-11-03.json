@@ -1,0 +1,69 @@
+{
+  "incident": "e2e-admin-public-credentials",
+  "date": "2026-11-03",
+  "timezone": "Asia/Taipei",
+  "production_containment": {
+    "account_disabled": true,
+    "role": "User",
+    "password_removed": true,
+    "refresh_tokens_revoked": 12,
+    "jwt_signing_key_rotated": true,
+    "old_signed_jwt_status_before": 200,
+    "old_signed_jwt_status_after": 401,
+    "database_role_password_rotated": true,
+    "old_database_password_rejected": true,
+    "new_database_password_accepted": true,
+    "authoritative_runner_settings_synchronized": true,
+    "legacy_env_synchronized": true,
+    "E2E_TEST_MODE": "0",
+    "ASPNETCORE_ENVIRONMENT": "Production",
+    "DOTNET_ENVIRONMENT": "Production",
+    "api_image_changed": false,
+    "api_health": "healthy",
+    "other_containers_restarted": false,
+    "private_record_directories": [
+      "incident-jwt-20261103T090503Z-df2e9817",
+      "incident-db-20261103T091053Z-69ee0c3c"
+    ]
+  },
+  "public_http_verification": {
+    "healthz": 200,
+    "anonymous_portfolios": 401,
+    "e2e_approval_gate_post": 404,
+    "exposed_credentials_login": 401,
+    "revoked_refresh_token": 401
+  },
+  "available_evidence": {
+    "account_created_utc": "2026-07-09T16:39:20.289843Z",
+    "historical_loopback_token_records": 9,
+    "today_token_records": 3,
+    "today_matching_user_confirmed_friend_ip": 3,
+    "today_other_ip_records": 0,
+    "agent_runs": 0,
+    "research_runs": 0,
+    "prompt_audit_records": 0,
+    "completed_import_market_price_jobs": 3,
+    "import_jobs_local_date": "2026-07-10",
+    "available_caddy_72h_admin_and_e2e_request_count": 7,
+    "caddy_admin_get_200_count": 4,
+    "caddy_admin_get_404_count": 2,
+    "caddy_e2e_post_404_count": 1
+  },
+  "credential_history_scan": {
+    "method": "Exact-value comparison against currently configured production credentials, in memory; no credential values emitted.",
+    "scope": "Reachable objects in locally available Git refs only",
+    "blobs_scanned": 3601,
+    "blobs_over_5mb_skipped": 2,
+    "credential_fields_checked": 11,
+    "initial_match": "PostgreSQL password in historical AGENTS.md and DesignTimeDbContextFactory.cs",
+    "matches_after_rotation": 0,
+    "limitations": "Not a complete secret-discovery scan; does not establish absence of unknown credentials, remote-only refs, deleted history, or compromise."
+  },
+  "remaining": [
+    "Deploy the local E2E/authentication code fix through the normal reviewed green-main release process; it is not included in this incident runtime-only update.",
+    "DeepSeek monthly USD 5 spending cap requested; browser is at sign-in and cap has not been configured or verified.",
+    "User must change the host account password privately because it matches the retired database password found in Git history.",
+    "Historical release snapshots contain retired credentials. Rebase any rollback on current runtime secrets; do not restore retired JWT/database secrets."
+  ],
+  "conclusion": "Available account records match the user-confirmed friend plus historical loopback tests. No research/agent/prompt activity found for this account; incomplete logs cannot exclude all misuse."
+}

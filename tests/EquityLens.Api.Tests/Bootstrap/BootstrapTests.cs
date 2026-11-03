@@ -34,6 +34,8 @@ public sealed class BootstrapTests
             ["ConnectionStrings:PostgreSQL"] = "Host=localhost;Database=unused;Username=unused",
             ["Retrieval:RerankProvider"] = "Cohere"
         });
+        builder.Configuration["E2E_TEST_MODE"] = e2e ? "1" : "0";
+        builder.Configuration["E2E_ADMIN_PASSWORD"] = Guid.NewGuid().ToString("N");
         builder.AddEquityLensInfrastructure();
         builder.AddEquityLensPortfolios();
         builder.AddEquityLensDocuments();

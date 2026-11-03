@@ -31,7 +31,7 @@ PORTFOLIO_EVAL_BUDGET_ENFORCED=1 python -m equitylens_eval.portfolio run \
 
 環境旗標是操作者確認代理已啟動，不能取代代理的總額控制。manifest 含短期 token，僅存私有 `/tmp`（0600），不可 commit。種子只新增資料，不刪除資料；API 資料庫不一致時停止。fixture 日期、hash、程式版本、原始問答、工具軌跡、審批前草稿、最後結果及持倉／交易前後快照保存在輸出目錄。
 
-Runner 讀取費用代理 ledger；遇供應商或額度拒絕時標記該題失敗並停止後續題目，不把錯誤後的通用澄清文字當成正確答案。中斷後仍未結算的 reservation 必須全額扣除，才能開始下一輪。
+Runner 讀取費用代理 ledger；遇供應商或額度拒絕、或題目完成時仍有未結算 provider 呼叫（例如 API 先逾時）時，標記該題失敗並停止後續題目，不把錯誤後的通用澄清文字當成正確答案。中斷後仍未結算的 reservation 必須全額扣除，才能開始下一輪。
 
 Runner 自動核准的是上述隔離合成帳號的 **WorkflowGate 唯讀報告**；不處理 ToolCall 審批、不修改持倉。此功能不適用正式站。
 

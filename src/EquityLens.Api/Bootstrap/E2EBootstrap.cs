@@ -2,6 +2,7 @@ using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.CurrentUser;
+using EquityLens.Api.Services.Auth;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -13,6 +14,7 @@ public static class E2EBootstrap
 {
     public static void MapEquityLensE2E(this WebApplication app)
     {
+        E2ETestAccess.RequireEnabled(app.Configuration, app.Environment);
         app.MapPost("/api/e2e/approval-gate-runs", async (
             ICurrentUserContext currentUser,
             E2EApprovalGateWorkflowDefinitionProvider provider,
@@ -63,18 +65,20 @@ public static class E2EBootstrap
 
     public static async Task SeedEquityLensE2EAsync(this WebApplication app)
     {
+        E2ETestAccess.RequireEnabled(app.Configuration, app.Environment);
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<EquityLensDbContext>();
         var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<AppUser>>();
-        const string email = "playwright-admin-test@example.com";
-        const string password = "Test1234!";
+        const string email = E2ETestAccess.AdminEmail;
+        var password = app.Configuration["E2E_ADMIN_PASSWORD"]!;
         var user = await db.Users.SingleOrDefaultAsync(x => x.Email == email);
         if (user is null)
         {
             user = new AppUser { Id = Guid.NewGuid(), Email = email, DisplayName = "Playwright E2E Admin", Role = "Admin", IsActive = true };
             db.Users.Add(user);
         }
-        user.Role = "Admin";
+        if (user.Role != "Admin")
+            throw new InvalidOperationException("Refusing to promote an existing account to E2E administrator.");
         user.IsActive = true;
         user.PasswordHash = passwordHasher.HashPassword(user, password);
         user.UpdatedAtUtc = DateTime.UtcNow;
