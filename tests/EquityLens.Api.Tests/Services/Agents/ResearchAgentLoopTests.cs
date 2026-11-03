@@ -459,6 +459,31 @@ public sealed class ResearchAgentLoopTests
         }
     }
 
+    [Fact]
+    public async Task SearchTool_PreservesFallbackEvidenceAndRerankDiagnostics()
+    {
+        var services = new ServiceCollection().AddSingleton<IRetrievalPlanner>(new RetrievalPlanner(Options.Create(new RetrievalOptions())))
+            .AddSingleton<IIntentDetector, IntentDetector>().AddSingleton<IDocumentRetriever, SearchFixture>().AddSingleton<IResultReranker, FallbackRanking>();
+        using var provider = services.BuildServiceProvider();
+        var tools = new ResearchLoopTools(provider.GetRequiredService<IServiceScopeFactory>(), Options.Create(new ResearchAgentLoopOptions()));
+        var result = await tools.InvokeAsync(new(Guid.NewGuid(), new("2330", "營收"), [], false), new("search", "search_local", new() { ["query"] = "營收" }), default);
+        Assert.Single(result.Evidence); Assert.True(result.Diagnostics!["usedFallback"]!.GetValue<bool>());
+        Assert.Equal("TimedOut", result.Diagnostics["status"]!.GetValue<string>());
+        Assert.Equal("RerankTimeout", result.Diagnostics["fallbackReason"]!.GetValue<string>());
+        var persisted = JsonSerializer.Deserialize<LoopToolResult>(AgentNodeJson.Serialize(result), AgentNodeJson.SerializerOptions)!;
+        Assert.Equal(result.Diagnostics.ToJsonString(), persisted.Diagnostics!.ToJsonString());
+    }
+    private sealed class SearchFixture : IDocumentRetriever
+    {
+        public Task<IReadOnlyList<RetrievedDocumentChunk>> RetrieveAsync(ResearchRetrievalStrategy strategy, string ticker, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RetrievedDocumentChunk>>([Evidence()]);
+        public IReadOnlyList<RetrievedDocumentChunk> GetCandidatesForRerank(IReadOnlyList<RetrievedDocumentChunk> chunks, int targetCount) => chunks;
+    }
+    private sealed class FallbackRanking : IResultReranker
+    {
+        public Task<RankedSelection> Rank(IReadOnlyList<RetrievedDocumentChunk> chunks, ResearchQuestionIntent intent, int topK, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new RankedSelection(chunks, [], new("reranker", "TimedOut", null, true, "RerankTimeout", 10000, chunks.Count, chunks.Count, 100, null)));
+    }
+
     private sealed class FakeTools : IResearchLoopTools
     {
         public IReadOnlyList<RetrievedDocumentChunk>? Results;

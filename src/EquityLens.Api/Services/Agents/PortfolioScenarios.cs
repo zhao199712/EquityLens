@@ -25,7 +25,6 @@ public sealed record PortfolioScenarioComparison(string Status, string Method, s
 /// <summary>以同一快照比較減碼留現金或轉入既有持股情境，不變更帳戶持倉。</summary>
 public static class PortfolioScenarioCalculator
 {
-    public const string NodeType = "EvaluatePortfolioScenarios";
     public const string ToolName = "evaluate_portfolio_scenario";
     public const string ResultKey = "portfolioScenarioComparison";
     public const string Method = "FixedWeightHistoricalSimpleReturns; cashReturn=0; annualization=252; equityHhi excludes cash";
@@ -119,46 +118,9 @@ public static class PortfolioScenarioCalculator
     }
 }
 
-/// <summary>唯讀情境工具節點；先持久化輸入快照，完成結果後才寫入證據。</summary>
-public sealed class EvaluatePortfolioScenariosNodeHandler : IAgentNodeHandler
+/// <summary>唯讀取得授權投組的情境輸入快照。</summary>
+internal static class PortfolioScenarioSnapshotReader
 {
-    public string NodeType => PortfolioScenarioCalculator.NodeType;
-    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
-    {
-        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
-        var routing = board[AgentBlackboardKeys.RoutingContext]?.Deserialize<InvestmentResearchRoutingContext>(AgentNodeJson.SerializerOptions);
-        var requests = routing?.Scenarios;
-        if (requests is null || requests.Count == 0) return;
-        var saved = context.Node.OutputJson is null ? null : JsonSerializer.Deserialize<PortfolioScenarioComparison>(context.Node.OutputJson, AgentNodeJson.SerializerOptions);
-        if (saved is null)
-        {
-            PortfolioScenarioComparison result;
-            try
-            {
-                var snapshot = context.Node.InputJson is null ? null : JsonNode.Parse(context.Node.InputJson)?["snapshot"]?.Deserialize<PortfolioScenarioSnapshot>(AgentNodeJson.SerializerOptions);
-                snapshot ??= await CaptureAsync(context, cancellationToken);
-                context.Node.InputJson = AgentNodeJson.Serialize(new { tool = PortfolioScenarioCalculator.ToolName, requests, snapshot });
-                await context.DbContext.SaveChangesAsync(cancellationToken);
-                result = PortfolioScenarioCalculator.Calculate(snapshot, requests);
-            }
-            catch (AgentWorkflowQueryException exception)
-            {
-                result = new("Unavailable", PortfolioScenarioCalculator.Method, "", null, 0, .95m, 1, null, [], [exception.Message]);
-            }
-            context.Node.OutputJson = AgentNodeJson.Serialize(result);
-            context.DbContext.AgentToolCalls.Add(new AgentToolCall {
-                Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                ToolName = PortfolioScenarioCalculator.ToolName, Status = result.Status == "Unavailable" ? "Failed" : "Succeeded",
-                ArgumentsJson = context.Node.InputJson ?? AgentNodeJson.Serialize(requests), ResultJson = context.Node.OutputJson,
-                ResultPreview = result.Status, StartedAtUtc = DateTime.UtcNow, CompletedAtUtc = DateTime.UtcNow
-            });
-            await context.DbContext.SaveChangesAsync(cancellationToken);
-            saved = result;
-        }
-        PortfolioDiagnosisBlackboard.Set(board, PortfolioScenarioCalculator.ResultKey, saved);
-        context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
-    }
-
     internal static async Task<PortfolioScenarioSnapshot> CaptureAsync(AgentNodeExecutionContext context, CancellationToken ct)
     {
         var diagnosis = PortfolioDiagnosisBlackboard.Context(AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson));

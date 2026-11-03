@@ -82,9 +82,8 @@ internal static partial class ResearchAgentOutput
     private static partial Regex EvidenceReference();
 }
 
-public sealed class ResearchOutputGateNodeHandler : IAgentNodeHandler
+public sealed class ResearchOutputCheck : IQualityCheckStage
 {
-    public string NodeType => ResearchAgentNodes.OutputGate;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
@@ -124,9 +123,8 @@ public sealed class ResearchOutputGateNodeHandler : IAgentNodeHandler
 }
 public sealed record OutputGateResult(bool Passed, IReadOnlyList<string> BlockingIssues, IReadOnlyList<string> Warnings);
 
-public sealed class RouteResearchAgentQualityNodeHandler : IAgentNodeHandler
+public sealed class ResearchQualityDecision : IQualityCheckStage
 {
-    public string NodeType => ResearchAgentNodes.Route;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);

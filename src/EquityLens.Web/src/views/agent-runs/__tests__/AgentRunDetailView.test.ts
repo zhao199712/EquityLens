@@ -1,3 +1,4 @@
+import { legacyWorkflow } from '../../../services/legacyWorkflows'
 import { mount } from '@vue/test-utils'
 import { computed, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -100,7 +101,7 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
 
   it('renders the bounded research quality loop summary', () => {
     const value = diagnosisRun(null)
-    value.run.workflowType = 'ResearchQualityReview'
+    value.run.workflowType = legacyWorkflow.quality
     value.loopSummary = {
       status: 'Stopped', currentIteration: 2, maxIterations: 2,
       lastAction: 'Complete', stopReason: 'MAX_ITERATIONS',

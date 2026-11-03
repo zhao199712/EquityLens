@@ -130,15 +130,11 @@ public sealed class AgentRunsControllerTests
         public Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default)
         {
             var researchRunId = Guid.NewGuid();
-            return Task.FromResult((new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.ResearchInvestigation, AgentTypes.Research, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0), researchRunId));
+            return Task.FromResult((new AgentRunSummaryResponse(Guid.NewGuid(), LegacyWorkflowReadModel.Research, AgentTypes.Research, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0), researchRunId));
         }
         public bool CreateWasCalled { get; private set; }
-        public bool CreateDraftRevisionWasCalled { get; private set; }
-        public bool CreateResearchQualityReviewWasCalled { get; private set; }
-        public bool CreateEvidenceRemediationWasCalled { get; private set; }
         public Guid LastResearchRunId { get; private set; }
         public Guid LastCriticReviewRunId { get; private set; }
-        public Guid LastEvidenceRemediationRunId { get; private set; }
         public AgentRunDetailResponse? Detail { get; set; } = new(
             new AgentRunSummaryResponse(Guid.NewGuid(), "CriticReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null, 0, 0, 0m),
             [], [], [], [], "{}", "{}", "{}");

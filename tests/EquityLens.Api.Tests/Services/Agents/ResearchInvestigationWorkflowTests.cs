@@ -5,6 +5,7 @@ using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Agents;
+using EquityLens.Api.Services.Agents.Loop;
 using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Ai.Retrieval;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +30,7 @@ public sealed class ResearchInvestigationWorkflowTests
             routing);
 
         var run = await db.AgentRuns.SingleAsync(x => x.Id == created.AgentRun.Id);
-        var input = ResearchInvestigationWorkflowDefinitionProvider.ParseInput(run.InputJson);
+        var input = ResearchInputReader.ParseInput(run.InputJson);
         var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
         var routeEvent = await db.AgentRunEvents.SingleAsync(x => x.AgentRunId == run.Id && x.EventType == AgentEventTypes.QuestionRouted);
         Assert.Equal("conference-call-takeaways", input.RoutingContext?.LeadSkill);
@@ -38,26 +39,7 @@ public sealed class ResearchInvestigationWorkflowTests
         Assert.Contains("conference-call-takeaways", routeEvent.PayloadJson);
     }
 
-    [Fact]
-    public void CreateRun_BuildsBootstrapGraphAndLinksArtifact()
-    {
-        var provider = new ResearchInvestigationWorkflowDefinitionProvider();
-        var userId = Guid.NewGuid();
-        var researchRunId = Guid.NewGuid();
 
-        var run = provider.CreateRun(userId, researchRunId, new ResearchAskRequest("2330", "主要風險是什麼？"));
-
-        Assert.Equal(AgentWorkflowTypes.ResearchInvestigation, run.WorkflowType);
-        Assert.Equal(researchRunId, run.ResearchRunId);
-        Assert.Equal(2, run.Nodes.Count);
-        Assert.Equal(ResearchInvestigationNodeTypes.Validate, run.Nodes.First().NodeType);
-        Assert.Equal(ResearchInvestigationNodeTypes.DetectIntent, run.Nodes.Last().NodeType);
-
-        using var definition = JsonDocument.Parse(run.WorkflowDefinitionJson);
-        Assert.Equal("DynamicStateful", definition.RootElement.GetProperty("orchestrationMode").GetString());
-        Assert.Equal(2, definition.RootElement.GetProperty("nodes").GetArrayLength());
-        Assert.Single(definition.RootElement.GetProperty("edges").EnumerateArray());
-    }
 
     [Theory]
     [InlineData(0, "LocalDocument")]
@@ -69,7 +51,7 @@ public sealed class ResearchInvestigationWorkflowTests
         {
             Id = Guid.NewGuid(),
             UserId = Guid.NewGuid(),
-            WorkflowType = AgentWorkflowTypes.ResearchInvestigation,
+            WorkflowType = LegacyWorkflowReadModel.Research,
             AgentType = AgentTypes.Research,
             Status = AgentRunStatuses.Running,
             BlackboardJson = $$"""
@@ -83,9 +65,9 @@ public sealed class ResearchInvestigationWorkflowTests
                 }
                 """
         };
-        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = ResearchQualityReviewNodeKeys.BuildEvidencePacket, NodeType = ResearchQualityReviewNodeTypes.BuildEvidencePacket, Status = AgentNodeStatuses.Running };
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = CriticReviewNodeKeys.BuildEvidencePacket, NodeType = "QualityGate", Status = AgentNodeStatuses.Running };
 
-        await new BuildEvidencePacketNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+        await new BuildEvidencePacketCheck().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
 
         using var board = JsonDocument.Parse(run.BlackboardJson);
         Assert.Equal(expected, board.RootElement.GetProperty(AgentBlackboardKeys.EvidencePacket).GetProperty("citations")[0].GetProperty("sourceType").GetString());
@@ -122,7 +104,7 @@ public sealed class ResearchInvestigationWorkflowTests
     public async Task RetryResearchInvestigation_RestoresOriginalRequestAndResearchRunLink()
     {
         await using var db = CreateDbContext();
-        var provider = new ResearchInvestigationWorkflowDefinitionProvider();
+        var provider = new ResearchAgentWorkflowDefinitionProvider();
         var request = new ResearchAskRequest("2330", "主要風險是什麼？", SourcePolicy: SourcePolicy.LocalThenWeb, TopK: 7, Temperature: 0.3);
         var artifact = new ResearchRun { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), TraceId = "trace", Ticker = "2330", Question = request.Question, Answer = "old", Status = "Failed" };
         var run = provider.CreateRun(artifact.UserId, artifact.Id, request);
@@ -150,78 +132,9 @@ public sealed class ResearchInvestigationWorkflowTests
         Assert.Equal(artifact.Id, board.RootElement.GetProperty(AgentBlackboardKeys.ResearchRunId).GetGuid());
     }
 
-    [Fact]
-    public async Task RankEvidence_RerankTimeout_PersistsFailedToolCallAndCompletesWithFallback()
-    {
-        await using var db = CreateDbContext();
-        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(
-            Guid.NewGuid(), Guid.NewGuid(), new ResearchAskRequest("2454", "成長與風險", TopK: 5));
-        run.Status = AgentRunStatuses.Running;
-        var node = new AgentRunNode
-        {
-            Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "rank:1",
-            NodeType = ResearchInvestigationNodeTypes.RankEvidence, Status = AgentNodeStatuses.Running
-        };
-        run.Nodes.Add(node);
-        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
-        board[AgentBlackboardKeys.InitialEvidence] = JsonSerializer.SerializeToNode(Array.Empty<RetrievedDocumentChunk>(), AgentNodeJson.SerializerOptions);
-        board[AgentBlackboardKeys.ResearchIntent] = JsonSerializer.SerializeToNode(new IntentDetectionResult(ResearchQuestionIntent.General, [], 1), AgentNodeJson.SerializerOptions);
-        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
-        db.AgentRuns.Add(run);
-        await db.SaveChangesAsync();
-        var events = new List<string>();
-        var handler = new RankAndSelectResearchEvidenceNodeHandler(
-            new TimeoutFallbackReranker(),
-            Options.Create(new RetrievalOptions { RerankProvider = "Cohere", DefaultTopK = 10, MaxTopK = 20 }));
 
-        await handler.ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, eventType, _, _) => events.Add(eventType)));
-        await db.SaveChangesAsync();
 
-        var toolCall = await db.AgentToolCalls.SingleAsync();
-        Assert.Equal("cohereRerank", toolCall.ToolName);
-        Assert.Equal(AgentToolCallStatuses.Failed, toolCall.Status);
-        Assert.Equal("CohereTimeout", toolCall.ErrorMessage);
-        Assert.Contains("TimedOut", toolCall.ResultJson);
-        Assert.Contains("local ranking fallback", toolCall.ResultPreview);
-        Assert.Contains(AgentEventTypes.ToolCallFailed, events);
-        using var output = JsonDocument.Parse(node.OutputJson!);
-        Assert.True(output.RootElement.GetProperty("rerankDiagnostics").GetProperty("usedFallback").GetBoolean());
-    }
 
-    [Fact]
-    public async Task EvaluateEvidence_NodeAgent_OnlyWritesPendingWebRequestToBlackboard()
-    {
-        await using var db = CreateDbContext();
-        var run = new ResearchInvestigationWorkflowDefinitionProvider().CreateRun(
-            Guid.NewGuid(), Guid.NewGuid(), new ResearchAskRequest("2454", "聯發科法說會相較上季改變了什麼？"), RoutingContext());
-        run.Status = AgentRunStatuses.Running;
-        var node = new AgentRunNode
-        {
-            Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "evaluate:1",
-            NodeType = ResearchInvestigationNodeTypes.EvaluateEvidence, Status = AgentNodeStatuses.Running
-        };
-        run.Nodes.Add(node);
-        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
-        board[AgentBlackboardKeys.InitialEvidence] = JsonSerializer.SerializeToNode(Array.Empty<RetrievedDocumentChunk>(), AgentNodeJson.SerializerOptions);
-        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
-        db.AgentRuns.Add(run);
-        await db.SaveChangesAsync();
-        var events = new List<string>();
-        var handler = new EvaluateInitialEvidencePolicyNodeHandler(new RequestingCapabilityAgent());
-
-        await handler.ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, eventType, _, _) => events.Add(eventType)));
-        await db.SaveChangesAsync();
-
-        board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
-        var request = Assert.Single(board[AgentBlackboardKeys.CapabilityRequests]!.AsArray())!.AsObject();
-        Assert.Equal("retrieve-web-research-evidence", request["capabilityId"]!.GetValue<string>());
-        Assert.Equal("Pending", request["status"]!.GetValue<string>());
-        Assert.False(board[AgentBlackboardKeys.InitialEvidencePolicy]!["useWeb"]!.GetValue<bool>());
-        Assert.Contains(AgentEventTypes.CapabilityRequested, events);
-        var toolCall = await db.AgentToolCalls.SingleAsync();
-        Assert.Equal("evidenceNeedsAgentLLM", toolCall.ToolName);
-        Assert.Equal(AgentToolCallStatuses.Succeeded, toolCall.Status);
-    }
 
     private static EquityLensDbContext CreateDbContext() => new TestDbContext(
         new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
@@ -268,25 +181,7 @@ public sealed class ResearchInvestigationWorkflowTests
         public Task AcknowledgeAsync(string streamId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
-    private sealed class TimeoutFallbackReranker : IResultReranker
-    {
-        public Task<RankedSelection> Rank(
-            IReadOnlyList<RetrievedDocumentChunk> chunks,
-            ResearchQuestionIntent intent,
-            int topK,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new RankedSelection([], [], new(
-                "Cohere", "TimedOut", "rerank-v4.0-fast", true, "CohereTimeout",
-                10_001, chunks.Count, 0, 70_822, null)));
-    }
 
-    private sealed class RequestingCapabilityAgent : IWebCapabilityRequestAgent
-    {
-        public Task<WebCapabilityAssessment> AssessAsync(
-            ResearchAskRequest request,
-            IReadOnlyList<RetrievedDocumentChunk> localEvidence,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new WebCapabilityAssessment(
-                "Request", "缺少前一季法說會基線，建議搜尋公開資料。", ["前一季指引"], "high", "Llm", "test", 10, 5));
-    }
+
+
 }

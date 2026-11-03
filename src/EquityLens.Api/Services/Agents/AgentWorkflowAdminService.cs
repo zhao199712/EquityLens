@@ -22,18 +22,15 @@ public sealed class AgentWorkflowAdminService : IAgentWorkflowAdminService
     private readonly EquityLensDbContext db;
     private readonly IAgentWorkflowCatalog catalog;
     private readonly IReadOnlyDictionary<string, IAgentWorkflowDefinitionProvider> providers;
-    private readonly INodeCapabilityRegistry? capabilities;
 
     public AgentWorkflowAdminService(
         EquityLensDbContext db,
         IAgentWorkflowCatalog catalog,
-        IEnumerable<IAgentWorkflowDefinitionProvider>? providers = null,
-        INodeCapabilityRegistry? capabilities = null)
+        IEnumerable<IAgentWorkflowDefinitionProvider>? providers = null)
     {
         this.db = db;
         this.catalog = catalog;
         this.providers = (providers ?? []).ToDictionary(x => x.WorkflowType, StringComparer.Ordinal);
-        this.capabilities = capabilities;
     }
 
     public async Task<IReadOnlyList<AgentWorkflowAdminResponse>> ListWorkflowsAsync(CancellationToken ct = default)
@@ -109,12 +106,10 @@ public sealed class AgentWorkflowAdminService : IAgentWorkflowAdminService
                 edge.GetProperty("from").GetString() ?? throw new InvalidOperationException("Workflow edge from is missing."),
                 edge.GetProperty("to").GetString() ?? throw new InvalidOperationException("Workflow edge to is missing.")))
             .ToList();
-        var dynamicNodeTypes = mode == "DynamicStateful" && capabilities is not null
-            ? capabilities.Capabilities.Select(capability => capability.NodeType).Distinct(StringComparer.Ordinal).ToList()
-            : [];
+
 
         return new(x.WorkflowType, s?.DisplayName ?? x.DisplayName, s?.Description ?? x.Description, x.AgentType, s?.IsEnabled ?? true,
-            x.NodeTypes, x.Edges.Select(e => new AgentWorkflowEdgeResponse(e.From, e.To)).ToList(), mode, initialNodes, initialEdges, dynamicNodeTypes);
+            x.NodeTypes, x.Edges.Select(e => new AgentWorkflowEdgeResponse(e.From, e.To)).ToList(), mode, initialNodes, initialEdges, []);
     }
     private static AgentNodeAdminResponse Map(AgentNodeCatalogEntry x, AgentNodeSetting? s)
     {

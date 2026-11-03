@@ -148,26 +148,3 @@ public sealed class InvestmentResearchRouter(IChatCompletionService chat, ILogge
         只回 JSON：{"action":"route|clarify|direct_reply|reject","workflow":"Research|Portfolio"或null,"params":{"ticker":null,"portfolioId":null,"scenarios":null,"period":null},"missing":[],"confidence":"high|medium|low","response":"簡短繁體中文回覆"}。
         """;
 }
-public static class InvestmentResearchSkillPrompts
-{
-    public const string ConferenceCallTakeaways = """
-        # 角色定位
-        你是一名機構級賣方分析師。把管理層評論轉化為「管理層相對前次實際改變了什麼，以及這對投資論點意味著什麼」，而不是逐字稿摘要。
-
-        # 工作流程與品質閘門
-        1. 區分 prepared remarks、管理層 Q&A 與分析師/主持人的發言；絕不可把分析師評論歸因給管理層。
-        2. 對照前期基線萃取 guidance 與 KPI delta。每個 delta 必須同時有前期與本期證據；缺少基線時標記 unresolved/open item，禁止補造。
-        3. 關鍵管理層陳述必須逐字引用並標記 management_statement；語氣變化屬 inference，必須附具體文本證據。
-        4. 將發現分類為 confirmed、changed、new、unresolved 或 contradictory，並說明對照基線。
-        5. 只使用提供的證據，保留跨語言不確定性，不產生交易指令。
-
-        # 輸出結構
-        無論證據是否充足，都必須保留以下六個段落及順序；證據不足的段落應明確標示 unresolved/open item，不可省略整個段落。
-        1. Top Takeaways / 核心要點
-        2. Guidance Delta / 指引變化
-        3. Tone Shift / 語氣變化
-        4. Verbatim Quote Register / 逐字引用登錄
-        5. Thesis Implications / 論點影響
-        6. Review Issues / 未決問題
-        """;
-}

@@ -1,4 +1,5 @@
 using EquityLens.Api.Data.Entities;
+using EquityLens.Api.Services.Agents.Loop;
 using EquityLens.Api.Services.Agents;
 using System.Text.Json.Nodes;
 
@@ -48,22 +49,9 @@ public sealed class AgentRunGraphValidatorTests
         Assert.Equal("Agent run contains node 'extra' not present in workflow definition.", exception.Message);
     }
 
-    [Fact]
-    public void Validate_DynamicRetrieveArguments_SatisfyRetrievalPlanDependency()
-    {
-        var run = DynamicRetrieveRun("""{"searchIntents":[{"topic":"台積電資本支出","targetClaims":["FCF impact"],"preferredSourceRoles":["Primary"],"topK":5,"freshness":"year"}]}""");
-        new AgentRunGraphValidator().Validate(run, ["retrieve:1"]);
-    }
 
-    [Theory]
-    [InlineData("{\"searchIntents\":[]}")]
-    [InlineData("{\"searchIntents\":[{\"topic\":\"x\",\"topK\":99}]}")]
-    [InlineData("not-json")]
-    public void Validate_InvalidDynamicRetrieveArguments_DoNotBypassDependency(string input)
-    {
-        var exception = Assert.Throws<InvalidOperationException>(() => new AgentRunGraphValidator().Validate(DynamicRetrieveRun(input), ["retrieve:1"]));
-        Assert.Contains("retrievalPlan", exception.Message);
-    }
+
+
 
     [Fact]
     public void RetryPlannedArguments_AreRestoredFromDefinitionSnapshot()
@@ -74,45 +62,13 @@ public sealed class AgentRunGraphValidatorTests
         Assert.False(arguments.ContainsKey("load")); Assert.Equal("台積電", restored["searchIntents"]![0]!["topic"]!.GetValue<string>());
     }
 
-    [Fact]
-    public void Validate_RetainedFeedbackRevisionGraph_AcceptsResetBlackboardForRetry()
-    {
-        var run = new FeedbackRevisionWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
-        (string Key, string Type)[] dynamicNodes =
-        [
-            ("plan:1", ResearchInvestigationNodeTypes.PlanRetrieval),
-            ("local:1", ResearchInvestigationNodeTypes.RetrieveLocal),
-            ("evaluate:1", ResearchInvestigationNodeTypes.EvaluateEvidence),
-            ("rank:1", ResearchInvestigationNodeTypes.RankEvidence),
-            ("draft:1", ResearchInvestigationNodeTypes.DraftAnswer),
-            ("packet:1", ResearchQualityReviewNodeTypes.BuildEvidencePacket),
-            ("check:1", ResearchQualityReviewNodeTypes.CheckEvidence),
-            ("critic:1", ResearchQualityReviewNodeTypes.CritiqueAnswer),
-            ("finalize:1", ResearchQualityReviewNodeTypes.FinalizeCriticReport)
-        ];
-        foreach (var (key, type) in dynamicNodes)
-            run.Nodes.Add(new AgentRunNode { Id = Guid.NewGuid(), NodeKey = key, NodeType = type, Status = AgentNodeStatuses.Pending });
-        var order = new[] { FeedbackRevisionNodeKeys.LoadContext, FeedbackRevisionNodeKeys.ValidateContext }
-            .Concat(dynamicNodes.Select(x => x.Key)).ToArray();
 
-        new AgentRunGraphValidator().Validate(run, order);
-    }
 
     [Fact]
     public void NodeMetadata_AllCriticReviewNodeTypes_HaveMetadata()
     {
         var allMetadata = AgentNodeMetadata.GetAll();
-        var nodeTypes = new[]
-        {
-            CriticReviewNodeTypes.LoadResearchRun,
-            CriticReviewNodeTypes.BuildEvidencePacket,
-            CriticReviewNodeTypes.CheckEvidence,
-            CriticReviewNodeTypes.CritiqueAnswer,
-            CriticReviewNodeTypes.FinalizeCriticReport,
-            DraftRevisionNodeTypes.LoadCriticReviewRun,
-            DraftRevisionNodeTypes.DraftRevisedAnswer,
-            DraftRevisionNodeTypes.FinalizeRevision,
-        };
+        var nodeTypes = new CriticReviewWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid()).Nodes.Select(n => n.NodeType);
 
         Assert.All(nodeTypes, nodeType => Assert.Contains(allMetadata.Keys, k => k == nodeType));
     }
@@ -137,9 +93,9 @@ public sealed class AgentRunGraphValidatorTests
     }
 
     [Fact]
-    public void NodeMetadata_ResearchQualityReviewWorkflow_AllNodesHaveMetadata()
+    public void NodeMetadata_ResearchAgentWorkflow_AllNodesHaveMetadata()
     {
-        var provider = new ResearchQualityReviewWorkflowDefinitionProvider();
+        var provider = new ResearchAgentWorkflowDefinitionProvider();
         var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid());
         var planner = new AgentWorkflowPlanner();
         var executionOrder = planner.GetExecutionOrder(run.WorkflowDefinitionJson);
@@ -169,9 +125,9 @@ public sealed class AgentRunGraphValidatorTests
     }
 
     [Fact]
-    public void NodeMetadataValidator_ResearchQualityReviewWorkflow_ValidBlackboard_DoesNotThrow()
+    public void NodeMetadataValidator_ResearchAgentWorkflow_ValidBlackboard_DoesNotThrow()
     {
-        var provider = new ResearchQualityReviewWorkflowDefinitionProvider();
+        var provider = new ResearchAgentWorkflowDefinitionProvider();
         var researchRunId = Guid.NewGuid();
         var run = provider.CreateRun(Guid.NewGuid(), researchRunId);
         var planner = new AgentWorkflowPlanner();
@@ -239,9 +195,4 @@ public sealed class AgentRunGraphValidatorTests
         }).ToList()
     };
 
-    private static AgentRun DynamicRetrieveRun(string input) => new()
-    {
-        Id = Guid.NewGuid(), BlackboardJson = new JsonObject { [AgentBlackboardKeys.Ticker] = "2330", [AgentBlackboardKeys.Question] = "問題" }.ToJsonString(),
-        Nodes = [new AgentRunNode { Id = Guid.NewGuid(), NodeKey = "retrieve:1", NodeType = EvidenceRemediationNodeTypes.RetrieveEvidence, Status = AgentNodeStatuses.Pending, InputJson = input }]
-    };
 }

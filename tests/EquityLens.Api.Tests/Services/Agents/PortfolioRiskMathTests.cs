@@ -30,16 +30,7 @@ public sealed class PortfolioRiskMathTests
     {
         Assert.Equal(37, PortfolioRiskMathCapabilities.All.Count);
         Assert.Equal(37, PortfolioRiskMathCapabilities.All.Select(x => x.Id).Distinct().Count());
-        Assert.Equal(37, PortfolioRiskMathCapabilities.All.Select(x => x.ArgumentSchema).Distinct().Count());
-        Assert.All(PortfolioRiskMathCapabilities.All, item =>
-        {
-            Assert.Equal(PortfolioRiskMathNodeTypes.Execute, item.NodeType);
-            Assert.NotNull(item.ParametersSchema);
-            Assert.NotEqual("PortfolioRiskMathArguments", item.ArgumentSchema);
-            Assert.Contains(AgentBlackboardKeys.MathInputs, item.RequiredKeys);
-        });
-        var skill = new WorkflowSkillCatalog().Skills.Single(x => x.Id == "portfolio-risk-mathematics");
-        Assert.Equal(38, skill.Capabilities.Count);
+        Assert.All(PortfolioRiskMathCapabilities.All, item => Assert.NotNull(item.ParametersSchema));
     }
 
     public static IEnumerable<object[]> Operations => PortfolioRiskMathCapabilities.All.Select(x => new object[] { x.Id });
@@ -57,11 +48,8 @@ public sealed class PortfolioRiskMathTests
     public void Registry_ExposesCapabilitySpecificParameterSchemas()
     {
         Assert.Equal(["confidenceLevel"], PropertyNames("calculate-expected-shortfall"));
-        Assert.Equal("HistoricalExpectedShortfallArguments", Capability("calculate-expected-shortfall").ArgumentSchema);
         Assert.Equal(["riskFreeRate"], PropertyNames("calculate-sharpe-ratio"));
-        Assert.Equal("SharpeRatioArguments", Capability("calculate-sharpe-ratio").ArgumentSchema);
         Assert.Equal(["confidenceLevel", "horizonDays", "lambda", "shrinkageAlpha", "simulations"], PropertyNames("run-multivariate-fhs-simulation"));
-        Assert.Equal("MultivariateFhsArguments", Capability("run-multivariate-fhs-simulation").ArgumentSchema);
         Assert.Empty(PropertyNames("calculate-return"));
     }
 
@@ -99,49 +87,9 @@ public sealed class PortfolioRiskMathTests
         Assert.Empty(Assert.IsType<JsonObject>(noArguments.Parameters));
     }
 
-    [Fact]
-    public async Task ExecuteNode_BatchEnvelopeIsNotPassedToCapabilityParsers()
-    {
-        await using var db = CreateDb();
-        var board = new JsonObject
-        {
-            [AgentBlackboardKeys.MathInputs] = JsonSerializer.SerializeToNode(Inputs(), AgentNodeJson.SerializerOptions),
-            [AgentBlackboardKeys.MathResults] = new JsonArray()
-        };
-        var run = new AgentRun { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions) };
-        var node = new AgentRunNode
-        {
-            Id = Guid.NewGuid(), AgentRunId = run.Id, NodeType = PortfolioRiskMathNodeTypes.Execute,
-            NodeKey = PortfolioRiskMathNodeKeys.ExecuteCore,
-            InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-expected-shortfall", "calculate-sharpe-ratio" } })
-        };
 
-        await new ExecutePortfolioRiskMathNodeHandler(new PortfolioRiskMathExecutor()).ExecuteAsync(
-            new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
 
-        var results = JsonNode.Parse(node.OutputJson!)!.AsArray();
-        Assert.Equal(2, results.Count);
-        Assert.Equal(["confidenceLevel"], results[0]!["parameters"]!.AsObject().Select(x => x.Key).ToArray());
-        Assert.Equal(["riskFreeRate"], results[1]!["parameters"]!.AsObject().Select(x => x.Key).ToArray());
-    }
 
-    [Fact]
-    public async Task ExecuteNode_BatchEnvelopeRejectsSharedCapabilityParameters()
-    {
-        await using var db = CreateDb();
-        var board = new JsonObject { [AgentBlackboardKeys.MathInputs] = JsonSerializer.SerializeToNode(Inputs(), AgentNodeJson.SerializerOptions) };
-        var run = new AgentRun { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions) };
-        var node = new AgentRunNode
-        {
-            Id = Guid.NewGuid(), AgentRunId = run.Id, NodeType = PortfolioRiskMathNodeTypes.Execute, NodeKey = "batch",
-            InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-expected-shortfall" }, shrinkageAlpha = .1m })
-        };
-
-        var error = await Assert.ThrowsAsync<AgentNodeException>(() =>
-            new ExecutePortfolioRiskMathNodeHandler(new PortfolioRiskMathExecutor()).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { })));
-
-        Assert.Equal("math_batch_parameter_unknown", error.ErrorCode);
-    }
 
     [Fact]
     public void Executor_RejectsPlannerNumericSourceInjection()
@@ -221,7 +169,7 @@ public sealed class PortfolioRiskMathTests
         await db.SaveChangesAsync();
         var board = AgentBlackboardContracts.CreateInitialPortfolioDiagnosisBlackboard(portfolioId, new DateOnly(2025, 1, 1), new DateOnly(2025, 1, 6));
         var run = new AgentRun { Id = Guid.NewGuid(), UserId = userId, WorkflowType = AgentWorkflowTypes.PortfolioDiagnosis, AgentType = AgentTypes.Portfolio, BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions) };
-        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = PortfolioRiskMathNodeKeys.PrepareInputs, NodeType = PortfolioRiskMathNodeTypes.PrepareInputs };
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "portfolioAgent", NodeType = "PortfolioAgentLoop" };
 
         var result = await new PortfolioRiskMathInputProvider().PrepareAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }), CancellationToken.None);
 
@@ -236,7 +184,7 @@ public sealed class PortfolioRiskMathTests
         foreach (var (day, price) in values) db.MarketPrices.Add(new MarketPrice { Id = Guid.NewGuid(), SecurityId = securityId, PriceTime = new DateTime(2025, 1, day, 0, 0, 0, DateTimeKind.Utc), Close = price, Interval = "1d", DataSource = "test" });
     }
 
-    private static NodeCapability Capability(string id) => PortfolioRiskMathCapabilities.All.Single(x => x.Id == id);
+    private static RiskMathFunction Capability(string id) => PortfolioRiskMathCapabilities.All.Single(x => x.Id == id);
     private static string[] PropertyNames(string id) => Capability(id).ParametersSchema!["properties"]!.AsObject().Select(x => x.Key).Order().ToArray();
     private static JsonObject FastArguments(string operation)
     {

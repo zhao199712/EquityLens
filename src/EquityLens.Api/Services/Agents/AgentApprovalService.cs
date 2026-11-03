@@ -106,14 +106,14 @@ public sealed class AgentApprovalService(
                 var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
                 var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject ?? new JsonObject();
                 runtime["status"] = "Cancelled";
-                runtime["stopReason"] = AgentLoopStopReasons.HumanRejected;
-                runtime["lastReasonCode"] = AgentLoopStopReasons.HumanRejected;
+                runtime["stopReason"] = "HumanRejected";
+                runtime["lastReasonCode"] = "HumanRejected";
                 board[AgentBlackboardKeys.Runtime] = runtime;
                 run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
             }
             run.LeaseOwner = null;
             run.LeaseExpiresAtUtc = null;
-            if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)
+            if ((run.WorkflowType == AgentWorkflowTypes.ResearchAgent) && run.ResearchRunId is Guid researchRunId)
             {
                 var researchRun = await db.ResearchRuns.SingleOrDefaultAsync(x => x.Id == researchRunId, cancellationToken);
                 if (researchRun is not null) researchRun.Status = "Cancelled";

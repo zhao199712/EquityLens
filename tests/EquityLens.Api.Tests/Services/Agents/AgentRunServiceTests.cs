@@ -1,3 +1,4 @@
+using EquityLens.Api.Services.Agents.Loop;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Agents;
@@ -66,9 +67,9 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
-    public void ResearchQualityReviewPolicyEvaluator_EvidenceFinding_SetsRouteBackToNull()
+    public void ResearchAgentPolicyEvaluator_EvidenceFinding_SetsRouteBackToNull()
     {
-        var evaluator = new ResearchQualityReviewPolicyEvaluator();
+        var evaluator = new ResearchAgentPolicyEvaluator();
         var criticReview = new JsonObject
         {
             [CriticReviewFields.Findings] = new JsonArray
@@ -78,8 +79,8 @@ public sealed class AgentRunServiceTests
         };
 
         var decision = evaluator.Evaluate(new WorkflowPolicyContext(
-            AgentWorkflowTypes.ResearchQualityReview,
-            ResearchQualityReviewNodeKeys.FinalizeCriticReport,
+            AgentWorkflowTypes.ResearchAgent,
+            CriticReviewNodeKeys.FinalizeCriticReport,
             new JsonObject(),
             criticReview));
 
@@ -91,17 +92,17 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
-    public void ResearchQualityReviewPolicyEvaluator_NoFindings_AcceptsAnswer()
+    public void ResearchAgentPolicyEvaluator_NoFindings_AcceptsAnswer()
     {
-        var evaluator = new ResearchQualityReviewPolicyEvaluator();
+        var evaluator = new ResearchAgentPolicyEvaluator();
         var criticReview = new JsonObject
         {
             [CriticReviewFields.Findings] = new JsonArray()
         };
 
         var decision = evaluator.Evaluate(new WorkflowPolicyContext(
-            AgentWorkflowTypes.ResearchQualityReview,
-            ResearchQualityReviewNodeKeys.FinalizeCriticReport,
+            AgentWorkflowTypes.ResearchAgent,
+            CriticReviewNodeKeys.FinalizeCriticReport,
             new JsonObject(),
             criticReview));
 
@@ -111,7 +112,7 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
-    public void ResearchInvestigationPolicyEvaluator_DeterministicEvidencePass_OverridesMediumMissingCitation()
+    public void ResearchAgentPolicyEvaluator_DeterministicEvidencePass_OverridesMediumMissingCitation()
     {
         var board = new JsonObject
         {
@@ -124,7 +125,7 @@ public sealed class AgentRunServiceTests
             [CriticReviewFields.Findings] = new JsonArray { AgentBlackboardContracts.CreateFinding("Medium", "MissingCitation", "LLM claimed citation text was missing.", "Provide quotes.") }
         };
 
-        var decision = new ResearchInvestigationPolicyEvaluator().Evaluate(new(AgentWorkflowTypes.ResearchInvestigation, "finalizeCriticReport:1", board, review));
+        var decision = new ResearchAgentPolicyEvaluator().Evaluate(new(AgentWorkflowTypes.ResearchAgent, "finalizeCriticReport:1", board, review));
 
         Assert.Equal("AcceptAnswer", decision.RecommendedNextAction);
         Assert.False(decision.RequiresRevision);
@@ -132,7 +133,7 @@ public sealed class AgentRunServiceTests
     }
 
     [Fact]
-    public void ResearchInvestigationPolicyEvaluator_HighFinding_DoesNotUseFastPath()
+    public void ResearchAgentPolicyEvaluator_HighFinding_DoesNotUseFastPath()
     {
         var board = new JsonObject
         {
@@ -145,31 +146,17 @@ public sealed class AgentRunServiceTests
             [CriticReviewFields.Findings] = new JsonArray { AgentBlackboardContracts.CreateFinding("High", "InsufficientEvidence", "Material gap.", "Retrieve evidence.") }
         };
 
-        var decision = new ResearchInvestigationPolicyEvaluator().Evaluate(new(AgentWorkflowTypes.ResearchInvestigation, "finalizeCriticReport:1", board, review));
+        var decision = new ResearchAgentPolicyEvaluator().Evaluate(new(AgentWorkflowTypes.ResearchAgent, "finalizeCriticReport:1", board, review));
 
         Assert.True(decision.RequiresMoreEvidence);
     }
 
-    [Fact]
-    public void FeedbackRevisionPolicyEvaluator_UsesResearchEvidenceAcceptancePolicy()
-    {
-        var board = new JsonObject
-        {
-            [AgentBlackboardKeys.EvidencePacket] = new JsonObject { ["evidenceSummary"] = new JsonObject { ["hasAnswer"] = true, ["hasCitations"] = true, ["emptyQuoteCount"] = 0 } },
-            [AgentBlackboardKeys.EvidenceChecks] = new JsonObject { [EvidenceCheckFields.FindingCount] = 0 }
-        };
-        var review = new JsonObject { [CriticReviewFields.OverallSeverity] = "None", [CriticReviewFields.Findings] = new JsonArray() };
 
-        var decision = new FeedbackRevisionPolicyEvaluator().Evaluate(new(AgentWorkflowTypes.FeedbackRevision, "finalizeFeedbackRevision:1", board, review));
-
-        Assert.Equal("AcceptAnswer", decision.RecommendedNextAction);
-        Assert.False(decision.RequiresRevision);
-    }
 
     [Fact]
-    public void ResearchQualityReviewPolicyEvaluator_NonEvidenceFinding_SetsRouteBackToNull()
+    public void ResearchAgentPolicyEvaluator_NonEvidenceFinding_SetsRouteBackToNull()
     {
-        var evaluator = new ResearchQualityReviewPolicyEvaluator();
+        var evaluator = new ResearchAgentPolicyEvaluator();
         var criticReview = new JsonObject
         {
             [CriticReviewFields.Findings] = new JsonArray
@@ -179,8 +166,8 @@ public sealed class AgentRunServiceTests
         };
 
         var decision = evaluator.Evaluate(new WorkflowPolicyContext(
-            AgentWorkflowTypes.ResearchQualityReview,
-            ResearchQualityReviewNodeKeys.FinalizeCriticReport,
+            AgentWorkflowTypes.ResearchAgent,
+            CriticReviewNodeKeys.FinalizeCriticReport,
             new JsonObject(),
             criticReview));
 
@@ -494,28 +481,7 @@ public sealed class AgentRunServiceTests
 
 
 
-    [Fact]
-    public async Task WorkflowAdmin_ResearchQualityReview_ReportsInitialDynamicGraph()
-    {
-        await using var db = CreateDbContext();
-        var service = new AgentWorkflowAdminService(
-            db,
-            new AgentWorkflowCatalog(),
-            [new ResearchQualityReviewWorkflowDefinitionProvider()],
-            new NodeCapabilityRegistry());
 
-        var workflows = await service.ListWorkflowsAsync();
-
-        var workflow = workflows.Single(x => x.WorkflowType == AgentWorkflowTypes.ResearchQualityReview);
-        Assert.Equal("DynamicStateful", workflow.OrchestrationMode);
-        Assert.Equal(5, workflow.InitialNodes.Count);
-        Assert.Equal(4, workflow.InitialEdges.Count);
-        Assert.Equal(ResearchQualityReviewNodeTypes.LoadResearchRun, workflow.InitialNodes[0].NodeType);
-        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, workflow.InitialNodes[^1].NodeType);
-        Assert.Contains(DraftRevisionNodeTypes.DraftRevisedAnswer, workflow.DynamicNodeTypes);
-        Assert.Contains(EvidenceRemediationNodeTypes.RetrieveEvidence, workflow.DynamicNodeTypes);
-        Assert.Contains(EvidenceReanalysisNodeTypes.Reanalyze, workflow.DynamicNodeTypes);
-    }
 
 
 
@@ -558,22 +524,7 @@ public sealed class AgentRunServiceTests
         Assert.Equal(nodeTypes.Length, handlers.Select(handler => handler.NodeType).Distinct(StringComparer.Ordinal).Count());
     }
 
-    [Fact]
-    public void DraftRevisionNodeHandlers_CoverEveryWorkflowNodeType()
-    {
-        var handlers = CreateAllHandlers(
-            new FakeResearchRunTraceService(BuildResearchRunDetail(Guid.NewGuid())),
-            new DeterministicCriticReviewAgent());
 
-        var nodeTypes = new[]
-        {
-            DraftRevisionNodeTypes.LoadCriticReviewRun,
-            DraftRevisionNodeTypes.DraftRevisedAnswer,
-            DraftRevisionNodeTypes.FinalizeRevision
-        };
-
-        Assert.All(nodeTypes, nodeType => Assert.Contains(handlers, handler => handler.NodeType == nodeType));
-    }
 
     [Fact]
     public async Task CreateCriticReviewAsync_MissingWorkflowProvider_Throws()
@@ -618,8 +569,8 @@ public sealed class AgentRunServiceTests
         IAgentNodeHandler[] handlers =
         [
             new LoadResearchRunNodeHandler(new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3))),
-            new BuildEvidencePacketNodeHandler(),
-            new CheckEvidenceNodeHandler(),
+
+
             new EquityLens.Api.Services.Agents.Loop.QualityGateNodeHandler(new DeterministicCriticReviewAgent(), [new CriticReviewPolicyEvaluator()])
         ];
         var service = CreateServiceWithHandlers(db, [new CriticReviewWorkflowDefinitionProvider()], handlers);
@@ -805,38 +756,7 @@ public sealed class AgentRunServiceTests
             root["edges"]!.AsArray().Select(e => e!["from"]!.GetValue<string>() + "->" + e["to"]!.GetValue<string>()));
     }
 
-    private static void AssertResearchQualityReviewWorkflowDefinition(string workflowDefinitionJson)
-    {
-        using var document = JsonDocument.Parse(workflowDefinitionJson);
-        var root = document.RootElement;
-        Assert.Equal(AgentWorkflowTypes.ResearchQualityReview, root.GetProperty("workflowType").GetString());
-        Assert.Equal(ResearchQualityReviewWorkflow.Version, root.GetProperty("version").GetInt32());
 
-        var nodes = root.GetProperty("nodes").EnumerateArray().ToArray();
-        Assert.Equal("DynamicStateful", root.GetProperty("orchestrationMode").GetString());
-        Assert.Equal(DynamicGoalStatuses.Complete, root.GetProperty("goalStatus").GetString());
-        Assert.Equal(5, nodes.Length);
-        Assert.Equal(ResearchQualityReviewNodeKeys.LoadResearchRun, nodes[0].GetProperty("id").GetString());
-        Assert.Equal(ResearchQualityReviewNodeTypes.LoadResearchRun, nodes[0].GetProperty("type").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.BuildEvidencePacket, nodes[1].GetProperty("id").GetString());
-        Assert.Equal(ResearchQualityReviewNodeTypes.BuildEvidencePacket, nodes[1].GetProperty("type").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.CheckEvidence, nodes[2].GetProperty("id").GetString());
-        Assert.Equal(ResearchQualityReviewNodeTypes.CheckEvidence, nodes[2].GetProperty("type").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.CritiqueAnswer, nodes[3].GetProperty("id").GetString());
-        Assert.Equal(ResearchQualityReviewNodeTypes.CritiqueAnswer, nodes[3].GetProperty("type").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeCriticReport, nodes[4].GetProperty("id").GetString());
-        Assert.Equal(ResearchQualityReviewNodeTypes.FinalizeCriticReport, nodes[4].GetProperty("type").GetString());
-        var edges = root.GetProperty("edges").EnumerateArray().ToArray();
-        Assert.Equal(4, edges.Length);
-        Assert.Equal(ResearchQualityReviewNodeKeys.LoadResearchRun, edges[0].GetProperty("from").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.BuildEvidencePacket, edges[0].GetProperty("to").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.BuildEvidencePacket, edges[1].GetProperty("from").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.CheckEvidence, edges[1].GetProperty("to").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.CheckEvidence, edges[2].GetProperty("from").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.CritiqueAnswer, edges[2].GetProperty("to").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.CritiqueAnswer, edges[3].GetProperty("from").GetString());
-        Assert.Equal(ResearchQualityReviewNodeKeys.FinalizeCriticReport, edges[3].GetProperty("to").GetString());
-    }
 
     [Fact]
     public async Task SubmitFeedbackAsync_NeedsCorrection_CreatesImmutableChildRunAndResearchArtifact()
@@ -906,7 +826,7 @@ public sealed class AgentRunServiceTests
         };
         db.AgentRuns.Add(sourceRun); await db.SaveChangesAsync();
         var queue = new RecordingAgentRunQueue();
-        var service = CreateServiceWithHandlers(db, [new FeedbackRevisionWorkflowDefinitionProvider()], [], queue);
+        var service = new AgentRunService(db, [new ResearchAgentWorkflowDefinitionProvider()], new AgentRunStateMachine(), new AgentNodeStateMachine(), queue);
 
         var result = await service.SubmitFeedbackAsync(sourceRun.Id, userId,
             new SubmitAgentFeedbackRequest(Guid.NewGuid(), AgentFeedbackTypes.Helpful, null));
@@ -933,7 +853,7 @@ public sealed class AgentRunServiceTests
 
         return new AgentRunService(
             db,
-            [new CriticReviewWorkflowDefinitionProvider(), new DraftRevisionWorkflowDefinitionProvider(), new ResearchQualityReviewWorkflowDefinitionProvider()],
+            [new CriticReviewWorkflowDefinitionProvider(), new ResearchAgentWorkflowDefinitionProvider(), new PortfolioDiagnosisWorkflowDefinitionProvider()],
             runStateMachine,
             nodeStateMachine,
             agentRunQueue,
@@ -966,7 +886,7 @@ public sealed class AgentRunServiceTests
     [
         new LoadResearchRunNodeHandler(researchTraceService),
         new EquityLens.Api.Services.Agents.Loop.QualityGateNodeHandler(criticReviewAgent, [new CriticReviewPolicyEvaluator()]),
-        new FinalizeCriticReportNodeHandler([new CriticReviewPolicyEvaluator(), new ResearchQualityReviewPolicyEvaluator()])
+        new FinalizeCriticReportNodeHandler([new CriticReviewPolicyEvaluator(), new ResearchAgentPolicyEvaluator()])
     ];
 
     private static IAgentNodeHandler[] CreateAllHandlers(
@@ -974,74 +894,14 @@ public sealed class AgentRunServiceTests
         ICriticReviewAgent criticReviewAgent) =>
     [
         new LoadResearchRunNodeHandler(researchTraceService),
-        new BuildEvidencePacketNodeHandler(),
-        new CheckEvidenceNodeHandler(),
-        new CritiqueAnswerNodeHandler(criticReviewAgent),
+
+
+
         new EquityLens.Api.Services.Agents.Loop.QualityGateNodeHandler(criticReviewAgent, [new CriticReviewPolicyEvaluator()]),
-        new FinalizeCriticReportNodeHandler([new CriticReviewPolicyEvaluator(), new ResearchQualityReviewPolicyEvaluator()]),
-        new LoadCriticReviewRunNodeHandler(),
-        new DraftRevisedAnswerNodeHandler(new DeterministicDraftRevisionAgent()),
-        new FinalizeRevisionNodeHandler(),
-        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.ExtractClaims),
-        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.RetrieveEvidence),
-        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.RetrieveWebEvidence),
-        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.AssessSupport),
-        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.ValidateMappings),
-        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.Route),
-        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.BuildPacket),
-        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.DraftRevision),
-        new LoopFixtureNodeHandler(EvidenceRemediationNodeTypes.Finalize)
+        new FinalizeCriticReportNodeHandler([new CriticReviewPolicyEvaluator(), new ResearchAgentPolicyEvaluator()]),
     ];
 
-    private sealed class LoopFixtureNodeHandler(string nodeType) : IAgentNodeHandler
-    {
-        public string NodeType => nodeType;
 
-        public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
-        {
-            var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
-            switch (NodeType)
-            {
-                case EvidenceRemediationNodeTypes.ExtractClaims:
-                    board[AgentBlackboardKeys.ExtractedClaims] = new JsonArray(new JsonObject { ["claimId"] = "C1", ["claim"] = "answer" });
-                    break;
-                case EvidenceRemediationNodeTypes.RetrieveEvidence:
-                    board[AgentBlackboardKeys.RetrievedEvidence] = new JsonArray(new JsonObject { ["documentChunkId"] = Guid.NewGuid(), ["content"] = "evidence" });
-                    break;
-                case EvidenceRemediationNodeTypes.AssessSupport:
-                    board[AgentBlackboardKeys.ClaimSupportAssessments] = new JsonArray(new JsonObject { ["claimId"] = "C1", ["status"] = "Supported" });
-                    break;
-                case EvidenceRemediationNodeTypes.ValidateMappings:
-                    board[AgentBlackboardKeys.EvidenceValidationResults] = new JsonObject { ["status"] = "Supported" };
-                    board[AgentBlackboardKeys.UnresolvedClaims] = new JsonArray();
-                    break;
-                case EvidenceRemediationNodeTypes.Route:
-                    board[AgentBlackboardKeys.RouteDecision] = "Supported";
-                    board[AgentBlackboardKeys.RequiresReanalysis] = false;
-                    break;
-                case EvidenceRemediationNodeTypes.BuildPacket:
-                    board[AgentBlackboardKeys.RemediatedEvidencePacket] = new JsonObject { ["status"] = "Supported", ["evidence"] = board[AgentBlackboardKeys.RetrievedEvidence]?.DeepClone() };
-                    break;
-                case EvidenceRemediationNodeTypes.DraftRevision:
-                    board[AgentBlackboardKeys.RevisedAnswer] = "revised answer [1]";
-                    board[AgentBlackboardKeys.RevisionSummary] = "Evidence-backed revision";
-                    break;
-                case EvidenceRemediationNodeTypes.Finalize:
-                    var output = new JsonObject
-                    {
-                        [DraftRevisionFields.RevisedAnswer] = board[AgentBlackboardKeys.RevisedAnswer]?.DeepClone(),
-                        [DraftRevisionFields.RevisionSummary] = board[AgentBlackboardKeys.RevisionSummary]?.DeepClone(),
-                        [DraftRevisionFields.RevisionRequired] = true
-                    };
-                    board[AgentBlackboardKeys.FinalOutput] = output.DeepClone();
-                    context.Run.OutputJson = output.ToJsonString(AgentNodeJson.SerializerOptions);
-                    break;
-            }
-            context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
-            context.Node.OutputJson = "{}";
-            return Task.CompletedTask;
-        }
-    }
 
     private static EquityLensDbContext CreateDbContext()
     {
@@ -1070,8 +930,7 @@ public sealed class AgentRunServiceTests
                 runStateMachine,
                 nodeStateMachine,
                 handlers,
-                NullLogger<AgentRunExecutor>.Instance,
-                dynamicPlanner: new TestQualityWorkflowPlanner());
+                NullLogger<AgentRunExecutor>.Instance);
         }
 
         public async Task EnqueueAsync(AgentRunQueueMessage message, CancellationToken cancellationToken = default)
@@ -1098,23 +957,7 @@ public sealed class AgentRunServiceTests
             Task.CompletedTask;
     }
 
-    private sealed class TestQualityWorkflowPlanner : IAgentWorkflowPlanner
-    {
-        public Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default)
-        {
-            if (context.CompletedNodeTypes.Contains(DraftRevisionNodeTypes.FinalizeRevision))
-                return Task.FromResult(new DynamicPlanProposal(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, DynamicGoalStatuses.Complete, "Test revision completed.", ["quality-finalization"], [], "Test"));
-            var review = context.Blackboard[AgentBlackboardKeys.CriticReview] as JsonObject;
-            if (review?[CriticReviewFields.RequiresRevision]?.GetValue<bool>() != true)
-                return Task.FromResult(new DynamicPlanProposal(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, DynamicGoalStatuses.Complete, "Test critic accepted answer.", ["quality-finalization"], [], "Test"));
-            IReadOnlyList<DynamicPlanAction> actions =
-            [
-                new("draftRevisedAnswer", "revise-answer", DraftRevisionNodeTypes.DraftRevisedAnswer, [ResearchQualityReviewNodeKeys.FinalizeCriticReport], new JsonObject()),
-                new("finalizeRevision", "finalize-revision", DraftRevisionNodeTypes.FinalizeRevision, ["draftRevisedAnswer"], new JsonObject())
-            ];
-            return Task.FromResult(new DynamicPlanProposal(Guid.NewGuid(), context.OrchestrationVersion, context.Trigger, DynamicGoalStatuses.Continue, "Test bounded revision.", ["answer-revision"], actions, "Test"));
-        }
-    }
+
 
     private sealed class RecordingAgentRunQueue : IAgentRunQueue
     {

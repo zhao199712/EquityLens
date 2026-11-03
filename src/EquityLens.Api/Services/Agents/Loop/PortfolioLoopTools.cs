@@ -96,7 +96,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 string? warning = null;
                 try
                 {
-                    patch[SnapshotKey] = board[SnapshotKey]?.DeepClone() ?? JsonSerializer.SerializeToNode(await EvaluatePortfolioScenariosNodeHandler.CaptureAsync(context, ct), AgentNodeJson.SerializerOptions);
+                    patch[SnapshotKey] = board[SnapshotKey]?.DeepClone() ?? JsonSerializer.SerializeToNode(await PortfolioScenarioSnapshotReader.CaptureAsync(context, ct), AgentNodeJson.SerializerOptions);
                 }
                 catch (AgentWorkflowQueryException e) { warning = e.Message; }
                 var total = inputs.Assets.Sum(x => x.Quantity * x.Prices.LastOrDefault());
@@ -132,8 +132,8 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             }
             case "get_performance_attribution":
             {
-                await new CalculatePerformanceAttributionNodeHandler(serviceScope.ServiceProvider.GetRequiredService<IPortfolioValuationService>()).ExecuteAsync(context, ct);
-                patch[AgentBlackboardKeys.PerformanceAttribution] = AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.PerformanceAttribution]!.DeepClone();
+                var attribution = await new PortfolioAttributionReader(serviceScope.ServiceProvider.GetRequiredService<IPortfolioValuationService>()).ReadAsync(context, ct);
+                patch[AgentBlackboardKeys.PerformanceAttribution] = JsonSerializer.SerializeToNode(attribution, AgentNodeJson.SerializerOptions);
                 data = Object(new { attribution = patch[AgentBlackboardKeys.PerformanceAttribution], diagnosis });
                 break;
             }

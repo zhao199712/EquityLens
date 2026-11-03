@@ -111,7 +111,7 @@ public sealed class ConversationServiceTests
         db.AgentRuns.Add(new AgentRun
         {
             Id = runId, UserId = userId, ResearchRunId = researchId,
-            WorkflowType = AgentWorkflowTypes.ResearchInvestigation, AgentType = AgentTypes.Research,
+            WorkflowType = LegacyWorkflowReadModel.Research, AgentType = AgentTypes.Research,
             Status = AgentRunStatuses.Succeeded, OutputJson = """{"summary":"Critic 摘要"}"""
         });
         db.ChatMessages.Add(new ChatMessage
@@ -255,7 +255,7 @@ public sealed class ConversationServiceTests
             Calls++; Question = request.Question; ParentId = request.ParentAgentRunId;
             if (failure is not null) throw failure;
             return Task.FromResult(new AgentWorkflowQueryCreatedResponse(runId ?? Guid.NewGuid(), Guid.NewGuid(),
-                AgentWorkflowTypes.ResearchInvestigation, AgentRunStatuses.Pending, "test", "test",
+                LegacyWorkflowReadModel.Research, AgentRunStatuses.Pending, "test", "test",
                 "research-investigation", "一般個股研究", "high", request.Question,
                 new("TW", "equity", "standard", null, null, "zh-TW"), [], []));
         }

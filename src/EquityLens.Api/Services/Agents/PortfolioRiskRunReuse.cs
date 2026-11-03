@@ -260,25 +260,3 @@ internal static class PortfolioRiskRunResultAdapter
     private static DateOnly? ReadDate(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<string>(out var text) && DateOnly.TryParse(text, out var date) ? date : null;
 }
-
-public sealed class ResolvePortfolioRiskEvidenceNodeHandler(IPortfolioRiskRunResolver resolver) : IAgentNodeHandler
-{
-    public string NodeType => PortfolioDiagnosisNodeTypes.ResolveRiskEvidence;
-
-    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
-    {
-        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
-        var diagnosis = PortfolioDiagnosisBlackboard.Context(board);
-        var resolved = await resolver.ResolveAsync(diagnosis, context.Run.UserId, cancellationToken);
-        var existing = board[AgentBlackboardKeys.MathResults] as JsonArray ?? new JsonArray();
-        foreach (var result in resolved.Results) existing.Add(result.DeepClone());
-        board[AgentBlackboardKeys.MathResults] = existing;
-        PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioRiskEvidence, resolved.Evidence);
-        board[AgentBlackboardKeys.CoreRiskCalculationRequired] = resolved.Evidence.CoreCalculationRequired ? "true" : "false";
-        context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
-        context.Node.OutputJson = AgentNodeJson.Serialize(resolved.Evidence);
-        context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated,
-            $"Portfolio Risk Run cache: {resolved.Evidence.CacheStatus}.",
-            new { resolved.Evidence.CacheStatus, resolved.Evidence.SourceRiskRunIds, resolved.Evidence.ReusedCapabilities, resolved.Evidence.CoreCalculationRequired });
-    }
-}

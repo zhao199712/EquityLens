@@ -1,3 +1,4 @@
+using EquityLens.Api.Services.Agents.Loop;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -91,9 +92,8 @@ public sealed class LoadResearchRunNodeHandler : IAgentNodeHandler
     }
 }
 
-public sealed class CheckEvidenceNodeHandler : IAgentNodeHandler
+public sealed class EvidenceCoverageCheck : IQualityCheckStage
 {
-    public string NodeType => CriticReviewNodeTypes.CheckEvidence;
 
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
@@ -150,9 +150,8 @@ public sealed class CheckEvidenceNodeHandler : IAgentNodeHandler
     }
 }
 
-public sealed class BuildEvidencePacketNodeHandler : IAgentNodeHandler
+public sealed class BuildEvidencePacketCheck : IQualityCheckStage
 {
-    public string NodeType => CriticReviewNodeTypes.BuildEvidencePacket;
 
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
@@ -243,16 +242,15 @@ public sealed class BuildEvidencePacketNodeHandler : IAgentNodeHandler
     private static int? GetInt(JsonObject? value, string key) => value?[key] is null ? null : value[key]!.GetValue<int>();
 }
 
-public sealed class CritiqueAnswerNodeHandler : IAgentNodeHandler
+public sealed class CriticAnswerCheck : IQualityCheckStage
 {
     private readonly ICriticReviewAgent _criticReviewAgent;
 
-    public CritiqueAnswerNodeHandler(ICriticReviewAgent criticReviewAgent)
+    public CriticAnswerCheck(ICriticReviewAgent criticReviewAgent)
     {
         _criticReviewAgent = criticReviewAgent;
     }
 
-    public string NodeType => CriticReviewNodeTypes.CritiqueAnswer;
 
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
@@ -360,7 +358,7 @@ public sealed class CritiqueAnswerNodeHandler : IAgentNodeHandler
 
 }
 
-public sealed class FinalizeCriticReportNodeHandler : IAgentNodeHandler
+public sealed class FinalizeCriticReportNodeHandler : IAgentNodeHandler, IQualityCheckStage
 {
     private readonly IReadOnlyDictionary<string, IWorkflowPolicyEvaluator> _policyEvaluators;
 
@@ -403,7 +401,7 @@ public sealed class FinalizeCriticReportNodeHandler : IAgentNodeHandler
         run.BlackboardJson = blackboard.ToJsonString(AgentNodeJson.SerializerOptions);
         run.OutputJson = node.OutputJson;
         context.AddEvent(run, node, AgentEventTypes.BlackboardUpdated, "Final critic report written to blackboard.", new { overallSeverity = finalOutput.OverallSeverity, policyDecision.RecommendedNextAction, policyDecision.Reason });
-        if (run.WorkflowType == AgentWorkflowTypes.ResearchInvestigation)
+        if (run.WorkflowType == AgentWorkflowTypes.ResearchAgent)
             context.AddEvent(run, node, AgentEventTypes.SupervisorRouteDecision, $"Research investigation route: {policyDecision.RecommendedNextAction}.", new { policyDecision.RecommendedNextAction, policyDecision.RequiresRevision, policyDecision.RequiresMoreEvidence, policyDecision.Reason });
         return Task.CompletedTask;
     }

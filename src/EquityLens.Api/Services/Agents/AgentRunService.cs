@@ -316,86 +316,8 @@ public sealed class AgentRunService : IAgentRunService
         return new AgentRunDetailResponse(
             MapSummary(run), nodes, events, toolCalls, feedback,
             run.BlackboardJson, run.OutputJson, run.WorkflowDefinitionJson,
-            approvals, promptSnapshots, BuildLoopSummary(run, nodeEntities), llmTurns);
+            approvals, promptSnapshots, LegacyWorkflowReadModel.BuildLoopSummary(run, nodeEntities), llmTurns);
     }
-
-    private static AgentLoopSummaryResponse? BuildLoopSummary(AgentRun run, IReadOnlyList<AgentRunNode> nodes)
-    {
-        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.PortfolioDiagnosis)) return null;
-        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
-        var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject;
-        if (run.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
-        {
-            var quality = board[AgentBlackboardKeys.PortfolioDiagnosisQuality]
-                ?.Deserialize<PortfolioDiagnosisQualityResult>(AgentNodeJson.SerializerOptions);
-            var gaps = quality?.Gaps.Select(x => x.Code).Distinct(StringComparer.Ordinal).ToList()
-                ?? (runtime?["gapCodes"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? string.Empty)
-                    .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).ToList()
-                ?? [];
-            var completed = quality?.CompletedCapabilities.Distinct(StringComparer.Ordinal).ToList()
-                ?? (runtime?["completedCapabilities"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? string.Empty)
-                    .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).ToList()
-                ?? [];
-            var riskEvidence = board[AgentBlackboardKeys.PortfolioRiskEvidence]
-                ?.Deserialize<PortfolioRiskEvidenceSnapshot>(AgentNodeJson.SerializerOptions);
-            return new(
-                LoopStatus(run, runtime),
-                runtime?["iteration"]?.GetValue<int>() ?? quality?.Iteration ?? 0,
-                runtime?["maxIterations"]?.GetValue<int>() ?? PortfolioDiagnosisWorkflow.MaxAnalysisIterations,
-                runtime?["lastAction"]?.GetValue<string>(),
-                runtime?["stopReason"]?.GetValue<string>(),
-                nodes.Count(x => !string.IsNullOrWhiteSpace(x.TemplateNodeKey)),
-                runtime?["maxDynamicNodes"]?.GetValue<int>() ?? PortfolioDiagnosisWorkflow.MaxDynamicNodes,
-                0,
-                0,
-                completed.Count,
-                gaps,
-                AgentWorkflowTypes.PortfolioDiagnosis,
-                quality?.Status ?? runtime?["qualityStatus"]?.GetValue<string>(),
-                gaps,
-                completed,
-                riskEvidence?.Source,
-                riskEvidence?.CacheStatus,
-                riskEvidence?.ReusedCapabilities,
-                riskEvidence?.CalculatedCapabilities,
-                riskEvidence?.SourceRiskRunIds,
-                riskEvidence?.RejectedRuns.Select(x => x.Code).Distinct(StringComparer.Ordinal).ToList(),
-                riskEvidence?.QualityStatus,
-                riskEvidence?.QualityEvaluationId,
-                riskEvidence?.QualityBacktestRunId,
-                riskEvidence?.QualityWarnings);
-        }
-        var unresolved = (board[AgentBlackboardKeys.UnresolvedClaims] as JsonArray)?.Select((x, index) => x switch
-        {
-            JsonValue value when value.TryGetValue<string>(out var claimId) && !string.IsNullOrWhiteSpace(claimId) => claimId,
-            JsonObject claim => claim["claimId"]?.GetValue<string>() ?? claim["id"]?.GetValue<string>() ?? $"claim:{index}",
-            _ => $"claim:{index}"
-        })
-            .Distinct(StringComparer.Ordinal).ToList() ?? [];
-        var evidenceCount = (board[AgentBlackboardKeys.RetrievedEvidence] as JsonArray)?.Select(x =>
-            x?["documentChunkId"]?.ToJsonString() ?? x?["url"]?.GetValue<string>() ?? x?.ToJsonString())
-            .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).Count() ?? 0;
-        return new(
-            LoopStatus(run, runtime),
-            runtime?["iteration"]?.GetValue<int>() ?? 0,
-            runtime?["maxIterations"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxRetrievalIterations,
-            runtime?["lastAction"]?.GetValue<string>(),
-            runtime?["stopReason"]?.GetValue<string>(),
-            nodes.Count(x => !string.IsNullOrWhiteSpace(x.TemplateNodeKey)),
-            runtime?["maxDynamicNodes"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxDynamicNodes,
-            nodes.Count(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence && x.Status == AgentNodeStatuses.Succeeded),
-            runtime?["maxWebRetrievals"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxWebRetrievals,
-            evidenceCount,
-            unresolved,
-            AgentWorkflowTypes.ResearchQualityReview);
-    }
-
-    private static string LoopStatus(AgentRun run, JsonObject? runtime) => run.Status switch
-    {
-        AgentRunStatuses.Failed => "Failed",
-        AgentRunStatuses.Cancelled => "Cancelled",
-        _ => runtime?["status"]?.GetValue<string>() ?? "NotStarted"
-    };
 
     public async Task<AgentRunSummaryResponse?> RetryAsync(
         Guid id,
@@ -416,10 +338,10 @@ public sealed class AgentRunService : IAgentRunService
         run.ErrorMessage = null;
         run.OutputJson = null;
         var provider = GetWorkflowProvider(run.WorkflowType);
-        if (run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.ResearchAgent)
+        if (run.WorkflowType == AgentWorkflowTypes.ResearchAgent)
         {
             var investigationProvider = new ResearchAgentWorkflowDefinitionProvider();
-            var input = ResearchInvestigationWorkflowDefinitionProvider.ParseInput(run.InputJson);
+            var input = ResearchInputReader.ParseInput(run.InputJson);
             var researchRunId = run.ResearchRunId
                 ?? throw new InvalidOperationException("ResearchInvestigation run is missing its ResearchRun link.");
             run.BlackboardJson = JsonNode.Parse(run.InputJson)?["revisionSeed"]?.ToJsonString(SerializerOptions)
@@ -437,13 +359,7 @@ public sealed class AgentRunService : IAgentRunService
         else
         {
             run.BlackboardJson = provider.CreateInitialBlackboardJson(GetSourceRunId(run.InputJson));
-            if (run.WorkflowType == AgentWorkflowTypes.FeedbackRevision && run.ResearchRunId is Guid feedbackResearchRunId)
-            {
-                var researchRun = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == feedbackResearchRunId, cancellationToken);
-                researchRun.Status = "Pending";
-                researchRun.Answer = string.Empty;
-                researchRun.ErrorMessage = null;
-            }
+
         }
         run.StartedAtUtc = null;
         run.CompletedAtUtc = null;

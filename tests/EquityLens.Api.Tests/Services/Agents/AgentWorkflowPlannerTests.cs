@@ -36,25 +36,7 @@ public sealed class AgentWorkflowPlannerTests
         order);
     }
 
-    [Fact]
-    public void GetExecutionOrder_ResearchQualityReviewWorkflow_ReturnsExpectedDynamicPrefix()
-    {
-        var provider = new ResearchQualityReviewWorkflowDefinitionProvider();
-        var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid());
-        var planner = new AgentWorkflowPlanner();
 
-        var order = planner.GetExecutionOrder(run.WorkflowDefinitionJson);
-
-        Assert.Equal(
-        [
-            ResearchQualityReviewNodeKeys.LoadResearchRun,
-            ResearchQualityReviewNodeKeys.BuildEvidencePacket,
-            ResearchQualityReviewNodeKeys.CheckEvidence,
-            ResearchQualityReviewNodeKeys.CritiqueAnswer,
-            ResearchQualityReviewNodeKeys.FinalizeCriticReport
-        ],
-        order);
-    }
 
     [Fact]
     public void GetExecutionOrder_PortfolioDiagnosisWorkflow_ReturnsExpectedOrder()
@@ -66,26 +48,7 @@ public sealed class AgentWorkflowPlannerTests
         Assert.Equal(PortfolioDiagnosisWorkflowDefinitionProvider.Steps.Select(x => x.Key), planner.GetExecutionOrder(run.WorkflowDefinitionJson));
     }
 
-    [Fact]
-    public void GetExecutionOrder_EvidenceRemediationWorkflow_ReturnsExpectedBoundedLoopOrder()
-    {
-        var run = new EvidenceRemediationWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
-        var order = new AgentWorkflowPlanner().GetExecutionOrder(run.WorkflowDefinitionJson);
 
-        Assert.Equal(
-        [
-            EvidenceRemediationNodeKeys.LoadContext,
-            EvidenceRemediationNodeKeys.ExtractClaims,
-            "planEvidenceRetrieval:1", "retrieveRemediationEvidence:1", "assessClaimSupport:1", "validateEvidenceMappings:1", "routeEvidenceRemediation:1",
-            "planEvidenceRetrieval:2", "retrieveRemediationEvidence:2", "assessClaimSupport:2", "validateEvidenceMappings:2", "routeEvidenceRemediation:2",
-            EvidenceRemediationNodeKeys.BuildPacket,
-            EvidenceRemediationNodeKeys.DraftRevision,
-            EvidenceRemediationNodeKeys.Finalize
-        ], order);
-        var catalog = new AgentWorkflowCatalog().GetWorkflow(AgentWorkflowTypes.EvidenceRemediation);
-        Assert.Equal(10, catalog.NodeTypes.Count);
-        Assert.Equal(9, catalog.Edges.Count);
-    }
 
     [Fact]
     public void Catalog_AllNodeContracts_AreCompleteAndUnique()
@@ -105,27 +68,7 @@ public sealed class AgentWorkflowPlannerTests
         });
     }
 
-    [Fact]
-    public void Catalog_ResearchQualityReview_UsesExpectedSharedNodeContracts()
-    {
-        var workflow = new AgentWorkflowCatalog().GetWorkflow(AgentWorkflowTypes.ResearchQualityReview);
 
-        Assert.Equal("研究品質審查", workflow.DisplayName);
-        Assert.Equal(AgentTypes.Critic, workflow.AgentType);
-        Assert.Equal(
-        [
-            ResearchQualityReviewNodeTypes.LoadResearchRun,
-            ResearchQualityReviewNodeTypes.BuildEvidencePacket,
-            ResearchQualityReviewNodeTypes.CheckEvidence,
-            ResearchQualityReviewNodeTypes.CritiqueAnswer,
-            ResearchQualityReviewNodeTypes.FinalizeCriticReport,
-            ResearchQualityReviewNodeTypes.DraftRevisedAnswer,
-            ResearchQualityReviewNodeTypes.FinalizeRevision
-        ], workflow.NodeTypes);
-        Assert.Equal(6, workflow.Edges.Count);
-        Assert.Equal((ResearchQualityReviewNodeTypes.FinalizeCriticReport, ResearchQualityReviewNodeTypes.DraftRevisedAnswer), workflow.Edges[4]);
-        Assert.Equal((ResearchQualityReviewNodeTypes.DraftRevisedAnswer, ResearchQualityReviewNodeTypes.FinalizeRevision), workflow.Edges[5]);
-    }
 
     [Fact]
     public void GetExecutionOrder_EdgeReferencesUnknownNode_Throws()

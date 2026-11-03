@@ -42,7 +42,7 @@ public sealed class ResearchPreflightService : IResearchPreflightService
         // Web-capable policies and freshness-sensitive Auto requests can proceed
         // without local documents; the supervisor may materialize a Web branch.
         if (request.SourcePolicy is SourcePolicy.WebOnly or SourcePolicy.LocalThenWeb
-            || request.SourcePolicy == SourcePolicy.Auto && Services.Agents.ResearchInvestigationPlanning.IsFreshnessSensitive(request.Question))
+            || request.SourcePolicy == SourcePolicy.Auto && Services.Agents.ResearchQuestionContext.IsFreshnessSensitive(request.Question))
         {
             return Result<ResearchPreflightResult>.Success(new ResearchPreflightResult(
                 security.Id,

@@ -8,15 +8,10 @@ public sealed class BlackboardVersioningTests
     [Theory]
     [InlineData("CreateInitialCriticReviewBlackboard")]
     [InlineData("CreateInitialPortfolioDiagnosisBlackboard")]
-    [InlineData("CreateInitialDraftRevisionBlackboard")]
-    [InlineData("CreateInitialResearchQualityReviewBlackboard")]
-    [InlineData("CreateInitialEvidenceRemediationBlackboard")]
-    [InlineData("CreateInitialEvidenceReanalysisBlackboard")]
     public void CreateInitialBlackboard_IncludesVersioningFields(string methodName)
     {
         var board = CreateBoard(methodName);
 
-        Assert.Equal(methodName == "CreateInitialResearchQualityReviewBlackboard" ? 2 : 1, board["schemaVersion"]?.GetValue<int>());
         Assert.Equal(0, board["blackboardVersion"]?.GetValue<int>());
     }
 
@@ -113,10 +108,6 @@ public sealed class BlackboardVersioningTests
         {
             "CreateInitialCriticReviewBlackboard" => AgentBlackboardContracts.CreateInitialCriticReviewBlackboard(Guid.NewGuid()),
             "CreateInitialPortfolioDiagnosisBlackboard" => AgentBlackboardContracts.CreateInitialPortfolioDiagnosisBlackboard(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30)), DateOnly.FromDateTime(DateTime.UtcNow)),
-            "CreateInitialDraftRevisionBlackboard" => AgentBlackboardContracts.CreateInitialDraftRevisionBlackboard(Guid.NewGuid()),
-            "CreateInitialResearchQualityReviewBlackboard" => AgentBlackboardContracts.CreateInitialResearchQualityReviewBlackboard(Guid.NewGuid()),
-            "CreateInitialEvidenceRemediationBlackboard" => AgentBlackboardContracts.CreateInitialEvidenceRemediationBlackboard(Guid.NewGuid()),
-            "CreateInitialEvidenceReanalysisBlackboard" => AgentBlackboardContracts.CreateInitialEvidenceReanalysisBlackboard(Guid.NewGuid()),
             _ => throw new ArgumentException($"Unknown method: {methodName}")
         };
     }

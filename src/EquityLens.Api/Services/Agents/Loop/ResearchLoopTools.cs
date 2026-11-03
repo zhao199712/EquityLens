@@ -66,6 +66,7 @@ public sealed class ResearchLoopTools(IServiceScopeFactory scopes, IOptions<Rese
         using var serviceScope = scopes.CreateScope();
         var services = serviceScope.ServiceProvider;
         IReadOnlyList<RetrievedDocumentChunk> results;
+        JsonObject? diagnostics = null;
         if (call.Tool == "search_local")
         {
             var query = call.Arguments["query"]!.GetValue<string>();
@@ -75,7 +76,9 @@ public sealed class ResearchLoopTools(IServiceScopeFactory scopes, IOptions<Rese
                 call.Arguments["documentType"]?.GetValue<string>() ?? scope.Request.DocumentType, topK);
             results = await services.GetRequiredService<IDocumentRetriever>().RetrieveAsync(plan, scope.Request.Ticker.Trim().ToUpperInvariant(), ct);
             var intent = services.GetRequiredService<IIntentDetector>().Detect(scope.Request.Question);
-            results = (await services.GetRequiredService<IResultReranker>().Rank(results, intent.Selected, topK, ct)).SelectedResults;
+            var ranked = await services.GetRequiredService<IResultReranker>().Rank(results, intent.Selected, topK, ct);
+            results = ranked.SelectedResults;
+            diagnostics = System.Text.Json.JsonSerializer.SerializeToNode(ranked.RerankDiagnostics, AgentNodeJson.SerializerOptions) as JsonObject;
         }
         else if (call.Tool == "search_web")
         {
@@ -93,7 +96,7 @@ public sealed class ResearchLoopTools(IServiceScopeFactory scopes, IOptions<Rese
             results = chunks.Select(x => source with { Result = source.Result with { DocumentChunkId = x.Id, ChunkIndex = x.ChunkIndex,
                 Content = x.Content, PageNumber = x.PageNumber, SectionTitle = x.SectionTitle } }).ToList();
         }
-        return new(results, $"Found {results.Count} evidence items.");
+        return new(results, $"Found {results.Count} evidence items.", Diagnostics: diagnostics);
     }
 
     private static JsonObject Schema(string required, params (string Name, string Type)[] properties) => new()

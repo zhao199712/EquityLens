@@ -23,19 +23,19 @@
 
 | # | 驗收條件（摘要） | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
-| R1 | 舊資料唯讀、retry 409、佇列安全失敗 | MUST | 🟨 | WorkflowExecutionCompatibilityTests：7 passed；版本／節點辨識、四種非終態、租約、讀取／retry 隔離 | 本項提交 | 防護完成；隨後續 provider 更新啟用各舊版退役，R10 再總驗收 |
+| R1 | 舊資料唯讀、retry 409、佇列安全失敗 | MUST | ✅ | WorkflowExecutionCompatibilityTests：7 passed；版本／節點辨識、四種非終態、租約、讀取／retry 隔離 | 本項提交 | 防護完成；隨後續 provider 更新啟用各舊版退役，R10 再總驗收 |
 | R2 | 研究一律 ResearchAgent；DynamicDag → 400 | MUST | ✅ | 預設／AgentLoop 建立及隔離、停用引擎不落盤測試 | 本項提交 | controller 明確回 engine_retired；初始資料不再借用舊 provider |
 | R3 | qualityGate 合併 | MUST | ✅ | 7／3 節點契約、接受／修訂一次／拒答、已提交 Critic 恢復不重呼叫 | 本項提交 | 新版本研究／Critic 舊圖由 R1 判定唯讀 |
 | R4 | 回饋修訂併入 ResearchAgent | MUST | ✅ | 回饋 API 去重／父子關聯、三節點修訂圖、prompt 內容、retry 還原種子 | 本項提交 | 研究詳情改選 ResearchAgent 接收回饋 |
-| R5 | 投組 Agent 迴圈與工具 | MUST | ✅ | 任務型工具草稿尚未完成驗收 | | 補充規格到達後，先驗收 R31、R30 再接續 |
+| R5 | 投組 Agent 迴圈與工具 | MUST | ✅ | 六工具執行／Guard／所有權／持倉不變測試 | | 補充規格到達後，先驗收 R31、R30 再接續 |
 | R6 | 投組人工審批不變 | MUST | ✅ | | | |
-| R7 | 迴圈基礎設施共用、可續跑、可查詢 | MUST | ✅ | 共用核心與結構化工具結果恢復測試草稿 | | 工作目錄 R27 已通過；未提交實作，尚未完成投組行為驗收 |
-| R8 | 刪除 4 個多餘工作流與前端呼叫 | MUST | 🟨 | endpoint 白名單、舊結果可讀且無建立按鈕、R27 | 本項提交 | 建立入口與 DI 移除；相依型別 R10 一起清理 |
+| R7 | 迴圈基礎設施共用、可續跑、可查詢 | MUST | ✅ | 共用核心、決策／結果落盤及結構化工具結果恢復測試 | | R5–R7 已提交並驗收 |
+| R8 | 刪除 4 個多餘工作流與前端呼叫 | MUST | ✅ | endpoint 白名單、舊結果可讀且無建立按鈕、R27 | 本項提交 | 建立入口與 DI 移除；相依型別 R10 一起清理 |
 | R9 | Ask Agent 路由到 3 個工作流 | MUST | ✅ | | | |
-| R10 | 移除型別零參照 | MUST | ⬜ | | | |
-| R11 | 3 個工作流、node type ≤ 15 | MUST | ⬜ | | | |
-| R12 | 使用者隔離 | MUST | ⬜ | | | |
-| R13 | Admin 介面 | SHOULD | ⬜ | | | |
+| R10 | 移除型別零參照 | MUST | ✅ | | | |
+| R11 | 3 個工作流、node type ≤ 15 | MUST | ✅ | | | |
+| R12 | 使用者隔離 | MUST | ✅ | | | |
+| R13 | Admin 介面 | SHOULD | ✅ | | | |
 | R14 | Eval harness | SHOULD | ⬜ | | | |
 | R15 | 文件與前後對照 | SHOULD | ⬜ | | | |
 
@@ -65,7 +65,7 @@
 
 | # | 驗收條件（摘要） | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
-| R28 | 共用基礎＋角色＋本角色 skill 目錄＋已載入全文；唯讀 load_skill、至少 3 個 skill、載入上限與可追溯紀錄 | MUST | 🟨 | 角色隔離／下一輪全文／批次上限／不可擴權／雜湊／設定擴充／trajectory | 本項提交 | 與 R9 一併做；保留法說會原 prompt，刪 Supporting skill；不能擴大權限；記錄 id／版本／雜湊及 trajectory |
+| R28 | 共用基礎＋角色＋本角色 skill 目錄＋已載入全文；唯讀 load_skill、至少 3 個 skill、載入上限與可追溯紀錄 | MUST | ✅ | 角色隔離／下一輪全文／批次上限／不可擴權／雜湊／設定擴充／trajectory | 本項提交 | 與 R9 一併做；保留法說會原 prompt，刪 Supporting skill；不能擴大權限；記錄 id／版本／雜湊及 trajectory |
 | R29 | Router 只選工作流與參數，不選 skill／capability | MUST | ✅ | | | 與 R9 一併做；取代先前 Router 選 playbook 的方案 |
 | R30 | 投組任務型工具 ≤ 8；37 個數學函式不可直接呼叫；重用情境計算 | MUST | ✅ | 六工具白名單、全數底層函式拒絕、各工具數值注入拒絕、快照／所有權情境測試 | 本項提交 | R5–R7 完成前先驗收；load_skill 不計入 8 個上限 |
 | R31 | 研究角色來源規則與可確定性檢查的 OutputGate | MUST | ✅ | prompt／證據中繼資料、6 組來源錯置正反例 | 本項提交 | R16 後優先補做；直接／補充來源不可錯置，表格／目錄／封面不得充當風險或實質證據 |
@@ -77,7 +77,7 @@
 
 ## 更新後執行順序
 
-已完成 R2、R3、R4、R16；R1 防護基礎完成，待移除舊註冊後總驗收。R5／R7 僅有未提交草稿，不能視為已驗收。
+已完成 R2、R3、R4、R16；R1 防護基礎完成，待移除舊註冊後總驗收。R5–R7 已完成並提交。
 
 `R1 → R2 → R3 → R4 → R16 → R31 → R30 → R5–R7 → R17 → R18 → R6 再驗收 → R8 → R9＋R28＋R29＋R34＋R35 → R19 → R10 → R11 → R12 → R13–R15 → R20–R25 → R32 → R33（環境與預算允許）＋R36 → R26`
 
@@ -97,16 +97,47 @@
 
 | 檔案 | 行數 | 理由 |
 |---|---|---|
-| | | |
+| `src/EquityLens.Api/Services/Agents/AgentDynamicPlanCoordinator.cs` | 181 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/AgentLoopController.cs` | 256 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/ClaimSetValidation.cs` | 105 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/DraftRevisionAgent.cs` | 180 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/DraftRevisionNodeHandlers.cs` | 220 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/DynamicPlanValidation.cs` | 346 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/DynamicWorkflowPlanning.cs` | 492 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/EvidenceAssessor.cs` | 92 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/EvidenceReanalysisWorkflow.cs` | 234 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/EvidenceRemediationAgent.cs` | 188 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/EvidenceRemediationNodeHandlers.cs` | 430 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/EvidenceRemediationWorkflowDefinitionProvider.cs` | 51 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/EvidenceRetrievalPlanAgent.cs` | 73 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/FeedbackRevisionWorkflow.cs` | 154 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/PlannerInvocation.cs` | 90 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/PortfolioDiagnosisNarrativeAgent.cs` | 78 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/ResearchInvestigationWorkflow.cs` | 474 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/SourcePolicyRules.cs` | 35 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Web/src/services/agentRegistryAdmin.ts` | 39 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Web/src/views/admin/AgentRegistryView.vue` | 217 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Web/src/views/admin/__tests__/AgentRegistryView.test.ts` | 129 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/AgentRunExecutorLoopPlanningTests.cs` | 141 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/DynamicWorkflowPlanningTests.cs` | 406 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceAssessorTests.cs` | 154 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceReanalysisWorkflowTests.cs` | 111 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceRemediationWorkflowTests.cs` | 445 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceRetrievalPlanAgentTests.cs` | 47 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/LlmDraftRevisionAgentTests.cs` | 123 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/PlannerInvocationTests.cs` | 223 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/PortfolioDiagnosisLoopTests.cs` | 141 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/ResearchQualityReviewLoopPolicyTests.cs` | 115 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `tests/EquityLens.Api.Tests/Services/Agents/SourcePolicyRulesTests.cs` | 76 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
 
 ## 收斂前後對照（R15）
 
 | 指標 | 收斂前 | 收斂後 |
 |---|---|---|
-| 可建立的工作流 | 9 | |
-| catalog node type | 54 | |
-| `Services/Agents` 行數 | 11,674 | |
-| 編排模式 | Static／Stateful／DynamicStateful | |
+| 可建立的工作流 | 9 | 3 |
+| catalog node type | 54 | 13 |
+| `Services/Agents` 行數 | 11,674 | 7,550（R10 提交點） |
+| 編排模式 | Static／Stateful／DynamicStateful | 固定 DAG＋節點內 Agent loop |
 
 ## 阻塞
 
@@ -221,3 +252,12 @@
 - B4 重現：從本項前的 HEAD 擷取原 Router 於獨立測試型別執行，MalformedOutput_ShouldRetryOnce 預期 2 次、實際 1 次（失敗）；新路由兩次失敗回澄清，warning 僅保留錯誤分類、固定欄位位置、白名單鍵與 JSON 型別，未知鍵遮罩，不記錄原文。暫時重現型別未納入產品；回歸測試保留。
 - 對話 requestId 查詢先驗證 session 所有權，避免去重路徑洩漏他人訊息。測試涵蓋同一 requestId 跨使用者、單次分類、追問／重置零分類、未授權投組、未知股票、低信心與不支援情境。
 - 完整 R27：build PASS、1014/1014（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 76、前端 build PASS／125 tests。無外部 API 呼叫。新追問若有尚未綁定的轉入情境會澄清，不猜目標權重。
+
+### R10／R11／R12／R13 舊機制清除與總驗收
+
+- 刪除動態 planner、validator、materializer、coordinator、舊迴圈 controller、capability 與 supporting skill catalog；executor 僅執行建立時保存的固定圖，不再擴增或改寫定義。保留拓撲排序、依賴檢查、條件邊與所有租約／fencing／outbox 機制。
+- 正式 catalog 恰好三工作流、13 個 node type；DI 也恰好 13 種 handler。品質內部階段改為普通檢查元件；投組歸因／情境快照改為工具使用的唯讀計算元件。37 個風險函式保留獨立參數驗證與計算測試，移除節點能力描述。
+- 舊型別名稱只剩 API 的 LegacyWorkflowReadModel.cs 與前端 services/legacyWorkflows.ts 唯讀對應（及 migrations）；R10 搜尋已核對。原 GET 的 nodes/events/toolCalls/definition 不需舊 catalog；三種現行流程的舊版本與舊節點形狀均會退役，持久化 node type 也納入判定。
+- Admin registry API／路由／頁面移除，workflow 設定只呈現固定圖。歷史 run 的篩選與結果呈現留在集中相容層，沒有恢復建立入口。
+- 刪除測試限於舊圖擴增、舊 planner 提案、已刪 provider／agent 與 registry 專用契約。仍有效的證據檢查、回饋修訂、投組數字、來源政策、風險數學、情境所有權／現金／幣別、審批、恢復與隔離改由固定圖及工具測試覆蓋。rerank fallback 的證據和診斷保存移至 search_local 結果；共用工具持久化保留該診斷。
+- 完整 R27：build PASS、864/864（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 76、前端 build PASS／121 tests。R1／R8／R28 隨舊註冊與 Supporting skill 清除完成總驗收。沒有外部 API 呼叫、migration、部署或正式資料改動。

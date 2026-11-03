@@ -118,7 +118,7 @@ public sealed class AgentApprovalServiceTests
         var downstream = new AgentRunNode
         {
             Id = Guid.NewGuid(), AgentRunId = artifact.Run.Id, NodeKey = "next", TemplateNodeKey = "next",
-            NodeType = CriticReviewNodeTypes.BuildEvidencePacket, Status = AgentNodeStatuses.Pending
+            NodeType = "QualityGate", Status = AgentNodeStatuses.Pending
         };
         artifact.Run.Nodes.Add(downstream);
         await db.SaveChangesAsync();

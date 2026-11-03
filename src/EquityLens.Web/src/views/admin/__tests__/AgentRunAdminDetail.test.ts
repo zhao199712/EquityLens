@@ -1,3 +1,4 @@
+import { legacyWorkflow } from '../../../services/legacyWorkflows'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
@@ -38,9 +39,9 @@ describe('AgentRunAdminDetail evidence remediation', () => {
     expect(wrapper.findAll('button').some(item => item.text().includes('重新分析'))).toBe(false)
   })
 
-  it('顯示 ResearchQualityReview loop 預算與停止原因', async () => {
+  it('顯示歷史品質流程 loop 預算與停止原因', async () => {
     vi.mocked(getAgentRun).mockResolvedValue({
-      run: { id: 'quality-1', workflowType: 'ResearchQualityReview', agentType: 'CriticAgent', status: 'Succeeded', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null },
+      run: { id: 'quality-1', workflowType: legacyWorkflow.quality, agentType: 'CriticAgent', status: 'Succeeded', errorMessage: null, createdAtUtc: new Date().toISOString(), startedAtUtc: null, completedAtUtc: null },
       nodes: [], events: [], toolCalls: [], feedback: [], approvals: [], promptSnapshots: [], blackboardJson: {}, outputJson: {}, workflowDefinitionJson: {},
       loopSummary: { status: 'Stopped', currentIteration: 1, maxIterations: 2, lastAction: 'Complete', stopReason: 'NO_PROGRESS', dynamicNodeCount: 8, maxDynamicNodes: 18, webRetrievalCount: 1, maxWebRetrievals: 1, evidenceCount: 2, unresolvedClaimIds: ['C1'] },
     })

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { legacyWorkflow, type LegacyRevisionOutput } from "../../services/legacyWorkflows"
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
@@ -34,13 +35,6 @@ interface CriticReviewOutput {
   suggestedAnswerRevision?: string | null
 }
 
-interface DraftRevisionOutput {
-  sourceAnswer?: string | null
-  revisedAnswer?: string
-  revisionSummary?: string
-  revisionRequired?: boolean
-  appliedRecommendation?: string | null
-}
 
 interface AttributionItem {
   evidenceId: string
@@ -232,9 +226,9 @@ const criticOutput = computed((): CriticReviewOutput | null => {
   return (run.value.outputJson as CriticReviewOutput) ?? null
 })
 
-const draftOutput = computed((): DraftRevisionOutput | null => {
-  if (!run.value || run.value.run.workflowType !== 'DraftRevision') return null
-  return (run.value.outputJson as DraftRevisionOutput) ?? null
+const draftOutput = computed((): LegacyRevisionOutput | null => {
+  if (!run.value || run.value.run.workflowType !== legacyWorkflow.draft) return null
+  return (run.value.outputJson as LegacyRevisionOutput) ?? null
 })
 
 const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null => {
@@ -489,7 +483,7 @@ const nextActionLabel = computed(() => {
             </div>
           </div>
 
-          <!-- DraftRevision Result -->
+          <!-- Historical revision result, read only -->
           <div v-if="draftOutput" class="prestige-panel prestige-panel-pad result-panel">
             <h3 class="panel-title">修訂結果</h3>
 

@@ -82,6 +82,22 @@ public sealed class WorkflowExecutionCompatibilityTests
         Assert.False(db.ChangeTracker.HasChanges());
     }
 
+    [Theory]
+    [InlineData("ResearchAgent")]
+    [InlineData("PortfolioDiagnosis")]
+    [InlineData("CriticReview")]
+    public void CurrentProvidersAcceptOnlyCurrentVersionAndShape(string workflow)
+    {
+        IAgentWorkflowDefinitionProvider[] providers = [new EquityLens.Api.Services.Agents.Loop.ResearchAgentWorkflowDefinitionProvider(), new PortfolioDiagnosisWorkflowDefinitionProvider(), new CriticReviewWorkflowDefinitionProvider()];
+        var policy = new WorkflowExecutionCompatibility(providers, new AgentWorkflowCatalog());
+        var run = providers.Single(p => p.WorkflowType == workflow).CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        Assert.False(policy.IsRetired(run));
+        var original = run.WorkflowDefinitionJson; var definition = JsonNode.Parse(original)!;
+        definition["version"] = definition["version"]!.GetValue<int>() - 1;
+        run.WorkflowDefinitionJson = definition.ToJsonString(); Assert.True(policy.IsRetired(run));
+        run.WorkflowDefinitionJson = original; run.Nodes.First().NodeType = "RemovedNode"; Assert.True(policy.IsRetired(run));
+    }
+
     private sealed class NoQueue : IAgentRunQueue
     {
         public Task EnqueueAsync(AgentRunQueueMessage m, CancellationToken ct = default) => throw new InvalidOperationException("Must not enqueue");

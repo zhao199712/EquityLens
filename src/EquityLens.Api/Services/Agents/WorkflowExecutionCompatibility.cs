@@ -25,7 +25,8 @@ public sealed class WorkflowExecutionCompatibility
             var definition = JsonNode.Parse(run.WorkflowDefinitionJson)!;
             if ((definition["version"]?.GetValue<int>() ?? 1) != version) return true;
             if (definition["workflowType"]?.GetValue<string>() != run.WorkflowType) return true;
-            return definition["nodes"]!.AsArray().Any(n => !nodeTypes.Contains(n!["type"]!.GetValue<string>()));
+            return run.Nodes.Any(n => !nodeTypes.Contains(n.NodeType))
+                || definition["nodes"]!.AsArray().Any(n => !nodeTypes.Contains(n!["type"]!.GetValue<string>()));
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or NullReferenceException)
         {

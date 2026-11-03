@@ -70,7 +70,7 @@ public sealed class ResearchAgentWorkflowTests
         };
         var executor = AgentExecutorTestFactory.Create(db, new WorkflowGraphTopologyService(), new AgentRunGraphValidator(),
             new AgentRunStateMachine(), new AgentNodeStateMachine(), handlers, NullLogger<AgentRunExecutor>.Instance,
-            catalog: new AgentWorkflowCatalog(), dynamicPlanner: new ForbiddenPlanner());
+            catalog: new AgentWorkflowCatalog());
         for (var batch = 0; batch < 10 && run.Status is "Pending" or "Running"; batch++)
             await executor.ExecuteAsync(run.Id, run.UserId);
         Assert.Equal(AgentRunStatuses.Succeeded, run.Status);
@@ -155,7 +155,7 @@ public sealed class ResearchAgentWorkflowTests
             ["researchRequest"] = JsonSerializer.SerializeToNode(new ResearchAskRequest("2330", question), AgentNodeJson.SerializerOptions),
             ["citations"] = new JsonArray(new JsonObject { ["citationIndex"] = 1, ["sourceType"] = "LocalDocument", ["quoteText"] = "每股盈餘66.26元" })
         };
-        Assert.Equal(expected, ResearchOutputGateNodeHandler.Check(board).Passed);
+        Assert.Equal(expected, ResearchOutputCheck.Check(board).Passed);
     }
 
     [Theory]
@@ -171,7 +171,7 @@ public sealed class ResearchAgentWorkflowTests
             ["researchRequest"] = JsonSerializer.SerializeToNode(new ResearchAskRequest("2330", "主要風險？"), AgentNodeJson.SerializerOptions),
             ["citations"] = new JsonArray(new JsonObject { ["citationIndex"] = 1, ["sourceType"] = "LocalDocument",
                 ["documentType"] = documentType, ["sourceRole"] = "Supporting", ["quoteText"] = quote }) };
-        var result = ResearchOutputGateNodeHandler.Check(board);
+        var result = ResearchOutputCheck.Check(board);
         if (expected is null) Assert.True(result.Passed);
         else Assert.Contains(expected, result.BlockingIssues);
     }
@@ -197,7 +197,7 @@ public sealed class ResearchAgentWorkflowTests
         var board = new JsonObject { ["answer"] = answer,
             ["researchRequest"] = JsonSerializer.SerializeToNode(new ResearchAskRequest("2330", "營收", SourcePolicy: SourcePolicy.LocalOnly), AgentNodeJson.SerializerOptions),
             ["citations"] = new JsonArray(new JsonObject { ["citationIndex"] = 1, ["sourceType"] = source }) };
-        var result = ResearchOutputGateNodeHandler.Check(board);
+        var result = ResearchOutputCheck.Check(board);
         Assert.False(result.Passed);
         Assert.Contains(issue, result.BlockingIssues);
     }
@@ -262,7 +262,7 @@ public sealed class ResearchAgentWorkflowTests
     }
 
     private static AgentRunService Service(EquityLensDbContext db) => new(db,
-        [new ResearchAgentWorkflowDefinitionProvider(), new ResearchInvestigationWorkflowDefinitionProvider()],
+        [new ResearchAgentWorkflowDefinitionProvider()],
         new AgentRunStateMachine(), new AgentNodeStateMachine(), new Queue());
     private sealed class Queue : IAgentRunQueue
     {
@@ -273,13 +273,10 @@ public sealed class ResearchAgentWorkflowTests
     }
     private sealed class NoOpValidation : IAgentNodeHandler
     {
-        public string NodeType => ResearchInvestigationNodeTypes.Validate;
+        public string NodeType => ResearchEntryNodeTypes.Validate;
         public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
-    private sealed class ForbiddenPlanner : IAgentWorkflowPlanner
-    {
-        public Task<DynamicPlanProposal> PlanAsync(WorkflowPlanningContext context, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Static workflow must never call planner");
-    }
+
     private sealed class CountingCritic : ICriticReviewAgent
     {
         public int Calls;

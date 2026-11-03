@@ -149,3 +149,5 @@
 |---|---|---|---|
 | D7 | 明列刪除的工作流及舊投組唯讀 | 舊 ResearchAgent／CriticReview 圖也依版本及節點辨識為唯讀 | 合併 QualityGate 會刪除其舊節點；不能繼續執行不再受支援的圖。 |
 | R1 分階段實作 | 先建立舊資料防護 | 防護先以目前註冊 provider 的版本／catalog 判定，替換 provider 版本或移除註冊時立即生效 | 避免中途提交讓仍在替換中的工作流全部失效；最終只註冊三個新版本。 |
+
+| R10 唯讀例外 | 廢棄名稱只允許集中 legacy 對應 | API `LegacyWorkflowReadModel.cs` 保留舊摘要與 artifact 歸屬；Web `services/legacyWorkflows.ts` 保留歷史結果型別／篩選名稱 | 保持舊 GET 與前端可讀，不參與建立、retry 或執行；搜尋除 migrations 僅命中這兩檔。 |

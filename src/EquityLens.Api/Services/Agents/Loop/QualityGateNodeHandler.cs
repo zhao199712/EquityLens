@@ -2,6 +2,11 @@ using System.Text.Json.Nodes;
 
 namespace EquityLens.Api.Services.Agents.Loop;
 
+public interface IQualityCheckStage
+{
+    Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default);
+}
+
 /// <summary>合併品質檢查；每個已完成階段與結果一併持久化，恢復不重複已提交的評論。</summary>
 public sealed class QualityGateNodeHandler(ICriticReviewAgent critic, IEnumerable<IWorkflowPolicyEvaluator> policies) : IAgentNodeHandler
 {
@@ -10,14 +15,14 @@ public sealed class QualityGateNodeHandler(ICriticReviewAgent critic, IEnumerabl
 
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var stages = new (string Key, IAgentNodeHandler Handler)[]
+        var stages = new (string Key, IQualityCheckStage Handler)[]
         {
-            ("output", new ResearchOutputGateNodeHandler()),
-            ("packet", new BuildEvidencePacketNodeHandler()),
-            ("evidence", new CheckEvidenceNodeHandler()),
-            ("critic", new CritiqueAnswerNodeHandler(critic)),
+            ("output", new ResearchOutputCheck()),
+            ("packet", new BuildEvidencePacketCheck()),
+            ("evidence", new EvidenceCoverageCheck()),
+            ("critic", new CriticAnswerCheck(critic)),
             ("report", new FinalizeCriticReportNodeHandler(policies)),
-            ("route", new RouteResearchAgentQualityNodeHandler())
+            ("route", new ResearchQualityDecision())
         };
         var checkpointKey = $"qualityGate:{context.Node.NodeKey}:{context.Run.ExecutionAttempt}";
         foreach (var stage in stages)

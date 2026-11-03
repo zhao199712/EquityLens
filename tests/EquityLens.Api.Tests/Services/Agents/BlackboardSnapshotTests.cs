@@ -40,25 +40,9 @@ public sealed class BlackboardSnapshotTests
         Assert.True(run.EnableBlackboardSnapshots);
     }
 
-    [Fact]
-    public void EvidenceRemediationWorkflowProvider_SetsEnableBlackboardSnapshots()
-    {
-        var provider = new EvidenceRemediationWorkflowDefinitionProvider();
 
-        var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid());
 
-        Assert.True(run.EnableBlackboardSnapshots);
-    }
 
-    [Fact]
-    public void EvidenceReanalysisWorkflowProvider_SetsEnableBlackboardSnapshots()
-    {
-        var provider = new EvidenceReanalysisWorkflowDefinitionProvider();
-
-        var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid());
-
-        Assert.True(run.EnableBlackboardSnapshots);
-    }
 
     [Fact]
     public void CriticReviewWorkflowProvider_DoesNotEnableSnapshots()
@@ -70,13 +54,5 @@ public sealed class BlackboardSnapshotTests
         Assert.False(run.EnableBlackboardSnapshots);
     }
 
-    [Fact]
-    public void DraftRevisionWorkflowProvider_DoesNotEnableSnapshots()
-    {
-        var provider = new DraftRevisionWorkflowDefinitionProvider();
 
-        var run = provider.CreateRun(Guid.NewGuid(), Guid.NewGuid());
-
-        Assert.False(run.EnableBlackboardSnapshots);
-    }
 }

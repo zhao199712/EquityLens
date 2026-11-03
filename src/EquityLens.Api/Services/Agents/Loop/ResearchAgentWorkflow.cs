@@ -20,8 +20,8 @@ public sealed class ResearchAgentWorkflowDefinitionProvider : IAgentWorkflowDefi
     public string WorkflowType => AgentWorkflowTypes.ResearchAgent;
     public static readonly (string Key, string Type, bool Revise)[] Steps =
     [
-        ("validate", ResearchInvestigationNodeTypes.Validate, false),
-        ("detectIntent", ResearchInvestigationNodeTypes.DetectIntent, false),
+        ("validate", ResearchEntryNodeTypes.Validate, false),
+        ("detectIntent", ResearchEntryNodeTypes.DetectIntent, false),
         ("researchAgent", ResearchAgentNodes.Loop, false),
         ("qualityGate", QualityGateNodeHandler.Type, false),
         ("reviseAgent", ResearchAgentNodes.Loop, true),
@@ -103,11 +103,4 @@ public sealed class ResearchAgentWorkflowDefinitionProvider : IAgentWorkflowDefi
         }.ToJsonString(AgentNodeJson.SerializerOptions);
         return run;
     }
-}
-
-public sealed class ResearchAgentPolicyEvaluator : IWorkflowPolicyEvaluator
-{
-    public string WorkflowType => AgentWorkflowTypes.ResearchAgent;
-    public WorkflowPolicyDecision Evaluate(WorkflowPolicyContext context) => new ResearchInvestigationPolicyEvaluator()
-        .Evaluate(context with { WorkflowType = AgentWorkflowTypes.ResearchInvestigation });
 }

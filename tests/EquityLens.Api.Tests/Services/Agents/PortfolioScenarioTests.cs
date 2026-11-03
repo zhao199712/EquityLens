@@ -153,26 +153,7 @@ public sealed class PortfolioScenarioTests
         Assert.NotEqual(a.InputHash, PortfolioScenarioCalculator.Calculate(snapshot with { Cash = 100 }, [Request(.3m)]).InputHash);
     }
 
-    [Fact]
-    public async Task Handler_ResumesPersistedSnapshot_WithoutDuplicateCallsOrTransactions()
-    {
-        await using var db = new TestDb(new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var snapshot = Snapshot();
-        var routing = Routing([Request(.3m)]);
-        var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), snapshot.PortfolioId, snapshot.From, snapshot.To, routing);
-        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = PortfolioScenarioCalculator.NodeType };
-        db.AgentRunNodes.Add(node);
-        node.InputJson = AgentNodeJson.Serialize(new { snapshot });
-        db.AgentRuns.Add(run); await db.SaveChangesAsync();
-        var context = new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { });
-        var handler = new EvaluatePortfolioScenariosNodeHandler();
-        await handler.ExecuteAsync(context); await db.SaveChangesAsync();
-        var original = node.OutputJson;
-        await handler.ExecuteAsync(context); await db.SaveChangesAsync();
-        Assert.Equal(original, node.OutputJson); Assert.Single(db.AgentToolCalls);
-        Assert.Empty(db.PortfolioTransactions); Assert.Empty(db.PortfolioHoldings); Assert.Empty(db.PortfolioCashFlows);
-        Assert.NotNull(JsonNode.Parse(run.BlackboardJson)![PortfolioScenarioCalculator.ResultKey]);
-    }
+
 
     [Fact]
     public async Task Handler_RejectsOtherUsersPortfolioWithoutWritingTransactions()
@@ -184,10 +165,9 @@ public sealed class PortfolioScenarioTests
         var board = JsonNode.Parse(run.BlackboardJson)!.AsObject();
         board[AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(new PortfolioDiagnosisContext(portfolio.Id, "private", "TWD", new(2025, 1, 1), new(2026, 1, 1), 0), AgentNodeJson.SerializerOptions);
         run.BlackboardJson = board.ToJsonString(); db.AgentRuns.Add(run); await db.SaveChangesAsync();
-        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = PortfolioScenarioCalculator.NodeType };
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = "PortfolioAgentLoop" };
         db.AgentRunNodes.Add(node);
-        await new EvaluatePortfolioScenariosNodeHandler().ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
-        Assert.Contains("Unavailable", node.OutputJson); Assert.Empty(db.PortfolioTransactions);
+        await Assert.ThrowsAsync<AgentWorkflowQueryException>(() => PortfolioScenarioSnapshotReader.CaptureAsync(new(db, run, node, (_, _, _, _, _) => { }), default)); Assert.Empty(db.PortfolioTransactions);
     }
 
     [Theory]
@@ -212,16 +192,16 @@ public sealed class PortfolioScenarioTests
         var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(user, portfolio.Id, snapshot.From, snapshot.To, Routing([Request(.3m)]));
         db.AgentRuns.Add(run); await db.SaveChangesAsync();
         await new LoadPortfolioDiagnosisContextNodeHandler().ExecuteAsync(new(db, run, run.Nodes.Single(n => n.NodeType == PortfolioDiagnosisNodeTypes.LoadContext), (_, _, _, _, _) => { }));
-        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = PortfolioScenarioCalculator.NodeType };
+        var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id, NodeKey = "scenarioFixture", NodeType = "PortfolioAgentLoop" };
         db.AgentRunNodes.Add(node);
-        await new EvaluatePortfolioScenariosNodeHandler().ExecuteAsync(new(db, run, node, (_, _, _, _, _) => { }));
-        var result = JsonSerializer.Deserialize<PortfolioScenarioComparison>(node.OutputJson!, AgentNodeJson.SerializerOptions)!;
-        Assert.Equal(expected, result.Status);
-        if (expected == "Calculated")
+        if (expected == "Unavailable")
+            await Assert.ThrowsAsync<AgentWorkflowQueryException>(() => PortfolioScenarioSnapshotReader.CaptureAsync(new(db, run, node, (_, _, _, _, _) => { }), default));
+        else
         {
-            Assert.Equal(2500, result.Snapshot!.Cash);
-            Assert.Equal(.2m, result.Baseline!.CashWeight);
-            Assert.Equal(.3m, result.Scenarios[0].CashWeight);
+            var captured = await PortfolioScenarioSnapshotReader.CaptureAsync(new(db, run, node, (_, _, _, _, _) => { }), default);
+            var result = PortfolioScenarioCalculator.Calculate(captured, [Request(.3m)]);
+            Assert.Equal(expected, result.Status); Assert.Equal(2500, captured.Cash);
+            Assert.Equal(.2m, result.Baseline!.CashWeight); Assert.Equal(.3m, result.Scenarios[0].CashWeight);
             Assert.Equal(50, result.Scenarios[0].Quantities["2330"]);
         }
         Assert.Empty(db.PortfolioTransactions);

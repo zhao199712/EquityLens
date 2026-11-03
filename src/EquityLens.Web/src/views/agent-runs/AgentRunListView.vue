@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { workflowReadFilters } from "../../services/legacyWorkflows"
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
@@ -12,7 +13,7 @@ const error = ref('')
 const filterWorkflow = ref('')
 const filterStatus = ref('')
 
-const workflowTypes = computed(() => [...new Set(['ResearchAgent', 'ResearchInvestigation', 'CriticReview', 'DraftRevision', 'ResearchQualityReview', 'EvidenceRemediation', 'EvidenceReanalysis', 'PortfolioDiagnosis', ...runs.value.map(run => run.workflowType)])])
+const workflowTypes = computed(() => [...new Set([...workflowReadFilters, ...runs.value.map(run => run.workflowType)])])
 
 const filteredRuns = computed(() => {
   const q = search.value.trim().toLowerCase()
