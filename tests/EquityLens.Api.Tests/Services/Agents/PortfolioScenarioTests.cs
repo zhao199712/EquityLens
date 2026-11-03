@@ -5,6 +5,7 @@ using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Domain.Calculations;
 using EquityLens.Api.Services.Agents;
+using EquityLens.Api.Services.Agents.Loop;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Tests.Services.Agents;
@@ -36,6 +37,40 @@ public sealed class PortfolioScenarioTests
         Assert.Equal("portfolioQualityGate", order[2]);
         Assert.Equal(6, run.Nodes.Count);
 
+    }
+
+    [Fact]
+    public void TransferReductionToExistingHolding_ConservesNavAndCash()
+    {
+        var request = JsonSerializer.Deserialize<PortfolioScenarioRequest>("""{"name":"轉入台積電","targetWeights":{"2327":0.3},"remainderPolicy":"holding","preserveOtherHoldings":true,"transferToTicker":"2330"}""", AgentNodeJson.SerializerOptions)!;
+        var snapshot = Snapshot() with { Assets = [.. Snapshot().Assets, new("2317", 10, 100, Snapshot().Assets[0].Prices)] };
+        var result = PortfolioScenarioCalculator.Calculate(snapshot, [request]).Scenarios.Single();
+        Assert.Equal(.3m, result.Weights["2327"]);
+        Assert.Equal(10, result.Quantities["2317"]);
+        Assert.Equal(0, result.CashWeight);
+        Assert.InRange(Math.Abs(11000m - snapshot.Assets.Sum(a => result.Quantities[a.Ticker] * a.ValuationPrice)), 0, .00000001m);
+        Assert.InRange(result.Weights["2330"], .609090m, .609091m);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("9999")]
+    [InlineData("2327")]
+    public void TransferRejectsMissingUnknownOrSameDestination(string? receiver)
+    {
+        Assert.Throws<AgentWorkflowQueryException>(() => PortfolioScenarioCalculator.Calculate(Snapshot(),
+            [Request(.3m) with { RemainderPolicy = "holding", TransferToTicker = receiver }]));
+    }
+
+    [Fact]
+    public void ScenarioReplyUsesSavedDestinationAndWeights()
+    {
+        var comparison = PortfolioScenarioCalculator.Calculate(Snapshot(), [Request(.3m) with { RemainderPolicy = "holding", TransferToTicker = "2330" }]);
+        var reply = PortfolioQualityGateNodeHandler.ScenarioSummary(comparison);
+        Assert.Contains("轉入 2330", reply);
+        Assert.Contains($"2330 權重 {comparison.Scenarios[0].Weights["2330"]:P2}", reply);
+        Assert.Contains("未變更實際持倉", reply);
+        Assert.DoesNotContain("留作現金", reply);
     }
 
     [Fact]

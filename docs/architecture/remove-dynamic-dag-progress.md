@@ -44,7 +44,7 @@
 | # | 問題 | 優先 | 狀態 | 重現測試 | 修正測試 | Commit | 備註 |
 |---|---|---|---|---|---|---|---|
 | R16 | B1 OutputGate 誤判年份／代號 | MUST | ✅ | OutputGate_ExcludesContextNumbersButKeepsFinancialClaims：3 個正案例先失敗 | 5 個正反案例、拒答事件與 artifact、UI 新舊圖及原因顯示 | 本項提交 | 不忽略代號同值的財務金額 |
-| R17 | B3 情境偷換＋澄清 | MUST | ⬜ | | | | |
+| R17 | B3 情境偷換＋澄清 | MUST | ✅ | 轉入既有持股原本 scenario_invalid | 守恆／其他持股／錯誤目標／替換拒絕／回覆取保存值 | 本項提交 | 自然語言路由澄清於 R34 再驗收 |
 | R18 | B2 優化建議 | MUST | ⬜ | | | | |
 | R19 | B4 路由重試＋log | MUST | ⬜ | | | | |
 | R20 | B8 拖累正負號 | SHOULD | ⬜ | | | | |
@@ -183,3 +183,10 @@
 - 六個工具均有執行測試：快照／Risk Run 重用／數學／歸因／情境／未保存風險偏好的明確 unavailable；持倉與交易不變。現有資料模型沒有使用者風險偏好欄位，因此不虛構偏好。
 - 移除 DynamicWorkflowPlanningTests 中 3 個投組動態規劃專屬測試（70 行）；由固定圖、工具選擇、審批與恢復測試接替仍存在的行為。舊情境 handler 測試暫以獨立 fixture 保留，R10 移除 handler 時再移至工具層。
 - 完整 R27：build PASS、1014/1014（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。沒有外部 API 呼叫。
+
+### R17／B3 轉入既有持股
+
+- 重現測試先證明指定轉入台積電被舊 cash-only 計算器拒絕。新增可選 transferToTicker；holding 僅把減碼所得轉入另一檔既有持股，cash 舊契約不變。
+- 保留其他持股股數及原現金；不接受同一標的、缺目標、未知標的、借款或增加減碼來源權重。分數權重的十進位精度以微小誤差界檢查淨值守恆，現金比例取原快照。
+- 工具 Guard 比對使用者已確認情境，不接受模型將 holding 偷換為 cash 或更改來源權重；情境報告的轉入對象／權重直接由持久化結果生成，不發布模型另述的配置。路由自然語言與澄清在 R34 全面驗收。
+- 完整 R27：build PASS、1020/1020（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。外部 API 費用 0。

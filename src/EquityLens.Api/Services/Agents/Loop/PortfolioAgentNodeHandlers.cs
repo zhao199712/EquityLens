@@ -40,10 +40,11 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         var comparison = board[PortfolioScenarioCalculator.ResultKey]?.Deserialize<PortfolioScenarioComparison>(AgentNodeJson.SerializerOptions);
         var limited = issues.Count > 0 || attribution?.CoverageStatus != "complete";
         var summary = issues.Count > 0 ? "模型答案未通過品質檢查；以下僅列出已保存的工具資料，請確認資料限制。" : answer!.Markdown;
+        if (comparison is not null) summary = ScenarioSummary(comparison);
         var output = new PortfolioDiagnosisOutput(summary, attribution?.PortfolioReturn, attribution?.BenchmarkReturn, attribution?.ActiveReturn,
             attribution?.Holdings.Where(x => x.Contribution < 0).OrderBy(x => x.Contribution).Take(3).ToArray() ?? [],
             attribution?.Holdings.Where(x => x.Contribution > 0).OrderByDescending(x => x.Contribution).Take(3).ToArray() ?? [], [],
-            limited ? "Limited" : "complete", metrics, issues.Count == 0 ? answer?.Markdown : null, comparison, diagnosis,
+            limited ? "Limited" : "complete", metrics, issues.Count == 0 && comparison is null ? answer?.Markdown : null, comparison, diagnosis,
             "Unvalidated", board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>(),
             "既有持股歷史重建；情境採固定權重、含現金的共同快照；模型未經回測驗證");
         board["portfolioQualityGate"] = JsonSerializer.SerializeToNode(new { passed = issues.Count == 0, blockingIssues = issues, limited }, AgentNodeJson.SerializerOptions);
@@ -53,6 +54,12 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         context.AddEvent(context.Run, context.Node, "PortfolioQualityGateEvaluated", issues.Count == 0 ? "Passed" : "Limited", new { issues });
         return Task.CompletedTask;
     }
+
+    internal static string ScenarioSummary(PortfolioScenarioComparison comparison) =>
+        "以下為唯讀情境，未變更實際持倉。" + string.Join("；", comparison.Scenarios.Select(s =>
+            $"{s.Name}：減碼資金{(s.RemainderPolicy == "holding" ? "轉入 " + s.TransferToTicker : "留作現金")}；" +
+            string.Join("、", s.Weights.Select(w => $"{w.Key} 權重 {w.Value:P2}")) + $"；現金 {s.CashWeight:P2}")) +
+        (comparison.Status == "Calculated" ? "。" : "。資料不足，風險指標無法計算。" );
 
     internal static List<string> Check(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts)
     {

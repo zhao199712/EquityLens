@@ -17,12 +17,12 @@ public sealed record ScenarioMetrics(decimal AnnualizedVolatility, decimal Histo
     IReadOnlyList<PortfolioHoldingRiskContribution> Contributions);
 public sealed record PortfolioScenarioResult(string Name, string Status, IReadOnlyDictionary<string, decimal> Weights,
     IReadOnlyDictionary<string, decimal> Quantities, decimal CashWeight, decimal EquityHhi, decimal LargestEquityWeight,
-    ScenarioMetrics? Metrics, ScenarioMetrics? DifferenceFromBaseline);
+    ScenarioMetrics? Metrics, ScenarioMetrics? DifferenceFromBaseline, string RemainderPolicy = "cash", string? TransferToTicker = null);
 public sealed record PortfolioScenarioComparison(string Status, string Method, string InputHash, PortfolioScenarioSnapshot? Snapshot,
     int ObservationCount, decimal ConfidenceLevel, int HorizonDays, PortfolioScenarioResult? Baseline,
     IReadOnlyList<PortfolioScenarioResult> Scenarios, IReadOnlyList<string> Warnings);
 
-/// <summary>以同一快照比較減碼留現金情境，不變更帳戶持倉。</summary>
+/// <summary>以同一快照比較減碼留現金或轉入既有持股情境，不變更帳戶持倉。</summary>
 public static class PortfolioScenarioCalculator
 {
     public const string NodeType = "EvaluatePortfolioScenarios";
@@ -40,7 +40,10 @@ public static class PortfolioScenarioCalculator
         {
             if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 80 || request.TargetWeights is null || request.TargetWeights.Count == 0)
                 Invalid("情境須包含名稱、股票代號與目標權重。");
-            if (request.RemainderPolicy != "cash" || !request.PreserveOtherHoldings) Invalid("目前僅支援減碼留現金，其他持股股數不變。");
+            if (request.RemainderPolicy is not ("cash" or "holding") || !request.PreserveOtherHoldings) Invalid("僅支援減碼留現金或轉入指定既有持股，其他持股股數不變。");
+            if (request.RemainderPolicy == "holding" && (string.IsNullOrWhiteSpace(request.TransferToTicker) || request.TargetWeights!.ContainsKey(request.TransferToTicker)))
+                Invalid("轉入情境須指定不同於減碼標的的既有持股。");
+            if (request.RemainderPolicy == "cash" && request.TransferToTicker is not null) Invalid("現金情境不可同時指定轉入持股。");
             if (request.TargetWeights!.Any(x => string.IsNullOrWhiteSpace(x.Key) || x.Value < 0 || x.Value > 1) || request.TargetWeights.Values.Sum() > 1)
                 Invalid("權重須介於 0 與 1，合計不得超過 1。");
         }
@@ -92,10 +95,17 @@ public static class PortfolioScenarioCalculator
             foreach (var (ticker, target) in request.TargetWeights)
             {
                 if (!baseWeights.TryGetValue(ticker, out var current)) Invalid($"{ticker} 不在持倉中；請指定既有股票代號。");
-                if (target > current) Invalid($"{ticker} 目標權重高於原權重；目前只支援減碼留現金。");
+                if (target > current) Invalid($"{ticker} 目標權重高於原權重；請只指定減碼來源權重，轉入持股另行指定。");
                 weights[ticker] = target;
             }
-            var result = Evaluate(request.Name, weights);
+            if (request.RemainderPolicy == "holding")
+            {
+                if (!baseWeights.ContainsKey(request.TransferToTicker!)) Invalid("轉入標的不在既有持股中，請先澄清。");
+                var released = request.TargetWeights.Sum(x => baseWeights[x.Key] - x.Value);
+                weights[request.TransferToTicker!] += released;
+            }
+            var result = Evaluate(request.Name, weights) with { RemainderPolicy = request.RemainderPolicy, TransferToTicker = request.TransferToTicker,
+                CashWeight = request.RemainderPolicy == "holding" ? snapshot.Cash / nav : 1 - weights.Values.Sum() };
             if (result.Metrics is { } m && baseline.Metrics is { } b)
                 result = result with { DifferenceFromBaseline = new(m.AnnualizedVolatility - b.AnnualizedVolatility,
                     m.HistoricalVaR - b.HistoricalVaR, m.ExpectedShortfall - b.ExpectedShortfall,

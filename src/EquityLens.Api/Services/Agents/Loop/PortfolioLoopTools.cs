@@ -36,7 +36,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
         }
         if (name == "simulate_weight_scenario")
         {
-            properties["scenarios"] = JsonNode.Parse("""{"type":"array","minItems":1,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["name","targetWeights"],"properties":{"name":{"type":"string","maxLength":80},"targetWeights":{"type":"object","additionalProperties":{"type":"number","minimum":0,"maximum":1}},"remainderPolicy":{"type":"string","enum":["cash"]},"preserveOtherHoldings":{"type":"boolean","const":true}}}}""");
+            properties["scenarios"] = JsonNode.Parse("""{"type":"array","minItems":1,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["name","targetWeights"],"properties":{"name":{"type":"string","maxLength":80},"targetWeights":{"type":"object","additionalProperties":{"type":"number","minimum":0,"maximum":1}},"remainderPolicy":{"type":"string","enum":["cash","holding"]},"preserveOtherHoldings":{"type":"boolean","const":true},"transferToTicker":{"type":["string","null"]}}}}""");
             required.Add("scenarios");
         }
         return new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = required, ["additionalProperties"] = false };
@@ -57,8 +57,13 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             if (call.Tool == "simulate_weight_scenario")
             {
                 if (call.Arguments["scenarios"] is not JsonArray scenarios) return "ScenariosRequired";
-                if (scenarios.Any(x => x is not JsonObject obj || obj.Any(p => p.Key is not ("name" or "targetWeights" or "remainderPolicy" or "preserveOtherHoldings")))) return "UnexpectedScenarioArgument";
-                PortfolioScenarioCalculator.ValidateRequests(scenarios.Deserialize<List<PortfolioScenarioRequest>>(AgentNodeJson.SerializerOptions));
+                if (scenarios.Any(x => x is not JsonObject obj || obj.Any(p => p.Key is not ("name" or "targetWeights" or "remainderPolicy" or "preserveOtherHoldings" or "transferToTicker")))) return "UnexpectedScenarioArgument";
+                var requests = scenarios.Deserialize<List<PortfolioScenarioRequest>>(AgentNodeJson.SerializerOptions)!;
+                PortfolioScenarioCalculator.ValidateRequests(requests);
+                var requested = scope.DomainContext?[AgentBlackboardKeys.RoutingContext]?["scenarios"]?.Deserialize<List<PortfolioScenarioRequest>>(AgentNodeJson.SerializerOptions);
+                if (requested is { Count: > 0 } && (requested.Count != requests.Count || requested.Any(r => !requests.Any(a =>
+                    a.RemainderPolicy == r.RemainderPolicy && a.TransferToTicker == r.TransferToTicker && a.TargetWeights.Count == r.TargetWeights.Count
+                    && r.TargetWeights.All(w => a.TargetWeights.TryGetValue(w.Key, out var value) && value == w.Value))))) return "RequestedScenarioMismatch";
                 if (scope.DomainContext?[SnapshotKey] is null) return "SnapshotRequired";
             }
         }

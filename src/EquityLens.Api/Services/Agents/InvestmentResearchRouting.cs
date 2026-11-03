@@ -139,9 +139,9 @@ public sealed class InvestmentResearchRouter(
         All Chinese strings MUST use Traditional Chinese. inferredFields must disclose every inference. Return at most three clarifyingQuestions.
         For explicit hypothetical portfolio weight comparisons, extract scenarios as an array of at most 3 objects:
         {"name":"國巨30%","targetWeights":{"2327":0.30},"remainderPolicy":"cash","preserveOtherHoldings":true}.
-        Include only requested target weights, never the current weight as another target. This is a read-only reduction-to-cash tool.
+        Include only requested target weights, never the current weight as another target. This is a read-only reduction tool. For moving proceeds to an existing holding, use remainderPolicy="holding" and transferToTicker set to its ticker. Never replace an explicit holding destination with cash.
         Do not invent securities, percentages, currencies, or policies. If the requested comparison lacks targets, is ambiguous,
-        requires increased positions, leverage, new securities, or another allocation policy, return clarifyingQuestions in Traditional Chinese.
+        requires borrowing, shorting, leverage, new securities, or an unsupported allocation policy, return clarifyingQuestions in Traditional Chinese.
         If no hypothetical allocation is requested, scenarios must be null. Preserve explicit stock identifiers in objective.
         Return JSON only:
         {"workflowType":"PortfolioDiagnosis|ResearchInvestigation","portfolioId":null,"securityQuery":null,"leadSkill":"allowed-id","objective":"one precise Traditional Chinese objective","contextEnvelope":{"market":"TW|CN-A|HK|US|Global|unknown","asset":"equity|ETF|index|sector|theme|bond|convertible|option|portfolio|unknown","depth":"quick|standard|deep|monitoring","horizon":null,"currency":null,"language":"zh-TW"},"inferredFields":[],"downstreamIntents":[],"clarifyingQuestions":[],"scenarios":null,"routingReason":"short Traditional Chinese reason","confidence":"high|medium|low"}.
