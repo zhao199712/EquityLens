@@ -36,8 +36,8 @@
 | R11 | 3 個工作流、node type ≤ 15 | MUST | ✅ | | | |
 | R12 | 使用者隔離 | MUST | ✅ | | | |
 | R13 | Admin 介面 | SHOULD | ✅ | | | |
-| R14 | Eval harness | SHOULD | ⬜ | | | |
-| R15 | 文件與前後對照 | SHOULD | ⬜ | | | |
+| R14 | Eval harness | SHOULD | ✅ | | | |
+| R15 | 文件與前後對照 | SHOULD | ✅ | | | |
 
 ### Part B：實測問題
 
@@ -261,3 +261,9 @@
 - Admin registry API／路由／頁面移除，workflow 設定只呈現固定圖。歷史 run 的篩選與結果呈現留在集中相容層，沒有恢復建立入口。
 - 刪除測試限於舊圖擴增、舊 planner 提案、已刪 provider／agent 與 registry 專用契約。仍有效的證據檢查、回饋修訂、投組數字、來源政策、風險數學、情境所有權／現金／幣別、審批、恢復與隔離改由固定圖及工具測試覆蓋。rerank fallback 的證據和診斷保存移至 search_local 結果；共用工具持久化保留該診斷。
 - 完整 R27：build PASS、864/864（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 76、前端 build PASS／121 tests。R1／R8／R28 隨舊註冊與 Supporting skill 清除完成總驗收。沒有外部 API 呼叫、migration、部署或正式資料改動。
+
+### R14／R15 Eval 與現況文件
+
+- Live CLI 僅接受 AgentLoop，client 預設明確指定並覆蓋題庫舊 engine；非法引擎在 HTTP 前拒絕。舊 responses 的離線 rescore 與未知 trajectory 語意保留。
+- 更新 AGENTS runtime／workflow 清單、架構文件 §13 與 eval README；根 README 未加入設計決策。收斂數字採實際 catalog／handler 與程式行數。
+- 完整 R27：build PASS、864/864（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／121 tests。無外部 API 呼叫。

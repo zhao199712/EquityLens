@@ -30,6 +30,8 @@ class EquityLensClient:
                  poll_interval_s: float = 2.0, investigation_timeout_s: float = 900.0,
                  transport: httpx.BaseTransport | None = None,
                  sleep: Callable[[float], None] = time.sleep, engine: str | None = None) -> None:
+        if engine not in (None, "AgentLoop"):
+            raise ValueError("Only AgentLoop investigations are supported")
         headers = {"Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -38,7 +40,7 @@ class EquityLensClient:
         self._poll_interval_s = poll_interval_s
         self._investigation_timeout_s = investigation_timeout_s
         self._sleep = sleep
-        self._engine = engine
+        self._engine = engine or "AgentLoop"
 
     def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         """Send a request, waiting out HTTP 429 (the API's per-user LLM rate limit) a few times.

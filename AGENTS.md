@@ -64,25 +64,25 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 - Retrieval defaults are in `Services/Ai/RetrievalOptions.cs`: `Hybrid` retrieval and Cohere `rerank-v4.0-fast` when reranking is enabled.
 - Preflight checks are skipped for `WebOnly` and `LocalThenWeb` source policies.
 
-## V3 Agent Runtime
-- Current V3 runtime is a persisted DAG workflow runner, not Microsoft Agent Framework runtime; keep MAF behind seams such as `ICriticReviewAgent` / `IDraftRevisionAgent`.
-- Workflow definitions are persisted in `AgentRun.WorkflowDefinitionJson`; `AgentWorkflowPlanner` topologically sorts `nodes`/`edges`; `AgentRunGraphValidator` checks persisted `AgentRun.Nodes` match the definition.
-- Run/node status transitions are centralized in `AgentStateMachine.cs`; use `Transition(...)` / `ResetForRetry(...)`, not direct `Status = ...` assignments.
-- Agent telemetry is in `EquityLensTelemetry`: spans `agent.run.execute` / `agent.node.execute`, metrics `equitylens.agent.*.status.transitions`; persisted `events`, `nodes`, and `toolCalls` remain the source of truth.
-- Node handlers in `CriticReviewNodeHandlers.cs` and `DraftRevisionNodeHandlers.cs` should only execute node business logic and write `InputJson`, `OutputJson`, `BlackboardJson`, tool calls, and events.
-- Human-in-the-loop is a durable suspension node `WaitForHumanApproval` (`HumanApprovalNodeHandlers.cs`): the handler calls `context.RequestApproval()` to pause; the executor moves node+run to `WaitingForFeedback`, releases the lease, and writes NO wake outbox. Resume is driven externally — never block a worker waiting for a human.
-- Decisions arrive via `POST /api/agent-runs/{id}/approval` (`AgentRunService.DecideApprovalAsync`): writes `approvalDecision` to the blackboard + an event, resets the gate node to `Pending`, run→`Running`, re-enqueues. Approve and Reject share one path (decision-as-data); branching is via conditional edges. Reject requires a comment; the update is guarded by the `OrchestrationVersion` concurrency token.
-- Node-level conditional edges (`condition: { path, equals }` on a node definition) resolve dotted blackboard paths (e.g. `humanApproval.decision`); single-segment paths behave as before. Approval blackboard keys: `approvalRequest` (written on pause), `approvalDecision` (written by the service), `humanApproval` (handler projection on resume).
-- A new node type MUST be registered in `Program.cs` AND added to `AgentWorkflowCatalog.cs`: `GetNode` uses `Single()` and throws for unknown types (both the run-creation policy snapshot and the executor's `GetPolicy` call it).
-- Current workflows (full list in `AgentWorkflowCatalog.cs`):
+## Fixed Workflow Runtime
+- Persisted DAG runtime with exactly three workflows and 13 node types; node-level research and portfolio loops share `Loop/AgentLoopEngine.cs`. This is not Microsoft Agent Framework runtime.
+- `AgentWorkflowPlanner` topologically sorts fixed nodes/edges; `AgentRunGraphValidator` checks persisted nodes. No runtime graph expansion, capability registry, or supporting-skill catalog remains.
+- Definitions are persisted in `AgentRun.WorkflowDefinitionJson`. `WorkflowExecutionCompatibility` checks workflow, version and both definition/persisted node shapes. Retired runs remain readable; retry/resume/approval return 409 after ownership validation. Workers acquire fenced leases before safely failing retired graphs.
+- Current workflow definitions:
 ```text
-CriticReview: loadResearchRun -> buildEvidencePacket -> checkEvidence -> critiqueAnswer -> finalizeCriticReport
-DraftRevision: loadCriticReviewRun -> draftRevisedAnswer -> finalizeRevision
-PortfolioDiagnosis: loadContext -> … -> draftPortfolioDiagnosis -> approvePortfolioDiagnosis (human gate, always-on) -> finalizePortfolioDiagnosis [Approved] / finalizeRejectedPortfolioDiagnosis [Rejected, fails run]
+ResearchAgent v2: validate -> detectIntent -> researchAgent -> qualityGate -> [reviseAgent -> reviseQualityGate] -> finalize
+PortfolioDiagnosis v4: loadContext -> portfolioAgent -> portfolioQualityGate -> approve -> finalize / finalizeRejected
+CriticReview v2: loadResearchRun -> qualityGate (score only) -> finalizeReport
 ```
-- Add a workflow by adding constants, provider, node contracts/blackboard keys, handlers, DI registrations, and tests for definition contract, planner order, handler coverage, blackboard/output, failure/retry, and user isolation.
-- Production DI maps `ICriticReviewAgent` to `LlmCriticReviewAgent` and `IDraftRevisionAgent` to `LlmDraftRevisionAgent`; tests use deterministic agents/fakes.
-- DeepSeek JSON mode is `ChatResponseFormat.JsonObject`; Gemini currently throws `NotSupportedException` for that response format.
+- Research and revision share a loop type; both gates share QualityGate. Research revises at most once. Feedback creates a ResearchAgent child beginning at revision, preserving request deduplication and parent links.
+- QualityGate stages persist their results and reuse a completed Critic on recovery. Stages are ordinary components, not registered nodes. Score mode does not rewrite the original answer.
+- Node registration lives in Bootstrap wiring and `AgentWorkflowCatalog.cs`; maintain their exact correspondence. Current catalog counts have regression tests.
+- Use `AgentStateMachine.Transition(...)` / `ResetForRetry(...)`, not direct status assignments. Handler business logic writes input/output, blackboard, tool calls and events; executor owns transitions and leases.
+- Telemetry uses `agent.run.execute` / `agent.node.execute` and `equitylens.agent.*.status.transitions`; persisted events/nodes/toolCalls remain the source of truth.
+- `WaitForHumanApproval` is always on for portfolio output. It durably suspends, releases the lease and writes no wake outbox. External approval restores the gate and follows conditional edges. Rejection requires a reason and ends Failed; no holdings are modified.
+- Conditional edges resolve dotted blackboard paths. Approval uses the existing ownership, orchestration concurrency and requestId guards.
+- Ask Agent uses one unified conversation router: action, workflow, params, missing, confidence. Explicit entry points and owned-run follow-ups bypass classification. All paths validate ownership, ambiguity, source policy and supported scenarios. Invalid routing JSON retries once, then clarifies with sanitized diagnostics.
+- Router never selects a method. Role-scoped method files under `AgentSkills/` are loaded by audited read-only `load_skill` (default maximum three). They can narrow tools but cannot expand authorization or source policy.
 
 ## Data Pipeline CLI Modes
 ```bash
@@ -108,9 +108,10 @@ dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj -- --export-financ
 - Heartbeat uses an independent scope/DbContext. Never share a handler DbContext with background renewal.
 - Interrupted Ready/Queued/Running nodes recover through the state machine with a bounded interruption count; caller cancellation and lease loss must not publish stale failure results.
 
-## Research Agent Loop (v4 opt-in)
-- `ResearchAskRequest.Engine`: omitted keeps configured default `DynamicDag`; `AgentLoop` selects fixed `ResearchAgent` workflow. Do not remove v1 planner/validator while existing workflows use them.
-- Loop code lives under `Services/Agents/Loop`; persist an LLM decision before dispatch and each tool result before merging the evidence ledger. Checkpoint uniqueness is node + execution attempt; committed results are reused on lease recovery.
-- All currently exposed loop tools are read-only. Never introduce a side-effect tool without durable approval, argument binding and downstream idempotency.
-- OutputGate is deterministic; revision runs Critic again. A final rejected answer becomes standard refusal with artifact status, while runtime can still succeed.
-- Eval: `--mode investigation --engine DynamicDag|AgentLoop`. Legacy output without trajectory remains rescorable and must not imply zero violations.
+## Shared Agent Loop
+- Investigation defaults to AgentLoop; explicit DynamicDag returns 400. Eval live CLI accepts only AgentLoop; saved legacy responses remain rescorable.
+- Persist each LLM decision before dispatch and each tool result before merging evidence/domain state. Checkpoints are scoped to node + execution attempt; committed results are reused after lease recovery.
+- Research tools: search_local, search_web (source-policy constrained, at most once), get_document_page. Portfolio has six task tools: snapshot, saved Risk Run, enum-selected risk analysis, attribution, scenario simulation and risk profile. The 37 internal math functions are not exposed to the model.
+- Tool arguments cannot supply price/return arrays or calculated financial results. Values come from owner-scoped DB/blackboard. Current tools are read-only. Any future side-effect tool requires durable approval, argument binding and downstream idempotency.
+- OutputGate is deterministic; revision invokes Critic again. Final refusal records quality_gate_rejected and blocked numbers; successful execution does not imply an accepted answer.
+- Preserve unknown trajectory indicators for old eval responses rather than inventing zero violations. Only verified, non-excluded original cases contribute to the original eight-case score; new corpus cases are reported separately.

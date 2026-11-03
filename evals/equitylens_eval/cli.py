@@ -253,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     run = sub.add_parser("run", help="run cases against a live API")
     run.add_argument("--cases", required=True)
     run.add_argument("--mode", choices=sorted(MODES), default="ask")
-    run.add_argument("--engine", choices=["DynamicDag", "AgentLoop"], help="investigation engine override")
+    run.add_argument("--engine", choices=["AgentLoop"], default="AgentLoop", help="fixed investigation engine")
     run.add_argument("--label", required=True, help="name for this run, e.g. prompt-v4 or jev-assessor")
     run.add_argument("--base-url", default=os.getenv("EQUITYLENS_BASE_URL", "http://localhost:5035"))
     run.add_argument("--token", help="JWT bearer token (default: $EQUITYLENS_TOKEN)")
