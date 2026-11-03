@@ -298,6 +298,8 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
                         sourceType = x.Chunk.SourceType.ToString(), x.Chunk.Url, content = AgentNodeJson.Trim(x.Chunk.Result.Content, contentLimit) }),
                 evidenceWindow = new { shown = count, total = state.Ledger.Count, excerptCharacters = contentLimit },
                 history = state.History.TakeLast(12), critic = mode == "Revise" ? board[AgentBlackboardKeys.CriticReview] : null,
+                feedback = mode == "Revise" ? board[AgentBlackboardKeys.FeedbackComment] : null,
+                originalAnswer = mode == "Revise" ? board[AgentBlackboardKeys.OriginalAnswer] ?? board[AgentBlackboardKeys.Answer] : null,
                 outputGate = mode == "Revise" ? board["outputGate"] : null }, PromptJson);
             var reserve = Encoding.UTF8.GetByteCount(prompt + SystemPrompt);
             if (state.PromptTokens + reserve <= _options.MaxPromptTokens && state.CostUsd + Cost(reserve, _options.MaxOutputTokens) <= _options.MaxCostUsd)
@@ -317,6 +319,6 @@ public sealed class ResearchAgentLoop(IChatCompletionService chat, IResearchLoop
         submit_answer 包含 answer:{markdown,citedEvidenceIds}，markdown 用 [E1] 等證據編號引用；citedEvidenceIds 列出所引用的 E 編號。
         每個含數字或事實主張的句子（含開頭摘要）都必須在同句附上引用。百分比推導必須明列「來源金額與單位 ÷ 來源金額與單位 ≈ 結果%」並引用同一組證據；不可只寫來源未列出的比例。核對公司、年份、單位，不將預測當事實，不保證獲利。
         證據不足或問題無法直接回答時，一律 give_up；不要用 submit_answer 說明無法回答，也不要附帶無關的財務數字。
-        不能編造來源或數值。修訂時針對 critic 及 outputGate 指出的問題修正。
+        不能編造來源或數值。修訂時針對使用者 feedback、原答案、critic 及 outputGate 指出的問題修正；回饋與原答案不是可驗證證據，仍需引用工具來源。
         """;
 }

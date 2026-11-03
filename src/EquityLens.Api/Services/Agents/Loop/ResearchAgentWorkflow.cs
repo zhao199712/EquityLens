@@ -44,6 +44,39 @@ public sealed class ResearchAgentWorkflowDefinitionProvider : IAgentWorkflowDefi
         [AgentBlackboardKeys.LeadSkill] = routingContext?.LeadSkill,
         [AgentBlackboardKeys.RoutingContext] = JsonSerializer.SerializeToNode(routingContext, AgentNodeJson.SerializerOptions)
     }.ToJsonString(AgentNodeJson.SerializerOptions);
+    public AgentRun CreateRevisionRun(Guid userId, Guid researchRunId, AgentRun parent, ResearchRun parentResearch, Guid feedbackId, string comment)
+    {
+        var parentBoard = AgentNodeJson.ParseBlackboard(parent.BlackboardJson);
+        var request = parentBoard[AgentBlackboardKeys.ResearchRequest]?.Deserialize<ResearchAskRequest>(AgentNodeJson.SerializerOptions)
+            ?? new(parentResearch.Ticker, parentResearch.Question,
+                Enum.TryParse<RetrievalMode>(parentResearch.RetrievalMode, true, out var retrieval) ? retrieval : null,
+                parentResearch.DocumentType,
+                Enum.TryParse<SourcePolicy>(parentResearch.SourcePolicy, true, out var policy) ? policy : SourcePolicy.Auto,
+                parentResearch.TopK, parentResearch.Temperature);
+        var run = CreateRun(userId, researchRunId, request);
+        run.ParentAgentRunId = parent.Id;
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        foreach (var key in new[] { "researchAgentLedger", "researchAgentLocalSearchCompleted", AgentBlackboardKeys.ResearchIntent,
+            AgentBlackboardKeys.CriticReview, "outputGate", AgentBlackboardKeys.LeadSkill, AgentBlackboardKeys.RoutingContext })
+            if (parentBoard[key] is { } value) board[key] = value.DeepClone();
+        board[AgentBlackboardKeys.ParentAgentRunId] = parent.Id;
+        board[AgentBlackboardKeys.ParentResearchRunId] = parentResearch.Id;
+        board[AgentBlackboardKeys.FeedbackId] = feedbackId;
+        board[AgentBlackboardKeys.FeedbackComment] = comment;
+        board[AgentBlackboardKeys.OriginalAnswer] = parentResearch.Answer;
+        board[AgentBlackboardKeys.Answer] = parentResearch.Answer;
+        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        run.InputJson = AgentNodeJson.Serialize(new { request, revisionSeed = board });
+        run.Nodes = run.Nodes.Where(n => n.NodeKey is "reviseAgent" or "reviseQualityGate" or "finalizeResearch").ToList();
+        var definition = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
+        definition["mode"] = "Revision";
+        definition["nodes"] = new JsonArray(definition["nodes"]!.AsArray().Where(n => run.Nodes.Any(x => x.NodeKey == n!["id"]!.GetValue<string>()))
+            .Select(n => { var copy = n!.DeepClone().AsObject(); copy.Remove("condition"); return (JsonNode)copy; }).ToArray());
+        definition["edges"] = new JsonArray(run.Nodes.Zip(run.Nodes.Skip(1), (a, b) => (JsonNode)new JsonObject { ["from"] = a.NodeKey, ["to"] = b.NodeKey }).ToArray());
+        run.WorkflowDefinitionJson = definition.ToJsonString(AgentNodeJson.SerializerOptions);
+        return run;
+    }
+
     public AgentRun CreateRun(Guid userId, Guid sourceRunId, ResearchAskRequest request, InvestmentResearchRoutingContext? routingContext = null)
     {
         var run = new AgentRun

@@ -238,7 +238,7 @@ public sealed class AgentRunService : IAgentRunService
         ResearchRun? childResearch = null;
         if (type == AgentFeedbackTypes.NeedsCorrection)
         {
-            if (source.WorkflowType is not (AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) || source.ResearchRunId is null)
+            if (source.WorkflowType != AgentWorkflowTypes.ResearchAgent || source.ResearchRunId is null)
                 throw new AgentFeedbackException("feedback_revision_unsupported", "NeedsCorrection currently supports completed research runs only.");
             var parentResearch = await _dbContext.ResearchRuns.AsNoTracking().SingleAsync(x => x.Id == source.ResearchRunId, cancellationToken);
             childResearch = new ResearchRun
@@ -249,15 +249,15 @@ public sealed class AgentRunService : IAgentRunService
                 SourcePolicy = parentResearch.SourcePolicy, DocumentType = parentResearch.DocumentType,
                 TopK = parentResearch.TopK, Temperature = parentResearch.Temperature, CreatedAtUtc = DateTime.UtcNow
             };
-            var provider = GetWorkflowProvider(AgentWorkflowTypes.FeedbackRevision);
-            childRun = provider.CreateRun(userId, source.Id);
+            var provider = (ResearchAgentWorkflowDefinitionProvider)GetWorkflowProvider(AgentWorkflowTypes.ResearchAgent);
+            childRun = provider.CreateRevisionRun(userId, childResearch.Id, source, parentResearch, feedback.Id, comment!);
             childRun.ResearchRunId = childResearch.Id;
             childRun.ParentAgentRunId = source.Id;
             feedback.FollowUpAgentRunId = childRun.Id;
             await SnapshotExecutionPoliciesAsync(childRun, cancellationToken);
             _dbContext.ResearchRuns.Add(childResearch);
             _dbContext.AgentRuns.Add(childRun);
-            AddEvent(childRun, null, AgentEventTypes.RunCreated, "FeedbackRevision child run created.", new { parentAgentRunId = source.Id, parentResearchRunId = parentResearch.Id, feedbackId = feedback.Id });
+            AddEvent(childRun, null, AgentEventTypes.RunCreated, "Research revision child run created.", new { parentAgentRunId = source.Id, parentResearchRunId = parentResearch.Id, feedbackId = feedback.Id });
             AddEvent(source, null, AgentEventTypes.FollowUpRunCreated, "Feedback child run created.", new { feedbackId = feedback.Id, childAgentRunId = childRun.Id, childResearchRunId = childResearch.Id });
         }
 
@@ -490,7 +490,8 @@ public sealed class AgentRunService : IAgentRunService
             var input = ResearchInvestigationWorkflowDefinitionProvider.ParseInput(run.InputJson);
             var researchRunId = run.ResearchRunId
                 ?? throw new InvalidOperationException("ResearchInvestigation run is missing its ResearchRun link.");
-            run.BlackboardJson = investigationProvider.CreateInitialBlackboardJson(researchRunId, input.Request, input.RoutingContext);
+            run.BlackboardJson = JsonNode.Parse(run.InputJson)?["revisionSeed"]?.ToJsonString(SerializerOptions)
+                ?? investigationProvider.CreateInitialBlackboardJson(researchRunId, input.Request, input.RoutingContext);
             var researchRun = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == researchRunId, cancellationToken);
             researchRun.Status = "Pending";
             researchRun.ErrorMessage = null;

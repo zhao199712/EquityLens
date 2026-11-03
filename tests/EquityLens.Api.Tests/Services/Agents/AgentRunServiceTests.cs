@@ -1203,13 +1203,13 @@ public sealed class AgentRunServiceTests
         var sourceRun = new AgentRun
         {
             Id = Guid.NewGuid(), UserId = userId, ResearchRunId = sourceResearch.Id,
-            WorkflowType = AgentWorkflowTypes.ResearchInvestigation, AgentType = AgentTypes.Research,
+            WorkflowType = AgentWorkflowTypes.ResearchAgent, AgentType = AgentTypes.Research,
             Status = AgentRunStatuses.Succeeded, InputJson = "{}", BlackboardJson = "{}",
             WorkflowDefinitionJson = "{\"nodes\":[]}", OutputJson = "{\"answer\":\"原始答案 [1]\"}"
         };
         db.ResearchRuns.Add(sourceResearch); db.AgentRuns.Add(sourceRun); await db.SaveChangesAsync();
         var queue = new RecordingAgentRunQueue();
-        var service = CreateServiceWithHandlers(db, [new FeedbackRevisionWorkflowDefinitionProvider()], [], queue);
+        var service = CreateServiceWithHandlers(db, [new EquityLens.Api.Services.Agents.Loop.ResearchAgentWorkflowDefinitionProvider()], [], queue);
         var requestId = Guid.NewGuid();
 
         var created = await service.SubmitFeedbackAsync(sourceRun.Id, userId,
@@ -1220,7 +1220,18 @@ public sealed class AgentRunServiceTests
         Assert.NotNull(created.FollowUpAgentRun);
         Assert.Equal(created.FollowUpAgentRun.Id, repeated.FollowUpAgentRun!.Id);
         Assert.Equal(sourceRun.Id, created.FollowUpAgentRun.ParentAgentRunId);
-        Assert.Equal(AgentWorkflowTypes.FeedbackRevision, created.FollowUpAgentRun.WorkflowType);
+        Assert.Equal(AgentWorkflowTypes.ResearchAgent, created.FollowUpAgentRun.WorkflowType);
+        var child = await db.AgentRuns.Include(x => x.Nodes).SingleAsync(x => x.Id == created.FollowUpAgentRun.Id);
+        Assert.Equal(new[] { "reviseAgent", "reviseQualityGate", "finalizeResearch" }, new WorkflowGraphTopologyService().GetExecutionOrder(child.WorkflowDefinitionJson));
+        var childBoard = AgentNodeJson.ParseBlackboard(child.BlackboardJson);
+        Assert.Equal("請重新檢查財報數字與引用來源。", childBoard[AgentBlackboardKeys.FeedbackComment]!.GetValue<string>());
+        Assert.Equal(sourceResearch.Answer, childBoard[AgentBlackboardKeys.OriginalAnswer]!.GetValue<string>());
+        var originalBoard = child.BlackboardJson;
+        new AgentRunStateMachine().Transition(child, AgentRunStatuses.Running);
+        new AgentRunStateMachine().Transition(child, AgentRunStatuses.Failed);
+        await db.SaveChangesAsync();
+        await service.RetryAsync(child.Id, userId);
+        Assert.Equal(originalBoard, child.BlackboardJson);
         Assert.Equal(AgentRunStatuses.Pending, created.FollowUpAgentRun.Status);
         Assert.Equal(2, await db.AgentRuns.CountAsync());
         Assert.Single(await db.AgentFeedback.ToListAsync());
@@ -1228,7 +1239,7 @@ public sealed class AgentRunServiceTests
         Assert.Equal(sourceResearch.Id, childResearch.ParentResearchRunId);
         Assert.Equal(created.Feedback.Id, childResearch.RevisionFeedbackId);
         Assert.Equal("Pending", childResearch.Status);
-        Assert.Single(queue.Messages);
+        Assert.Equal(2, queue.Messages.Count);
         var children = await service.ListChildrenAsync(sourceRun.Id, userId);
         Assert.Single(children);
         Assert.Equal(created.FollowUpAgentRun.Id, children[0].Id);

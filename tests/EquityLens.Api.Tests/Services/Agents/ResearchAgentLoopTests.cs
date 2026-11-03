@@ -23,6 +23,22 @@ public sealed class ResearchAgentLoopTests
     private const string Submit = """{"action":"submit_answer","thoughtSummary":"已有資料","answer":{"markdown":"營收 100 元 [E1]。","citedEvidenceIds":["E1"]}}""";
 
     [Fact]
+    public async Task RevisionPrompt_IncludesFeedbackAndOriginalAnswer()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
+        board[AgentBlackboardKeys.FeedbackComment] = "請校正年度與單位。";
+        board[AgentBlackboardKeys.OriginalAnswer] = "原始內容待核對";
+        context.Run.BlackboardJson = board.ToJsonString();
+        var chat = new FakeChat(Search, Submit);
+        await Loop(chat, new FakeTools()).RunAsync(context, "Revise", default);
+        var prompt = JsonNode.Parse(chat.Prompts[0])!;
+        Assert.Equal("請校正年度與單位。", prompt["feedback"]!.GetValue<string>());
+        Assert.Equal("原始內容待核對", prompt["originalAnswer"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task TwoTurns_RecordDecisionsEvidenceAndToolResults()
     {
         await using var db = RefactorTestDbContext.Create();
