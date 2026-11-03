@@ -1,0 +1,14 @@
+{
+  "external_api_cap_usd": 10,
+  "new_paid_calls_during_refactor": 0,
+  "new_external_spend_usd": 0,
+  "historical_total_usd": null,
+  "remaining_budget_usd": null,
+  "status": "unconfirmed_historical_coverage",
+  "evidence": [
+    "docs/architecture/research-agent-runtime-progress.md: previous costs exclude embedding and are estimates, not a provider bill",
+    "docs/eval-verification/2026-11-02-agent-loop-ab/README.md: initial runs explicitly have incomplete provider usage",
+    "/tmp/equitylens-ab-usage.json and initial usage snapshots cover experiment subsets, not the entire authorized session"
+  ],
+  "decision": "Do not start new paid research, embedding, reranking, router or ablation calls until cumulative budget coverage is confirmed. Continue offline verification."
+}

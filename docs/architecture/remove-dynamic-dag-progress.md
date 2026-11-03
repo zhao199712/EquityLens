@@ -70,10 +70,10 @@
 | R30 | 投組任務型工具 ≤ 8；37 個數學函式不可直接呼叫；重用情境計算 | MUST | ✅ | 六工具白名單、全數底層函式拒絕、各工具數值注入拒絕、快照／所有權情境測試 | 本項提交 | R5–R7 完成前先驗收；load_skill 不計入 8 個上限 |
 | R31 | 研究角色來源規則與可確定性檢查的 OutputGate | MUST | ✅ | prompt／證據中繼資料、6 組來源錯置正反例 | 本項提交 | R16 後優先補做；直接／補充來源不可錯置，表格／目錄／封面不得充當風險或實質證據 |
 | R32 | 台積電／鴻海風險、法說會新題庫與原始 PDF 核實紀錄；validate 通過 | SHOULD | ✅ | | | R26 前；至少各 1 題，Garage 原始 PDF 核對文件、實體頁碼、摘錄前保持 verified: false；與原 8 題分開計分 |
-| R33 | 新題庫 investigation、skill trajectory、拆解實驗 A（MaxTurns=1）與 C | COULD | ⬜ | | | R32 核實後、R26 前或一起做；沿用累計 US$10 預算，無法確認剩餘額度先記錄阻塞 |
+| R33 | 新題庫 investigation、skill trajectory、拆解實驗 A（MaxTurns=1）與 C | COULD | ⛔ | | | R32 核實後、R26 前或一起做；沿用累計 US$10 預算，無法確認剩餘額度先記錄阻塞 |
 | R34 | 入口／追問免 LLM 路由、程式訊號、權限與參數驗證、低信心及不支援情境澄清 | MUST | ✅ | | | 與 R9 一併做；每種情況均有測試，不猜投組或替換情境；混合問題單 run 不跨角色 |
 | R35 | 合併對話與 Router 為一次 LLM 呼叫，輸出 D14 結構 | SHOULD | ✅ | | | 與 R9 一併做；保護直接回覆、澄清、拒絕、重置、修訂上次 run；明確入口仍為零次路由呼叫 |
-| R36 | 約 20–30 句 Router 題庫，程式評分與準確率／混淆矩陣 | SHOULD | ⬜ | | | R26 前或一起做；涵蓋研究、投組、混合、模糊、越權、無投組與超出情境能力；不用 LLM judge |
+| R36 | 約 20–30 句 Router 題庫，程式評分與準確率／混淆矩陣 | SHOULD | ⛔ | | | R26 前或一起做；涵蓋研究、投組、混合、模糊、越權、無投組與超出情境能力；不用 LLM judge |
 
 ## 更新後執行順序
 
@@ -143,7 +143,9 @@
 
 | 項目 | 原因 | 已嘗試 | 建議 |
 |---|---|---|---|
-| | | | |
+| R26／R33／R36 live | 歷史外部費用缺完整帳務與 embedding 覆蓋，剩餘 US$10 無法確認 | 檢查舊 progress、A/B manifest、provider usage 與本機 usage snapshots；初期明示未完整記錄 | 提供累計費用覆蓋後在隔離服務執行，不增加上限 |
+| R33 實驗 C | 引用報告未含 C 操作定義 | 搜尋 docs 中拆解實驗／MaxTurns；只有補充條文引用 | 取得具體對照條件，不自行改來源安全規則 |
+| Garage 原始檔 | 目前 bucket 為空，DB key 回 NoSuchKey | 本機原始 PDF 核實；台積電與 DB hash 相符 | 發布前恢復原始檔儲存及下載驗證，另案授權操作 |
 
 ## 給 Reviewer 的摘要
 
@@ -312,3 +314,9 @@
 - 新增獨立 2 題：台積電匯率風險（財報實體第64頁）、鴻海核心獲利規模化（2026-05-14 法說會實體第12頁）。封面、全文摘錄及圖表渲染核對後才設 verified:true；validate：2 cases、0 problems、0 unverified。
 - Garage 目前 bucket 為空、DB object key 回 NoSuchKey；改讀既有本機原始 PDF。台積電與 DB SHA256 完全一致；鴻海 DB 未存 hash，保留核對原檔 hash 與限制。詳見 docs/eval-verification/2026-11-03-risk-conference-cases/；PDF 不提交，也未上傳正式 bucket。
 - 此項只驗收 gold，不宣稱新系統已答對。原八題及 excluded_reason 未動。完整 R27：build PASS、878/878（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／127 tests。無付費 API 呼叫。
+
+### R33／R36 離線交付與付費阻塞
+
+- Router 新題庫 26 題；獨立程式評分 action／workflow／參數，輸出兩種混淆矩陣及逐題結果；不使用 LLM judge。五個測試驗證缺測、錯參數、混淆矩陣、重複／未知 ID 與情境目的地。
+- 因預算覆蓋不完整，真實分類未執行：0/26 observed、accuracy:null，不以 fixture 回覆冒充模型實測。新題 investigation、A／C 拆解亦未執行；狀態及恢復步驟已寫在報告。
+- 完整 R27：build PASS、878/878（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 83、前端 build PASS／127 tests。無付費呼叫。本項只交付離線部分，R33／R36 不標全數完成。

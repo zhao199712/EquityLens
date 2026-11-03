@@ -1,0 +1,248 @@
+{
+  "status": "not_run",
+  "case_count": 26,
+  "observed_count": 0,
+  "missing_count": 26,
+  "accuracy": null,
+  "action_accuracy": null,
+  "workflow_accuracy": null,
+  "parameter_accuracy": null,
+  "action_confusion_matrix": {},
+  "workflow_confusion_matrix": {},
+  "results": [
+    {
+      "id": "router-01",
+      "category": "research",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-02",
+      "category": "research",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-03",
+      "category": "research",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-04",
+      "category": "research",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-05",
+      "category": "research",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-06",
+      "category": "research",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-07",
+      "category": "portfolio",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-08",
+      "category": "portfolio",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-09",
+      "category": "portfolio",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-10",
+      "category": "portfolio",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-11",
+      "category": "portfolio",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-12",
+      "category": "portfolio_scenario",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-13",
+      "category": "portfolio_scenario",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-14",
+      "category": "mixed",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-15",
+      "category": "mixed",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-16",
+      "category": "ambiguous",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-17",
+      "category": "ambiguous",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-18",
+      "category": "ambiguous",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-19",
+      "category": "ambiguous",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-20",
+      "category": "unauthorized",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-21",
+      "category": "no_portfolio",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-22",
+      "category": "unsupported",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-23",
+      "category": "unsupported",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-24",
+      "category": "conversation",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-25",
+      "category": "followup",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    },
+    {
+      "id": "router-26",
+      "category": "explicit_entry",
+      "observed": false,
+      "action_correct": false,
+      "workflow_correct": false,
+      "parameters_correct": false,
+      "passed": false
+    }
+  ]
+}
