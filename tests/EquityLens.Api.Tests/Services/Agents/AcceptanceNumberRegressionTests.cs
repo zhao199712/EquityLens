@@ -54,6 +54,24 @@ public class AcceptanceNumberRegressionTests
     }
 
     [Fact]
+    public void AccountCashClaimRequiresActualBalance_NotUnrelatedZeroOrScenarioCash()
+    {
+        var snapshot = new LoopDataFact("P1", "snapshot", "get_portfolio_snapshot", new JsonObject {
+            ["commonTradingDays"] = 0, ["accountCash"] = new JsonObject { ["status"] = "Unavailable", ["balance"] = null } });
+        var scenario = new LoopDataFact("P2", "scenario", "simulate_weight_scenario", new JsonObject { ["cashWeight"] = 0 });
+        var claim = new LoopAnswer("帳戶現金為 0 [P1][P2]", ["P1", "P2"]);
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(claim, [snapshot, scenario]));
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("未取得帳戶現金餘額，無法確認是否為零。", []), [snapshot]));
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("情境現金權重 0% [P2]", ["P2"]), [scenario]));
+        snapshot.Data["accountCash"] = new JsonObject { ["status"] = "Available", ["balance"] = 731m };
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(claim, [snapshot, scenario]));
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("系統帳簿現金餘額 731 元 [P1]", ["P1"]), [snapshot]));
+        snapshot.Data["accountCash"]!["balance"] = 0m;
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(claim, [snapshot, scenario]));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(new("帳戶現金為 0 [P2]", ["P2"]), [snapshot, scenario]));
+    }
+
+    [Fact]
     public void SharedPercentagePointUnitAppliesOnlyToAdjacentNumericList()
     {
         var facts = new[] { new LoopDataFact("P1", "scenario", "simulate_weight_scenario", new JsonObject { ["a"] = .0147m, ["b"] = .009m }) };

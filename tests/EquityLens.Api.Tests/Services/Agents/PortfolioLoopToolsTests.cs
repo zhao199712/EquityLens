@@ -17,6 +17,78 @@ namespace EquityLens.Api.Tests.Services.Agents;
 
 public sealed class PortfolioLoopToolsTests
 {
+    [Theory]
+    [InlineData("recorded", "Available", 731)]
+    [InlineData("zero", "Available", 0)]
+    [InlineData("missing", "Unavailable", null)]
+    [InlineData("pending", "Unavailable", null)]
+    [InlineData("foreign-flow", "Unavailable", null)]
+    [InlineData("foreign-trade", "Unavailable", null)]
+    [InlineData("unknown-flow", "Unavailable", null)]
+    [InlineData("derived", "Available", 731)]
+    public async Task SnapshotCashUsesOwnedRecordedLedger_AndNeverAssumesMissingMeansZero(string mode, string status, int? expected)
+    {
+        var options = new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        using var services = new ServiceCollection().AddScoped<EquityLensDbContext>(_ => new RefactorTestDbContext(options)).BuildServiceProvider();
+        var id = Guid.NewGuid(); var owner = Guid.NewGuid(); var otherId = Guid.NewGuid();
+        var date = new DateOnly(2025, 5, 1);
+        await using var db = new RefactorTestDbContext(options);
+        db.Portfolios.AddRange(new Portfolio { Id = id, OwnerUserId = owner, Name = "cash" },
+            new Portfolio { Id = otherId, OwnerUserId = Guid.NewGuid(), Name = "other" });
+        var security = new Security { Id = Guid.NewGuid(), Ticker = "2330", Currency = mode == "foreign-trade" ? "USD" : "TWD" };
+        db.Securities.Add(security);
+        if (mode != "missing")
+        {
+            db.PortfolioCashFlows.AddRange(
+                new() { Id = Guid.NewGuid(), PortfolioId = id, FlowType = "Deposit", Amount = mode == "zero" ? 1269 : 2000,
+                    Currency = mode == "foreign-flow" ? "USD" : "TWD", EffectiveDate = date, Status = mode == "pending" ? "Pending" : "Posted", IsSystemDerived = mode == "derived" },
+                new() { Id = Guid.NewGuid(), PortfolioId = id, FlowType = mode == "unknown-flow" ? "Unknown" : "Withdrawal", Amount = 500, EffectiveDate = date, Status = "Confirmed" },
+                new() { Id = Guid.NewGuid(), PortfolioId = id, FlowType = "Dividend", Amount = 50, EffectiveDate = date, Status = "Applied" },
+                new() { Id = Guid.NewGuid(), PortfolioId = id, FlowType = "DividendTax", Amount = 5, EffectiveDate = date, Status = "Posted" },
+                new() { Id = Guid.NewGuid(), PortfolioId = id, FlowType = "Fee", Amount = 7, EffectiveDate = date, Status = "Posted" });
+            db.PortfolioTransactions.AddRange(
+                new() { Id = Guid.NewGuid(), PortfolioId = id, SecurityId = security.Id, TransactionType = "BUY", Quantity = 10, Price = 100, Fee = 10, TransactionDate = date },
+                new() { Id = Guid.NewGuid(), PortfolioId = id, SecurityId = security.Id, TransactionType = "SELL", Quantity = 2, Price = 103, Fee = 3, TransactionDate = date });
+        }
+        // Neither other owners nor future / skipped / scheduled activity may leak into the balance.
+        db.PortfolioCashFlows.AddRange(
+            new() { Id = Guid.NewGuid(), PortfolioId = otherId, FlowType = "Deposit", Amount = 888888, EffectiveDate = date, Status = "Posted" },
+            new() { Id = Guid.NewGuid(), PortfolioId = id, FlowType = "Deposit", Amount = 999999, EffectiveDate = date.AddDays(1), Status = "Posted" },
+            new() { Id = Guid.NewGuid(), PortfolioId = id, FlowType = "Deposit", Amount = 999999, EffectiveDate = date, Status = "Skipped" },
+            new() { Id = Guid.NewGuid(), PortfolioId = id, FlowType = "Deposit", Amount = 999999, EffectiveDate = date, Status = "Scheduled" });
+        db.PortfolioTransactions.Add(new() { Id = Guid.NewGuid(), PortfolioId = id, SecurityId = security.Id, TransactionType = "BUY", Quantity = 999, Price = 100, TransactionDate = date.AddDays(1) });
+        await db.SaveChangesAsync();
+        var beforeFlows = await db.PortfolioCashFlows.AsNoTracking().OrderBy(x => x.Id).ToListAsync();
+        var beforeTrades = await db.PortfolioTransactions.AsNoTracking().OrderBy(x => x.Id).ToListAsync();
+        var inputs = new PortfolioRiskMathInputs("Portfolio", id, null, date, date, [], [], [], [], [], [], [], [], 0, "test", []);
+        var board = new JsonObject {
+            [AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(new PortfolioDiagnosisContext(id, "cash", "TWD", date, date, 0), AgentNodeJson.SerializerOptions),
+            [AgentBlackboardKeys.MathInputs] = JsonSerializer.SerializeToNode(inputs, AgentNodeJson.SerializerOptions),
+            [PortfolioLoopTools.SnapshotKey] = JsonSerializer.SerializeToNode(new PortfolioScenarioSnapshot(id, DateTime.UtcNow, "TWD", date, date, [], [], 0, []), AgentNodeJson.SerializerOptions) };
+        var tools = new PortfolioLoopTools(services.GetRequiredService<IServiceScopeFactory>());
+        var scope = new LoopToolScope(owner, new("", "現金是多少"), [], false, DomainContext: board);
+        var result = await tools.InvokeAsync(scope, new("snapshot", "get_portfolio_snapshot", new()), default);
+        Assert.Null(result.Error);
+        var cash = result.Data!["accountCash"];
+        Assert.NotNull(cash);
+        Assert.Equal(status, cash!["status"]!.GetValue<string>());
+        Assert.Equal(date.ToString("yyyy-MM-dd"), cash["asOf"]!.ToString());
+        Assert.Equal("RecordedLedger", cash["basis"]!.GetValue<string>());
+        Assert.Equal("TWD", cash["currency"]!.GetValue<string>());
+        if (expected.HasValue)
+        {
+            Assert.Equal((decimal)expected.Value, cash["balance"]!.GetValue<decimal>());
+            var facts = new[] { new LoopDataFact("P1", "snapshot", "get_portfolio_snapshot", result.Data) };
+            Assert.Empty(PortfolioQualityGateNodeHandler.Check(new($"系統帳簿現金餘額 {expected.Value} 元 [P1]", ["P1"]), facts));
+        }
+        else { Assert.Null(cash["balance"]); Assert.False(string.IsNullOrWhiteSpace(cash["reason"]?.ToString())); }
+        Assert.Equal(mode == "derived", cash["includesSystemDerivedFunding"]!.GetValue<bool>());
+        Assert.Equal(JsonSerializer.Serialize(beforeFlows), JsonSerializer.Serialize(await db.PortfolioCashFlows.AsNoTracking().OrderBy(x => x.Id).ToListAsync()));
+        Assert.Equal(JsonSerializer.Serialize(beforeTrades), JsonSerializer.Serialize(await db.PortfolioTransactions.AsNoTracking().OrderBy(x => x.Id).ToListAsync()));
+        var denied = await tools.InvokeAsync(scope with { UserId = Guid.NewGuid() }, new("snapshot", "get_portfolio_snapshot", new()), default);
+        Assert.Equal("portfolio_not_found", denied.Error); Assert.Null(denied.Data);
+    }
+
     [Fact]
     public void RiskDisplayKeepsSourceSpecificRounding()
     {

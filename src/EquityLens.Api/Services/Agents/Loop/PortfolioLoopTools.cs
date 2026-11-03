@@ -19,7 +19,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
     public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => Names.Select(name => new LoopToolDefinition(name,
         name switch
         {
-            "get_portfolio_snapshot" => "取得授權投組持倉、成本、權重、價格與損益快照。",
+            "get_portfolio_snapshot" => "取得授權投組持倉、成本、權重、價格、損益與 accountCash 帳簿現金。只有 accountCash.status=Available 才可引用 balance；Unavailable 是未知而非零，持股權重不包含帳戶現金。",
             "get_risk_report" => "重用同期間且輸入相符的已存風險結果；沒有時明確回 cache miss。",
             "run_risk_analysis" => "以快照補算 Core、TailRisk 或 RiskContribution；不可輸入數值資料。",
             "get_performance_attribution" => "取得持股與產業的正負績效貢獻。",
@@ -100,7 +100,10 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
         var db = serviceScope.ServiceProvider.GetRequiredService<EquityLensDbContext>();
         var board = scope.DomainContext?.DeepClone().AsObject() ?? throw new InvalidOperationException("Portfolio context required.");
         var diagnosis = PortfolioDiagnosisBlackboard.Context(board);
-        if (!await db.Portfolios.AsNoTracking().AnyAsync(x => x.Id == diagnosis.PortfolioId && x.OwnerUserId == scope.UserId && x.IsActive, ct))
+        var portfolio = await db.Portfolios.AsNoTracking()
+            .Where(x => x.Id == diagnosis.PortfolioId && x.OwnerUserId == scope.UserId && x.IsActive)
+            .Select(x => new { x.BaseCurrency }).SingleOrDefaultAsync(ct);
+        if (portfolio is null)
             return new([], "Portfolio unavailable", "portfolio_not_found");
         var run = new AgentRun { Id = scope.RunId ?? Guid.Empty, UserId = scope.UserId, InputJson = scope.InputJson ?? "{}", BlackboardJson = board.ToJsonString() };
         var node = new AgentRunNode { Id = Guid.NewGuid(), AgentRunId = run.Id };
@@ -122,7 +125,9 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 catch (AgentWorkflowQueryException e) { warning = e.Message; }
                 var namedAssets = patch[SnapshotKey]?.Deserialize<PortfolioScenarioSnapshot>(AgentNodeJson.SerializerOptions)?.Assets;
                 var total = inputs.Assets.Sum(x => x.Quantity * x.Prices.LastOrDefault());
-                data = Object(new { diagnosis, inputs.CommonTradingDays, inputs.Warnings, warning,
+                var accountCash = await PortfolioAccountCashReader.ReadAsync(db, diagnosis.PortfolioId, portfolio.BaseCurrency, diagnosis.To, ct);
+                data = Object(new { diagnosis, inputs.CommonTradingDays, inputs.Warnings, warning, accountCash,
+                    holdingWeightBasis = "SecuritiesMarketValueExcludingAccountCash",
                     holdings = inputs.Assets.Select(a => new { a.Ticker, securityName = namedAssets?.FirstOrDefault(x => x.Ticker == a.Ticker)?.SecurityName, a.Currency, a.Quantity, a.AverageCost,
                         price = a.Prices.LastOrDefault(), weight = total > 0 ? a.Quantity * a.Prices.LastOrDefault() / total : (decimal?)null,
                         unrealizedProfit = a.Quantity * (a.Prices.LastOrDefault() - a.AverageCost) }) });

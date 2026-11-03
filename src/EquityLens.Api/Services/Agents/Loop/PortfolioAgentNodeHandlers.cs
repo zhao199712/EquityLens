@@ -96,6 +96,20 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             // Markdown 編號不是數據；標題裡真正的指標數字仍須引用。
             text = Regex.Replace(text, @"^\s*(?:#{1,6}\s*)?\d+[.)、]\s+", "");
             var cited = ids.Where(byId.ContainsKey).Select(id => byId[id]).ToArray();
+            // 帳戶餘額只能由明確帳簿欄位支持，不能借用情境 cashWeight 或其他指標碰巧相同的數字。
+            foreach (Match cashClaim in Regex.Matches(text,
+                @"(?:帳戶現金(?:餘額)?|帳簿現金(?:餘額)?|現金餘額)\s*(?:為|是|[:：|])?\s*(?<value>[-+]?\d+(?:,\d{3})*(?:\.\d+)?)(?![\d.]|\s*[%％])"))
+            {
+                var token = cashClaim.Groups["value"].Value;
+                if (!decimal.TryParse(token, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)) continue;
+                var precision = token.Contains('.') ? token.Length - token.IndexOf('.') - 1 : 0;
+                var supported = cited.Any(f => f.Tool == "get_portfolio_snapshot"
+                    && f.Data["accountCash"] is JsonObject cash
+                    && cash["status"]?.ToString() == "Available"
+                    && cash["balance"] is JsonValue balance && balance.TryGetValue<decimal>(out var value)
+                    && Matches(value, amount, false, precision));
+                if (!supported) { issues.Add("UntraceableNumbers"); rejectedNumbers?.Add(token); }
+            }
             // 日期是分析範圍而非金額；必須在本句引用的事實中確實存在。
             text = Regex.Replace(text, @"(?<!\d)20\d{2}-\d{2}-\d{2}(?!\d)", m =>
                 cited.Any(f => f.Data.ToJsonString().Contains(m.Value, StringComparison.Ordinal)) ? "日期" : m.Value);
