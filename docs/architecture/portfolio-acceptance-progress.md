@@ -120,3 +120,5 @@
 使用者在 PR #14 合併後授權加入尚未持有的指數 ETF 比較。新分支從 main f8f3ffa 建立；六工具／三工作流／十三節點維持，新增 index_etf 政策及快照候選清單，不增加交易副作用。原 14 題、歷史分數及付費 ledger 不變。實作、資料要求與驗證限制見 [ETF 情境說明](portfolio-index-etf-scenarios.md)。
 
 本機驗證：後端 1046（18 PostgreSQL、0 skipped）、前端 138／瀏覽器 10、eval 92、數學 36 皆過，前後端 build 通過，EF 無模型變更。真實 AI／ETF 行情覆蓋驗收尚未執行，本次無額外 API 費用。
+
+使用者追加提示偏好：loop prompt 18／portfolio method v3 對一般優化、分散及降低波動問題優先評估 ETF，與現金比較；尊重明確排除 ETF／只留現金的要求。評估結果不支持時不能硬推買入。未執行新的付費模型驗證。

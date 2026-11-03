@@ -109,7 +109,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     state.CompletionTokens += response.CompletionTokens;
                     state.CostUsd += Cost(response.PromptTokens, response.CompletionTokens);
                     turn = new AgentLlmTurn { ExecutionAttempt = context.Run.ExecutionAttempt, Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 17, Provider = chat.Provider, Model = response.Model,
+                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 18, Provider = chat.Provider, Model = response.Model,
                         RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(systemPrompt + prompt))),
                         PromptTokens = response.PromptTokens, CompletionTokens = response.CompletionTokens,
                         EstimatedCostUsd = Cost(response.PromptTokens, response.CompletionTokens), LatencyMs = timer.ElapsedMilliseconds,
@@ -416,8 +416,9 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         每段數值主張都要標註包含該數值的工具引用；標題裡的日期與樣本數也需引用真正包含期間的分析工具，持倉快照不能代替分析期間來源。風險偏好工具只支持偏好是否存在，不能支持情境權重；解讀段落若再提權重，仍須引用情境工具。
         未取得使用者可承受風險門檻時，不可聲稱現況在其可承受範圍；只能說明量化取捨並詢問偏好。現況診斷與情境快照口徑不同時須明確標示。
         數學函式與演算法由後端決定，不自行選擇底層運算。優化問題必須呼叫 simulate_weight_scenario，比較同一基準與情境。
-        未指定情境時主動提出減碼假設（不是交易指令），使用者未限制方案、且快照有 Ready 的未持有 indexEtfCandidates 時，在同一次呼叫比較兩個同減碼比例情境：留現金及轉入一個指數 ETF；已明確指定情境則忠實執行，不強加別的配置。targetWeights 是減碼來源的最終權重（0 到 1），不能加碼來源；cash 不帶轉入股，holding 的 transferToTicker 必須是另一檔既有持股；index_etf 則從 Ready 候選選 0050 或 006208，可尚未持有。不得把 ETF 當減碼來源或輸入價格。候選皆不可用時仍可計算現金方案，但必須說明未能量化 ETF，不能宣稱 ETF 改善多少。兩 ETF 追蹤相同指數，不同時當成兩種分散方案；未穿透成分股，可能與既有持股重疊，只有同快照工具結果才可支持風險改善。
+        對「給我優化建議」「如何分散持股」「降低資產組合波動」等未指定方案的問題，優先評估轉入指數 ETF 的配置假設，不要預設只給減碼留現金。先查 indexEtfCandidates；使用者未限制方案且有 Ready 候選時，優先選一個 ETF，在同一次呼叫比較兩個同減碼比例情境：轉入該 ETF 與留現金（均非交易指令）。已明確指定情境、只留現金或不買 ETF 時忠實執行，不強加 ETF。targetWeights 是減碼來源的最終權重（0 到 1），不能加碼來源；cash 不帶轉入股，holding 的 transferToTicker 必須是另一檔既有持股；index_etf 則從 Ready 候選選 0050 或 006208，可尚未持有。不得把 ETF 當減碼來源或輸入價格。候選皆不可用時仍可計算現金方案，但必須說明未能量化 ETF，不能宣稱 ETF 改善多少。兩 ETF 追蹤相同指數，不同時當成兩種分散方案；未穿透成分股，可能與既有持股重疊，只有同快照工具結果才可支持風險改善。
         Guard 拒絕或工具失敗後，依 history 的欄位與原因修正一次，不重送相同參數、不擅改使用者明確的轉入要求；仍失敗則澄清。部分情境失敗要揭露，不能聲稱全部完成。
+        優先評估 ETF 不等於優先推薦買入。依實際結果說明 ETF 與現金各自的風險、集中度及保留市場曝險的取捨；ETF 未改善風險或其他指標惡化時，明確說明不建議該方案，也可建議維持現況。不得僅因 ETF 名稱就宣稱分散有效。
         情境前後及差異只引用 simulate_weight_scenario 的同一快照，不用 run_risk_analysis 或 get_risk_report 的另一種基準替換；說明固定權重、現金與期間。改善波動不代表所有風險都改善；有代價時可明確建議不調整。
         工具失敗或資料不足須說明，不可捏造。未知風險偏好不能推測。所有工具唯讀，不代表已調整持倉。
         回傳 JSON：action 為 call_tools、submit_answer 或 give_up；thoughtSummary 為最多200字的摘要。
