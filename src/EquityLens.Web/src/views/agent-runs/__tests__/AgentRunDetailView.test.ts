@@ -96,6 +96,14 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
     expect(mount(AgentRunDetailView, { global: { stubs } }).text()).toContain('資料涵蓋不足')
   })
 
+  it('keeps a long report visible without an intersection callback', () => {
+    state.agentRun.value = diagnosisRun(null, '長報告內容。'.repeat(2000))
+    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
+    const report = wrapper.get('.interpretation').element
+    expect(report.closest('.kimi-reveal:not(.visible)')).toBeNull()
+    wrapper.unmount()
+  })
+
   it('renders risk metrics when present', () => {
     state.agentRun.value = diagnosisRun({
       annualizedVolatility: 0.3871, maxDrawdown: -0.0858, historicalVaR: -0.0729,

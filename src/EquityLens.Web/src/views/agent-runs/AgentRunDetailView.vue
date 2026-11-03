@@ -4,7 +4,6 @@ import type { RiskMeasurementBasis as MeasurementBasis } from '../../services/ri
 import { legacyWorkflow, type LegacyRevisionOutput } from "../../services/legacyWorkflows"
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import PortfolioScenarioComparison, { type ScenarioComparison, type HoldingRisk } from '../../components/agents/PortfolioScenarioComparison.vue'
 import ResearchAgentSummary from '../../components/agents/ResearchAgentSummary.vue'
 import AgentRunProgress from '../../components/agents/AgentRunProgress.vue'
@@ -300,7 +299,7 @@ const nextActionLabel = computed(() => {
       <div v-else-if="error || pollError" class="prestige-error">{{ error || pollError }}</div>
 
       <template v-else-if="run">
-        <ScrollReveal>
+        <div class="run-detail-content">
           <!-- Header -->
           <div class="prestige-panel prestige-panel-pad header-panel">
             <div class="run-tags">
@@ -693,7 +692,7 @@ const nextActionLabel = computed(() => {
               </div>
             </template>
           </div>
-        </ScrollReveal>
+        </div>
       </template>
     </div>
   </div>

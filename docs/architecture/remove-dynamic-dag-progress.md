@@ -406,3 +406,9 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - 原始失敗回答現在通過數字 gate；這是離線回歸，並非重新執行線上 eval，不改原 7/8 計分。
 - 完整 R27：後端 920/920、0 skipped；eval pytest 83、前端 127，雙端 build 與 EF pending-model 通過。日誌 `/tmp/browser-math-r27-*.log`。
 - 正式服務未更動；本階段新增 API 費用 0。未刪除檔案。
+
+### Agent Run 長報告可見性
+
+- 修正前測試重現：沒有 IntersectionObserver 回呼時，整份報告落在 `.kimi-reveal:not(.visible)` 的透明祖先內（1 failed / 9 passed）。正式站已保存超過 5,000px 報告透明的 DOM／截圖證據。
+- 詳情頁移除整頁 ScrollReveal，結果一載入即顯示；保留既有版面及審批操作，不依賴視窗比例或捲動恢復位置。
+- 完整 R27：後端 920/920、0 skipped；pytest 83、前端 128，雙端 build／EF 通過。`/tmp/browser-ui-r27-*.log`。無檔案刪除、無付費呼叫、無部署。
