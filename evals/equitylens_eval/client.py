@@ -219,7 +219,23 @@ def parse_trajectory(detail: dict[str, Any]) -> dict[str, Any]:
             output = {}
         if isinstance(output, dict) and output.get("used") is True:
             legacy_web += 1
+    loaded_skills = []
+    for tool in tools:
+        if tool.get("toolName") != "load_skill" or tool.get("status") != "Succeeded":
+            continue
+        try:
+            result = tool.get("resultJson") or {}
+            if isinstance(result, str):
+                result = json.loads(result)
+            data = result.get("data") if isinstance(result, dict) else None
+            if isinstance(data, dict) and all(isinstance(data.get(k), str) for k in ("skillId", "version", "contentHash")):
+                entry = {k: data[k] for k in ("skillId", "version", "contentHash")}
+                if entry not in loaded_skills:
+                    loaded_skills.append(entry)
+        except (TypeError, ValueError):
+            continue
     return {
+        "loaded_skills": loaded_skills,
         "workflow_type": (detail.get("run") or {}).get("workflowType"),
         "node_types": [n.get("nodeType") for n in nodes],
         "planner_modes": modes,

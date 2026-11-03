@@ -15,8 +15,9 @@ public static class AgentRuntimeRegistration
             .Validate(x => x.MaxTurns >= 2 && x.MaxRevisionTurns >= 2 && x.MaxToolCalls > 0 && x.MaxToolCallsPerTurn > 0
                 && x.MaxWallClockSeconds > 0 && x.ToolTimeoutSeconds > 0 && x.ApprovalExpiryHours > 0 && x.MaxCostUsd > 0
                 && x.InputUsdPerMillion > 0 && x.OutputUsdPerMillion > 0 && x.MaxOutputTokens > 0
-                && x.DefaultEngine == "AgentLoop", "Invalid research loop limits.");
+                && x.MaxSkills >= 0 && x.DefaultEngine == "AgentLoop", "Invalid research loop limits.");
         builder.Services.AddScoped<IResearchLoopTools, ResearchLoopTools>();
+        builder.Services.AddSingleton(new AgentMethodCatalog(Path.Combine(builder.Environment.ContentRootPath, "AgentSkills")));
         builder.Services.AddScoped<ResearchAgentLoop>();
         builder.Services.AddScoped<PortfolioLoopTools>();
         builder.Services.AddScoped<IAgentNodeHandler, PortfolioAgentLoopNodeHandler>();

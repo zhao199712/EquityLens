@@ -13,6 +13,7 @@ public sealed class ResearchAgentLoopOptions
     public int MaxRevisionTurns { get; set; } = 3;
     public int MaxToolCalls { get; set; } = 16;
     public int MaxToolCallsPerTurn { get; set; } = 4;
+    public int MaxSkills { get; set; } = 3;
     public int MaxWebCalls { get; set; } = 1;
     public int MaxPromptTokens { get; set; } = 60000;
     public int MaxOutputTokens { get; set; } = 2500;

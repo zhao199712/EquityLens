@@ -381,6 +381,51 @@ public sealed class ResearchAgentLoopTests
             Data: new() { ["status"] = "Calculated" }, BlackboardPatch: new() { [PortfolioScenarioCalculator.ResultKey] = new JsonObject { ["status"] = "Calculated" } }));
     }
 
+    [Fact]
+    public void PublishedMethods_PreserveConferencePromptAndSeparateRoles()
+    {
+        var catalog = new AgentMethodCatalog(Path.Combine(AppContext.BaseDirectory, "AgentSkills"));
+        Assert.Equal(2, catalog.ForRole("Research").Count);
+        Assert.Single(catalog.ForRole("Portfolio"));
+        var conference = catalog.ForRole("Research").Single(x => x.Id == "conference-call-takeaways");
+        // 從移動前的原始法說會 prompt 核對，不重新生成內容。
+        Assert.Equal("47a678014da54fa1c8bac8f65bf3358d62936533c629f8cdd65ac41db5237b03", conference.ContentHash);
+    }
+
+    [Fact]
+    public async Task Skills_AreRoleScopedBoundedAuditedAndCannotExpandTools()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "method-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(directory);
+        try
+        {
+            foreach (var (id, role, content) in new[] { ("one", "Research", "METHOD_ONE"), ("two", "Research", "METHOD_TWO"), ("private", "Portfolio", "PRIVATE_METHOD") })
+                File.WriteAllText(Path.Combine(directory, id + ".json"), AgentNodeJson.Serialize(new AgentMethod(id, id, "description", role, "1", content)));
+            var catalog = new AgentMethodCatalog(directory);
+            await using var db = RefactorTestDbContext.Create();
+            var context = await Context(db);
+            var chat = new FakeChat("""{"action":"call_tools","toolCalls":[{"callId":"1","tool":"load_skill","arguments":{"id":"one"}},{"callId":"2","tool":"load_skill","arguments":{"id":"two"}},{"callId":"3","tool":"load_skill","arguments":{"id":"private"}},{"callId":"4","tool":"search_web","arguments":{"query":"x"}}]}""", """{"action":"give_up"}""");
+            var state = await new AgentLoopEngine(chat, new FakeTools(), Options.Create(new ResearchAgentLoopOptions { MaxSkills = 1 }), TimeProvider.System, skills: catalog).RunAsync(context, "Research", default);
+            Assert.DoesNotContain("METHOD_ONE", chat.SystemPrompts[0]);
+            Assert.Contains("METHOD_ONE", chat.SystemPrompts[1]);
+            Assert.DoesNotContain("PRIVATE_METHOD", string.Join("", chat.SystemPrompts));
+            Assert.DoesNotContain("private", chat.SystemPrompts[0]);
+            var calls = await db.AgentToolCalls.ToListAsync();
+            Assert.Equal(4, calls.Count);
+            Assert.Contains(calls, c => c.GuardReason == "SkillLimitExceeded");
+            Assert.Contains(calls, c => c.GuardReason == "SkillNotVisible");
+            Assert.Contains(calls, c => c.ToolName == "search_web" && c.Status == "Denied");
+            var loaded = JsonNode.Parse(calls.Single(c => c.Status == "Succeeded").ResultJson!)!["data"]!;
+            Assert.Equal("one", loaded["skillId"]!.GetValue<string>());
+            Assert.Equal("1", loaded["version"]!.GetValue<string>());
+            Assert.Equal(catalog.ForRole("Research")[0].ContentHash, loaded["contentHash"]!.GetValue<string>());
+            Assert.Empty(state.Facts); // 方法不是可引用的事實。
+            File.WriteAllText(Path.Combine(directory, "third.json"), AgentNodeJson.Serialize(new AgentMethod("third", "third", "added", "Research", "1", "NEW_METHOD")));
+            Assert.Equal(3, catalog.ForRole("Research").Count);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     private static ResearchAgentLoop Loop(FakeChat chat, FakeTools tools, ResearchAgentLoopOptions? options = null) =>
         new(chat, tools, Options.Create(options ?? new ResearchAgentLoopOptions()), TimeProvider.System);
 

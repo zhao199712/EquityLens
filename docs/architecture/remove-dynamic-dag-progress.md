@@ -65,7 +65,7 @@
 
 | # | 驗收條件（摘要） | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
-| R28 | 共用基礎＋角色＋本角色 skill 目錄＋已載入全文；唯讀 load_skill、至少 3 個 skill、載入上限與可追溯紀錄 | MUST | ⬜ | | | 與 R9 一併做；保留法說會原 prompt，刪 Supporting skill；不能擴大權限；記錄 id／版本／雜湊及 trajectory |
+| R28 | 共用基礎＋角色＋本角色 skill 目錄＋已載入全文；唯讀 load_skill、至少 3 個 skill、載入上限與可追溯紀錄 | MUST | 🟨 | 角色隔離／下一輪全文／批次上限／不可擴權／雜湊／設定擴充／trajectory | 本項提交 | 與 R9 一併做；保留法說會原 prompt，刪 Supporting skill；不能擴大權限；記錄 id／版本／雜湊及 trajectory |
 | R29 | Router 只選工作流與參數，不選 skill／capability | MUST | ⬜ | | | 與 R9 一併做；取代先前 Router 選 playbook 的方案 |
 | R30 | 投組任務型工具 ≤ 8；37 個數學函式不可直接呼叫；重用情境計算 | MUST | ✅ | 六工具白名單、全數底層函式拒絕、各工具數值注入拒絕、快照／所有權情境測試 | 本項提交 | R5–R7 完成前先驗收；load_skill 不計入 8 個上限 |
 | R31 | 研究角色來源規則與可確定性檢查的 OutputGate | MUST | ✅ | prompt／證據中繼資料、6 組來源錯置正反例 | 本項提交 | R16 後優先補做；直接／補充來源不可錯置，表格／目錄／封面不得充當風險或實質證據 |
@@ -204,3 +204,11 @@
 - 移除只驗證已刪除建立入口／專屬工作流的測試與 rate-limit 清單項，加入建立 endpoint 白名單、評論仍可讀且無舊建立操作的測試；研究修訂／隔離／retry 由固定流程既有測試保護。
 - 暫留內部舊 provider／handler 型別，因仍與待刪動態 coordinator 共用；按順序在 R10 一併解開相依並總驗收，R8 不提早標完成。
 - 完整 R27：build PASS、996/996（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／125 tests。無付費呼叫；未部署。
+
+### R28 方法工具與 prompt 分層
+
+- 三個部署 skill 設定檔：法說會要點、市場事件、投組風險優化；通用研究方法留在研究角色 prompt。法說會內容與原字串雜湊一致，有固定 hash 回歸驗證。
+- 共用基礎＋固定角色＋本角色目錄摘要＋已載入全文。新增 skill 檔不用修改 Router 或程式；load_skill 走原工具紀錄／checkpoint 路徑，保存 id、版本、內容 hash。方法內容不進證據 Facts，不能當作引用來源。
+- 同批多個載入也預先保留上限；跨角色與超限拒絕可查。既有來源政策仍限制工具，skill 最多縮小工具集合，不能放寬權限。預設每 run 最多 3 個，可由 Options 調整。
+- eval trajectory 新增 loaded_skills（id／版本／hash，不把方法全文列成證據）；舊結果仍可解析。Supporting skill 舊 catalog 等待 R9 解開 Router 相依、R10 刪除後才標 R28 全數完成。
+- 完整 R27：build PASS、998/998（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 76、前端 build PASS／125 tests。無外部 API 呼叫。

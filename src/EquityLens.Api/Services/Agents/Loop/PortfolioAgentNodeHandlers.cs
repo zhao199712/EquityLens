@@ -9,12 +9,12 @@ namespace EquityLens.Api.Services.Agents.Loop;
 
 /// <summary>投組角色使用共用有界迴圈；只將已保存的工具事實交給品質關卡。</summary>
 public sealed class PortfolioAgentLoopNodeHandler(IChatCompletionService chat, PortfolioLoopTools tools,
-    IOptions<ResearchAgentLoopOptions> options, TimeProvider clock) : IAgentNodeHandler
+    IOptions<ResearchAgentLoopOptions> options, TimeProvider clock, AgentMethodCatalog? skills = null) : IAgentNodeHandler
 {
     public string NodeType => "PortfolioAgentLoop";
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var state = await new AgentLoopEngine(chat, tools, options, clock, portfolio: true).RunAsync(context, "Portfolio", cancellationToken);
+        var state = await new AgentLoopEngine(chat, tools, options, clock, portfolio: true, skills: skills).RunAsync(context, "Portfolio", cancellationToken);
         if (context.AwaitingApproval) return;
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
         board["portfolioLoopAnswer"] = JsonSerializer.SerializeToNode(state.Answer, AgentNodeJson.SerializerOptions);
