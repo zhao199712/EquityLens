@@ -21,6 +21,7 @@ npm install
 npm run dev
 npm run build
 npm test
+npm run test:e2e:ci # production frontend + mocked API, no paid AI or live backend
 
 # Local services
 docker compose up -d
@@ -34,6 +35,7 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 - Frontend scripts and lockfile live only under `src/EquityLens.Web`; Vite dev server binds `0.0.0.0` and Vitest uses `jsdom` with `src/**/*.{test,spec}.ts`.
 - Backend tests use xUnit, EF InMemory, and hand-written fakes; no Moq/NSubstitute dependency is present.
 - Existing `NU1510 System.Text.Encoding.CodePages` warning is non-blocking.
+- PR CI runs real ParadeDB integration tests and fails if TRX results are missing or skipped. Browser smoke uses isolated fixed API responses; it does not validate live AI quality or full-stack HTTP behavior. Setup and scope: `docs/testing/pr-validation.md`.
 
 ## Infra And Env
 - `docker-compose.yml` starts ParadeDB `paradedb/paradedb:0.24.1-pg18`, Redis, Garage S3, Garage WebUI, and Aspire Dashboard.

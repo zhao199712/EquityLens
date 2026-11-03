@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:ci": "tsc --project tsconfig.browser.json && playwright test --config playwright.ci.config.ts"
   },
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",
