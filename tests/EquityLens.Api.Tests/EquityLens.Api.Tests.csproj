@@ -31,4 +31,7 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Services/Agents/Fixtures/*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

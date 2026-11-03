@@ -16,6 +16,7 @@ internal static partial class ResearchNumberTraceability
         var questionNumbers = Extract(question ?? "");
         var total = 0; var missing = 0; var missingMoney = false; var invalidRatio = false;
         var warnings = new HashSet<string>();
+        var derived = new List<(HashSet<int> Sources, Number Value)>();
         // 常見「句子。[1]」格式仍屬同句引用。
         answer = Regex.Replace(answer.Normalize(NormalizationForm.FormKC), @"([。！？!?；;])\s*((?:\[\d+\])+)", "$2$1");
         // 分號分隔的是同一句的子句；句尾引用涵蓋整句，句號與換行仍是引用邊界。
@@ -40,6 +41,13 @@ internal static partial class ResearchNumberTraceability
             var quotes = citations.Where(x => ids.Contains(x["citationIndex"]?.GetValue<int>() ?? -1))
                 .SelectMany(x => ExtractQuote(x["quoteText"]?.GetValue<string>() ?? "")
                     .Concat(Extract(x["title"]?.GetValue<string>() ?? "").Select(n => n with { AllowUnitlessMoney = false }))).ToList();
+            // 已驗證的結果只可在再次引用相同來源的句子重用，不能跨來源替模型背書。
+            quotes.AddRange(derived.Where(x => x.Sources.IsSubsetOf(ids)).Select(x => x.Value));
+            void Record(Number value)
+            {
+                quotes.Add(value);
+                derived.Add((ids, value));
+            }
             // 只驗證明示的百分比除法；兩個運算元必須來自同句引用，不能用任意模型數值造出依據。
             foreach (Match expression in RatioExpression().Matches(sentence))
             {
@@ -59,7 +67,7 @@ internal static partial class ResearchNumberTraceability
                     verified = Math.Abs(calculated - claimed.Value) <= Math.Abs(calculated) * .005m;
                     if (verified)
                     {
-                        quotes.Add(new(calculated, "percent"));
+                        Record(new(claimed.Value, "percent"));
                         warnings.Add("VerifiedRatioExpression");
                     }
                 }
@@ -81,11 +89,34 @@ internal static partial class ResearchNumberTraceability
                         var calculated = (newValue.Value / oldValue.Value - 1m) * 100m;
                         var claimed = Extract(expression.Groups["result"].Value).Single();
                         verified = Math.Abs(calculated - claimed.Value) <= Math.Abs(calculated) * .005m;
-                        if (verified) { quotes.Add(new(calculated, "percent")); warnings.Add("VerifiedGrowthExpression"); }
+                        if (verified) { Record(new(claimed.Value, "percent")); warnings.Add("VerifiedGrowthExpression"); }
                     }
                     catch (OverflowException) { }
                 }
                 if (!verified) { invalidRatio = true; warnings.Add("UntraceableGrowthExpression"); }
+            }
+            // 差額必須明示兩個有來源的同單位運算元。百分比相減的結果只能是百分點。
+            foreach (Match expression in DifferenceExpression().Matches(sentence))
+            {
+                var left = Extract(expression.Groups["left"].Value).SingleOrDefault();
+                var right = Extract(expression.Groups["right"].Value).SingleOrDefault();
+                var claimed = Extract(expression.Groups["result"].Value).SingleOrDefault();
+                var verified = false;
+                if (left is not null && right is not null && claimed is not null && left.Kind == right.Kind
+                    && claimed.Kind == left.Kind && left.Kind != "plain"
+                    && (left.Kind != "percent" || expression.Groups["result"].Value.Contains("百分點"))
+                    && quotes.Any(q => q.Kind == left.Kind && q.Value == left.Value)
+                    && quotes.Any(q => q.Kind == right.Kind && q.Value == right.Value))
+                {
+                    try
+                    {
+                        var calculated = left.Value - right.Value;
+                        verified = Math.Abs(calculated - claimed.Value) <= Math.Abs(calculated) * .005m;
+                        if (verified) { Record(claimed); warnings.Add("VerifiedDifferenceExpression"); }
+                    }
+                    catch (OverflowException) { }
+                }
+                if (!verified) { invalidRatio = true; warnings.Add("UntraceableDifferenceExpression"); }
             }
             foreach (var number in numbers)
             {
@@ -164,6 +195,9 @@ internal static partial class ResearchNumberTraceability
 
     [GeneratedRegex(@"由\s*(?<old>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:增至|降至|成長至|下降至|至)\s*(?<new>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*[，,]?\s*年增率\s*(?:約為|約|為|=|≈)?\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)")]
     private static partial Regex GrowthExpression();
+
+    [GeneratedRegex(@"(?<left>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股|%))\s*(?:−|-|減去)\s*(?<right>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股|%))\s*(?:=|≈|約為|等於)\s*(?<result>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:個百分點|百分點|美元|元|股|%))")]
+    private static partial Regex DifferenceExpression();
 
     [GeneratedRegex(@"\[(\d+)\]")]
     private static partial Regex Reference();

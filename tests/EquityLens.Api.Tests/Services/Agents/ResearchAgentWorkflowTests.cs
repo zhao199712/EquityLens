@@ -265,6 +265,34 @@ public sealed class ResearchAgentWorkflowTests
     }
 
     [Fact]
+    public void NumberGate_ReplaysBrowserFinancialComparison()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Services/Agents/Fixtures/financial-comparison.json");
+        var fixture = JsonNode.Parse(File.ReadAllText(path))!;
+        var result = ResearchNumberTraceability.Check(fixture["answer"]!.GetValue<string>(),
+            fixture["citations"]!.AsArray().Select(x => x!.AsObject()).ToArray(),
+            "台積電2025年營業收入淨額、毛利率與2024年比較", "2330");
+        Assert.False(result.Blocking, string.Join("; ", result.Warnings));
+        Assert.Contains("VerifiedDifferenceExpression", result.Warnings);
+    }
+
+    [Theory]
+    [InlineData("收入 600 元 − 500 元 = 100 元[1]", "收入 600 元、500 元", false)]
+    [InlineData("收入 600 元 − 500 元 = 200 元[1]", "收入 600 元、500 元、200 元", true)]
+    [InlineData("收入 600 元 − 500 元 = 100 元[1]", "收入 600 元、400 元", true)]
+    [InlineData("收入 600 仟元 − 500 仟元 = 100 元[1]", "收入 600 仟元、500 仟元", true)]
+    [InlineData("毛利率 60% − 50% = 10 個百分點[1]", "毛利率 60%、50%", false)]
+    [InlineData("毛利率 60% − 50% = 20 個百分點[1]", "毛利率 60%、50%、20%", true)]
+    [InlineData("毛利率 60% − 50% = 10%[1]", "毛利率 60%、50%", true)]
+    [InlineData("600 元 ÷ 1000 元 ≈ 60%[1]。60% − 50% = 10 個百分點[2]", "600 元、1000 元", true)]
+    public void NumberGate_VerifiesDifferencesWithoutTrustingClaimedResults(string answer, string quote, bool blocking)
+    {
+        var result = ResearchNumberTraceability.Check(answer, [new JsonObject { ["citationIndex"] = 1, ["quoteText"] = quote },
+            new JsonObject { ["citationIndex"] = 2, ["quoteText"] = "50%" }]);
+        Assert.Equal(blocking, result.Blocking);
+    }
+
+    [Fact]
     public async Task Retry_PreservesOriginalRequest_AndStartsNewCheckpointAttempt()
     {
         await using var db = RefactorTestDbContext.Create();
