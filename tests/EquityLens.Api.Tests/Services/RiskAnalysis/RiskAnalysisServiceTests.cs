@@ -23,6 +23,22 @@ public sealed class RiskAnalysisServiceTests
     private const int Simulations = 5000;
 
     [Fact]
+    public async Task HistoricalTailRisk_DisabledWhenHorizonHasFewerThan100Windows()
+    {
+        var service = CreateService(activeExists: true, prices: BuildPrices(120));
+        var result = await service.GetSecurityRiskAsync(SecurityId, From, To, 30, ConfidenceLevel, 1000, default);
+        Assert.True(result.IsSuccess);
+        var shortHorizon = result.Value!.Horizons.Single(x => x.HorizonDays == 1);
+        var longHorizon = result.Value.Horizons.Single(x => x.HorizonDays == 30);
+        Assert.NotNull((object?)shortHorizon.HistoricalVaR);
+        Assert.Null((object?)longHorizon.HistoricalVaR);
+        Assert.Null((object?)longHorizon.HistoricalES);
+        Assert.Equal(119, shortHorizon.EffectiveHistoricalObservations);
+        Assert.Equal(90, longHorizon.EffectiveHistoricalObservations);
+        Assert.Equal("InsufficientData", longHorizon.HistoricalStatus);
+    }
+
+    [Fact]
     public async Task GetSecurityRiskAsync_SecurityNotFound_ReturnsFailure()
     {
         var service = CreateService(activeExists: false, prices: null);

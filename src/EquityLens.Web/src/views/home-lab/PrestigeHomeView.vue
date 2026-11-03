@@ -410,7 +410,8 @@ function applyRisk(risk: PortfolioRiskResponse) {
   if (risk.horizons.length > 0) {
     varItems.value = [...risk.horizons]
       .sort((a, b) => a.horizonDays - b.horizonDays)
-      .map((h) => ({ label: `VaR ${h.horizonDays}D`, value: h.historicalVaR * 100 }))
+      .filter((h) => h.historicalVaR != null)
+      .map((h) => ({ label: `VaR ${h.horizonDays}D`, value: h.historicalVaR! * 100 }))
   }
 }
 

@@ -134,14 +134,15 @@ internal static class PortfolioRiskModelCalculator
 
                 return new RiskHorizonResult(
                     horizonDays,
-                    RiskMath.CalculateHistoricalVaR(rollingReturns, confidenceLevel),
-                    RiskMath.CalculateExpectedShortfall(rollingReturns, confidenceLevel),
+                    rollingReturns.Count >= RiskQualityPolicy.MinimumObservations ? RiskMath.CalculateHistoricalVaR(rollingReturns, confidenceLevel) : null,
+                    rollingReturns.Count >= RiskQualityPolicy.MinimumObservations ? RiskMath.CalculateExpectedShortfall(rollingReturns, confidenceLevel) : null,
                     mcResult.SimulatedVaR,
                     mcResult.SimulatedES,
                     mcResult.MeanFinalValue,
                     mcResult.MedianFinalValue,
                     mcResult.WorstCase95Percentile,
-                    mcResult.BestCase95Percentile);
+                    mcResult.BestCase95Percentile, rollingReturns.Count,
+                    rollingReturns.Count >= RiskQualityPolicy.MinimumObservations ? "Available" : "InsufficientData", RiskQualityPolicy.MinimumObservations);
             })
             .ToList();
     }
@@ -168,14 +169,15 @@ internal static class PortfolioRiskModelCalculator
 
                 return new RiskHorizonResult(
                     horizonDays,
-                    RiskMath.CalculateHistoricalVaR(rollingReturns, confidenceLevel),
-                    RiskMath.CalculateExpectedShortfall(rollingReturns, confidenceLevel),
+                    rollingReturns.Count >= RiskQualityPolicy.MinimumObservations ? RiskMath.CalculateHistoricalVaR(rollingReturns, confidenceLevel) : null,
+                    rollingReturns.Count >= RiskQualityPolicy.MinimumObservations ? RiskMath.CalculateExpectedShortfall(rollingReturns, confidenceLevel) : null,
                     mcResult.SimulatedVaR,
                     mcResult.SimulatedES,
                     mcResult.MeanFinalValue,
                     mcResult.MedianFinalValue,
                     mcResult.WorstCase95Percentile,
-                    mcResult.BestCase95Percentile);
+                    mcResult.BestCase95Percentile, rollingReturns.Count,
+                    rollingReturns.Count >= RiskQualityPolicy.MinimumObservations ? "Available" : "InsufficientData", RiskQualityPolicy.MinimumObservations);
             })
             .ToList();
     }
@@ -291,14 +293,15 @@ internal static class PortfolioRiskModelCalculator
 
             results.Add(new RiskHorizonResult(
                 horizonDays,
-                RiskMath.CalculateHistoricalVaR(rollingReturns, confidenceLevel),
-                RiskMath.CalculateExpectedShortfall(rollingReturns, confidenceLevel),
+                rollingReturns.Count >= RiskQualityPolicy.MinimumObservations ? RiskMath.CalculateHistoricalVaR(rollingReturns, confidenceLevel) : null,
+                rollingReturns.Count >= RiskQualityPolicy.MinimumObservations ? RiskMath.CalculateExpectedShortfall(rollingReturns, confidenceLevel) : null,
                 fhsResult.SimulatedVaR,
                 fhsResult.SimulatedES,
                 fhsResult.MeanFinalValue,
                 fhsResult.MedianFinalValue,
                 fhsResult.WorstCase95Percentile,
-                fhsResult.BestCase95Percentile));
+                fhsResult.BestCase95Percentile, rollingReturns.Count,
+                rollingReturns.Count >= RiskQualityPolicy.MinimumObservations ? "Available" : "InsufficientData", RiskQualityPolicy.MinimumObservations));
         }
         return results;
     }

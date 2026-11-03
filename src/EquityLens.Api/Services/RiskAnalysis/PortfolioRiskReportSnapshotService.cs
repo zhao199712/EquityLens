@@ -64,7 +64,7 @@ public sealed class PortfolioRiskReportSnapshotService(
                 maxDrawdown = riskValue.MaxDrawdown,
                 sharpeRatio = riskValue.SharpeRatio,
                 confidenceLevel = riskValue.ConfidenceLevel,
-                horizons = riskValue.Horizons.Select(h => new { h.HorizonDays, h.HistoricalVaR, h.HistoricalES, h.MonteCarloVaR, h.MonteCarloES })
+                horizons = riskValue.Horizons.Select(h => new { h.HorizonDays, h.HistoricalVaR, h.HistoricalES, h.EffectiveHistoricalObservations, h.HistoricalStatus, h.MinimumHistoricalObservations, h.MonteCarloVaR, h.MonteCarloES })
             },
             holdings = riskValue.Holdings.Select(h => new { h.Ticker, h.Exchange, h.SecurityName, h.Industry, h.Weight, h.AnnualizedVolatility, h.ComponentVolatility, h.ComponentRiskShare, h.MarginalVolatility, h.IncrementalVolatility, h.DataPointCount }),
             industries = riskValue.Industries?.Select(i => new { i.Industry, i.HoldingCount, i.Weight, i.ComponentVolatility, i.ComponentRiskShare, i.MarginalVolatility, i.IncrementalVolatility }),

@@ -34,9 +34,12 @@ export interface PortfolioDetail {
 }
 
 export interface RiskHorizonResult {
+  effectiveHistoricalObservations?: number | null
+  historicalStatus?: string
+  minimumHistoricalObservations?: number
   horizonDays: number
-  historicalVaR: number
-  historicalES: number
+  historicalVaR: number | null
+  historicalES: number | null
   monteCarloVaR: number
   monteCarloES: number
   monteCarloMeanFinalValue: number

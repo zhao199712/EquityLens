@@ -375,13 +375,17 @@ const esTableRows = computed(() =>
     })),
 )
 
+function historicalPercent(value: number | null | undefined) {
+  return value == null ? '資料不足／未提供' : `${(value * 100).toFixed(2)}%`
+}
+
 const diagnosticVarTableRows = computed(() => {
   const h95 = risk.value?.horizons.find((h) => h.horizonDays === 1)
   const h99 = risk99.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma99 = riskEwma99.value?.horizons.find((h) => h.horizonDays === 1)
   return [
-    { method: '歷史模擬法', var95: h95?.historicalVaR ?? 0, var99: h99?.historicalVaR ?? 0, note: '1日' },
+    { method: '歷史模擬法', var95: h95?.historicalVaR ?? null, var99: h99?.historicalVaR ?? null, note: `1日；有效視窗 ${h95?.effectiveHistoricalObservations ?? '未知'}` },
     { method: 'MVEWMA-FHS', var95: h95?.monteCarloVaR ?? 0, var99: h99?.monteCarloVaR ?? 0, note: '1日' },
     { method: 'EWMA 常態蒙地卡羅', var95: ewma95?.monteCarloVaR ?? 0, var99: ewma99?.monteCarloVaR ?? 0, note: 'λ=0.94' },
   ]
@@ -392,7 +396,7 @@ const diagnosticEsTableRows = computed(() => {
   const ewma95 = riskEwma.value?.horizons.find((h) => h.horizonDays === 1)
   const ewma99 = riskEwma99.value?.horizons.find((h) => h.horizonDays === 1)
   return [
-    { method: '歷史模擬法', es95: h95?.historicalES ?? 0, es99: h99?.historicalES ?? 0 },
+    { method: '歷史模擬法', es95: h95?.historicalES ?? null, es99: h99?.historicalES ?? null },
     { method: 'MVEWMA-FHS', es95: h95?.monteCarloES ?? 0, es99: h99?.monteCarloES ?? 0 },
     { method: 'EWMA 常態蒙地卡羅', es95: ewma95?.monteCarloES ?? 0, es99: ewma99?.monteCarloES ?? 0 },
   ]
@@ -1145,8 +1149,8 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                     <tbody>
                       <tr v-for="(v, i) in diagnosticVarTableRows" :key="i">
                         <td>{{ v.method }}</td>
-                        <td class="prestige-mono td-num">{{ (v.var95 * 100).toFixed(2) }}%</td>
-                        <td class="prestige-mono td-num">{{ (v.var99 * 100).toFixed(2) }}%</td>
+                        <td class="prestige-mono td-num">{{ historicalPercent(v.var95) }}</td>
+                        <td class="prestige-mono td-num">{{ historicalPercent(v.var99) }}</td>
                         <td class="td-muted" style="padding-left: 16px">{{ v.note }}</td>
                       </tr>
                     </tbody>
@@ -1164,12 +1168,18 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                     <tbody>
                       <tr v-for="(e, i) in diagnosticEsTableRows" :key="i">
                         <td>{{ e.method }}</td>
-                        <td class="prestige-mono td-num">{{ (e.es95 * 100).toFixed(2) }}%</td>
-                        <td class="prestige-mono td-num">{{ (e.es99 * 100).toFixed(2) }}%</td>
+                        <td class="prestige-mono td-num">{{ historicalPercent(e.es95) }}</td>
+                        <td class="prestige-mono td-num">{{ historicalPercent(e.es99) }}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
+                <p v-for="h in risk?.horizons ?? []" :key="`historical-${h.horizonDays}`" class="table-note">
+                  歷史 {{ h.horizonDays }} 日：有效滾動視窗 {{ h.effectiveHistoricalObservations ?? '未知' }}，門檻 {{ h.minimumHistoricalObservations ?? 100 }}；
+                  VaR {{ historicalPercent(h.historicalVaR) }}，ES {{ historicalPercent(h.historicalES) }}。
+                  {{ h.historicalStatus === 'InsufficientData' ? '樣本不足，停用該期限歷史數字。' : '' }}
+                </p>
+                <p class="table-note">重疊視窗不代表獨立樣本；不同期限使用不同樣本，不保證 VaR 單調。模擬數字另依每日資料估計，不能替代歷史樣本品質。</p>
                 <p class="table-note">以上為同步 EWMA 端點的歷史診斷資料，不作為正式風險決策依據。正式模型為 {{ calculationRun?.selectedModel ?? '—' }}。</p>
               </div>
             </div>
