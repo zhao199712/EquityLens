@@ -52,7 +52,7 @@
 | R22 | B5 數字口徑 | SHOULD | ✅ | | | | |
 | R23 | B7 產業分類 | SHOULD | ✅ | | | | |
 | R24 | B9、B10 前端 | COULD | ✅ | | | | |
-| R25 | B11 log 等級 | COULD | ⬜ | | | | |
+| R25 | B11 log 等級 | COULD | ✅ | | | | |
 
 ### 驗證
 
@@ -300,3 +300,9 @@
 - 兩個 UI 重現測試先失敗：列表沒有問題／標的，空 Risk Run 頁面仍呼叫計算。新增可選 questionSummary／ticker／portfolioName；列表支援顯示與搜尋，後端只在投組與 run 所有人相同時讀取名稱，摘要截斷 160 字，舊損壞 JSON 可讀。
 - 投組詳情與 Risk Run 頁面先確認持倉，空投組不呼叫風險／治理計算，顯示尚無持倉。保留現金流估值用途。未修改 App.vue 導覽。
 - 完整 R27：build PASS、877/877（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／127 tests。無外部 API 呼叫。
+
+### R25／B11 正式 SQL log 設定
+
+- 重現：正式設定沒有 Logging 分類，測試先失敗。僅在 appsettings.Production.json 設定 EF Database.Command／Infrastructure 為 Warning，保留其他設定。
+- ASPNETCORE_ENVIRONMENT=Production 時由標準設定載入；本次只提交，不部署、不改 appsettings.json。
+- 完整 R27：build PASS、878/878（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／127 tests。無外部 API 呼叫。
