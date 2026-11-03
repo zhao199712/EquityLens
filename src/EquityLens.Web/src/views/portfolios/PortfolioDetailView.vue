@@ -624,13 +624,13 @@ async function loadPeriodData() {
       from: fromDate.value,
       to: toDate.value,
     }),
-    getPortfolioRisk(portfolioId.value, {
+    portfolio.value?.holdings.length ? getPortfolioRisk(portfolioId.value, {
       from: fromDate.value,
       to: toDate.value,
       horizonDays: 30,
       confidenceLevel: 0.95,
       simulations: 10000,
-    }),
+    }) : Promise.resolve(null),
   ])
 
   if (historyResult.status === 'fulfilled') {
@@ -645,6 +645,7 @@ async function loadPeriodData() {
 
   if (riskResult.status === 'fulfilled') {
     risk.value = riskResult.value
+    if (!portfolio.value?.holdings.length) riskError.value = '投資組合尚無持倉，加入持股後即可計算風險。'
   } else {
     risk.value = null
     riskError.value = getApiErrorMessage(

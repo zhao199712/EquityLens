@@ -1,6 +1,9 @@
 import { http } from './http'
 
 export interface AgentRunListItem {
+  questionSummary?: string | null
+  ticker?: string | null
+  portfolioName?: string | null
   id: string
   workflowType: string
   agentType: string

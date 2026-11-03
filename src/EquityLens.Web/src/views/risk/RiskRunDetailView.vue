@@ -665,12 +665,15 @@ function isReusableRun(run: RiskCalculationRun): boolean {
 onMounted(async () => {
   loading.value = true
   try {
-    const [portfolio, calculations, governanceData] = await Promise.all([
-      getPortfolio(portfolioId.value),
-      listRiskCalculations(portfolioId.value),
-      getPortfolioRiskGovernance(portfolioId.value),
-    ])
+    const portfolio = await getPortfolio(portfolioId.value)
     portfolioName.value = portfolio.name
+    if (!portfolio.holdings?.length) {
+      error.value = '投資組合尚無持倉，加入持股後即可計算風險。'
+      return
+    }
+    const [calculations, governanceData] = await Promise.all([
+      listRiskCalculations(portfolioId.value), getPortfolioRiskGovernance(portfolioId.value),
+    ])
     governance.value = governanceData
     try {
       const valuation = await getPortfolioValuation(portfolioId.value)

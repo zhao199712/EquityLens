@@ -51,7 +51,7 @@
 | R21 | B6 VaR 樣本不足 | SHOULD | ✅ | | | | |
 | R22 | B5 數字口徑 | SHOULD | ✅ | | | | |
 | R23 | B7 產業分類 | SHOULD | ✅ | | | | |
-| R24 | B9、B10 前端 | COULD | ⬜ | | | | |
+| R24 | B9、B10 前端 | COULD | ✅ | | | | |
 | R25 | B11 log 等級 | COULD | ⬜ | | | | |
 
 ### 驗證
@@ -294,3 +294,9 @@
 - 新共用 broad-industry-v1 將已知電子細類彙總為電子工業、已知金融別名彙總為金融保險業；未知原值不猜測。風險、歸因、回測輸入均使用，原分類另存 RawIndustry，不修改 Security 原始資料。
 - 壓力測試仍依原始細分類決定半導體／金融衝擊，僅彙總分類改為一致。風險輸入 hash 會因新的分類快照改變；舊快照不改寫，必要時重新計算以取得新口徑。
 - 原快照排序測試改為同時核對正規化類別與原始分類，仍驗證來源變動不改既存快照。完整 R27：build PASS、876/876（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／124 tests。無外部 API 呼叫。
+
+### R24／B9、B10 列表摘要與空投組
+
+- 兩個 UI 重現測試先失敗：列表沒有問題／標的，空 Risk Run 頁面仍呼叫計算。新增可選 questionSummary／ticker／portfolioName；列表支援顯示與搜尋，後端只在投組與 run 所有人相同時讀取名稱，摘要截斷 160 字，舊損壞 JSON 可讀。
+- 投組詳情與 Risk Run 頁面先確認持倉，空投組不呼叫風險／治理計算，顯示尚無持倉。保留現金流估值用途。未修改 App.vue 導覽。
+- 完整 R27：build PASS、877/877（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 78、前端 build PASS／127 tests。無外部 API 呼叫。

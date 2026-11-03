@@ -233,10 +233,14 @@ public sealed class AgentRunService : IAgentRunService
 
         if (researchRunId.HasValue) runs = runs.Where(x => x.ResearchRunId == researchRunId.Value).ToList();
 
-        return runs
-            .Take(Math.Clamp(limit, 1, 100))
-            .Select(x => MapSummary(x))
-            .ToList();
+        var selected = runs.Take(Math.Clamp(limit, 1, 100)).ToList();
+        var portfolioIds = selected.Select(ReadPortfolioId).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray();
+        var portfolios = await _dbContext.Portfolios.AsNoTracking().Where(p => portfolioIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.OwnerUserId, p.Name }).ToListAsync(cancellationToken);
+        return selected.Select(run => MapSummary(run) with {
+            PortfolioName = portfolios.FirstOrDefault(p => p.Id == ReadPortfolioId(run) && p.OwnerUserId == run.UserId)?.Name
+                ?? MapSummary(run).PortfolioName
+        }).ToList();
     }
 
     public async Task<AgentRunDetailResponse?> GetByIdAsync(
@@ -615,7 +619,29 @@ public sealed class AgentRunService : IAgentRunService
         run.TotalInputTokens,
         run.TotalOutputTokens,
         run.TotalEstimatedCostUsd,
-        run.ParentAgentRunId);
+        run.ParentAgentRunId,
+        SummaryText(run, "question"), SummaryText(run, "ticker"), SummaryText(run, "portfolioName"));
+
+    private static JsonObject SummaryJson(string json)
+    {
+        try { return JsonNode.Parse(json) as JsonObject ?? new(); }
+        catch (JsonException) { return new(); }
+    }
+    private static string? SummaryValue(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+    private static Guid? ReadPortfolioId(AgentRun run) =>
+        Guid.TryParse(SummaryValue(SummaryJson(run.InputJson)["portfolioId"]), out var id) ? id : null;
+    private static string? SummaryText(AgentRun run, string key)
+    {
+        var input = SummaryJson(run.InputJson); var board = SummaryJson(run.BlackboardJson);
+        var request = input["request"] as JsonObject ?? input;
+        var context = board[AgentBlackboardKeys.PortfolioContext] as JsonObject;
+        var routing = input["routingContext"] as JsonObject ?? board[AgentBlackboardKeys.RoutingContext] as JsonObject;
+        var text = key == "portfolioName" ? SummaryValue(context?["name"])
+            : SummaryValue(request[key]) ?? SummaryValue(board[key]) ?? (key == "question" ? SummaryValue(routing?["objective"]) : null);
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        text = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return text.Length <= 160 ? text : text[..160] + "…";
+    }
 
     private static AgentFeedbackResponse MapFeedback(AgentFeedback feedback) => new(
         feedback.Id, feedback.AgentRunNodeId, feedback.FeedbackType, feedback.Status, feedback.Prompt,

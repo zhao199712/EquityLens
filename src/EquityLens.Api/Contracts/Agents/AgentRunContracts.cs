@@ -44,7 +44,8 @@ public sealed record AgentRunSummaryResponse(
     int TotalInputTokens,
     int TotalOutputTokens,
     decimal TotalEstimatedCostUsd,
-    Guid? ParentAgentRunId = null);
+    Guid? ParentAgentRunId = null,
+    string? QuestionSummary = null, string? Ticker = null, string? PortfolioName = null);
 
 public sealed record AgentRunNodeResponse(
     Guid Id,

@@ -15,6 +15,30 @@ namespace EquityLens.Api.Tests.Services.Agents;
 public sealed class AgentRunServiceTests
 {
     [Fact]
+    public async Task List_SummarizesOwnedQuestionsAndPortfolioNames_WithoutLeakingForeignNames()
+    {
+        await using var db = CreateDbContext();
+        var owner = Guid.NewGuid(); var other = Guid.NewGuid(); var portfolioId = Guid.NewGuid();
+        db.Portfolios.Add(new() { Id = portfolioId, OwnerUserId = owner, Name = "退休投組" });
+        var research = new AgentRun { Id = Guid.NewGuid(), UserId = owner, WorkflowType = AgentWorkflowTypes.ResearchAgent,
+            InputJson = """{"request":{"ticker":"2330","question":"台積電風險有哪些？"}}""" };
+        var portfolio = new AgentRun { Id = Guid.NewGuid(), UserId = owner, WorkflowType = AgentWorkflowTypes.PortfolioDiagnosis,
+            InputJson = JsonSerializer.Serialize(new { portfolioId, routingContext = new { objective = "降低波動" } }) };
+        var foreign = new AgentRun { Id = Guid.NewGuid(), UserId = other, InputJson = portfolio.InputJson };
+        var legacy = new AgentRun { Id = Guid.NewGuid(), UserId = owner, InputJson = "invalid", BlackboardJson = "[]" };
+        db.AgentRuns.AddRange(research, portfolio, foreign, legacy); await db.SaveChangesAsync();
+        var service = CreateServiceWithHandlers(db, [], []);
+        var owned = await service.ListAsync(owner);
+        Assert.Equal(3, owned.Count);
+        Assert.Equal("2330", owned.Single(x => x.Id == research.Id).Ticker);
+        Assert.Equal("台積電風險有哪些？", owned.Single(x => x.Id == research.Id).QuestionSummary);
+        Assert.Equal("退休投組", owned.Single(x => x.Id == portfolio.Id).PortfolioName);
+        Assert.Equal("降低波動", owned.Single(x => x.Id == portfolio.Id).QuestionSummary);
+        Assert.Null(owned.Single(x => x.Id == legacy.Id).QuestionSummary);
+        Assert.Null(Assert.Single(await service.ListAsync(other)).PortfolioName);
+    }
+
+    [Fact]
     public void CriticReviewPolicyEvaluator_EvidenceFinding_RoutesToResearchRetrieval()
     {
         var evaluator = new CriticReviewPolicyEvaluator();

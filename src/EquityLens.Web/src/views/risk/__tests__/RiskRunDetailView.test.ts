@@ -6,7 +6,7 @@ vi.mock('../../../services/http', () => ({ http: {} }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: 'p' } }), useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('../../../services/risk', async importOriginal => ({
   ...await importOriginal<typeof import('../../../services/risk')>(),
-  getPortfolio: vi.fn().mockResolvedValue({ name: 'Test Portfolio' }),
+  getPortfolio: vi.fn().mockResolvedValue({ name: 'Test Portfolio', holdings: [{ securityId: 'a' }] }),
   listRiskCalculations: vi.fn(),
   getPortfolioRiskGovernance: vi.fn().mockResolvedValue({ dataStatus: 'ready', commonTradingDays: 252, alerts: [] }),
   getPortfolioValuation: vi.fn().mockResolvedValue({ totalMarketValue: 1000, currency: 'TWD' }),
@@ -15,7 +15,7 @@ vi.mock('../../../services/risk', async importOriginal => ({
   calculatePortfolioRiskScenario: vi.fn(),
 }))
 import RiskRunDetailView from '../RiskRunDetailView.vue'
-import { listRiskCalculations, calculatePortfolioRiskScenario, createRiskCalculation } from '../../../services/risk'
+import { getPortfolio, getPortfolioRiskGovernance, listRiskCalculations, calculatePortfolioRiskScenario, createRiskCalculation } from '../../../services/risk'
 
 const holding = { securityId: 'a', ticker: '2330', securityName: 'Snapshot Name', exchange: 'TWSE', industry: '科技',
   weight: 1, annualizedVolatility: .16, dataPointCount: 252, componentVolatility: .16,
@@ -63,4 +63,15 @@ describe('risk detail result routing', () => {
       }
     } finally { wrapper.unmount() }
   })
+})
+
+it('does not request risk calculations or governance for an empty portfolio', async () => {
+  vi.mocked(getPortfolio).mockResolvedValueOnce({ name: 'Empty', holdings: [] } as never)
+  vi.mocked(listRiskCalculations).mockResolvedValueOnce([])
+  const wrapper = mountView()
+  await flushPromises()
+  expect(createRiskCalculation).not.toHaveBeenCalled()
+  expect(getPortfolioRiskGovernance).not.toHaveBeenCalled()
+  expect(wrapper.text()).toContain('尚無持倉')
+  wrapper.unmount()
 })

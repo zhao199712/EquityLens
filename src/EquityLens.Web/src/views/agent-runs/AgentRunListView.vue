@@ -18,7 +18,7 @@ const workflowTypes = computed(() => [...new Set([...workflowReadFilters, ...run
 const filteredRuns = computed(() => {
   const q = search.value.trim().toLowerCase()
   return runs.value.filter((run) =>
-    (!q || run.workflowType.toLowerCase().includes(q) || run.agentType.toLowerCase().includes(q) || run.id.toLowerCase().includes(q)) &&
+    (!q || run.workflowType.toLowerCase().includes(q) || run.agentType.toLowerCase().includes(q) || run.id.toLowerCase().includes(q) || [run.questionSummary, run.ticker, run.portfolioName].some(v => v?.toLowerCase().includes(q))) &&
     (!filterWorkflow.value || run.workflowType === filterWorkflow.value) &&
     (!filterStatus.value || run.status === filterStatus.value),
   )
@@ -71,7 +71,7 @@ function statusColor(status: string) {
 
       <!-- Filters -->
       <div class="filter-row">
-        <input v-model="search" placeholder="搜尋 workflow / agent / ID..." class="prestige-input filter-search" />
+        <input v-model="search" placeholder="搜尋問題 / 標的 / 投組 / ID..." class="prestige-input filter-search" />
         <select v-model="filterWorkflow" class="prestige-input filter-select">
           <option value="">全部 Workflow</option>
           <option v-for="workflow in workflowTypes" :key="workflow" :value="workflow">{{ workflow }}</option>
@@ -113,6 +113,7 @@ function statusColor(status: string) {
                     :style="{ borderColor: statusColor(run.status), color: statusColor(run.status) }"
                   >{{ run.status }}</span>
                 </div>
+                <p class="body-text">{{ [run.ticker, run.portfolioName, run.questionSummary].filter(Boolean).join(' · ') || '舊紀錄未提供問題摘要' }}</p>
                 <div v-if="run.errorMessage" class="run-error">{{ run.errorMessage }}</div>
                 <div class="run-dates prestige-mono">
                   <span>Created: {{ formatDate(run.createdAtUtc) }}</span>
