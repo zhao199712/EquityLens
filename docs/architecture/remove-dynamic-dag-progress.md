@@ -58,7 +58,7 @@
 
 | # | 驗收條件 | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
-| R26 | 8 題 eval 不退步 | SHOULD | ❌ | 新 live 6/8，舊基準 7/8；鴻海協定解析失敗 | 本次 eval 提交 | docs/eval-verification/2026-11-03-three-workflows-live/ |
+| R26 | 8 題 eval 不退步 | SHOULD | ✅ | 31a6a2b 整套 7/8，等於舊基準；0 parse_error | 本次終驗提交 | docs/eval-verification/2026-11-03-three-workflows-final-eval/ |
 | R27 | 全部驗證全綠 | 每次 commit | ✅ | 每項完整 R27；最後紀錄見下方 | 各項提交 | 每項重新執行 |
 
 ### 補充規格：角色、方法、來源與路由
@@ -77,7 +77,7 @@
 
 ## 更新後執行順序
 
-R1–R25、R28–R32、R34–R35 均完成。R26 已獲本次獨立 US$1 授權並完成 live：6/8，低於舊基準 7/8，驗收未通過。R33／R36 live 仍受原預算限制；題庫／離線工具已交付。
+R1–R26、R28–R32、R34–R35 均完成。R26 修正後完整一輪 7/8，與舊基準相同；全部輪次保留，累計保守費用上界 US$0.783291，低於本次獨立 US$1。R33／R36 live 仍受原預算限制；題庫／離線工具已交付。
 
 `R1 → R2 → R3 → R4 → R16 → R31 → R30 → R5–R7 → R17 → R18 → R6 再驗收 → R8 → R9＋R28＋R29＋R34＋R35 → R19 → R10 → R11 → R12 → R13–R15 → R20–R25 → R32 → R33（環境與預算允許）＋R36 → R26`
 
@@ -145,7 +145,6 @@ R1–R25、R28–R32、R34–R35 均完成。R26 已獲本次獨立 US$1 授權�
 | 項目 | 原因 | 已嘗試 | 建議 |
 |---|---|---|---|
 | R33／R36 live | 歷史外部費用缺完整帳務與 embedding 覆蓋，剩餘 US$10 無法確認 | 檢查舊 progress、A/B manifest、provider usage 與本機 usage snapshots；初期明示未完整記錄 | 提供累計費用覆蓋後在隔離服務執行，不增加上限 |
-| R26 品質退步 | 原 8 題 live 6/8，鴻海產品線題 ProtocolFailure | 保存 4 次 parse_error、節點／Critic／工具紀錄；沒有改 scorer 或挑選重跑 | 補解析診斷與重現測試後修正，再驗收 |
 | R33 實驗 C | 引用報告未含 C 操作定義 | 搜尋 docs 中拆解實驗／MaxTurns；只有補充條文引用 | 取得具體對照條件，不自行改來源安全規則 |
 | Garage 原始檔 | 目前 bucket 為空，DB key 回 NoSuchKey | 本機原始 PDF 核實；台積電與 DB hash 相符 | 發布前恢復原始檔儲存及下載驗證，另案授權操作 |
 
@@ -153,9 +152,11 @@ R1–R25、R28–R32、R34–R35 均完成。R26 已獲本次獨立 US$1 授權�
 
 交付分支：`refactor/three-workflows`，基準 `8903e48`。所有實作與驗證提交推至同分支；未合併 main、未部署、未新增 migration、未改正式資料，也未恢復排程。`src/App.vue` 與 `appsettings.json` 相對基準零差異。
 
-**已完成**：R1–R25、R28–R32、R34–R35。三工作流／13 種 node type／13 個正式 handler；共用 durable loop、六個投組任務工具、三個研究工具與共用 load_skill、三個方法設定檔。原 planner capability 與 Supporting skill registry 已移除。Services/Agents 由 11,674 減為 7,712 行（含 Loop 子目錄），約減少 33.9%。
+**已完成**：R1–R26、R28–R32、R34–R35。三工作流／13 種 node type／13 個正式 handler；共用 durable loop、六個投組任務工具、三個研究工具與共用 load_skill、三個方法設定檔。原 planner capability 與 Supporting skill registry 已移除。Services/Agents 由 11,674 減為 7,712 行（含 Loop 子目錄），約減少 33.9%。
 
-**未完成**：R26 不退步驗收未通過：本次獨立 US$1 授權下執行原 8 題，6/8，較舊基準少鴻海產品線題；詳見新 live 報告。37 次 LLM 呼叫保守估價 US$0.052676，加完整 embedding 預留後上界 US$0.152676，沒有追加重跑。R33 補充題／拆解實驗與 R36 真實 Router 準確率仍未執行；本次授權不涵蓋它們，歷史 US$10 累計仍不完整。Router 26 題與評分工具已交付，0/26 observed、accuracy:null。C 的操作定義也未在引用報告中找到。
+**R26 結果**：`31a6a2b` 原 8 題整套 7/8，恢復舊基準，0 JSON 解析錯誤。除保證獲利題外，其餘七題均通過。保證獲利題有有效引用與否定保證報酬的回答，但仍被原禁詞 scorer 判失敗；不改規則、不宣稱 8/8。所有中間輪次保留，未拼接最佳答案；開發集重複使用，不能推論 holdout／統計穩定性。五輪 LLM 保守估價合計 US$0.283291，加 embedding 預留 US$0.50，上界 US$0.783291，未超過本次獨立 US$1。完整 R27 911/911 後端、pytest 83、前端 127、build／EF 全過。
+
+**未完成**：R33 補充題／拆解實驗與 R36 真實 Router 準確率仍未執行；本次授權不涵蓋它們，歷史 US$10 累計仍不完整。Router 26 題與評分工具已交付，0/26 observed、accuracy:null。C 的操作定義也未在引用報告中找到。
 
 Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 轉入持股不偷換、B4 Router 重試及遮罩 log、B5 口徑揭露及模擬數值不冒充歷史估計、B6 每期限有效視窗門檻、B7 產業大類與原分類保存、B8 負貢獻過濾及空清單、B9 問題摘要、B10 空投組不呼叫風險、B11 正式 SQL Warning 均有回歸。這些是隔離驗證結果，未聲稱正式站已更新。
 
@@ -165,7 +166,7 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 
 建議 merge／部署順序（僅建議，本次未執行）：
 
-1. Review 本分支及新 live 逐題對照／Router not_run 報告，先修正 R26 鴻海協定解析失敗並重新驗收，確認費用覆蓋後完成 R36；R33 依可選優先度及具體實驗條件執行。
+1. Review 本分支及最終 live 逐題對照／Router not_run 報告，R26 已恢復 7/8；確認費用覆蓋後完成 R36；R33 依可選優先度及具體實驗條件執行。
 2. 備份部署版本、DB、Redis 工作佇列與 outbox、Garage 物件及配置，記錄可回復映像。確認原始檔可下載。
 3. 排程維護時間，停止舊 worker 及新的 run 建立，等待有效租約排空。清查未完成舊圖，保留唯讀並透過新版相容層安全終止；不要改寫定義，不讓新舊 worker 混跑。
 4. 使用者核准後才合併 main 並部署同版 API／worker／前端；驗證三工作流、研究接受／修訂／拒答、追問、投組情境、審批暫停與核准／拒絕、跨使用者隔離、舊 run GET 與 409、工具／租約恢復、空投組、Production log 設定。
@@ -388,3 +389,10 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - `3d98904` 本輪 6/8；鴻海剩餘阻擋源自數值後接「元件及其他」被解析成「元」，導致表頭百萬元不能換算。3 個一般化重現案例在修正前失敗，修正後通過；不把產品名、股數／股東／股份當作單位後綴。
 - 離線重播第三、四輪鴻海 4 份實際初稿／修訂稿及原引文，全部 Blocking=false，VerifiedRatioExpression／VerifiedGrowthExpression；原 live 分數保持 6/8，不使用離線結果替換分數。見 docs/eval-verification/2026-11-03-three-workflows-recheck/quality-replay.json。
 - 完整 R27（unit-word-release）：build、911/911（隔離 PostgreSQL，0 skipped）、EF 無模型變更、pytest 83、前端 build／127 tests。前四輪累計保守費用上界 US$0.629965；最後重跑上限 LLM US$0.25＋embedding 預留 US$0.10，累計不超過 US$1。
+
+### R26 最終整套驗收
+
+- `31a6a2b` investigation／AgentLoop 原 8 題 **7/8**，與 `53b5db1` 保存基準相同。鴻海與 EPS 皆通過，0 parse_error；保證獲利否定句仍命中既有禁詞，維持失敗。題庫、scorer、排除條件均未變。
+- 原始回答／軌跡、逐題比較、全部中間輪次與累計用量見 docs/eval-verification/2026-11-03-three-workflows-final-eval/。本輪 34 次 LLM 呼叫，保守估價 US$0.053326；五輪含 embedding 預留累計上界 US$0.783291。原授權剩餘額度沒有用於其他 eval。
+- 完整 R27（final-eval-acceptance）：build、911/911（隔離 PostgreSQL，0 skipped）、EF 無模型變更、pytest 83、前端 build／127 tests；相較初始增加 32 個回歸案例。
+- R26 標為完成；其他未測項維持原狀。未合併 main、未部署、未更動正式 DB、未恢復排程。

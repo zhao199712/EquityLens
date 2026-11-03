@@ -1,0 +1,44 @@
+{
+  "authorization_cap_usd": 1,
+  "rounds": [
+    {
+      "directory": "2026-11-03-three-workflows-live",
+      "llm_calls": 37,
+      "llm_upper_usd": 0.0526758,
+      "embedding_reserve_usd": 0.1,
+      "total_upper_usd": 0.1526758
+    },
+    {
+      "directory": "2026-11-03-three-workflows-protocol-fix",
+      "llm_calls": 39,
+      "llm_upper_usd": 0.06300389999999999,
+      "embedding_reserve_usd": 0.1,
+      "total_upper_usd": 0.16300389999999998
+    },
+    {
+      "directory": "2026-11-03-three-workflows-fixed",
+      "llm_calls": 37,
+      "llm_upper_usd": 0.059424000000000005,
+      "embedding_reserve_usd": 0.1,
+      "total_upper_usd": 0.159424
+    },
+    {
+      "directory": "2026-11-03-three-workflows-recheck",
+      "llm_calls": 37,
+      "llm_upper_usd": 0.054861300000000016,
+      "embedding_reserve_usd": 0.1,
+      "total_upper_usd": 0.15486130000000004
+    },
+    {
+      "directory": "2026-11-03-three-workflows-final-eval",
+      "llm_calls": 34,
+      "llm_upper_usd": 0.05332619999999999,
+      "embedding_reserve_usd": 0.1,
+      "total_upper_usd": 0.1533262
+    }
+  ],
+  "llm_calls": 184,
+  "llm_upper_usd": 0.2832912,
+  "embedding_reserve_usd": 0.5,
+  "cumulative_upper_usd": 0.7832912000000001
+}
