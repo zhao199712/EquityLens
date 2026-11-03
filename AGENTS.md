@@ -39,6 +39,7 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 - Risk contracts and the real DB → C# → Redis → Python → DB chain run separately in `tests/EquityLens.Risk.IntegrationTests`. Install the Mathematics Python package and set `RISK_TEST_POSTGRES`, `RISK_TEST_REDIS`, and `RISK_TEST_REDIS_URL` to isolated services; missing dependencies fail rather than skip. The suite starts its own Python worker and C# result worker; do not point it at production services. See `docs/testing/pr-validation.md` for commands.
 
 ## Infra And Env
+- Manual deployment entrypoint: `scripts/deploy/deploy.sh` (plan-only unless `--execute`). It requires an exact green main SHA and explicit live Compose/env paths; see `docs/operations/manual-deployment.md`. Never run it as part of tests or CI; CI only tests its guards. It does not migrate or restore databases.
 - `docker-compose.yml` starts ParadeDB `paradedb/paradedb:0.24.1-pg18`, Redis, Garage S3, Garage WebUI, and Aspire Dashboard.
 - Aspire Dashboard is exposed at `${ASPIRE_DASHBOARD_PORT:-18888}`; login token is printed by `docker compose logs aspire-dashboard`. API traces/metrics/logs export through OTLP gRPC at `${OTEL_GRPC_PORT:-4317}` when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
 - `DesignTimeDbContextFactory` reads `ConnectionStrings__PostgreSQL` first, otherwise `POSTGRES_*` env vars with Docker defaults; it does not load `.env` directly.
