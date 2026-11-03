@@ -67,7 +67,8 @@ public static class AgentRuntimeRegistration
         builder.Services.AddSingleton<IAgentLoopPolicy, ResearchQualityReviewLoopPolicy>();
         builder.Services.AddSingleton<IAgentLoopPolicy, PortfolioDiagnosisLoopPolicy>();
         builder.Services.AddSingleton<IAgentLoopController, AgentLoopController>();
-        builder.Services.AddScoped<IInvestmentResearchRouter, InvestmentResearchRouter>();
+        builder.Services.AddScoped<InvestmentResearchRouter>();
+        builder.Services.AddScoped<IInvestmentResearchRouter>(sp => sp.GetRequiredService<InvestmentResearchRouter>());
         builder.Services.AddScoped<IWebCapabilityRequestAgent, LlmWebCapabilityRequestAgent>();
         builder.Services.AddScoped<IAgentWorkflowQueryService, AgentWorkflowQueryService>();
         builder.Services.AddScoped<IDynamicPlanValidator, DynamicPlanValidator>();

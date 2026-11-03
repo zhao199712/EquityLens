@@ -1,3 +1,4 @@
+using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Ai.Retrieval;
 using EquityLens.Api.Services.Chat;
@@ -52,7 +53,7 @@ public static class ResearchAiRegistration
                 throw new InvalidOperationException(
                     $"Unsupported AI:ChatProvider '{chatProvider}'. Supported values: DeepSeek, Gemini.");
         }
-        builder.Services.AddScoped<IConversationAgent, LlmConversationAgent>();
+        builder.Services.AddScoped<IConversationAgent>(sp => sp.GetRequiredService<InvestmentResearchRouter>());
         builder.Services.AddScoped<IConversationService, ConversationService>();
         builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
 
