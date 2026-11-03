@@ -21,6 +21,7 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchAgentWorkflowDefinitionProvider>();
         builder.Services.AddScoped<IWorkflowPolicyEvaluator, ResearchAgentPolicyEvaluator>();
         builder.Services.AddScoped<IAgentNodeHandler, ResearchAgentLoopNodeHandler>();
+        builder.Services.AddScoped<IAgentNodeHandler, QualityGateNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, ResearchOutputGateNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, RouteResearchAgentQualityNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, FinalizeResearchAgentNodeHandler>();

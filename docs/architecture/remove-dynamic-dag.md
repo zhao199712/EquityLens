@@ -43,14 +43,14 @@
 | D5 | `DraftRevision`、`EvidenceRemediation`、`EvidenceReanalysis` | **刪除**（功能已被 ResearchAgent 的迴圈與修訂模式涵蓋）。移除 endpoint、前端呼叫與按鈕（`AgentRunDetailView.vue`、`AgentRunAdminDetail.vue` 等）。只被它們使用的節點、Agent、prompt、Blackboard key、測試一併移除。 |
 | D6 | `CriticReview` | 保留，改用 `qualityGate`（評分模式）。`POST /api/agent-runs/critic-review` 與 Admin 研究管理頁行為不變。 |
 | D7 | **舊資料**（D1、D2、D4、D5 以及舊版 PortfolioDiagnosis 已存在 DB 的 run） | **保留唯讀**：列表、詳情、時間軸、節點、事件、工具呼叫照常可讀（前端舊 run 詳情頁要能打開）。retry／繼續執行回 `409`，錯誤碼 `legacy_workflow_retired`。佇列撿到舊 workflow 的未完成 run：標記 `Failed` 並帶錯誤碼，**不可**當機或無限重試。不做資料遷移。 |
-| D8 | **Ask Agent（聊天路由）** | 必須繼續運作，路由目標改為上述 3 個工作流。`InvestmentResearchRouting` 可保留或改寫，但不得依賴已移除的 skill／capability 機制。 |
+| D8 | **Ask Agent（聊天路由）** | 必須繼續運作，路由目標改為上述 3 個工作流。`InvestmentResearchRouting` 可保留或改寫，但不得依賴已移除的 skill／capability 機制。聊天 Router 僅輸出 Research／Portfolio 工作流、4 種 playbook 之一與標的／投組／情境參數；CriticReview 保留 Admin 入口。解析或 schema 錯誤重試一次，再失敗回澄清並記錄遮罩 warning。 |
 
 ## 4. 要移除的機制（驗收以「沒有任何參照」為準）
 
 - `LlmAgentWorkflowPlanner`、`DeterministicDynamicWorkflowPlanner`、`PlannerInvocation`、動態規劃用途的 `IAgentWorkflowPlanner`
 - `DynamicPlanValidator`、`GraphMaterializer`、`DynamicPlanProposal` 等提案型別、`DynamicPlanningTriggers`
 - `AgentDynamicPlanCoordinator` 與 executor 中呼叫它的路徑；`orchestrationMode = "DynamicStateful"`；執行期改寫 `WorkflowDefinitionJson` 的邏輯
-- `NodeCapabilityRegistry` / `INodeCapabilityRegistry`；`WorkflowSkillCatalog` 只保留新流程實際用到的部分，否則移除
+- `NodeCapabilityRegistry` / `INodeCapabilityRegistry`；`WorkflowSkillCatalog` 移除；7 個 Supporting skill 刪除，4 個 Lead skill 改為 playbook（研究方法 prompt、工具範圍、預算、必要輸入），保留法說會專屬 prompt。playbook 不能放寬來源政策或全域預算
 - `AgentLoopController` 及其 loop policy（停止條件改由各 Agent 迴圈的預算／停止原因負責）
 - D1、D2、D4、D5 的工作流、provider、endpoint、只被它們使用的 handler／Agent／常數／Blackboard key／prompt／測試
 - Admin 中依賴 skill／capability 的 API 與前端頁面：移除，或改為列出**工具註冊表**（名稱、風險等級、可見條件）

@@ -207,11 +207,11 @@ public sealed class AgentRunServiceTests
         Assert.Equal(AgentRunStatuses.Succeeded, summary.Status);
         var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
         Assert.NotNull(detail);
-        Assert.Equal(5, detail.Nodes.Count);
-        Assert.Contains(detail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Succeeded);
-        var critiqueNode = Assert.Single(detail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer);
-        Assert.Equal("評論答案", critiqueNode.DisplayName);
-        Assert.Equal("Analyze", critiqueNode.Stage);
+        Assert.Equal(3, detail.Nodes.Count);
+        Assert.Contains(detail.Nodes, n => n.NodeKey == "qualityGate" && n.Status == AgentNodeStatuses.Succeeded);
+        var critiqueNode = Assert.Single(detail.Nodes, n => n.NodeKey == "qualityGate");
+        Assert.Equal("品質檢查", critiqueNode.DisplayName);
+        Assert.Equal("Validation", critiqueNode.Stage);
         Assert.False(string.IsNullOrWhiteSpace(critiqueNode.Description));
         AssertCriticReviewWorkflowDefinition(detail.WorkflowDefinitionJson);
         Assert.Contains(detail.Events, e => e.EventType == AgentEventTypes.RunStarted);
@@ -295,9 +295,7 @@ public sealed class AgentRunServiceTests
         var expectedNodeTransitions = new[]
         {
             CriticReviewNodeKeys.LoadResearchRun,
-            CriticReviewNodeKeys.BuildEvidencePacket,
-            CriticReviewNodeKeys.CheckEvidence,
-            CriticReviewNodeKeys.CritiqueAnswer,
+            "qualityGate",
             CriticReviewNodeKeys.FinalizeCriticReport
         }.SelectMany(nodeKey => new[]
         {
@@ -398,7 +396,7 @@ public sealed class AgentRunServiceTests
         Assert.Equal("critic unavailable", failed.ErrorMessage);
         var failedDetail = await service.GetByIdAsync(failed.Id, userId, CancellationToken.None);
         Assert.NotNull(failedDetail);
-        Assert.Contains(failedDetail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Failed);
+        Assert.Contains(failedDetail.Nodes, n => n.NodeKey == "qualityGate" && n.Status == AgentNodeStatuses.Failed);
         Assert.Contains(failedDetail.Events, e => e.EventType == AgentEventTypes.NodeFailed);
         Assert.Contains(failedDetail.ToolCalls, t =>
             t.ToolName == "criticReviewLLM"
@@ -412,7 +410,7 @@ public sealed class AgentRunServiceTests
         Assert.Equal(AgentRunStatuses.Succeeded, retried.Status);
         var retriedDetail = await service.GetByIdAsync(failed.Id, userId, CancellationToken.None);
         Assert.NotNull(retriedDetail);
-        Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer && n.Status == AgentNodeStatuses.Succeeded);
+        Assert.Contains(retriedDetail.Nodes, n => n.NodeKey == "qualityGate" && n.Status == AgentNodeStatuses.Succeeded);
         Assert.Contains(retriedDetail.Events, e => e.EventType == AgentEventTypes.RunFailed);
         Assert.Contains(retriedDetail.Events, e => e.EventType == AgentEventTypes.RunSucceeded);
         Assert.NotNull(retriedDetail.OutputJson);
@@ -903,9 +901,7 @@ public sealed class AgentRunServiceTests
         var nodeTypes = new[]
         {
             CriticReviewNodeTypes.LoadResearchRun,
-            CriticReviewNodeTypes.BuildEvidencePacket,
-            CriticReviewNodeTypes.CheckEvidence,
-            CriticReviewNodeTypes.CritiqueAnswer,
+            EquityLens.Api.Services.Agents.Loop.QualityGateNodeHandler.Type,
             CriticReviewNodeTypes.FinalizeCriticReport
         };
 
@@ -975,7 +971,7 @@ public sealed class AgentRunServiceTests
             new LoadResearchRunNodeHandler(new FakeResearchRunTraceService(BuildResearchRunDetail(researchRunId, candidateCount: 3))),
             new BuildEvidencePacketNodeHandler(),
             new CheckEvidenceNodeHandler(),
-            new CritiqueAnswerNodeHandler(new DeterministicCriticReviewAgent())
+            new EquityLens.Api.Services.Agents.Loop.QualityGateNodeHandler(new DeterministicCriticReviewAgent(), [new CriticReviewPolicyEvaluator()])
         ];
         var service = CreateServiceWithHandlers(db, [new CriticReviewWorkflowDefinitionProvider()], handlers);
 
@@ -1008,7 +1004,7 @@ public sealed class AgentRunServiceTests
         Assert.Equal($"Agent run is missing node '{CriticReviewNodeKeys.FinalizeCriticReport}'.", summary.ErrorMessage);
         var detail = await service.GetByIdAsync(summary.Id, userId, CancellationToken.None);
         Assert.NotNull(detail);
-        Assert.Equal(4, detail.Nodes.Count);
+        Assert.Equal(2, detail.Nodes.Count);
         Assert.Null(detail.OutputJson);
     }
 
@@ -1089,7 +1085,7 @@ public sealed class AgentRunServiceTests
         Assert.Equal(1, loadOutput.RootElement.GetProperty(EvidenceCheckFields.CandidateCount).GetInt32());
         Assert.True(loadOutput.RootElement.GetProperty("hasAnswer").GetBoolean());
 
-        var buildEvidencePacketNode = detail.Nodes.Single(n => n.NodeKey == CriticReviewNodeKeys.BuildEvidencePacket);
+        var buildEvidencePacketNode = new { InputJson = root.GetProperty("qualityGate:qualityGate:0").GetProperty("packet").GetProperty("input").GetRawText(), OutputJson = root.GetProperty("qualityGate:qualityGate:0").GetProperty("packet").GetProperty("output").GetRawText() };
         Assert.NotNull(buildEvidencePacketNode.InputJson);
         using var buildEvidencePacketInput = JsonDocument.Parse(buildEvidencePacketNode.InputJson);
         Assert.Equal("2330", buildEvidencePacketInput.RootElement.GetProperty(AgentBlackboardKeys.Ticker).GetString());
@@ -1104,7 +1100,7 @@ public sealed class AgentRunServiceTests
         Assert.Equal(1, buildEvidencePacketOutput.RootElement.GetProperty(EvidenceCheckFields.CitationCount).GetInt32());
         Assert.Equal(1, buildEvidencePacketOutput.RootElement.GetProperty(EvidenceCheckFields.CandidateCount).GetInt32());
 
-        var checkEvidenceNode = detail.Nodes.Single(n => n.NodeKey == CriticReviewNodeKeys.CheckEvidence);
+        var checkEvidenceNode = new { InputJson = root.GetProperty("qualityGate:qualityGate:0").GetProperty("evidence").GetProperty("input").GetRawText(), OutputJson = root.GetProperty("qualityGate:qualityGate:0").GetProperty("evidence").GetProperty("output").GetRawText() };
         Assert.NotNull(checkEvidenceNode.InputJson);
         using var checkEvidenceInput = JsonDocument.Parse(checkEvidenceNode.InputJson);
         Assert.Equal("2330", checkEvidenceInput.RootElement.GetProperty(AgentBlackboardKeys.Ticker).GetString());
@@ -1119,7 +1115,7 @@ public sealed class AgentRunServiceTests
         Assert.True(checkEvidenceOutput.RootElement.GetProperty(EvidenceCheckFields.FindingCount).GetInt32() > 0);
         Assert.Equal(JsonValueKind.Array, checkEvidenceOutput.RootElement.GetProperty(EvidenceCheckFields.Findings).ValueKind);
 
-        var critiqueNode = detail.Nodes.Single(n => n.NodeKey == CriticReviewNodeKeys.CritiqueAnswer);
+        var critiqueNode = new { InputJson = root.GetProperty("qualityGate:qualityGate:0").GetProperty("critic").GetProperty("input").GetRawText(), OutputJson = root.GetProperty("qualityGate:qualityGate:0").GetProperty("critic").GetProperty("output").GetRawText() };
         Assert.NotNull(critiqueNode.InputJson);
         Assert.NotNull(critiqueNode.OutputJson);
         using var critiqueInput = JsonDocument.Parse(critiqueNode.InputJson);
@@ -1149,39 +1145,15 @@ public sealed class AgentRunServiceTests
 
     private static void AssertCriticReviewWorkflowDefinition(string workflowDefinitionJson)
     {
-        using var document = JsonDocument.Parse(workflowDefinitionJson);
-        var root = document.RootElement;
-        Assert.Equal(AgentWorkflowTypes.CriticReview, root.GetProperty("workflowType").GetString());
-        Assert.Equal(CriticReviewWorkflow.Version, root.GetProperty("version").GetInt32());
-
-        var nodes = root.GetProperty("nodes").EnumerateArray().ToArray();
-        Assert.Equal(5, nodes.Length);
-        Assert.Equal(CriticReviewNodeKeys.LoadResearchRun, nodes[0].GetProperty("id").GetString());
-        Assert.Equal(CriticReviewNodeTypes.LoadResearchRun, nodes[0].GetProperty("type").GetString());
-        Assert.True(nodes[0].GetProperty("required").GetBoolean());
-        Assert.Equal(CriticReviewNodeKeys.BuildEvidencePacket, nodes[1].GetProperty("id").GetString());
-        Assert.Equal(CriticReviewNodeTypes.BuildEvidencePacket, nodes[1].GetProperty("type").GetString());
-        Assert.True(nodes[1].GetProperty("required").GetBoolean());
-        Assert.Equal(CriticReviewNodeKeys.CheckEvidence, nodes[2].GetProperty("id").GetString());
-        Assert.Equal(CriticReviewNodeTypes.CheckEvidence, nodes[2].GetProperty("type").GetString());
-        Assert.True(nodes[2].GetProperty("required").GetBoolean());
-        Assert.Equal(CriticReviewNodeKeys.CritiqueAnswer, nodes[3].GetProperty("id").GetString());
-        Assert.Equal(CriticReviewNodeTypes.CritiqueAnswer, nodes[3].GetProperty("type").GetString());
-        Assert.True(nodes[3].GetProperty("required").GetBoolean());
-        Assert.Equal(CriticReviewNodeKeys.FinalizeCriticReport, nodes[4].GetProperty("id").GetString());
-        Assert.Equal(CriticReviewNodeTypes.FinalizeCriticReport, nodes[4].GetProperty("type").GetString());
-        Assert.True(nodes[4].GetProperty("required").GetBoolean());
-
-        var edges = root.GetProperty("edges").EnumerateArray().ToArray();
-        Assert.Equal(4, edges.Length);
-        Assert.Equal(CriticReviewNodeKeys.LoadResearchRun, edges[0].GetProperty("from").GetString());
-        Assert.Equal(CriticReviewNodeKeys.BuildEvidencePacket, edges[0].GetProperty("to").GetString());
-        Assert.Equal(CriticReviewNodeKeys.BuildEvidencePacket, edges[1].GetProperty("from").GetString());
-        Assert.Equal(CriticReviewNodeKeys.CheckEvidence, edges[1].GetProperty("to").GetString());
-        Assert.Equal(CriticReviewNodeKeys.CheckEvidence, edges[2].GetProperty("from").GetString());
-        Assert.Equal(CriticReviewNodeKeys.CritiqueAnswer, edges[2].GetProperty("to").GetString());
-        Assert.Equal(CriticReviewNodeKeys.CritiqueAnswer, edges[3].GetProperty("from").GetString());
-        Assert.Equal(CriticReviewNodeKeys.FinalizeCriticReport, edges[3].GetProperty("to").GetString());
+        var root = JsonNode.Parse(workflowDefinitionJson)!;
+        Assert.Equal(AgentWorkflowTypes.CriticReview, root["workflowType"]!.GetValue<string>());
+        Assert.Equal(CriticReviewWorkflow.Version, root["version"]!.GetValue<int>());
+        var nodes = root["nodes"]!.AsArray();
+        Assert.Equal(new[] { "loadResearchRun", "qualityGate", "finalizeCriticReport" }, nodes.Select(n => n!["id"]!.GetValue<string>()));
+        Assert.Equal(new[] { "LoadResearchRun", "QualityGate", "FinalizeCriticReport" }, nodes.Select(n => n!["type"]!.GetValue<string>()));
+        Assert.All(nodes, n => Assert.True(n!["required"]!.GetValue<bool>()));
+        Assert.Equal(new[] { "loadResearchRun->qualityGate", "qualityGate->finalizeCriticReport" },
+            root["edges"]!.AsArray().Select(e => e!["from"]!.GetValue<string>() + "->" + e["to"]!.GetValue<string>()));
     }
 
     private static void AssertResearchQualityReviewWorkflowDefinition(string workflowDefinitionJson)
@@ -1333,9 +1305,7 @@ public sealed class AgentRunServiceTests
         ICriticReviewAgent criticReviewAgent) =>
     [
         new LoadResearchRunNodeHandler(researchTraceService),
-        new BuildEvidencePacketNodeHandler(),
-        new CheckEvidenceNodeHandler(),
-        new CritiqueAnswerNodeHandler(criticReviewAgent),
+        new EquityLens.Api.Services.Agents.Loop.QualityGateNodeHandler(criticReviewAgent, [new CriticReviewPolicyEvaluator()]),
         new FinalizeCriticReportNodeHandler([new CriticReviewPolicyEvaluator(), new ResearchQualityReviewPolicyEvaluator()])
     ];
 
@@ -1347,6 +1317,7 @@ public sealed class AgentRunServiceTests
         new BuildEvidencePacketNodeHandler(),
         new CheckEvidenceNodeHandler(),
         new CritiqueAnswerNodeHandler(criticReviewAgent),
+        new EquityLens.Api.Services.Agents.Loop.QualityGateNodeHandler(criticReviewAgent, [new CriticReviewPolicyEvaluator()]),
         new FinalizeCriticReportNodeHandler([new CriticReviewPolicyEvaluator(), new ResearchQualityReviewPolicyEvaluator()]),
         new LoadCriticReviewRunNodeHandler(),
         new DraftRevisedAnswerNodeHandler(new DeterministicDraftRevisionAgent()),

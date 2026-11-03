@@ -17,6 +17,17 @@ namespace EquityLens.Api.Tests.Services.Agents;
 public sealed class ResearchAgentWorkflowTests
 {
     [Fact]
+    public void CoarseQualityGate_IsSharedAndBoundsResearchToSevenNodes()
+    {
+        var research = new ResearchAgentWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        var critic = new CriticReviewWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        Assert.Equal(7, research.Nodes.Count);
+        Assert.Equal(3, critic.Nodes.Count);
+        Assert.Equal(2, research.Nodes.Count(n => n.NodeType == "QualityGate"));
+        Assert.Single(critic.Nodes.Where(n => n.NodeType == "QualityGate"));
+    }
+
+    [Fact]
     public async Task RetiredEngine_IsRejectedBeforeAnyPersistence()
     {
         await using var db = RefactorTestDbContext.Create();
@@ -55,9 +66,7 @@ public sealed class ResearchAgentWorkflowTests
         {
             new NoOpValidation(), new DetectResearchIntentNodeHandler(new IntentDetector()),
             new ResearchAgentLoopNodeHandler(new ResearchAgentLoop(chat, new EvidenceTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System)),
-            new ResearchOutputGateNodeHandler(), new BuildEvidencePacketNodeHandler(), new CheckEvidenceNodeHandler(),
-            new CritiqueAnswerNodeHandler(critic), new FinalizeCriticReportNodeHandler([new ResearchAgentPolicyEvaluator()]),
-            new RouteResearchAgentQualityNodeHandler(), new FinalizeResearchAgentNodeHandler()
+            new QualityGateNodeHandler(critic, [new ResearchAgentPolicyEvaluator()]), new FinalizeResearchAgentNodeHandler()
         };
         var executor = AgentExecutorTestFactory.Create(db, new WorkflowGraphTopologyService(), new AgentRunGraphValidator(),
             new AgentRunStateMachine(), new AgentNodeStateMachine(), handlers, NullLogger<AgentRunExecutor>.Instance,
@@ -74,6 +83,16 @@ public sealed class ResearchAgentWorkflowTests
         Assert.Equal(3, await db.ResearchRunCandidates.CountAsync());
         var detail = await Service(db).GetByIdAsync(run.Id, run.UserId);
         Assert.NotEmpty(detail!.LlmTurns!);
+        // 模擬已提交評論後、節點完成前的恢復：不得重新呼叫評論服務。
+        var gate = run.Nodes.Single(n => n.NodeKey == (invalidFirst ? "reviseQualityGate" : "qualityGate"));
+        var persisted = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        var checkpointKey = $"qualityGate:{gate.NodeKey}:{run.ExecutionAttempt}";
+        persisted[checkpointKey]!.AsObject().Remove("route");
+        run.BlackboardJson = persisted.ToJsonString();
+        await db.SaveChangesAsync();
+        var beforeResume = critic.Calls;
+        await new QualityGateNodeHandler(critic, [new ResearchAgentPolicyEvaluator()]).ExecuteAsync(new(db, run, gate, (_, _, _, _, _) => { }));
+        Assert.Equal(beforeResume, critic.Calls);
         Assert.Contains(detail.ToolCalls, x => x.AgentLlmTurnId.HasValue);
     }
 

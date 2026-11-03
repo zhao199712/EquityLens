@@ -23,18 +23,9 @@ public sealed class ResearchAgentWorkflowDefinitionProvider : IAgentWorkflowDefi
         ("validate", ResearchInvestigationNodeTypes.Validate, false),
         ("detectIntent", ResearchInvestigationNodeTypes.DetectIntent, false),
         ("researchAgent", ResearchAgentNodes.Loop, false),
-        ("outputGate", ResearchAgentNodes.OutputGate, false),
-        ("buildEvidencePacket", CriticReviewNodeTypes.BuildEvidencePacket, false),
-        ("checkEvidence", CriticReviewNodeTypes.CheckEvidence, false),
-        ("critiqueAnswer", CriticReviewNodeTypes.CritiqueAnswer, false),
-        ("finalizeCriticReport", CriticReviewNodeTypes.FinalizeCriticReport, false),
-        ("routeQuality", ResearchAgentNodes.Route, false),
+        ("qualityGate", QualityGateNodeHandler.Type, false),
         ("reviseAgent", ResearchAgentNodes.Loop, true),
-        ("reviseOutputGate", ResearchAgentNodes.OutputGate, true),
-        ("reviseEvidencePacket", CriticReviewNodeTypes.BuildEvidencePacket, true),
-        ("reviseCheckEvidence", CriticReviewNodeTypes.CheckEvidence, true),
-        ("reviseCritiqueAnswer", CriticReviewNodeTypes.CritiqueAnswer, true),
-        ("reviseCriticReport", CriticReviewNodeTypes.FinalizeCriticReport, true),
+        ("reviseQualityGate", QualityGateNodeHandler.Type, true),
         ("finalizeResearch", ResearchAgentNodes.Finalize, false)
     ];
     public AgentRun CreateRun(Guid userId, Guid sourceRunId) => CreateRun(userId, sourceRunId, new("", ""));
@@ -67,7 +58,7 @@ public sealed class ResearchAgentWorkflowDefinitionProvider : IAgentWorkflowDefi
             NodeKey = x.Key, NodeType = x.Type, Status = AgentNodeStatuses.Pending }).ToList();
         run.WorkflowDefinitionJson = new JsonObject
         {
-            ["workflowType"] = WorkflowType, ["version"] = 1, ["orchestrationMode"] = "Static",
+            ["workflowType"] = WorkflowType, ["version"] = 2, ["orchestrationMode"] = "Static",
             ["nodes"] = new JsonArray(Steps.Select(x => (JsonNode)new JsonObject
             {
                 ["id"] = x.Key, ["type"] = x.Type, ["required"] = true,
