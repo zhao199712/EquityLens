@@ -131,12 +131,38 @@ def save_compose(path, config):
     write_json(path, map_strings(config, lambda text: text.replace("$", "$$")))
 
 
-def resolved_config(file, env_file):
-    rendered = json.loads(run(["docker", "compose", "--project-name", PROJECT, "--env-file", str(env_file),
-                               "-f", str(file), "config", "--format", "json"]))
-    # Compose serializes literal dollars as $$ so its output can be loaded again.
-    # Decode once for comparisons to live Docker Env; save_compose re-encodes once.
-    return map_strings(rendered, lambda text: text.replace("$$", "$"))
+def resolved_config(file, env_file, override=None):
+    command = ["docker", "compose", "--project-name", PROJECT, "--env-file", str(env_file), "-f", str(file)]
+    def resolve(extra):
+        rendered = json.loads(run(command + extra + ["config", "--format", "json"]))
+        # Compose escapes dollars in its output so the document can be loaded again.
+        return map_strings(rendered, lambda text: text.replace("$$", "$"))
+    base = resolve([])
+    if override is None:
+        return base
+    result = resolve(["-f", str(override)])
+    original, changed = copy.deepcopy(base), copy.deepcopy(result)
+    for service in SERVICES:
+        original["services"][service].pop("environment", None)
+        changed["services"][service].pop("environment", None)
+    require(original == changed, "Compose override may only change api/mathematics environment values.")
+    return result
+
+
+def validate_api_configuration(source, target):
+    # A clean git archive must not depend on ignored developer appsettings.json.
+    jwt = {}
+    for name in ("appsettings.json", "appsettings.Production.json"):
+        path = source / "src/EquityLens.Api" / name
+        if path.exists():
+            jwt.update(json.loads(path.read_text()).get("Jwt", {}))
+    env = target["services"]["api"].get("environment", {})
+    jwt.update({k.removeprefix("Jwt__"): v for k, v in env.items() if k.startswith("Jwt__")})
+    require(all(isinstance(jwt.get(k), str) and jwt[k].strip() for k in ("Issuer", "Audience", "Key")),
+            "Target lacks Jwt Issuer/Audience/Key; supply runtime configuration with --compose-override.")
+    require(len(jwt["Key"].encode()) >= 32, "JWT signing key must contain at least 32 bytes.")
+    require(str(jwt.get("ExpireMinutes", "")).isdigit() and int(jwt["ExpireMinutes"]) > 0,
+            "Target lacks positive Jwt ExpireMinutes; supply runtime configuration with --compose-override.")
 
 
 def inspect(service):
@@ -240,8 +266,18 @@ def wait_healthy(images, health_url, timeout):
     fixture = (ROOT / "tests/fixtures/risk_backtest_input.json").read_bytes()
     require(b"risk-engine-ok" in run(["docker", "exec", "-i", f"{PROJECT}-mathematics", "python", "-c", probe], input=fixture),
             "Mathematics engine smoke failed.")
+    internal = run(["docker", "exec", f"{PROJECT}-api", "curl", "--fail", "--silent", "--max-time", "20",
+                    "http://127.0.0.1:5034/healthz"])
+    require(json.loads(internal).get("status") == "ok", "Direct API health payload is invalid.")
     response = run(["curl", "--fail", "--silent", "--show-error", "--max-time", "20", health_url])
-    require(json.loads(response).get("status") == "ok", "Public health response is not the API health payload.")
+    # Production Caddy handles /healthz itself and returns plain text, not API JSON.
+    if response.strip() != b"ok":
+        require(json.loads(response).get("status") == "ok", "Public health response is invalid.")
+    public = urllib.parse.urlsplit(health_url)
+    protected_url = urllib.parse.urlunsplit((public.scheme, public.netloc, "/api/portfolios", "", ""))
+    status = run(["curl", "--silent", "--show-error", "--max-time", "20", "--output", "/dev/null",
+                  "--write-out", "%{http_code}", protected_url])
+    require(status.strip() == b"401", "Public protected API did not return 401 without credentials.")
     for name, before in states.items():
         after = inspect(name)
         require(after["State"]["Running"] and after["Image"] == images[name]
@@ -263,6 +299,7 @@ def main(argv=None):
     parser.add_argument("--execute", action="store_true", help="Actually deploy; default only prints a plan")
     parser.add_argument("--env-file", type=Path, help="Explicit production env file; never sourced as shell code")
     parser.add_argument("--live-compose", type=Path, help="Exact Compose file currently used by production")
+    parser.add_argument("--compose-override", type=Path, help="Private override restricted to api/mathematics environment values")
     parser.add_argument("--state-dir", type=Path, default=Path.home() / ".local/state/equitylens/deployments")
     parser.add_argument("--health-url", default="https://equitylens.duckdns.org/healthz")
     parser.add_argument("--timeout", type=int, default=180)
@@ -326,6 +363,11 @@ def execute(args):
             require(args.env_file.stat().st_mode & 0o077 == 0, "Production env file must not be group/world readable (chmod 600).")
             args.env_file = args.env_file.resolve()
             args.live_compose = args.live_compose.resolve(strict=True)
+            override = getattr(args, "compose_override", None)
+            if override is not None:
+                require(override.is_file() and not override.is_symlink() and override.stat().st_mode & 0o077 == 0,
+                        "Compose override must be a regular private file (chmod 600).")
+                override = override.resolve()
             origin = run(["git", "remote", "get-url", "origin"]).decode().strip()
             require(origin in (f"git@github.com:{REPOSITORY}.git", f"https://github.com/{REPOSITORY}.git"), "Unexpected Git origin.")
             run(["git", "fetch", "origin", "main"])
@@ -342,10 +384,11 @@ def execute(args):
             archive.unlink()
             expected = inventory(source)
             check_migrations(expected, query_migrations())
-            current = resolved_config(args.live_compose, args.env_file)
-            target = resolved_config(source / "docker-compose.prod.yml", args.env_file)
+            current = resolved_config(args.live_compose, args.env_file, override)
+            target = resolved_config(source / "docker-compose.prod.yml", args.env_file, override)
             retain_infrastructure_paths(target, source, args.live_compose.parent)
             check_configs(current, target)
+            validate_api_configuration(source, target)
             images_before = assert_current(current)
             rollback = copy.deepcopy(current)
             for service in SERVICES:

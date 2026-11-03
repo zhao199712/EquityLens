@@ -8,9 +8,25 @@
 - 保留一份乾淨的工具 checkout。部署原始碼由 `git archive <SHA>` 匯出，不 checkout／覆蓋目前分支，也不帶入未提交檔案、忽略的 appsettings、`.env`、bin 或 obj。
 - 目標必須是完整 SHA、位於更新後的 `origin/main` 歷史，且該 SHA 的 **main push CI 最新一次執行**成功，六個必要 jobs 皆成功。PR 的測試結果不能替代合併提交的 CI；剛合併時先等 main CI 完成。無法取得 GitHub 結果就停止，不提供 skip-CI 開關。公開 repo 可匿名查詢；遇到 API 限額可提供只有讀取 Actions 權限的 `GH_TOKEN`，不得寫入命令列或文件。
 - `--live-compose` 必須指向目前正式服務實際使用的 Compose 檔案；`--env-file` 明確指定其環境檔（可為 `.env` 或 `.env.prod`），權限須為 0600。腳本不猜檔名，不 `source` 檔案，也不帶入 shell 裡的 Compose 變數覆寫。
+- 乾淨 Git 建置不包含被忽略的本機 `appsettings.json`。腳本會檢查目標的 `Jwt:Issuer`、`Audience`、`ExpireMinutes` 與至少 32-byte 的簽章 key；缺少時在建置／停機前停止。非密鑰設定也必須明確提供，不能只設定 JWT_KEY。
+- 可用 `--compose-override /absolute/runtime.override.json` 補主機特有設定；檔案權限須為 0600，只允許修改 api／mathematics 的 environment。變更 image、build、掛載、命令、資料服務等欄位會被拒絕。相同 override 同時用於辨識目前設定與產生目標設定，之後會凍結到私有 release 設定中。
 - 這是既有 `equitylens-prod` 的更新工具，不是首次安裝工具。既有 api、mathematics、postgres、redis 容器必須存在並運作。API／Mathematics 的實際環境若與 Compose、映像預設不一致，停止而不猜測設定。
 - 部署帳號需能管理 Docker。Docker 權限等同很高的主機權限；這支腳本不提供權限隔離。不得直接接到公開 PR 的 self-hosted runner。
 - 新舊版本必須相容於既有 agent runs、Redis 訊息及資料。腳本檢查 migration 歷史，無法證明語意相容；大幅 workflow／queue 格式變更先另做升級及排空計畫。
+
+### 補齊必要執行設定
+
+例如以私有 `runtime.override.json` 提供非密鑰 JWT 值（issuer／audience 應沿用既有正式值，避免令既有 token 失效；以下是專案目前常用值）：
+
+```json
+{"services":{"api":{"environment":{
+  "Jwt__Issuer":"EquityLens.Api",
+  "Jwt__Audience":"EquityLens.Web",
+  "Jwt__ExpireMinutes":"120"
+}}}}
+```
+
+JWT_KEY 仍由明確指定的環境檔提供。**不要把含密鑰的 appsettings.json 複製進 Git 建置來源。** 若首次採用 override，先核對目前容器／應用設定，讓執行設定與宣告一致；腳本不會默默接受額外 shell 覆寫。後續所有預覽／部署命令都加相同 `--compose-override`；rollback 不需要另帶它，會使用已保存設定。
 
 ## 預覽與部署
 
@@ -43,7 +59,7 @@ bash scripts/deploy/deploy.sh \
 4. 保存實際舊映像 ID、保留映像標籤及已解析設定。含 `$` 的環境值會正確處理 Compose escaping，避免保存／載入時變動密碼。建置新映像，標籤唯一並記錄 commit revision；此時舊服務仍運作。
 5. 再確認 migration 與舊容器未變，執行 `pg_dump -Fc`。備份必須非空，並經 `pg_restore --file=/dev/null` 完整解碼；保存 SHA-256。任何失敗均不停止舊服務。
 6. 停止 api／mathematics（給 60 秒結束），再用已建置映像 `up --no-deps --no-build --pull never` 啟動。**會有短暫停機**；不重啟資料服務、不執行 `down`、不移除 volume。
-7. 驗證實際映像 ID、API 容器 healthy、Postgres `SELECT 1`、Redis PING；在 Mathematics 容器中驗證自身 Redis 連線及合成資料的真實計算引擎，最後檢查公開 HTTPS `/healthz` 回傳。記錄成功或失敗。
+7. 驗證實際映像 ID、API 容器 healthy、Postgres `SELECT 1`、Redis PING；在 Mathematics 容器中驗證自身 Redis 連線及合成資料的真實計算引擎，另外直接檢查 API 容器 `/healthz` 的 JSON，接受 Caddy 公開 HTTPS `/healthz` 的純文字 `ok`，並確認公開 `/api/portfolios` 未帶憑證回 401。記錄成功或失敗。
 
 資料庫 dump 是線上、一致性快照；不是停止所有寫入後的備份，也不是實際還原演練。只備份 PostgreSQL，不宣稱涵蓋 Garage 檔案、Redis 狀態或整台主機。部署程序外的人工操作不受此鎖約束，執行期間勿同時部署或套 migration。
 
@@ -83,10 +99,10 @@ python3 -m unittest discover -s scripts/deploy -v
 
 測試涵蓋計畫模式零副作用、精確 CI／最新結果／必要 jobs、migration 差異、基礎設施變更、環境覆寫、私有設定、備份先於停機、各階段失敗、健康失敗不自動回復及回復時 schema 阻擋。Compose escaping 用真實 CLI 離線解析，其餘部署外部操作使用 fake，不接正式主機或資料庫。測試已加入既有 CI，不新增部署 workflow。
 
-Smoke 的邊界：引擎測試使用合成資料，不寫正式隊列、不呼叫 AI。它不驗證 HTTP 登入、授權查詢、真實 retrieval、Python consumer 實際消費訊息或 agent 回答品質；`/healthz` 本身只代表 API 能回應。真實 DB／Redis／worker 串接由 PR 的隔離整合測試補充，發布後仍需依變更做使用者流程驗收。
+Smoke 的邊界：引擎測試使用合成資料，不寫正式隊列、不呼叫 AI。它不驗證成功登入後的授權查詢、真實 retrieval、Python consumer 實際消費訊息或 agent 回答品質；`/healthz` 本身只代表 API 能回應。真實 DB／Redis／worker 串接由 PR 的隔離整合測試補充，發布後仍需依變更做使用者流程驗收。
 
-本次只執行離線與 fake 測試，尚未以此腳本操作正式部署或完成完整隔離部署演練。
+已完成實際隔離 Docker daemon 的部署、備份還原、映像回復與登入後投組讀取驗證；詳見[演練紀錄](deployment-rehearsal-2026-11-03.md)。沒有使用此腳本部署正式服務。
 
 參考：[Docker Compose production](https://docs.docker.com/compose/how-tos/production/)、[Compose config](https://docs.docker.com/reference/cli/docker/compose/config/)、[GitHub workflow runs API](https://docs.github.com/en/rest/actions/workflow-runs)。
 
-本機驗證（2026-11-03）：部署防護 18/18、Bash 語法通過；原有完整回歸後端 931/931（0 skipped）、eval harness 83、前端 Vitest 135，前後端 build 與 EF pending-model 通過。日誌 `/tmp/manual-deploy-r27-*.log`；遠端結果以 PR checks 為準。
+初版驗證（2026-11-03）：部署防護 18/18、Bash 語法通過；原有完整回歸後端 931/931（0 skipped）、eval harness 83、前端 Vitest 135，前後端 build 與 EF pending-model 通過。日誌 `/tmp/manual-deploy-r27-*.log`；遠端結果以 PR checks 為準。

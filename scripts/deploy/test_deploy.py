@@ -20,7 +20,7 @@ IMAGES = {"api": "sha256:old-api", "mathematics": "sha256:old-math"}
 
 def config():
     return {"name": deploy.PROJECT, "services": {
-        "api": {"container_name": "equitylens-prod-api", "build": {"context": "/source/api"}, "environment": {"PASSWORD": "a$b"}},
+        "api": {"container_name": "equitylens-prod-api", "build": {"context": "/source/api"}, "environment": {"PASSWORD": "a$b", "Jwt__Issuer": "drill", "Jwt__Audience": "drill", "Jwt__ExpireMinutes": "60", "Jwt__Key": "x" * 32}},
         "mathematics": {"container_name": "equitylens-prod-mathematics", "build": {"context": "/source/math"}},
         "postgres": {"image": "postgres", "volumes": [{"type": "volume", "source": "data", "target": "/var/lib/postgresql"}]},
         "redis": {"image": "redis"},
@@ -123,6 +123,29 @@ class GuardTests(unittest.TestCase):
             again = deploy.resolved_config(saved, Path("/dev/null"))
             self.assertEqual(target["services"]["api"]["environment"], again["services"]["api"]["environment"])
 
+    def test_clean_archive_requires_complete_jwt_configuration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = config()
+            deploy.validate_api_configuration(Path(temp), target)
+            for key in ("Jwt__Key", "Jwt__ExpireMinutes", "Jwt__Issuer", "Jwt__Audience"):
+                broken = copy.deepcopy(target)
+                del broken["services"]["api"]["environment"][key]
+                with self.subTest(key=key), self.assertRaises(deploy.DeploymentError):
+                    deploy.validate_api_configuration(Path(temp), broken)
+
+    def test_runtime_override_only_accepts_app_environment_real_cli(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "base.json"
+            override = Path(temp) / "override.json"
+            deploy.save_compose(source, config())
+            override.write_text(json.dumps({"services":{"api":{"environment":{"Jwt__ExpireMinutes":"120"}}}}))
+            result = deploy.resolved_config(source, Path("/dev/null"), override)
+            self.assertEqual("120", result["services"]["api"]["environment"]["Jwt__ExpireMinutes"])
+            for change in ({"api":{"image":"unreviewed"}}, {"postgres":{"environment":{"SECRET":"changed"}}}):
+                override.write_text(json.dumps({"services": change}))
+                with self.assertRaises(deploy.DeploymentError):
+                    deploy.resolved_config(source, Path("/dev/null"), override)
+
     def test_rollback_path_and_sha_validation(self):
         for args in [["--rollback", "../../other"], ["--sha", "main"], ["--sha", SHA]]:
             with self.assertRaises(deploy.DeploymentError):
@@ -140,6 +163,10 @@ class GuardTests(unittest.TestCase):
                     compile(args[-1], "smoke", "exec")
                     self.assertIn(b"portfolioId", kwargs["input"])
                     return b"bad" if failure == "engine" else b"risk-engine-ok"
+                if "http://127.0.0.1:5034/healthz" in args:
+                    return b'{"status":"ok"}'
+                if "%{http_code}" in args:
+                    return b"401"
                 if args[0] == "curl":
                     return b'{"status":"bad"}' if failure == "http" else b'{"status":"ok"}'
                 return b"1"
@@ -151,6 +178,32 @@ class GuardTests(unittest.TestCase):
                     deploy.wait_healthy(IMAGES, "https://example.invalid/healthz", 10)
                     self.assertTrue(any("psql" in " ".join(c) for c in calls))
                     self.assertTrue(any("python" in c for c in calls))
+
+    def test_caddy_plaintext_health_also_requires_api_and_auth_boundary(self):
+        state = {"Image": "sha256:expected", "State": {"Running": True, "Health": {"Status": "healthy"}}, "RestartCount": 0}
+        for auth_status in (b"401", b"200"):
+            calls = []
+            def command(args, **kwargs):
+                calls.append(args)
+                if "redis-cli" in args:
+                    return b"PONG"
+                if "python" in args:
+                    return b"risk-engine-ok"
+                if "http://127.0.0.1:5034/healthz" in args:
+                    return b'{"status":"ok"}'
+                if "%{http_code}" in args:
+                    return auth_status
+                if args[0] == "curl":
+                    return b"ok"
+                return b"1"
+            with self.subTest(auth_status=auth_status), patch.object(deploy, "inspect", return_value=state), patch.object(deploy, "run", side_effect=command):
+                if auth_status == b"401":
+                    deploy.wait_healthy({s:"sha256:expected" for s in deploy.SERVICES}, "https://example.invalid/healthz", 10)
+                    self.assertTrue(any("http://127.0.0.1:5034/healthz" in c for c in calls))
+                    self.assertTrue(any("https://example.invalid/api/portfolios" in c for c in calls))
+                else:
+                    with self.assertRaises(deploy.DeploymentError):
+                        deploy.wait_healthy({s:"sha256:expected" for s in deploy.SERVICES}, "https://example.invalid/healthz", 10)
 
     def test_wrong_image_cannot_pass_health(self):
         state = {"Image": "wrong", "State": {"Running": True, "Health": {"Status": "healthy"}}}
