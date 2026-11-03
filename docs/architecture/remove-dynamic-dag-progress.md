@@ -412,3 +412,11 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - 修正前測試重現：沒有 IntersectionObserver 回呼時，整份報告落在 `.kimi-reveal:not(.visible)` 的透明祖先內（1 failed / 9 passed）。正式站已保存超過 5,000px 報告透明的 DOM／截圖證據。
 - 詳情頁移除整頁 ScrollReveal，結果一載入即顯示；保留既有版面及審批操作，不依賴視窗比例或捲動恢復位置。
 - 完整 R27：後端 920/920、0 skipped；pytest 83、前端 128，雙端 build／EF 通過。`/tmp/browser-ui-r27-*.log`。無檔案刪除、無付費呼叫、無部署。
+
+### 風險快照與壓力測試
+
+- 查閱正式站唯讀 log，確認壓力測試 `BuildWorstTwentyDayStress` 有 DivideByZeroException；測試帳號沒有成功保存的快照。不能僅憑該 log 斷言快照 POST 的唯一失敗原因，但原快照確實依賴同一壓力計算且重算另一套模型。
+- 修正前重現 7/7 failed：零／負價格、事件區間外價格、缺資料時未回報具體元件。修正後非正價格回 `invalid_prices`，歷史事件缺期間內價格回 `insufficient_prices`，不刪除壞資料再假裝有效；舊完整報告 API 仍拒絕不完整資料並列出缺少元件。
+- 新增指定計算的快照 API；前端傳目前顯示的 Run ID。從授權 DB 保存原始結果、輸入／期間、模型、InputHash、fallback 及品質評估，不再重算。失敗品質保留 Failed，未驗證保留 Unvalidated，明示此快照範圍。讀取舊快照格式不變，不需要 migration。
+- 新增他人／其他投組／未完成／缺結果／錯誤 operation 拒絕、快照不可變及不呼叫計算的測試。UI 先重現未傳 Run ID，修後也驗證清單刷新失敗仍顯示已成功保存。
+- 完整 R27：後端 930/930、0 skipped；pytest 83、前端 129，雙端 build／EF 通過。`/tmp/browser-risk-r27-*.log`。無檔案刪除、無付費呼叫、無部署。

@@ -214,7 +214,24 @@ async function runTargetWeightScenario() {
 }
 const reportStatusLabel = (status: string) => ({ ready: '資料正常', warning: '資料需注意', critical: '資料嚴重不足' }[status] ?? status)
 const reportCreatedAt = (value: string) => new Date(value).toLocaleString('zh-TW', { hour12: false })
-async function createReportSnapshot() { reportCreating.value = true; reportActionMessage.value = ''; try { const report = await createPortfolioRiskReportSnapshot(portfolioId.value); selectedReportSnapshot.value = report; reportSnapshots.value = await getPortfolioRiskReportSnapshots(portfolioId.value); reportActionMessage.value = '風險報告快照已建立；內容已固定，不會隨後續價格更新而改變。' } catch (e) { reportActionMessage.value = riskErrorMessage(e) } finally { reportCreating.value = false } }
+async function createReportSnapshot() {
+  const run = calculationRun.value
+  if (!run || run.status !== 'Completed') {
+    reportActionMessage.value = '請先完成風險計算，再保存快照。'
+    return
+  }
+  reportCreating.value = true
+  reportActionMessage.value = ''
+  try {
+    const report = await createPortfolioRiskReportSnapshot(portfolioId.value, run.id)
+    selectedReportSnapshot.value = report
+    reportSnapshots.value = [report, ...reportSnapshots.value.filter(item => item.id !== report.id)]
+    reportActionMessage.value = '風險報告快照已建立；已保存此 Run 的結果與品質狀態。'
+    try { reportSnapshots.value = await getPortfolioRiskReportSnapshots(portfolioId.value) }
+    catch { reportActionMessage.value += ' 歷史清單更新失敗，本次快照已保存，請勿重複建立。' }
+  } catch (e) { reportActionMessage.value = riskErrorMessage(e) }
+  finally { reportCreating.value = false }
+}
 async function openReportSnapshot(reportId: string) { try { selectedReportSnapshot.value = await getPortfolioRiskReportSnapshot(portfolioId.value, reportId) } catch (e) { reportActionMessage.value = riskErrorMessage(e) } }
 function printReportSnapshot() { window.print() }
 
@@ -806,7 +823,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
             <!-- Report snapshots -->
             <div class="sub-block">
               <div class="btn-row">
-                <button class="prestige-btn" :disabled="reportCreating" @click="createReportSnapshot">{{ reportCreating ? '建立中…' : '建立風險報告快照' }}</button>
+                <button class="prestige-btn" :disabled="reportCreating || calculationRun?.status !== 'Completed'" @click="createReportSnapshot">{{ reportCreating ? '建立中…' : '建立風險報告快照' }}</button>
                 <span v-if="reportActionMessage" class="muted-text snap-msg">{{ reportActionMessage }}</span>
               </div>
               <div v-if="reportSnapshots.length" class="snap-list">
@@ -887,7 +904,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
             <div class="panel-head">
               <div>
                 <h2 class="panel-title">風險報告快照</h2>
-                <span class="prestige-label">{{ reportCreatedAt(selectedReportSnapshot.createdAtUtc) }} · 資料截止 {{ selectedReportSnapshot.dataAsOfDate ?? '—' }} · {{ selectedReportSnapshot.model }} · {{ selectedReportSnapshot.thresholdVersion }}</span>
+                <span class="prestige-label">{{ reportCreatedAt(selectedReportSnapshot.createdAtUtc) }} · 資料截止 {{ selectedReportSnapshot.dataAsOfDate ?? '—' }} · {{ selectedReportSnapshot.model }} · {{ selectedReportSnapshot.thresholdVersion }} · 品質 {{ selectedReportSnapshot.overallStatus }}</span>
               </div>
               <button class="prestige-btn" @click="printReportSnapshot">列印／另存 PDF</button>
             </div>

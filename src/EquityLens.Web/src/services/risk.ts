@@ -366,8 +366,8 @@ export interface PortfolioRiskReportSnapshotListItem {
 export interface PortfolioRiskReportSnapshotDetail extends PortfolioRiskReportSnapshotListItem {
   portfolioId:string; snapshot:Record<string, unknown>
 }
-export async function createPortfolioRiskReportSnapshot(portfolioId:string): Promise<PortfolioRiskReportSnapshotDetail> {
-  const response = await http.post<PortfolioRiskReportSnapshotDetail>(`/portfolios/${portfolioId}/risk/reports`)
+export async function createPortfolioRiskReportSnapshot(portfolioId:string, runId?:string): Promise<PortfolioRiskReportSnapshotDetail> {
+  const response = await http.post<PortfolioRiskReportSnapshotDetail>(`/portfolios/${portfolioId}/risk/reports${runId ? `/from-calculation/${runId}` : ''}`)
   return response.data
 }
 export async function getPortfolioRiskReportSnapshots(portfolioId:string): Promise<PortfolioRiskReportSnapshotListItem[]> {

@@ -12,10 +12,11 @@ vi.mock('../../../services/risk', async importOriginal => ({
   getPortfolioValuation: vi.fn().mockResolvedValue({ totalMarketValue: 1000, currency: 'TWD' }),
   getPortfolioRiskReportSnapshots: vi.fn().mockResolvedValue([]),
   createRiskCalculation: vi.fn(),
+  createPortfolioRiskReportSnapshot: vi.fn(),
   calculatePortfolioRiskScenario: vi.fn(),
 }))
 import RiskRunDetailView from '../RiskRunDetailView.vue'
-import { getPortfolio, getPortfolioRiskGovernance, listRiskCalculations, calculatePortfolioRiskScenario, createRiskCalculation } from '../../../services/risk'
+import { createPortfolioRiskReportSnapshot, getPortfolioRiskReportSnapshots, getPortfolio, getPortfolioRiskGovernance, listRiskCalculations, calculatePortfolioRiskScenario, createRiskCalculation } from '../../../services/risk'
 
 const holding = { securityId: 'a', ticker: '2330', securityName: 'Snapshot Name', exchange: 'TWSE', industry: '科技',
   weight: 1, annualizedVolatility: .16, dataPointCount: 252, componentVolatility: .16,
@@ -67,11 +68,25 @@ describe('risk detail result routing', () => {
 
 it('does not request risk calculations or governance for an empty portfolio', async () => {
   vi.mocked(getPortfolio).mockResolvedValueOnce({ name: 'Empty', holdings: [] } as never)
-  vi.mocked(listRiskCalculations).mockResolvedValueOnce([])
   const wrapper = mountView()
   await flushPromises()
   expect(createRiskCalculation).not.toHaveBeenCalled()
   expect(getPortfolioRiskGovernance).not.toHaveBeenCalled()
   expect(wrapper.text()).toContain('尚無持倉')
+  wrapper.unmount()
+})
+
+it('saves the visible run and preserves success if refreshing the list fails', async () => {
+  vi.mocked(listRiskCalculations).mockResolvedValue([{ id: 'visible-run', operation: 'risk', status: 'Completed',
+    selectedModel: 'VT-GARCH-t + Joint-Vector FHS', result: { horizons: [], confidenceCurve: [], conditionalRisk } } as unknown as RiskCalculationRun])
+  const wrapper = mountView()
+  await flushPromises()
+  vi.mocked(createPortfolioRiskReportSnapshot).mockResolvedValue({ id: 'saved', snapshot: { source: { runId: 'visible-run' } }, model: 'fixture', overallStatus: 'Failed' } as never)
+  vi.mocked(getPortfolioRiskReportSnapshots).mockRejectedValueOnce(new Error('list unavailable'))
+  await wrapper.findAll('button').find(b => b.text().includes('建立風險報告快照'))!.trigger('click')
+  await flushPromises()
+  expect(createPortfolioRiskReportSnapshot).toHaveBeenCalledWith('p', 'visible-run')
+  expect(wrapper.text()).toContain('快照已建立')
+  expect(wrapper.text()).toContain('Failed')
   wrapper.unmount()
 })
