@@ -14,13 +14,14 @@
   "mathematics_pytest": 36,
   "eval_pytest": 92,
   "ef_pending_model_changes": false,
-  "live_code_final_verification": "Prompt 13 full round 12/14; prompt 14 targeted rerun 2/2, other 12 not rerun; do not claim 14/14",
-  "authorized_usd": 1,
-  "charged_or_reserved_upper_usd": 0.9632685,
+  "live_code_final_verification": "Prompt 14: round 14 targeted 2/2; round 15 remaining twelve 11/12 on clean merged main 6d805b9. Cash fails UntraceableNumbers; no single full 14-case latest run or stability claim.",
+  "authorized_usd": 1.2,
+  "charged_or_reserved_upper_usd": 1.03638,
   "deployment": "none",
   "original_research_cases": "unchanged",
-  "integrated_main": "81c8809",
+  "integrated_main": "6d805b9",
   "benchmark_isolation_verified_from_round": 12,
-  "evaluated_code": "c4b643a plus per-round recorded diff hashes (prompt 13 full, prompt 14 targeted)",
-  "recovery_observed": "round 13 cash: per-turn ToolBudgetExceeded then identical arguments succeeded next turn; invalid-argument recovery not observed"
+  "evaluated_code": "6d805b951e777293635ae896b6f01cbe3e8dafa3 (round 15 clean checkout, prompt 14)",
+  "recovery_observed": "round 13 cash: per-turn ToolBudgetExceeded then identical arguments succeeded next turn; invalid-argument recovery not observed",
+  "additional_authorized_usd": 0.2
 }
