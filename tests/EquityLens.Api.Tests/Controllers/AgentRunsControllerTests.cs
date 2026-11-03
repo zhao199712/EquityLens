@@ -11,6 +11,16 @@ namespace EquityLens.Api.Tests.Controllers;
 public sealed class AgentRunsControllerTests
 {
     [Fact]
+    public void CreationEndpoints_AreLimitedToPortfolioAndAdminCritic()
+    {
+        var routes = typeof(AgentRunsController).GetMethods()
+            .Where(m => m.Name.StartsWith("Create", StringComparison.Ordinal))
+            .SelectMany(m => m.GetCustomAttributes(typeof(HttpPostAttribute), true).Cast<HttpPostAttribute>())
+            .Select(a => a.Template).Order().ToArray();
+        Assert.Equal(new[] { "/api/portfolios/{portfolioId:guid}/agent-diagnoses", "critic-review" }, routes);
+    }
+
+    [Fact]
     public async Task CreateCriticReview_EmptyResearchRunId_ReturnsBadRequest()
     {
         var service = new FakeAgentRunService();
@@ -40,35 +50,7 @@ public sealed class AgentRunsControllerTests
         Assert.True(service.CreateWasCalled);
     }
 
-    [Fact]
-    public async Task CreateDraftRevision_EmptyCriticReviewRunId_ReturnsBadRequest()
-    {
-        var service = new FakeAgentRunService();
-        var controller = new AgentRunsController(service, new FakeCurrentUserContext());
 
-        var result = await controller.CreateDraftRevision(new CreateDraftRevisionRequest(Guid.Empty), CancellationToken.None);
-
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
-        var error = Assert.IsType<ApiError>(badRequest.Value);
-        Assert.Equal("critic_review_run_id_required", error.Code);
-        Assert.False(service.CreateDraftRevisionWasCalled);
-    }
-
-    [Fact]
-    public async Task CreateDraftRevision_ValidRequest_CallsService()
-    {
-        var service = new FakeAgentRunService();
-        var controller = new AgentRunsController(service, new FakeCurrentUserContext());
-        var criticReviewRunId = Guid.NewGuid();
-
-        var result = await controller.CreateDraftRevision(new CreateDraftRevisionRequest(criticReviewRunId), CancellationToken.None);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<AgentRunSummaryResponse>(ok.Value);
-        Assert.Equal("DraftRevision", response.WorkflowType);
-        Assert.Equal(criticReviewRunId, service.LastCriticReviewRunId);
-        Assert.True(service.CreateDraftRevisionWasCalled);
-    }
 
     [Fact]
     public async Task GetDetail_NotFound_ReturnsNotFound()
@@ -81,53 +63,9 @@ public sealed class AgentRunsControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
-    [Fact]
-    public async Task CreateResearchQualityReview_EmptyResearchRunId_ReturnsBadRequest()
-    {
-        var service = new FakeAgentRunService();
-        var controller = new AgentRunsController(service, new FakeCurrentUserContext());
 
-        var result = await controller.CreateResearchQualityReview(new CreateResearchQualityReviewRequest(Guid.Empty), CancellationToken.None);
 
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
-        var error = Assert.IsType<ApiError>(badRequest.Value);
-        Assert.Equal("research_run_id_required", error.Code);
-        Assert.False(service.CreateResearchQualityReviewWasCalled);
-    }
 
-    [Fact]
-    public async Task CreateResearchQualityReview_ValidRequest_CallsService()
-    {
-        var service = new FakeAgentRunService();
-        var controller = new AgentRunsController(service, new FakeCurrentUserContext());
-        var researchRunId = Guid.NewGuid();
-
-        var result = await controller.CreateResearchQualityReview(new CreateResearchQualityReviewRequest(researchRunId), CancellationToken.None);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<AgentRunSummaryResponse>(ok.Value);
-        Assert.Equal("ResearchQualityReview", response.WorkflowType);
-        Assert.Equal(researchRunId, service.LastResearchRunId);
-        Assert.True(service.CreateResearchQualityReviewWasCalled);
-    }
-
-    [Fact]
-    public async Task CreateEvidenceRemediation_ValidRequest_CallsService()
-    {
-        var service = new FakeAgentRunService(); var controller = new AgentRunsController(service, new FakeCurrentUserContext()); var criticRunId = Guid.NewGuid();
-        var result = await controller.CreateEvidenceRemediation(new CreateEvidenceRemediationRequest(criticRunId), CancellationToken.None);
-        var ok = Assert.IsType<OkObjectResult>(result.Result); var response = Assert.IsType<AgentRunSummaryResponse>(ok.Value);
-        Assert.Equal(AgentWorkflowTypes.EvidenceRemediation, response.WorkflowType); Assert.Equal(criticRunId, service.LastCriticReviewRunId); Assert.True(service.CreateEvidenceRemediationWasCalled);
-    }
-
-    [Fact]
-    public async Task CreateEvidenceReanalysis_ValidRequest_CallsService()
-    {
-        var service = new FakeAgentRunService(); var controller = new AgentRunsController(service, new FakeCurrentUserContext()); var sourceRunId = Guid.NewGuid();
-        var result = await controller.CreateEvidenceReanalysis(new CreateEvidenceReanalysisRequest(sourceRunId), CancellationToken.None);
-        var ok = Assert.IsType<OkObjectResult>(result.Result); var response = Assert.IsType<AgentRunSummaryResponse>(ok.Value);
-        Assert.Equal(AgentWorkflowTypes.EvidenceReanalysis, response.WorkflowType); Assert.Equal(sourceRunId, service.LastEvidenceRemediationRunId);
-    }
 
     [Fact]
     public async Task Approve_ValidRequest_CallsApprovalService()
@@ -213,33 +151,9 @@ public sealed class AgentRunsControllerTests
                 Guid.NewGuid(), "CriticReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null, 0, 0, 0m));
         }
 
-        public Task<AgentRunSummaryResponse> CreateDraftRevisionAsync(Guid userId, Guid criticReviewRunId, CancellationToken cancellationToken = default)
-        {
-            CreateDraftRevisionWasCalled = true;
-            LastCriticReviewRunId = criticReviewRunId;
-            return Task.FromResult(new AgentRunSummaryResponse(
-                Guid.NewGuid(), "DraftRevision", "DraftAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null, 0, 0, 0m));
-        }
 
-        public Task<AgentRunSummaryResponse> CreateResearchQualityReviewAsync(Guid userId, Guid researchRunId, CancellationToken cancellationToken = default)
-        {
-            CreateResearchQualityReviewWasCalled = true;
-            LastResearchRunId = researchRunId;
-            return Task.FromResult(new AgentRunSummaryResponse(
-                Guid.NewGuid(), "ResearchQualityReview", "CriticAgent", "Succeeded", DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow, null, 0, 0, 0m));
-        }
 
-        public Task<AgentRunSummaryResponse> CreateEvidenceRemediationAsync(Guid userId, Guid criticReviewRunId, CancellationToken cancellationToken = default)
-        {
-            CreateEvidenceRemediationWasCalled = true; LastCriticReviewRunId = criticReviewRunId;
-            return Task.FromResult(new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.EvidenceRemediation, AgentTypes.Research, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0m));
-        }
 
-        public Task<AgentRunSummaryResponse> CreateEvidenceReanalysisAsync(Guid userId, Guid evidenceRemediationRunId, CancellationToken cancellationToken = default)
-        {
-            LastEvidenceRemediationRunId = evidenceRemediationRunId;
-            return Task.FromResult(new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.EvidenceReanalysis, AgentTypes.Analysis, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0m));
-        }
 
         public Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default)
             => Task.FromResult(new AgentRunSummaryResponse(

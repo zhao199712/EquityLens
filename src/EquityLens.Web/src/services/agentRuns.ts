@@ -203,25 +203,9 @@ export async function createCriticReview(researchRunId: string): Promise<AgentRu
   return response.data
 }
 
-export async function createDraftRevision(criticReviewRunId: string): Promise<AgentRunCreatedResponse> {
-  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/draft-revision', { criticReviewRunId })
-  return response.data
-}
 
-export async function createResearchQualityReview(researchRunId: string): Promise<AgentRunCreatedResponse> {
-  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/research-quality-review', { researchRunId })
-  return response.data
-}
 
-export async function createEvidenceRemediation(criticReviewRunId: string): Promise<AgentRunCreatedResponse> {
-  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/evidence-remediation', { criticReviewRunId })
-  return response.data
-}
 
-export async function createEvidenceReanalysis(evidenceRemediationRunId: string): Promise<AgentRunCreatedResponse> {
-  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/evidence-reanalysis', { evidenceRemediationRunId })
-  return response.data
-}
 
 export async function retryAgentRun(id: string): Promise<AgentRunCreatedResponse> {
   const response = await http.post<AgentRunCreatedResponse>(`/agent-runs/${id}/retry`)

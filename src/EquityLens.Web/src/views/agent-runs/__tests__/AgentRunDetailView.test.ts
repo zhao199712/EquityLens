@@ -37,7 +37,6 @@ vi.mock('../../../composables/useAgentRunPolling', () => ({
 
 vi.mock('../../../services/agentRuns', () => ({
   cancelAgentRun: vi.fn(),
-  createDraftRevision: vi.fn(),
   decideAgentApproval: vi.fn(),
   retryAgentRun: vi.fn(),
 }))

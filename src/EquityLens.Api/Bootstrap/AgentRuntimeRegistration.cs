@@ -47,12 +47,8 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<IInvestmentReanalysisAgent, LlmInvestmentReanalysisAgent>();
         builder.Services.AddScoped<IEvidenceRetrievalPlanAgent, EvidenceRetrievalPlanAgent>();
         builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, CriticReviewWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, DraftRevisionWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchQualityReviewWorkflowDefinitionProvider>();
         builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, ResearchInvestigationWorkflowDefinitionProvider>();
         builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, FeedbackRevisionWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceRemediationWorkflowDefinitionProvider>();
-        builder.Services.AddScoped<IAgentWorkflowDefinitionProvider, EvidenceReanalysisWorkflowDefinitionProvider>();
         if (e2eTestMode)
         {
             builder.Services.AddScoped<E2EApprovalGateWorkflowDefinitionProvider>();

@@ -30,7 +30,7 @@
 | R5 | 投組 Agent 迴圈與工具 | MUST | ✅ | 任務型工具草稿尚未完成驗收 | | 補充規格到達後，先驗收 R31、R30 再接續 |
 | R6 | 投組人工審批不變 | MUST | ✅ | | | |
 | R7 | 迴圈基礎設施共用、可續跑、可查詢 | MUST | ✅ | 共用核心與結構化工具結果恢復測試草稿 | | 工作目錄 R27 已通過；未提交實作，尚未完成投組行為驗收 |
-| R8 | 刪除 4 個多餘工作流與前端呼叫 | MUST | ⬜ | | | |
+| R8 | 刪除 4 個多餘工作流與前端呼叫 | MUST | 🟨 | endpoint 白名單、舊結果可讀且無建立按鈕、R27 | 本項提交 | 建立入口與 DI 移除；相依型別 R10 一起清理 |
 | R9 | Ask Agent 路由到 3 個工作流 | MUST | ⬜ | | | |
 | R10 | 移除型別零參照 | MUST | ⬜ | | | |
 | R11 | 3 個工作流、node type ≤ 15 | MUST | ⬜ | | | |
@@ -197,3 +197,10 @@
 - 已有足夠快照時，提前 submit_answer 會被 Guard 拒絕並回饋 simulate_weight_scenario 要求；已落盤決策保留，接續下一輪。預算耗盡不把未比較的建議視為通過。
 - 回覆直接呈現同一快照原組合／調整後的年化波動、VaR、ES、最大回撤與差異，並標出樣本數、信心水準與 horizon；資料不足不生成改善幅度。
 - R6 再驗收：核准／拒絕／等待釋放租約／無 wake／跨使用者及去重測試再次通過。完整 R27：build PASS、1023/1023（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／126 tests。無外部 API 呼叫。
+
+### R8 建立入口與前端收斂
+
+- 移除四種舊流程的 HTTP POST、service 方法、provider DI 與前端建立按鈕／API；Critic 保留既有入口，歷史詳情繼續唯讀。
+- 移除只驗證已刪除建立入口／專屬工作流的測試與 rate-limit 清單項，加入建立 endpoint 白名單、評論仍可讀且無舊建立操作的測試；研究修訂／隔離／retry 由固定流程既有測試保護。
+- 暫留內部舊 provider／handler 型別，因仍與待刪動態 coordinator 共用；按順序在 R10 一併解開相依並總驗收，R8 不提早標完成。
+- 完整 R27：build PASS、996/996（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 75、前端 build PASS／125 tests。無付費呼叫；未部署。

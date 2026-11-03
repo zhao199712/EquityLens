@@ -8,7 +8,6 @@ import AgentRunProgress from '../../components/agents/AgentRunProgress.vue'
 import CapabilityRequestStatus from '../../components/agents/CapabilityRequestStatus.vue'
 import {
   cancelAgentRun,
-  createDraftRevision,
   decideAgentApproval,
   retryAgentRun,
   type AgentRunNodeDto,
@@ -140,27 +139,13 @@ async function handleCancel() {
   }
 }
 
-async function handleCreateDraftRevision() {
-  if (!run.value) return
-  actionLoading.value = true
-  error.value = ''
-  try {
-    const created = await createDraftRevision(run.value.run.id)
-    router.push({ name: 'agent-run-detail', params: { id: created.id } })
-  } catch {
-    error.value = '建立 DraftRevision 失敗。'
-  } finally {
-    actionLoading.value = false
-  }
-}
-
 async function handleApproval(decision: 'approve' | 'reject') {
   if (!run.value || !pendingApproval.value) return
   if (decision === 'reject' && !approvalComment.value.trim()) {
     error.value = '拒絕時必須填寫原因。'
     return
   }
-  if (decision === 'reject' && !window.confirm('拒絕後會取消整個 Agent Run，確定繼續？')) return
+  if (decision === 'reject' && !window.confirm(pendingApproval.value.scope === 'WorkflowGate' ? '拒絕此診斷並保留原因，確定繼續？' : '拒絕後會取消整個 Agent Run，確定繼續？')) return
   actionLoading.value = true
   error.value = ''
   try {
@@ -241,13 +226,6 @@ const duration = computed(() => {
 })
 
 const pendingApproval = computed(() => run.value?.approvals.find(item => item.status === 'Pending') ?? null)
-
-const canCreateDraftRevision = computed(() => {
-  if (!run.value || run.value.run.workflowType !== 'CriticReview' || run.value.run.status !== 'Succeeded') return false
-  const output = run.value.outputJson as CriticReviewOutput | null
-  if (!output) return true
-  return output.recommendedNextAction === 'ReviseAnswer' || output.recommendedNextAction === 'CollectMoreEvidenceThenReviseAnswer'
-})
 
 const criticOutput = computed((): CriticReviewOutput | null => {
   if (!run.value || run.value.run.workflowType !== 'CriticReview') return null
@@ -342,7 +320,6 @@ const nextActionLabel = computed(() => {
               <button v-if="run.run.parentAgentRunId" class="prestige-btn" @click="router.push({ name: 'agent-run-detail', params: { id: run.run.parentAgentRunId } })">查看父版本</button>
               <button v-if="run.run.status === 'Failed'" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
               <button v-if="run.run.status === 'Running' || run.run.status === 'Pending' || run.run.status === 'WaitingForApproval'" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
-              <button v-if="canCreateDraftRevision" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleCreateDraftRevision">產生修訂稿</button>
               <button class="prestige-btn" :disabled="actionLoading" @click="refresh">重新整理</button>
             </div>
 
