@@ -15,7 +15,7 @@ pytest evals/tests -q
 
 僅使用專用隔離 PostgreSQL（名稱以 `_eval` 結尾）與隔離 Redis，先套用既有 migration。不得指定正式服務或將正式帳號加入題庫。
 
-1. 啟動 `equitylens_eval.portfolio_benchmark.serve(5547)`，設定測試程序 `FinMind__BaseUrl=http://127.0.0.1:5547`，基準指數固定 100，避免績效歸因混入外部行情。再啟動本機 API，DeepSeek BaseUrl 必須指向 `equitylens_eval.budget_proxy.serve`，以 `Budget(已授權美元額, 私有ledger路徑)` 控管總額。只允許已定價的 Flash 模型與有界 `max_tokens`；費用不明的請求按整筆保留額計算。不同輪的保留額要扣除前輪費用。停掉這個 API 後才結束代理。
+1. 啟動 `equitylens_eval.portfolio_benchmark.serve(5547)`，設定測試程序 `MarketData__FinMind__BaseUrl=http://127.0.0.1:5547`（Token 使用 `MarketData__FinMind__Token`），基準指數固定 100，避免績效歸因混入外部行情。再啟動本機 API，DeepSeek BaseUrl 必須指向 `equitylens_eval.budget_proxy.serve`，以 `Budget(已授權美元額, 私有ledger路徑)` 控管總額。只允許已定價的 Flash 模型與有界 `max_tokens`；費用不明的請求按整筆保留額計算。不同輪的保留額要扣除前輪費用。停掉這個 API 後才結束代理。
 2. Seed 工具限本機 API，且 Docker compose project 必須是 `equitylens-runtime` 或 `equitylens-portfolio-eval`。註冊後會比對該帳號確實存在於指定 DB，才寫入合成行情。獨立測試程序可設 `RateLimiting__Auth__RegisterPermitLimit=100` 建立 14 個各自只有一個投組的帳號，避免選錯投組；不改正式限流。
 
 ```bash
@@ -30,6 +30,8 @@ PORTFOLIO_EVAL_BUDGET_ENFORCED=1 python -m equitylens_eval.portfolio run \
 ```
 
 環境旗標是操作者確認代理已啟動，不能取代代理的總額控制。manifest 含短期 token，僅存私有 `/tmp`（0600），不可 commit。種子只新增資料，不刪除資料；API 資料庫不一致時停止。fixture 日期、hash、程式版本、原始問答、工具軌跡、審批前草稿、最後結果及持倉／交易前後快照保存在輸出目錄。
+
+Runner 在任何 AI 呼叫前，逐個投組讀取 valuation/history，驗證實際基準每筆為 100、報酬為零且日期完整，保存 benchmark-preflight.json；不符合即停止。單純在 manifest 寫固定基準名稱不足以證明隔離。
 
 Runner 讀取費用代理 ledger；遇供應商或額度拒絕、或題目完成時仍有未結算 provider 呼叫（例如 API 先逾時）時，標記該題失敗並停止後續題目，不把錯誤後的通用澄清文字當成正確答案。中斷後仍未結算的 reservation 必須全額扣除，才能開始下一輪。
 

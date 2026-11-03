@@ -8,7 +8,8 @@
     "eligible_for_quality_comparison": true,
     "reason": null,
     "raw_sha256": "e34384249c42d38ad2cb5ae5b785cb9c68424f58312d2bd7d6fb2276df6e698b",
-    "raw_bytes": 8532008
+    "raw_bytes": 8532008,
+    "benchmark_isolation_verified": false
   },
   {
     "round": 2,
@@ -19,7 +20,8 @@
     "eligible_for_quality_comparison": true,
     "reason": null,
     "raw_sha256": "c62a20254f1bb11ce3d15588fc3432ef6a38c7a26f0166a9057bbe1de52fc148",
-    "raw_bytes": 6897514
+    "raw_bytes": 6897514,
+    "benchmark_isolation_verified": false
   },
   {
     "round": 3,
@@ -30,7 +32,8 @@
     "eligible_for_quality_comparison": true,
     "reason": null,
     "raw_sha256": "49dddcad312a0c43a646a795d36a676ee7b9100fc9bc77902caddb0571822e39",
-    "raw_bytes": 6893837
+    "raw_bytes": 6893837,
+    "benchmark_isolation_verified": false
   },
   {
     "round": 4,
@@ -41,7 +44,9 @@
     "eligible_for_quality_comparison": true,
     "reason": null,
     "raw_sha256": "0cd58c05ac57c5a7eed170f6dd0227ba3335bf563d88f9d65190e6ee290efdd5",
-    "raw_bytes": 6953624
+    "raw_bytes": 6953624,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
   },
   {
     "round": 5,
@@ -52,7 +57,9 @@
     "eligible_for_quality_comparison": true,
     "reason": null,
     "raw_sha256": "f28903de58d1c507635182dfb49f4b24d96104a840d2031a9d5797acef06bbf1",
-    "raw_bytes": 6923541
+    "raw_bytes": 6923541,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
   },
   {
     "round": 6,
@@ -63,7 +70,9 @@
     "eligible_for_quality_comparison": false,
     "reason": "Isolation setup: missing JWT audience; no AI calls",
     "raw_sha256": "155a388384fb76a55922db103f918ca799ca4966c39e03c2f9cbabd6331c3ff5",
-    "raw_bytes": 768
+    "raw_bytes": 768,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
   },
   {
     "round": 7,
@@ -74,7 +83,9 @@
     "eligible_for_quality_comparison": false,
     "reason": "Provider 503; not an answer-quality evaluation",
     "raw_sha256": "60535c28a9d53244ddba2209d03023e86a3796061920126af5997787fd3653ac",
-    "raw_bytes": 27216
+    "raw_bytes": 27216,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
   },
   {
     "round": 8,
@@ -85,7 +96,9 @@
     "eligible_for_quality_comparison": false,
     "reason": "Provider 503; not an answer-quality evaluation",
     "raw_sha256": "2af20c8ce17ec312d411993979934cf68c9ced3ddf139053edfe2c4f7c480399",
-    "raw_bytes": 5458
+    "raw_bytes": 5458,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
   },
   {
     "round": 9,
@@ -96,7 +109,9 @@
     "eligible_for_quality_comparison": true,
     "reason": null,
     "raw_sha256": "96996cb986caf9424a6134f1bf7295ed98a1ed5fa80290092d3b074e79c874a9",
-    "raw_bytes": 7004999
+    "raw_bytes": 7004999,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
   },
   {
     "round": 10,
@@ -107,6 +122,32 @@
     "eligible_for_quality_comparison": false,
     "reason": "Stopped after repeated provider/client timeouts; seven saved cases, additional in-flight case interrupted; latest date repair not live-tested",
     "raw_sha256": "4a55ea95eeff5bb52fccf99f28a9dce105e883e7cee5453ab44f4cc9fd03fba7",
-    "raw_bytes": 2196152
+    "raw_bytes": 2196152,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
+  },
+  {
+    "round": 11,
+    "original_directory": "portfolio-eval-20261103-retry12",
+    "strict_passed": null,
+    "attempted_cases": 7,
+    "not_run": 7,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": false,
+    "reason": "Stopped after discovering incorrect FinMind configuration; external attribution benchmark active, including in earlier rounds. Not a full quality round.",
+    "raw_sha256": "596fde216ad95dd3e03355b24a56995656369220748cdaf3c03b162f7551818a",
+    "raw_bytes": 4145359
+  },
+  {
+    "round": 12,
+    "original_directory": "portfolio-eval-20261103-benchmark-verified",
+    "strict_passed": 9,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": null,
+    "raw_sha256": "775751598d84d6eccf8a28aebd95b0ea4d1855a7555d3f709381455ae8e502c7",
+    "raw_bytes": 8763829
   }
 ]

@@ -103,3 +103,22 @@ def test_unsettled_provider_call_stops_next_case_without_refunding_reservation()
     assert provider_failures(pending + [{'id': 'a', 'charged_upper_usd': .02, 'status': 503}]) == [503]
     assert provider_failures([{'status': 402, 'admission_refused': True}]) == [402]
     assert pending[0]['reserved_usd'] == .02
+
+
+def test_benchmark_preflight_rejects_external_or_incomplete_data_before_ai():
+    import httpx
+    from equitylens_eval.portfolio import verify_benchmark
+    dates = ['2026-01-01', '2026-01-02']
+    valid = {'benchmarkReturn': 0, 'benchmark': [{'date': d, 'indexValue': 100} for d in dates]}
+    for payload, expected in [(valid, True), ({**valid, 'benchmarkReturn': .55}, False),
+                              ({**valid, 'benchmark': valid['benchmark'][:1]}, False),
+                              ({**valid, 'benchmark': []}, False),
+                              ({**valid, 'benchmark': [{'date': d, 'indexValue': 101} for d in dates]}, False)]:
+        def handle(request):
+            assert request.method == 'GET'
+            assert request.url.path == '/api/portfolios/test/valuation/history'
+            return httpx.Response(200, json=payload)
+        with httpx.Client(base_url='http://127.0.0.1', transport=httpx.MockTransport(handle)) as client:
+            if expected: assert verify_benchmark(client, 'test', dates)['return'] == 0
+            else:
+                with pytest.raises(ValueError, match='Benchmark isolation failed'): verify_benchmark(client, 'test', dates)

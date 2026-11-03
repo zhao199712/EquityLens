@@ -189,6 +189,20 @@ def run_case(client, case, portfolio_id, timeout=360):
                 before={'portfolio':before,'transactions':before_tx},
                 after={'portfolio':get(f'/api/portfolios/{portfolio_id}'),'transactions':get(f'/api/portfolios/{portfolio_id}/transactions')})
 
+def verify_benchmark(client, portfolio_id, dates):
+    """Check the API's actual benchmark before spending any model budget."""
+    response = client.get(f'/api/portfolios/{portfolio_id}/valuation/history', params={'from': dates[0], 'to': dates[-1]})
+    response.raise_for_status()
+    data = response.json()
+    points = data.get('benchmark') or []
+    if not points or data.get('benchmarkReturn') != 0 or any(p.get('indexValue') != 100 for p in points):
+        raise ValueError('Benchmark isolation failed: expected constant index 100 and zero return; check MarketData__FinMind__BaseUrl')
+    observed = {p['date'] for p in points}
+    if not set(dates).issubset(observed):
+        raise ValueError('Benchmark isolation failed: missing fixture dates')
+    return {'from': dates[0], 'to': dates[-1], 'points': len(points), 'index_value': 100, 'return': 0}
+
+
 def provider_failures(entries):
     """Stop before the next case if the previous API returned before its provider settled.
 
@@ -240,6 +254,13 @@ def main():
               'cases_sha256':hashlib.sha256(args.cases.read_bytes()).hexdigest()}
         if (args.out/'responses.jsonl').exists(): raise ValueError('Use a new output directory; never overwrite raw responses')
         (args.out/'meta.json').write_text(json.dumps(meta,indent=2))
+        preflight = {}
+        for c in cases:
+            if args.ids and c['id'] not in args.ids: continue
+            entry = manifest['cases'][c['id']]
+            with httpx.Client(base_url=args.base_url, headers={'Authorization': 'Bearer '+entry['token']}, timeout=30) as client:
+                preflight[c['id']] = verify_benchmark(client, entry['portfolio_id'], manifest['fixtures'][c['id']]['dates'])
+        (args.out/'benchmark-preflight.json').write_text(json.dumps(preflight, indent=2))
         for c in cases:
             if args.ids and c['id'] not in args.ids: continue
             ledger_offset=len(args.usage_ledger.read_text().splitlines()) if args.usage_ledger.exists() else 0
