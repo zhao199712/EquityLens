@@ -1,0 +1,7 @@
+{
+  "eligible_for_quality_comparison": false,
+  "benchmark_isolation_verified": true,
+  "reason": "Single cash case after accountCash evidence and prompt 15, clean code 99be9f3; other thirteen cases not rerun. Final currency-prefix guard extension is covered by offline tests, not another paid run.",
+  "raw_sha256": "e760cf7149d59a8d0029432b44a205c225f377b8cf5f72fc7700dbd73d8c42e7",
+  "raw_bytes": 811896
+}

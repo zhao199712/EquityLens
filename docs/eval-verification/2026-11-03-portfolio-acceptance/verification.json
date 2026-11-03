@@ -1,6 +1,6 @@
 {
   "backend": {
-    "passed": 1008,
+    "passed": 1017,
     "postgres_integration": 18,
     "skipped": 0
   },
@@ -14,14 +14,14 @@
   "mathematics_pytest": 36,
   "eval_pytest": 92,
   "ef_pending_model_changes": false,
-  "live_code_final_verification": "Prompt 14: round 14 targeted 2/2; round 15 remaining twelve 11/12 on clean merged main 6d805b9. Cash fails UntraceableNumbers; no single full 14-case latest run or stability claim.",
+  "live_code_final_verification": "Prompt 15 cash targeted 1/1 (round 16, 99be9f3); other thirteen not rerun. Previous prompt 14 remaining twelve 11/12.",
   "authorized_usd": 1.2,
-  "charged_or_reserved_upper_usd": 1.03638,
+  "charged_or_reserved_upper_usd": 1.042494,
   "deployment": "none",
   "original_research_cases": "unchanged",
   "integrated_main": "6d805b9",
   "benchmark_isolation_verified_from_round": 12,
-  "evaluated_code": "6d805b951e777293635ae896b6f01cbe3e8dafa3 (round 15 clean checkout, prompt 14)",
+  "evaluated_code": "99be9f3 (round 16 clean checkout, prompt 15); final currency-prefix guard extension offline-tested",
   "recovery_observed": "round 13 cash: per-turn ToolBudgetExceeded then identical arguments succeeded next turn; invalid-argument recovery not observed",
   "additional_authorized_usd": 0.2
 }

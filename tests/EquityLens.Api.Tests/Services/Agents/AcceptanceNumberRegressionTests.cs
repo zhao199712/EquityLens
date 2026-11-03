@@ -61,6 +61,8 @@ public class AcceptanceNumberRegressionTests
         var scenario = new LoopDataFact("P2", "scenario", "simulate_weight_scenario", new JsonObject { ["cashWeight"] = 0 });
         var claim = new LoopAnswer("帳戶現金為 0 [P1][P2]", ["P1", "P2"]);
         Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(claim, [snapshot, scenario]));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(new("系統帳簿現金餘額為 TWD 0.00 [P1]", ["P1"]), [snapshot]));
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(new("帳戶現金為新台幣 0 [P1]", ["P1"]), [snapshot]));
         Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("未取得帳戶現金餘額，無法確認是否為零。", []), [snapshot]));
         Assert.Empty(PortfolioQualityGateNodeHandler.Check(new("情境現金權重 0% [P2]", ["P2"]), [scenario]));
         snapshot.Data["accountCash"] = new JsonObject { ["status"] = "Available", ["balance"] = 731m };

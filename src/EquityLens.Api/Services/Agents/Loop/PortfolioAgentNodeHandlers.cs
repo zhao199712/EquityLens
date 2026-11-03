@@ -98,7 +98,7 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             var cited = ids.Where(byId.ContainsKey).Select(id => byId[id]).ToArray();
             // 帳戶餘額只能由明確帳簿欄位支持，不能借用情境 cashWeight 或其他指標碰巧相同的數字。
             foreach (Match cashClaim in Regex.Matches(text,
-                @"(?:帳戶現金(?:餘額)?|帳簿現金(?:餘額)?|現金餘額)\s*(?:為|是|[:：|])?\s*(?<value>[-+]?\d+(?:,\d{3})*(?:\.\d+)?)(?![\d.]|\s*[%％])"))
+                @"(?:帳戶現金(?:餘額)?|帳簿現金(?:餘額)?|現金餘額)\s*(?:為|是|[:：|])?\s*(?:[A-Z]{3}|NT\$|新[台臺]幣)?\s*(?<value>[-+]?\d+(?:,\d{3})*(?:\.\d+)?)(?![\d.]|\s*[%％])"))
             {
                 var token = cashClaim.Groups["value"].Value;
                 if (!decimal.TryParse(token, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)) continue;
