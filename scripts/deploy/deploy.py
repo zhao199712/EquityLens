@@ -107,7 +107,7 @@ def check_migrations(expected, actual):
 
 def inventory(source):
     ids = []
-    for file in (source / "src/EquityLens.Api/Migrations").glob("*.Designer.cs"):
+    for file in (source / "src/EquityLens.Api/Migrations").glob("*.cs"):
         ids += re.findall(r'\[Migration\("([^"\n]+)"\)\]', file.read_text(encoding="utf-8-sig"))
     return sorted(ids)
 
@@ -300,6 +300,7 @@ def main(argv=None):
     parser.add_argument("--env-file", type=Path, help="Explicit production env file; never sourced as shell code")
     parser.add_argument("--live-compose", type=Path, help="Exact Compose file currently used by production")
     parser.add_argument("--compose-override", type=Path, help="Private override restricted to api/mathematics environment values")
+    parser.add_argument("--target-compose-override", type=Path, help="Target-only app environment override; defaults to --compose-override")
     parser.add_argument("--state-dir", type=Path, default=Path.home() / ".local/state/equitylens/deployments")
     parser.add_argument("--health-url", default="https://equitylens.duckdns.org/healthz")
     parser.add_argument("--timeout", type=int, default=180)
@@ -364,10 +365,14 @@ def execute(args):
             args.env_file = args.env_file.resolve()
             args.live_compose = args.live_compose.resolve(strict=True)
             override = getattr(args, "compose_override", None)
-            if override is not None:
-                require(override.is_file() and not override.is_symlink() and override.stat().st_mode & 0o077 == 0,
+            target_override = getattr(args, "target_compose_override", None) or override
+            for candidate in (override, target_override):
+                if candidate is None:
+                    continue
+                require(candidate.is_file() and not candidate.is_symlink() and candidate.stat().st_mode & 0o077 == 0,
                         "Compose override must be a regular private file (chmod 600).")
-                override = override.resolve()
+            override = override.resolve() if override else None
+            target_override = target_override.resolve() if target_override else None
             origin = run(["git", "remote", "get-url", "origin"]).decode().strip()
             require(origin in (f"git@github.com:{REPOSITORY}.git", f"https://github.com/{REPOSITORY}.git"), "Unexpected Git origin.")
             run(["git", "fetch", "origin", "main"])
@@ -385,7 +390,7 @@ def execute(args):
             expected = inventory(source)
             check_migrations(expected, query_migrations())
             current = resolved_config(args.live_compose, args.env_file, override)
-            target = resolved_config(source / "docker-compose.prod.yml", args.env_file, override)
+            target = resolved_config(source / "docker-compose.prod.yml", args.env_file, target_override)
             retain_infrastructure_paths(target, source, args.live_compose.parent)
             check_configs(current, target)
             validate_api_configuration(source, target)

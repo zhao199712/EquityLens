@@ -10,6 +10,7 @@
 - `--live-compose` 必須指向目前正式服務實際使用的 Compose 檔案；`--env-file` 明確指定其環境檔（可為 `.env` 或 `.env.prod`），權限須為 0600。腳本不猜檔名，不 `source` 檔案，也不帶入 shell 裡的 Compose 變數覆寫。
 - 乾淨 Git 建置不包含被忽略的本機 `appsettings.json`。腳本會檢查目標的 `Jwt:Issuer`、`Audience`、`ExpireMinutes` 與至少 32-byte 的簽章 key；缺少時在建置／停機前停止。非密鑰設定也必須明確提供，不能只設定 JWT_KEY。
 - 可用 `--compose-override /absolute/runtime.override.json` 補主機特有設定；檔案權限須為 0600，只允許修改 api／mathematics 的 environment。變更 image、build、掛載、命令、資料服務等欄位會被拒絕。相同 override 同時用於辨識目前設定與產生目標設定，之後會凍結到私有 release 設定中。
+- 第一次從含本機 appsettings 的舊映像切到乾淨建置時，可另指定 `--target-compose-override /absolute/target.override.json`。它只用於新版本，仍限兩個應用服務的 environment；不與舊 override 疊加，須提供完整目標覆寫。`--compose-override` 仍描述舊容器並用於保存回復設定，避免為了補新設定而先重啟舊服務。沿用舊映像的有效設定與金鑰，不將內容輸出或提交。
 - 這是既有 `equitylens-prod` 的更新工具，不是首次安裝工具。既有 api、mathematics、postgres、redis 容器必須存在並運作。API／Mathematics 的實際環境若與 Compose、映像預設不一致，停止而不猜測設定。
 - 部署帳號需能管理 Docker。Docker 權限等同很高的主機權限；這支腳本不提供權限隔離。不得直接接到公開 PR 的 self-hosted runner。
 - 新舊版本必須相容於既有 agent runs、Redis 訊息及資料。腳本檢查 migration 歷史，無法證明語意相容；大幅 workflow／queue 格式變更先另做升級及排空計畫。
@@ -54,7 +55,7 @@ bash scripts/deploy/deploy.sh \
 實際順序：
 
 1. 取得部署鎖、驗證本機 Docker context、固定容器與 Git origin，fetch main，驗證指定 SHA 與 CI。
-2. 將指定提交匯出到私有 release 目錄；讀取提交中 EF migration ID，與正式 `__EFMigrationsHistory` **完整集合比較**。缺少 migration 或 DB 比目標多 migration 均停止；不執行 migration 或 Down。
+2. 將指定提交匯出到私有 release 目錄；讀取提交中 EF migration ID（包含直接在 `.cs` 宣告 attribute 的純資料 migration），與正式 `__EFMigrationsHistory` **完整集合比較**。缺少 migration 或 DB 比目標多 migration 均停止；不執行 migration 或 Down。
 3. 解析目前及目標 Compose；拒絕資料服務、網路、volume、掛載或其他基礎設施差異。本工具只重建 api／mathematics。
 4. 保存實際舊映像 ID、保留映像標籤及已解析設定。含 `$` 的環境值會正確處理 Compose escaping，避免保存／載入時變動密碼。建置新映像，標籤唯一並記錄 commit revision；此時舊服務仍運作。
 5. 再確認 migration 與舊容器未變，執行 `pg_dump -Fc`。備份必須非空，並經 `pg_restore --file=/dev/null` 完整解碼；保存 SHA-256。任何失敗均不停止舊服務。
