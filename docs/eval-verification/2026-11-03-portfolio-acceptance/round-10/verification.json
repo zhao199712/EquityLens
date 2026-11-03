@@ -1,0 +1,6 @@
+{
+  "eligible_for_quality_comparison": false,
+  "reason": "Stopped after repeated provider/client timeouts; seven saved cases, additional in-flight case interrupted; latest date repair not live-tested",
+  "raw_sha256": "4a55ea95eeff5bb52fccf99f28a9dce105e883e7cee5453ab44f4cc9fd03fba7",
+  "raw_bytes": 2196152
+}

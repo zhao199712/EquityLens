@@ -1,0 +1,7 @@
+{
+  "eligible_for_quality_comparison": false,
+  "benchmark_isolation_verified": false,
+  "reason": "Stopped after discovering incorrect FinMind configuration; external attribution benchmark active, including in earlier rounds. Not a full quality round.",
+  "raw_sha256": "596fde216ad95dd3e03355b24a56995656369220748cdaf3c03b162f7551818a",
+  "raw_bytes": 4145359
+}

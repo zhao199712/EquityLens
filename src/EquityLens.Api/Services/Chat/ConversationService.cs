@@ -204,15 +204,17 @@ public sealed class ConversationService(
         var run = await db.AgentRuns.AsNoTracking().Include(x => x.Nodes).Include(x => x.ResearchRun)
             .FirstOrDefaultAsync(x => x.Id == agentRunId && x.UserId == userId, cancellationToken);
         if (run is null) return null;
+        var waiting = run.Status is AgentRunStatuses.WaitingForFeedback or AgentRunStatuses.WaitingForApproval;
         var current = run.Nodes.Where(x => x.Status == AgentNodeStatuses.Running).OrderBy(x => x.StartedAtUtc).FirstOrDefault()
             ?? run.Nodes.Where(x => x.Status == AgentNodeStatuses.Pending).OrderBy(x => x.NodeKey).FirstOrDefault();
         var currentContract = current is null ? null : workflowCatalog.Nodes.SingleOrDefault(x => x.NodeType == current.NodeType)?.Contract;
         var finalAnswer = !string.IsNullOrWhiteSpace(run.ResearchRun?.Answer)
             ? run.ResearchRun.Answer
             : ExtractFinalAnswer(run.OutputJson);
-        return new(run.Id, run.ResearchRunId, run.WorkflowType, run.Status, currentContract?.Stage, currentContract?.DisplayName,
+        var issues = AgentNodeJson.ParseBlackboard(run.BlackboardJson)["portfolioQualityGate"]?["blockingIssues"]?.Deserialize<List<string>>(AgentNodeJson.SerializerOptions);
+        return new(run.Id, run.ResearchRunId, run.WorkflowType, run.Status, waiting ? "Approval" : currentContract?.Stage, waiting ? "等待人工審閱" : currentContract?.DisplayName,
             run.Nodes.Count(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped),
-            run.Nodes.Count, finalAnswer, run.ErrorMessage);
+            run.Nodes.Count, finalAnswer, run.ErrorMessage, issues);
     }
 
     private async Task<ConversationAgentDecision?> EntryDecisionAsync(Guid userId, string content, JsonObject context, CancellationToken ct)
@@ -252,7 +254,9 @@ public sealed class ConversationService(
         try
         {
             var node = JsonNode.Parse(outputJson);
-            return Find(node, ["finalAnswer", "answer", "revisedAnswer", "summary"]);
+            var summary = Find(node, ["finalAnswer", "answer", "revisedAnswer", "summary"]);
+            var interpretation = node?["interpretation"]?.GetValue<string>();
+            return string.IsNullOrWhiteSpace(interpretation) || interpretation == summary ? summary : summary + "\n\n" + interpretation;
         }
         catch (JsonException) { return null; }
     }

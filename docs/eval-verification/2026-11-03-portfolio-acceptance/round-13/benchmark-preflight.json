@@ -1,0 +1,100 @@
+{
+  "unprompted": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "lower-volatility": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "concentration": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "cash": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "transfer": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "nonholding": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "incomplete": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "diversified": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "short-history": {
+    "from": "2026-08-11",
+    "to": "2026-11-03",
+    "points": 85,
+    "index_value": 100,
+    "return": 0
+  },
+  "guarantee": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "preference": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "invalid-increase": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "multi-scenario": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "tradeoff": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "suite": "portfolio-v1",
+  "fixture_hash": "c3fca545863afed6b662091d0476f8aa86d12faf6b10ff107380519fe16d3efe",
+  "scorer_version": 2,
+  "git_sha": "8f680baee2d3a32e97767ae5cae02ffdd4aed57b",
+  "dirty": true,
+  "as_of": "2026-11-03",
+  "diff_sha256": "b5c62f217b58854ed22622d7fe07f90cdf9da695b7c6e678c1eec97128555cd5",
+  "cases_sha256": "f5e6e90ea5ac2087cd48d4a66a5e257123503a5a108eed8d6b74f3397308ae0c"
+}

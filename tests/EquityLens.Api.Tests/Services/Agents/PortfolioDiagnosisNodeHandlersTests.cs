@@ -97,6 +97,24 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         Assert.Equal("complete", output.AttributionCoverage);
     }
 
+    [Fact]
+    public async Task QualityGate_PreservesValidatedInterpretationAlongsideComputedSummary()
+    {
+        await using var db = CreateDb();
+        var run = CreateRun(new JsonArray());
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board["portfolioLoopAnswer"] = JsonNode.Parse("""{"markdown":"不建議調整，集中風險只是轉移 [P1]","citedEvidenceIds":["P1"]}""");
+        board["agentLoopFacts"] = JsonNode.Parse("""[{"id":"P1","key":"scenario","tool":"simulate_weight_scenario","data":{"status":"Calculated"}}]""");
+        board[PortfolioScenarioCalculator.ResultKey] = JsonSerializer.SerializeToNode(new PortfolioScenarioComparison("Calculated", "fixture", "hash", null, 252, .95m, 1, null, [], []), AgentNodeJson.SerializerOptions);
+        run.BlackboardJson = board.ToJsonString();
+        await new EquityLens.Api.Services.Agents.Loop.PortfolioQualityGateNodeHandler().ExecuteAsync(new(db, run, DraftNode(run.Id), (_, _, _, _, _) => { }));
+        var output = AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.PortfolioDiagnosisDraft]!.Deserialize<PortfolioDiagnosisOutput>(AgentNodeJson.SerializerOptions)!;
+        Assert.Contains("不建議調整", output.Interpretation);
+        Assert.Contains("唯讀情境", output.Summary);
+        Assert.Empty(output.QualityIssues!);
+        Assert.Null(LegacyWorkflowReadModel.BuildLoopSummary(run, [new AgentRunNode { NodeType = "PortfolioAgentLoop" }]));
+    }
+
     private static AgentRun CreateRun(JsonArray mathResults)
     {
         var portfolioId = Guid.NewGuid();

@@ -1,0 +1,6 @@
+{
+  "eligible_for_quality_comparison": false,
+  "reason": "Isolation setup: missing JWT audience; no AI calls",
+  "raw_sha256": "155a388384fb76a55922db103f918ca799ca4966c39e03c2f9cbabd6331c3ff5",
+  "raw_bytes": 768
+}

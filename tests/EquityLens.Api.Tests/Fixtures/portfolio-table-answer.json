@@ -1,0 +1,679 @@
+{
+  "answer": {
+    "markdown": "## 目前組合狀況\n\n組合甲共 3 檔持股，期間 2025-11-03 至 2026-11-03，252 個共同交易日 [P1]。權重高度集中：9001 標的A 約 80.0%、9002 標的B 約 10.0%、9003 標的C 約 10.0% [P1]。集中度 HHI 為 0.66、最大單一權重 0.80 [P5]。\n\n風險面上，年化波動率約 24.53%、最大回撤約 -11.88% [P5]；95% 一日歷史 VaR 約 -2.33%、期望短缺（ES）約 -2.46% [P6]。風險貢獻幾乎全部來自 9001，其成分風險占比約 99.78%，9002 約 2.16%，9003 約 -1.94%（負值代表分散效果）[P7]。\n\n績效歸因顯示期間組合報酬約 -1.19%，主要負貢獻來自 9001（約 -1.34%），9003 為正貢獻約 +0.33%；三檔皆屬 Technology 產業，產業集中度 100% [P3]。\n\n## 減碼假設情境（非交易指令）\n\n以同一快照、固定權重歷史簡單報酬、252 日年化、現金報酬 0 的假設，模擬「9001 由 80% 減碼至 60%，其餘持股不變，減碼部分留現金」[P8]：\n\n| 指標 | 原組合 | 情境 | 差異 |\n|---|---|---|---|\n| 年化波動率 | 24.33% | 18.27% | -6.06 個百分點 |\n| 95% 一日歷史 VaR | -2.30% | -1.70% | +0.60 個百分點（損失較小） |\n| 95% 一日 ES | -2.43% | -1.81% | +0.61 個百分點 |\n| 假設最大回撤 | -11.05% | -7.84% | +3.21 個百分點 |\n| 股票 HHI | 0.66 | 0.38 | 下降 |\n\n以上數字皆來自同一情境模擬結果 [P8]。\n\n## 解讀與限制\n\n- 此情境可降低波動、尾部損失與集中度，但代價是 20% 資金轉為零報酬現金，且模型未計費用、滑價與稅負，也未經回測驗證 [P8]。\n- 波動與尾部風險改善不代表所有風險都改善；產業仍 100% 集中於 Technology [P3]，且樣本僅 252 個共同交易日、採固定權重假設 [P8]。\n- 你的風險偏好尚未保存，無法確認此減碼幅度是否符合你的可承受風險，建議先確認偏好再決定 [P4]。\n- 所有工具皆為唯讀，以上僅為假設情境，未實際調整任何持倉 [P8]。\n\n若你希望，我可以再模擬其他減碼幅度，或改為轉入既有持股（而非留現金）的情境。不保證獲利。",
+    "citedEvidenceIds": [
+      "P1",
+      "P3",
+      "P4",
+      "P5",
+      "P6",
+      "P7",
+      "P8"
+    ]
+  },
+  "facts": [
+    {
+      "id": "P1",
+      "key": "get_portfolio_snapshot:44136FA355B3678A1146AD16F7E8649E94FB4FC21FE77E8310C060F61CAAFF8A",
+      "data": {
+        "warning": null,
+        "holdings": [
+          {
+            "price": 103.440013,
+            "ticker": "9003",
+            "weight": 0.09999999954916199,
+            "currency": "TWD",
+            "quantity": 96.674388,
+            "averageCost": 100.0,
+            "securityName": "標的C",
+            "unrealizedProfit": 332.561151487044
+          },
+          {
+            "price": 98.248523,
+            "ticker": "9002",
+            "weight": 0.10000000043629777,
+            "currency": "TWD",
+            "quantity": 101.782701,
+            "averageCost": 100.0,
+            "securityName": "標的B",
+            "unrealizedProfit": -178.270059799377
+          },
+          {
+            "price": 98.331022,
+            "ticker": "9001",
+            "weight": 0.8000000000145402,
+            "currency": "TWD",
+            "quantity": 813.578445,
+            "averageCost": 100.0,
+            "securityName": "標的A",
+            "unrealizedProfit": -1357.84452597921
+          }
+        ],
+        "warnings": [],
+        "diagnosis": {
+          "to": "2026-11-03",
+          "from": "2025-11-03",
+          "portfolioId": "00000000-0000-0000-0000-000000000000",
+          "baseCurrency": "TWD",
+          "holdingCount": 3,
+          "portfolioName": "組合甲"
+        },
+        "commonTradingDays": 252
+      },
+      "tool": "get_portfolio_snapshot"
+    },
+    {
+      "id": "P2",
+      "key": "get_risk_report:44136FA355B3678A1146AD16F7E8649E94FB4FC21FE77E8310C060F61CAAFF8A",
+      "data": {
+        "metrics": {
+          "maxDrawdown": null,
+          "contributions": null,
+          "historicalVaR": null,
+          "largestWeight": null,
+          "concentrationHhi": null,
+          "expectedShortfall": null,
+          "portfolioVolatility": null,
+          "volatilityRiskShare": null,
+          "annualizedVolatility": null
+        },
+        "evidence": {
+          "source": "CacheMiss",
+          "inputHash": null,
+          "cacheStatus": "Miss",
+          "dataAsOfDate": null,
+          "rejectedRuns": [
+            {
+              "code": "NO_COMPATIBLE_RISK_RUN",
+              "reason": "No compatible completed Risk Run was found.",
+              "riskRunId": "00000000-0000-0000-0000-000000000000"
+            }
+          ],
+          "qualityStatus": null,
+          "qualityWarnings": null,
+          "algorithmVersion": null,
+          "sourceRiskRunIds": [],
+          "dataFactorVersion": null,
+          "reusedCapabilities": [],
+          "qualityEvaluationId": null,
+          "qualityBacktestRunId": null,
+          "calculatedCapabilities": [],
+          "coreCalculationRequired": true
+        },
+        "diagnosis": {
+          "to": "2026-11-03",
+          "from": "2025-11-03",
+          "portfolioId": "00000000-0000-0000-0000-000000000000",
+          "baseCurrency": "TWD",
+          "holdingCount": 3,
+          "portfolioName": "組合甲"
+        }
+      },
+      "tool": "get_risk_report"
+    },
+    {
+      "id": "P3",
+      "key": "get_performance_attribution:44136FA355B3678A1146AD16F7E8649E94FB4FC21FE77E8310C060F61CAAFF8A",
+      "data": {
+        "diagnosis": {
+          "to": "2026-11-03",
+          "from": "2025-11-03",
+          "portfolioId": "00000000-0000-0000-0000-000000000000",
+          "baseCurrency": "TWD",
+          "holdingCount": 3,
+          "portfolioName": "組合甲"
+        },
+        "attribution": {
+          "holdings": [
+            {
+              "name": "9001 標的A",
+              "return": -0.01668978,
+              "weight": 0.8039030425981071,
+              "industry": "Technology",
+              "evidenceId": "holding-3",
+              "rawIndustry": "Technology",
+              "contribution": -0.013416964922293035
+            },
+            {
+              "name": "9002 標的B",
+              "return": -0.01751477,
+              "weight": 0.10057226014358504,
+              "industry": "Technology",
+              "evidenceId": "holding-2",
+              "rawIndustry": "Technology",
+              "contribution": -0.001761500004795059
+            },
+            {
+              "name": "9003 標的C",
+              "return": 0.03440013,
+              "weight": 0.09552469725830792,
+              "industry": "Technology",
+              "evidenceId": "holding-1",
+              "rawIndustry": "Technology",
+              "contribution": 0.0032860620038964363
+            }
+          ],
+          "industries": [
+            {
+              "name": "Technology",
+              "return": -0.011892402923191657,
+              "weight": 1.0,
+              "industry": "Technology",
+              "evidenceId": "industry-1",
+              "rawIndustry": null,
+              "contribution": -0.011892402923191657
+            }
+          ],
+          "activeReturn": -0.567405416081581,
+          "holdingCount": 3,
+          "coverageStatus": "complete",
+          "benchmarkReturn": 0.5555130131583893,
+          "portfolioReturn": -0.011892402923191657,
+          "pricedHoldingCount": 3
+        }
+      },
+      "tool": "get_performance_attribution"
+    },
+    {
+      "id": "P4",
+      "key": "get_risk_profile:44136FA355B3678A1146AD16F7E8649E94FB4FC21FE77E8310C060F61CAAFF8A",
+      "data": {
+        "reason": "尚未保存使用者風險偏好，請向使用者確認。",
+        "available": false
+      },
+      "tool": "get_risk_profile"
+    },
+    {
+      "id": "P5",
+      "key": "run_risk_analysis:28E3DD6A7A5ABA1886DFD6C8FA1C196B34E275D90CA873C8C81ABAB4038EC431",
+      "data": {
+        "results": [
+          {
+            "seed": null,
+            "unit": "ratio",
+            "value": -0.011892402923191657,
+            "warnings": [],
+            "operation": "calculate-portfolio-return",
+            "parameters": {},
+            "provenance": {
+              "to": "2026-11-03",
+              "from": "2025-11-14",
+              "mode": "Portfolio",
+              "assets": [
+                "9003",
+                "9002",
+                "9001"
+              ],
+              "source": "synthetic-eval-v1",
+              "ticker": null,
+              "portfolioId": "00000000-0000-0000-0000-000000000000",
+              "measurementBasis": {
+                "to": "2026-11-03",
+                "from": "2025-11-14",
+                "weighting": "現有股數固定，歷史權重隨價格變動",
+                "horizonDays": null,
+                "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                "confidenceLevel": null,
+                "observationCount": 252,
+                "sampleDefinition": "最多252筆共同交易日日報酬",
+                "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+              },
+              "commonTradingDays": 252,
+              "commonTradingDateTo": "2026-11-03",
+              "commonTradingDateFrom": "2025-11-14"
+            }
+          },
+          {
+            "seed": null,
+            "unit": null,
+            "value": {
+              "hhi": 0.6600000000203563,
+              "largestWeight": 0.8000000000145402
+            },
+            "warnings": [],
+            "operation": "calculate-concentration",
+            "parameters": {},
+            "provenance": {
+              "to": "2026-11-03",
+              "from": "2025-11-14",
+              "mode": "Portfolio",
+              "assets": [
+                "9003",
+                "9002",
+                "9001"
+              ],
+              "source": "synthetic-eval-v1",
+              "ticker": null,
+              "portfolioId": "00000000-0000-0000-0000-000000000000",
+              "measurementBasis": {
+                "to": "2026-11-03",
+                "from": "2025-11-14",
+                "weighting": "期末市值固定權重",
+                "horizonDays": null,
+                "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                "confidenceLevel": null,
+                "observationCount": 252,
+                "sampleDefinition": "最多252筆共同交易日日報酬",
+                "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+              },
+              "commonTradingDays": 252,
+              "commonTradingDateTo": "2026-11-03",
+              "commonTradingDateFrom": "2025-11-14"
+            }
+          },
+          {
+            "seed": null,
+            "unit": "ratio",
+            "value": 0.24531041869840453,
+            "warnings": [],
+            "operation": "calculate-annualized-volatility",
+            "parameters": {},
+            "provenance": {
+              "to": "2026-11-03",
+              "from": "2025-11-14",
+              "mode": "Portfolio",
+              "assets": [
+                "9003",
+                "9002",
+                "9001"
+              ],
+              "source": "synthetic-eval-v1",
+              "ticker": null,
+              "portfolioId": "00000000-0000-0000-0000-000000000000",
+              "measurementBasis": {
+                "to": "2026-11-03",
+                "from": "2025-11-14",
+                "weighting": "現有股數固定，歷史權重隨價格變動",
+                "horizonDays": null,
+                "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                "confidenceLevel": null,
+                "observationCount": 252,
+                "sampleDefinition": "最多252筆共同交易日日報酬",
+                "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+              },
+              "commonTradingDays": 252,
+              "commonTradingDateTo": "2026-11-03",
+              "commonTradingDateFrom": "2025-11-14"
+            }
+          },
+          {
+            "seed": null,
+            "unit": "ratio",
+            "value": -0.11875609829835049,
+            "warnings": [],
+            "operation": "calculate-max-drawdown",
+            "parameters": {},
+            "provenance": {
+              "to": "2026-11-03",
+              "from": "2025-11-14",
+              "mode": "Portfolio",
+              "assets": [
+                "9003",
+                "9002",
+                "9001"
+              ],
+              "source": "synthetic-eval-v1",
+              "ticker": null,
+              "portfolioId": "00000000-0000-0000-0000-000000000000",
+              "measurementBasis": {
+                "to": "2026-11-03",
+                "from": "2025-11-14",
+                "weighting": "現有股數固定，歷史權重隨價格變動",
+                "horizonDays": null,
+                "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                "confidenceLevel": null,
+                "observationCount": 252,
+                "sampleDefinition": "最多252筆共同交易日日報酬",
+                "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+              },
+              "commonTradingDays": 252,
+              "commonTradingDateTo": "2026-11-03",
+              "commonTradingDateFrom": "2025-11-14"
+            }
+          }
+        ],
+        "analysis": "Core",
+        "diagnosis": {
+          "to": "2026-11-03",
+          "from": "2025-11-03",
+          "portfolioId": "00000000-0000-0000-0000-000000000000",
+          "baseCurrency": "TWD",
+          "holdingCount": 3,
+          "portfolioName": "組合甲"
+        },
+        "commonTradingDays": 252
+      },
+      "tool": "run_risk_analysis"
+    },
+    {
+      "id": "P6",
+      "key": "run_risk_analysis:E5673C3B6B77498F818479617861D0FB8995F615BD31496E48B4A4A7228D50AE",
+      "data": {
+        "results": [
+          {
+            "seed": null,
+            "unit": "ratio",
+            "value": -0.02326605811204671,
+            "warnings": [],
+            "operation": "calculate-historical-var",
+            "parameters": {
+              "confidenceLevel": 0.95
+            },
+            "provenance": {
+              "to": "2026-11-03",
+              "from": "2025-11-14",
+              "mode": "Portfolio",
+              "assets": [
+                "9003",
+                "9002",
+                "9001"
+              ],
+              "source": "synthetic-eval-v1",
+              "ticker": null,
+              "portfolioId": "00000000-0000-0000-0000-000000000000",
+              "measurementBasis": {
+                "to": "2026-11-03",
+                "from": "2025-11-14",
+                "weighting": "現有股數固定，歷史權重隨價格變動",
+                "horizonDays": 1,
+                "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                "confidenceLevel": 0.95,
+                "observationCount": 252,
+                "sampleDefinition": "最多252筆共同交易日日報酬",
+                "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+              },
+              "commonTradingDays": 252,
+              "commonTradingDateTo": "2026-11-03",
+              "commonTradingDateFrom": "2025-11-14"
+            }
+          },
+          {
+            "seed": null,
+            "unit": "ratio",
+            "value": -0.024591082950384993,
+            "warnings": [],
+            "operation": "calculate-expected-shortfall",
+            "parameters": {
+              "confidenceLevel": 0.95
+            },
+            "provenance": {
+              "to": "2026-11-03",
+              "from": "2025-11-14",
+              "mode": "Portfolio",
+              "assets": [
+                "9003",
+                "9002",
+                "9001"
+              ],
+              "source": "synthetic-eval-v1",
+              "ticker": null,
+              "portfolioId": "00000000-0000-0000-0000-000000000000",
+              "measurementBasis": {
+                "to": "2026-11-03",
+                "from": "2025-11-14",
+                "weighting": "現有股數固定，歷史權重隨價格變動",
+                "horizonDays": 1,
+                "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                "confidenceLevel": 0.95,
+                "observationCount": 252,
+                "sampleDefinition": "最多252筆共同交易日日報酬",
+                "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+              },
+              "commonTradingDays": 252,
+              "commonTradingDateTo": "2026-11-03",
+              "commonTradingDateFrom": "2025-11-14"
+            }
+          }
+        ],
+        "analysis": "TailRisk",
+        "diagnosis": {
+          "to": "2026-11-03",
+          "from": "2025-11-03",
+          "portfolioId": "00000000-0000-0000-0000-000000000000",
+          "baseCurrency": "TWD",
+          "holdingCount": 3,
+          "portfolioName": "組合甲"
+        },
+        "commonTradingDays": 252
+      },
+      "tool": "run_risk_analysis"
+    },
+    {
+      "id": "P7",
+      "key": "run_risk_analysis:F474652CF01D5E7787F0B62B5B612EEF7E1EBCEFF80AE01B96FEF138392F9CEE",
+      "data": {
+        "results": [
+          {
+            "seed": null,
+            "unit": "ratio",
+            "value": 0.0153305875158263,
+            "warnings": [],
+            "operation": "calculate-portfolio-volatility",
+            "parameters": {},
+            "provenance": {
+              "to": "2026-11-03",
+              "from": "2025-11-14",
+              "mode": "Portfolio",
+              "assets": [
+                "9003",
+                "9002",
+                "9001"
+              ],
+              "source": "synthetic-eval-v1",
+              "ticker": null,
+              "portfolioId": "00000000-0000-0000-0000-000000000000",
+              "measurementBasis": {
+                "to": "2026-11-03",
+                "from": "2025-11-14",
+                "weighting": "期末市值固定權重",
+                "horizonDays": null,
+                "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                "confidenceLevel": null,
+                "observationCount": 252,
+                "sampleDefinition": "最多252筆共同交易日日報酬",
+                "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+              },
+              "commonTradingDays": 252,
+              "commonTradingDateTo": "2026-11-03",
+              "commonTradingDateFrom": "2025-11-14"
+            }
+          },
+          {
+            "seed": null,
+            "unit": "ratio",
+            "value": {
+              "holdings": [
+                {
+                  "ticker": "9003",
+                  "weight": 0.09999999954916199,
+                  "componentRiskShare": -0.019369954510649243,
+                  "componentVolatility": -0.004713979286553194
+                },
+                {
+                  "ticker": "9002",
+                  "weight": 0.10000000043629777,
+                  "componentRiskShare": 0.021623321853656056,
+                  "componentVolatility": 0.0052623712290376
+                },
+                {
+                  "ticker": "9001",
+                  "weight": 0.8000000000145402,
+                  "componentRiskShare": 0.9977466326569915,
+                  "componentVolatility": 0.2428171401738418
+                }
+              ],
+              "componentRiskShare": 0.9999999999999983
+            },
+            "warnings": [],
+            "operation": "calculate-volatility-risk-contribution",
+            "parameters": {},
+            "provenance": {
+              "to": "2026-11-03",
+              "from": "2025-11-14",
+              "mode": "Portfolio",
+              "assets": [
+                "9003",
+                "9002",
+                "9001"
+              ],
+              "source": "synthetic-eval-v1",
+              "ticker": null,
+              "portfolioId": "00000000-0000-0000-0000-000000000000",
+              "measurementBasis": {
+                "to": "2026-11-03",
+                "from": "2025-11-14",
+                "weighting": "期末市值固定權重",
+                "horizonDays": null,
+                "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                "confidenceLevel": null,
+                "observationCount": 252,
+                "sampleDefinition": "最多252筆共同交易日日報酬",
+                "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+              },
+              "commonTradingDays": 252,
+              "commonTradingDateTo": "2026-11-03",
+              "commonTradingDateFrom": "2025-11-14"
+            }
+          }
+        ],
+        "analysis": "RiskContribution",
+        "diagnosis": {
+          "to": "2026-11-03",
+          "from": "2025-11-03",
+          "portfolioId": "00000000-0000-0000-0000-000000000000",
+          "baseCurrency": "TWD",
+          "holdingCount": 3,
+          "portfolioName": "組合甲"
+        },
+        "commonTradingDays": 252
+      },
+      "tool": "run_risk_analysis"
+    },
+    {
+      "id": "P8",
+      "key": "simulate_weight_scenario:4C66D7A90C4C2E39AFB3F435CF6938DB529E5F2B18F040E46DC53881175B13D4",
+      "data": {
+        "method": "FixedWeightHistoricalSimpleReturns; cashReturn=0; annualization=252; equityHhi excludes cash",
+        "status": "Calculated",
+        "baseline": {
+          "name": "原組合",
+          "status": "Calculated",
+          "metrics": {
+            "contributions": [
+              {
+                "ticker": "9001",
+                "weight": 0.8000000000145402,
+                "componentRiskShare": 0.9977513699042257,
+                "componentVolatility": 0.24275787596454576
+              },
+              {
+                "ticker": "9002",
+                "weight": 0.10000000043629777,
+                "componentRiskShare": 0.021627261608250518,
+                "componentVolatility": 0.0052620204284484495
+              },
+              {
+                "ticker": "9003",
+                "weight": 0.09999999954916199,
+                "componentRiskShare": -0.01937863151247145,
+                "componentVolatility": -0.004714917530525415
+              }
+            ],
+            "historicalVaR": -0.023023433468236484,
+            "expectedShortfall": -0.024267908404133294,
+            "annualizedVolatility": 0.24330497886246763,
+            "hypotheticalMaxDrawdown": -0.11051776647111038
+          },
+          "weights": {
+            "9001": 0.8000000000145402,
+            "9002": 0.10000000043629777,
+            "9003": 0.09999999954916199
+          },
+          "equityHhi": 0.6600000000203563,
+          "cashWeight": 0.0,
+          "quantities": {
+            "9001": 813.578445,
+            "9002": 101.782701,
+            "9003": 96.674388
+          },
+          "remainderPolicy": "cash",
+          "transferToTicker": null,
+          "largestEquityWeight": 0.8000000000145402,
+          "differenceFromBaseline": null
+        },
+        "snapshot": null,
+        "warnings": [
+          "假設固定權重歷史報酬序列，並非帳戶實際績效；現金零報酬，不含費用、滑價及稅負。模型未經回測驗證。"
+        ],
+        "inputHash": "1052B87D648BD80340F42232A7ACEB7CBAB732395568620168FB083C9D596CF0",
+        "scenarios": [
+          {
+            "name": "標的A（9001）減碼至60%，餘額留現金",
+            "status": "Calculated",
+            "metrics": {
+              "contributions": [
+                {
+                  "ticker": "9001",
+                  "weight": 0.6,
+                  "componentRiskShare": 0.9940774553680404,
+                  "componentVolatility": 0.18160045769784516
+                },
+                {
+                  "ticker": "9002",
+                  "weight": 0.10000000043629777,
+                  "componentRiskShare": 0.030250596011945095,
+                  "componentVolatility": 0.0055262515528711545
+                },
+                {
+                  "ticker": "9003",
+                  "weight": 0.09999999954916199,
+                  "componentRiskShare": -0.024328051379978392,
+                  "componentVolatility": -0.004444306871304194
+                }
+              ],
+              "historicalVaR": -0.01704688252197684,
+              "expectedShortfall": -0.01811806279546278,
+              "annualizedVolatility": 0.18268240237941083,
+              "hypotheticalMaxDrawdown": -0.07839832621132321
+            },
+            "weights": {
+              "9001": 0.6,
+              "9002": 0.10000000043629777,
+              "9003": 0.09999999954916199
+            },
+            "equityHhi": 0.37999999999709194,
+            "cashWeight": 0.20000000001454024,
+            "quantities": {
+              "9001": 610.1838337389097,
+              "9002": 101.782701,
+              "9003": 96.674388
+            },
+            "remainderPolicy": "cash",
+            "transferToTicker": null,
+            "largestEquityWeight": 0.6,
+            "differenceFromBaseline": {
+              "contributions": [],
+              "historicalVaR": 0.005976550946259644,
+              "expectedShortfall": 0.006149845608670512,
+              "annualizedVolatility": -0.06062257648305681,
+              "hypotheticalMaxDrawdown": 0.03211944025978716
+            }
+          }
+        ],
+        "horizonDays": 1,
+        "scenarioErrors": [],
+        "confidenceLevel": 0.95,
+        "observationCount": 252
+      },
+      "tool": "simulate_weight_scenario"
+    }
+  ]
+}

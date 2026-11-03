@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AgentLoopRunSummary from "../../../components/agents/AgentLoopRunSummary.vue"
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   NSpin,
@@ -226,7 +227,8 @@ const nodeMap = computed(() => {
         </NSpace>
       </section>
 
-      <section v-if="run.loopSummary" class="prestige-panel prestige-panel-pad detail-section" data-testid="admin-loop-summary">
+<AgentLoopRunSummary :detail="run" />
+      <section v-if="!run.nodes.some(n => ['PortfolioAgentLoop', 'ResearchAgentLoop'].includes(n.nodeType)) && run.loopSummary" class="prestige-panel prestige-panel-pad detail-section" data-testid="admin-loop-summary">
         <span class="prestige-label detail-label">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? 'Portfolio Diagnosis Loop' : 'Research Quality Loop' }}</span>
         <div class="detail-field"><span class="detail-field-label">Status</span><span class="detail-field-value">{{ run.loopSummary.status }}</span></div>
         <div class="detail-field"><span class="detail-field-label">Iteration</span><span class="detail-field-value prestige-mono">{{ run.loopSummary.currentIteration }} / {{ run.loopSummary.maxIterations }}</span></div>

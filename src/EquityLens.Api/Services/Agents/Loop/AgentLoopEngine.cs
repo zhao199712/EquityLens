@@ -109,7 +109,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     state.CompletionTokens += response.CompletionTokens;
                     state.CostUsd += Cost(response.PromptTokens, response.CompletionTokens);
                     turn = new AgentLlmTurn { ExecutionAttempt = context.Run.ExecutionAttempt, Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 6, Provider = chat.Provider, Model = response.Model,
+                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 14, Provider = chat.Provider, Model = response.Model,
                         RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(systemPrompt + prompt))),
                         PromptTokens = response.PromptTokens, CompletionTokens = response.CompletionTokens,
                         EstimatedCostUsd = Cost(response.PromptTokens, response.CompletionTokens), LatencyMs = timer.ElapsedMilliseconds,
@@ -159,6 +159,20 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                                 context.AddEvent(context.Run, context.Node, "AnswerGuardDenied", "OptimizationScenarioRequired", new { turn.Turn });
                                 if (state.ForcedDraft) state.StopReason = "QualityGateRejected";
                                 break;
+                            }
+                            if (portfolio && !state.ForcedDraft && state.AnswerRepairCount == 0)
+                            {
+                                var rejected = new List<string>();
+                                var issues = PortfolioQualityGateNodeHandler.Check(action.Answer, state.Facts, rejected);
+                                if (issues.Any(i => i is "UntraceableNumbers" or "MixedRiskBasis" or "UnknownToolEvidence"))
+                                {
+                                    state.AnswerRepairCount++;
+                                    state.History.Add("AnswerQualityRepair: " + string.Join(",", issues) + "; numbers=" + string.Join(",", rejected.Distinct().Take(20)) +
+                                        ". 請修正一次：只依已保存的工具原始值按顯示精度四捨五入，每句或表格標示正確引用，情境比較只用同一 simulate_weight_scenario。保留原本單位與有依據的建議；無法核對的數字移除，不重做相同工具。");
+                                    state.History.Add(PortfolioQualityGateNodeHandler.RepairHints(rejected, state.Facts, action.Answer));
+                                    context.AddEvent(context.Run, context.Node, "PortfolioAnswerRepairRequested", "Numeric or basis repair", new { issues, rejected });
+                                    break;
+                                }
                             }
                             state.Answer = action.Answer;
                             state.StopReason = state.ForcedDraft ? (state.NoProgressTurns >= 2 ? "NoProgress" : "BudgetExhausted") : "AnswerSubmitted";
@@ -293,7 +307,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         }
         foreach (var record in stored)
         {
-            state.History.Add($"{record.ToolName}: {record.Status} {record.GuardReason ?? record.ResultPreview}");
+            state.History.Add($"{record.ToolName}: {record.Status} {record.GuardReason ?? record.ErrorMessage ?? record.ResultPreview}");
             if (record.Status != "Succeeded" || record.ResultJson is null) continue;
             if (record.ToolName == "search_local") state.LocalSearchCompleted = true;
             var result = JsonSerializer.Deserialize<LoopToolResult>(record.ResultJson, AgentNodeJson.SerializerOptions)!;
@@ -359,7 +373,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                 evidenceWindow = new { shown = count, total = state.Ledger.Count, excerptCharacters = contentLimit },
                 portfolioContext = portfolio ? board[AgentBlackboardKeys.PortfolioContext] : null,
                 requestedScenarios = portfolio ? board[AgentBlackboardKeys.RoutingContext]?["scenarios"] : null,
-                facts = state.Facts.Select(f => new { f.Id, f.Tool, content = AgentNodeJson.Trim(f.Data.ToJsonString(PromptJson), contentLimit * 2) }),
+                facts = state.Facts.Select(f => new { f.Id, f.Tool, content = AgentNodeJson.Trim(f.Data.ToJsonString(PromptJson), contentLimit * (f.Tool == "simulate_weight_scenario" ? 4 : 2)) }),
                 history = state.History.TakeLast(12), critic = mode == "Revise" ? board[AgentBlackboardKeys.CriticReview] : null,
                 feedback = mode == "Revise" ? board[AgentBlackboardKeys.FeedbackComment] : null,
                 originalAnswer = mode == "Revise" ? board[AgentBlackboardKeys.OriginalAnswer] ?? board[AgentBlackboardKeys.Answer] : null,
@@ -392,7 +406,17 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
     private const string PortfolioPrompt = """
         你是繁體中文投資組合分析助理。只能使用提供的六個任務型工具，所有數值由工具取得，不能自行提供價格、報酬或風險數值給工具。
         先取得持倉快照與既有風險報告；缺少分析時呼叫 run_risk_analysis（Core、TailRisk、RiskContribution）。再查績效歸因與風險偏好。
+        報告以「診斷、情境比較、取捨與待確認」組織，標題不要放數字。每個含數字的段落或表格列都附該工具引用，不能只在整份報告末尾引用。
+        情境工具的 period 是分析起訖，weightChanges/cashWeightChange 是已計算的權重差（乘100為百分點）；只使用工具原值，不自行心算風險貢獻合計，未提供的合計可以省略。
+        方法、情境假設與最後建議若提權重，仍需同句引用情境工具；最後待確認段只問定性偏好，不重述任何風險數字、權重或現金範圍；若使用者要求必須重述，仍須引用情境來源，不能只引用偏好工具。
+        不必重複列出其他口徑的風險表；必要時分段說明口徑不同。數字計算交給工具，文字著重已驗證的取捨。
+        工具的 display 是由同一份原始數值四捨五入的顯示值，引用該工具時直接使用，不得挪用另一工具的相近數字。
+        每段數值主張都要標註包含該數值的工具引用；標題裡的日期與樣本數也需引用真正包含期間的分析工具，持倉快照不能代替分析期間來源。風險偏好工具只支持偏好是否存在，不能支持情境權重；解讀段落若再提權重，仍須引用情境工具。
+        未取得使用者可承受風險門檻時，不可聲稱現況在其可承受範圍；只能說明量化取捨並詢問偏好。現況診斷與情境快照口徑不同時須明確標示。
         數學函式與演算法由後端決定，不自行選擇底層運算。優化問題必須呼叫 simulate_weight_scenario，比較同一基準與情境。
+        未指定情境時主動提出減碼假設（不是交易指令），先以一個簡單情境驗證。targetWeights 是減碼來源的最終權重（0 到 1），不能加碼來源；cash 不帶轉入股，holding 的 transferToTicker 必須是另一檔既有持股。
+        Guard 拒絕或工具失敗後，依 history 的欄位與原因修正一次，不重送相同參數、不擅改使用者明確的轉入要求；仍失敗則澄清。部分情境失敗要揭露，不能聲稱全部完成。
+        情境前後及差異只引用 simulate_weight_scenario 的同一快照，不用 run_risk_analysis 或 get_risk_report 的另一種基準替換；說明固定權重、現金與期間。改善波動不代表所有風險都改善；有代價時可明確建議不調整。
         工具失敗或資料不足須說明，不可捏造。未知風險偏好不能推測。所有工具唯讀，不代表已調整持倉。
         回傳 JSON：action 為 call_tools、submit_answer 或 give_up；thoughtSummary 為最多200字的摘要。
         call_tools 帶 toolCalls:[{callId,tool,arguments}]。不同工具可同輪呼叫，相依分析須等上一輪結果。

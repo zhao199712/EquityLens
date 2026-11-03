@@ -21,6 +21,7 @@ export interface ChatMessage {
 }
 
 export interface ConversationRunCard {
+  qualityIssues?: string[] | null
   agentRunId: string
   researchRunId: string | null
   workflowType: string
