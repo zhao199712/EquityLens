@@ -41,6 +41,38 @@ public sealed class ResearchAgentLoopTests
         Assert.Equal(42, AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson)["verifiedValue"]!.GetValue<int>());
     }
 
+    [Fact]
+    public async Task PortfolioBatch_AccumulatesIndependentAnalysesAndReusesThemAfterRecovery()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var tools = new AnalysisTools();
+        var chat = new FakeChat("""{"action":"call_tools","toolCalls":[{"callId":"core","tool":"run_risk_analysis","arguments":{"analysis":"Core"}},{"callId":"tail","tool":"run_risk_analysis","arguments":{"analysis":"TailRisk"}}]}""");
+        var loop = new AgentLoopEngine(chat, tools, Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio: true);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => loop.RunAsync(context, "Portfolio", default));
+        var resumed = new AgentLoopEngine(new FakeChat("""{"action":"submit_answer","answer":{"markdown":"資料已確認 [P1] [P2]","citedEvidenceIds":["P1","P2"]}}"""), tools,
+            Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio: true);
+        var state = await resumed.RunAsync(context, "Portfolio", default);
+        Assert.Equal(2, tools.Calls);
+        Assert.Equal(2, state.Facts.Count);
+        var results = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson)[AgentBlackboardKeys.MathResults]!.AsArray();
+        Assert.Equal(new[] { "Core", "TailRisk" }, results.Select(x => x!["operation"]!.GetValue<string>()).Order());
+    }
+
+    private sealed class AnalysisTools : IAgentLoopTools
+    {
+        public int Calls;
+        public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("run_risk_analysis", "Analysis", new())];
+        public string? Validate(LoopToolScope scope, LoopToolCall call) => null;
+        public Task<LoopToolResult> InvokeAsync(LoopToolScope scope, LoopToolCall call, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Calls);
+            var result = new JsonObject { ["operation"] = call.Arguments["analysis"]!.DeepClone(), ["value"] = .2m };
+            return Task.FromResult(new LoopToolResult([], "calculated", Data: result.DeepClone().AsObject(),
+                BlackboardPatch: new JsonObject { [AgentBlackboardKeys.MathResults] = new JsonArray(result) }));
+        }
+    }
+
     private sealed class StructuredTools : IAgentLoopTools
     {
         public int Calls;

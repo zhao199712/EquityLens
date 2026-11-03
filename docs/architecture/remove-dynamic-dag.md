@@ -155,3 +155,7 @@
 ### R32 原始 PDF 取得方式補充
 
 2026-11-03：Garage 正式 bucket 為空，資料庫指向的原始 PDF key 回 NoSuchKey。使用工作目錄既有 PDF 原檔作逐頁核實，未以 chunk／摘要替代。台積電檔案 hash 與 DB 一致；鴻海來源 DB 未存 hash，另記本機原檔 hash，無法證明與不存在的 Garage 物件相同。核實紀錄與限制見補充題報告。未修改正式資料或上傳檔案；原始檔儲存恢復列為發布前待辦。
+
+### R10 API 操作名稱的相容性界線
+
+`CreateResearchInvestigationAsync` 與前端同名函式、Created DTO 保留既有 investigation API 操作名稱，回應 JSON／HTTP 路徑不變；這些不是 workflow provider／node／catalog 註冊，實際只建立 ResearchAgent。廢棄工作流的字串值與停用引擎識別集中至 legacy 相容檔（明確拒絕舊引擎，不啟動它）；錯誤文字與 UI fixture 不再散布舊型別值。

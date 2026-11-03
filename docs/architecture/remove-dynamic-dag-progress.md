@@ -23,61 +23,61 @@
 
 | # | 驗收條件（摘要） | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
-| R1 | 舊資料唯讀、retry 409、佇列安全失敗 | MUST | ✅ | WorkflowExecutionCompatibilityTests：7 passed；版本／節點辨識、四種非終態、租約、讀取／retry 隔離 | 本項提交 | 防護完成；隨後續 provider 更新啟用各舊版退役，R10 再總驗收 |
-| R2 | 研究一律 ResearchAgent；DynamicDag → 400 | MUST | ✅ | 預設／AgentLoop 建立及隔離、停用引擎不落盤測試 | 本項提交 | controller 明確回 engine_retired；初始資料不再借用舊 provider |
-| R3 | qualityGate 合併 | MUST | ✅ | 7／3 節點契約、接受／修訂一次／拒答、已提交 Critic 恢復不重呼叫 | 本項提交 | 新版本研究／Critic 舊圖由 R1 判定唯讀 |
-| R4 | 回饋修訂併入 ResearchAgent | MUST | ✅ | 回饋 API 去重／父子關聯、三節點修訂圖、prompt 內容、retry 還原種子 | 本項提交 | 研究詳情改選 ResearchAgent 接收回饋 |
-| R5 | 投組 Agent 迴圈與工具 | MUST | ✅ | 六工具執行／Guard／所有權／持倉不變測試 | | 補充規格到達後，先驗收 R31、R30 再接續 |
-| R6 | 投組人工審批不變 | MUST | ✅ | | | |
-| R7 | 迴圈基礎設施共用、可續跑、可查詢 | MUST | ✅ | 共用核心、決策／結果落盤及結構化工具結果恢復測試 | | R5–R7 已提交並驗收 |
-| R8 | 刪除 4 個多餘工作流與前端呼叫 | MUST | ✅ | endpoint 白名單、舊結果可讀且無建立按鈕、R27 | 本項提交 | 建立入口與 DI 移除；相依型別 R10 一起清理 |
-| R9 | Ask Agent 路由到 3 個工作流 | MUST | ✅ | | | |
-| R10 | 移除型別零參照 | MUST | ✅ | | | |
-| R11 | 3 個工作流、node type ≤ 15 | MUST | ✅ | | | |
-| R12 | 使用者隔離 | MUST | ✅ | | | |
-| R13 | Admin 介面 | SHOULD | ✅ | | | |
-| R14 | Eval harness | SHOULD | ✅ | | | |
-| R15 | 文件與前後對照 | SHOULD | ✅ | | | |
+| R1 | 舊資料唯讀、retry 409、佇列安全失敗 | MUST | ✅ | 版本／定義及持久化節點、舊圖唯讀／409／安全終止／隔離 | 0e307d4、d47b0f6 | R10 已完成舊版本／節點形狀退役總驗收 |
+| R2 | 研究一律 ResearchAgent；DynamicDag → 400 | MUST | ✅ | 預設 AgentLoop；DynamicDag 建立前拒絕 | e96d17a | controller 明確回 engine_retired；初始資料不再借用舊 provider |
+| R3 | qualityGate 合併 | MUST | ✅ | 接受／修訂一次／拒答／Critic stage 恢復 | a5302d2 | 新版本研究／Critic 舊圖由 R1 判定唯讀 |
+| R4 | 回饋修訂併入 ResearchAgent | MUST | ✅ | 子 run／requestId 去重／回饋種子 | 8bbc2e0 | 研究詳情改選 ResearchAgent 接收回饋 |
+| R5 | 投組 Agent 迴圈與工具 | MUST | ✅ | 六工具執行／注入防護／持倉不變 | 7ea3e2c | 補充規格到達後，先驗收 R31、R30 再接續 |
+| R6 | 投組人工審批不變 | MUST | ✅ | 等待釋放租約、無 wake、核准／拒絕與去重 | 7ea3e2c、98dd7e5 | |
+| R7 | 迴圈基礎設施共用、可續跑、可查詢 | MUST | ✅ | 共用 loop；決策與結果先落盤；中斷重用 | 624d07d、7ea3e2c | R5–R7 已提交並驗收 |
+| R8 | 刪除 4 個多餘工作流與前端呼叫 | MUST | ✅ | 建立 endpoint 白名單與舊結果唯讀 | 04629e1、d47b0f6 | 建立入口與 DI 移除；相依型別 R10 一起清理 |
+| R9 | Ask Agent 路由到 3 個工作流 | MUST | ✅ | 單次 Router、明確入口及追問零分類 | 05d0363 | |
+| R10 | 移除型別零參照 | MUST | ✅ | 只剩 migrations 與兩處 legacy 名稱對應 | d47b0f6 | |
+| R11 | 3 個工作流、node type ≤ 15 | MUST | ✅ | FixedArchitectureTests：3 workflows／13 catalog／13 handler DI | d47b0f6 | |
+| R12 | 使用者隔離 | MUST | ✅ | 研究、投組、列表、conversation 去重與 approval 所有權 | 05d0363、d47b0f6、d4f0a26 | |
+| R13 | Admin 介面 | SHOULD | ✅ | 移除 registry API／頁面／路由；Admin 只管理固定圖 | d47b0f6 | |
+| R14 | Eval harness | SHOULD | ✅ | CLI AgentLoop only、舊 responses 可 rescore | e2f3959 | |
+| R15 | 文件與前後對照 | SHOULD | ✅ | AGENTS／架構 §13／進度實測對照 | e2f3959、終驗提交 | |
 
 ### Part B：實測問題
 
 | # | 問題 | 優先 | 狀態 | 重現測試 | 修正測試 | Commit | 備註 |
 |---|---|---|---|---|---|---|---|
-| R16 | B1 OutputGate 誤判年份／代號 | MUST | ✅ | OutputGate_ExcludesContextNumbersButKeepsFinancialClaims：3 個正案例先失敗 | 5 個正反案例、拒答事件與 artifact、UI 新舊圖及原因顯示 | 本項提交 | 不忽略代號同值的財務金額 |
-| R17 | B3 情境偷換＋澄清 | MUST | ✅ | 轉入既有持股原本 scenario_invalid | 守恆／其他持股／錯誤目標／替換拒絕／回覆取保存值 | 本項提交 | 自然語言路由澄清於 R34 再驗收 |
-| R18 | B2 優化建議 | MUST | ✅ | 無情境的優化建議原本仍 passed | 提交 Guard、足夠／不足資料 gate、四指標與差異取同快照 | 本項提交 | |
-| R19 | B4 路由重試＋log | MUST | ✅ | | | | |
-| R20 | B8 拖累正負號 | SHOULD | ✅ | | | | |
-| R21 | B6 VaR 樣本不足 | SHOULD | ✅ | | | | |
-| R22 | B5 數字口徑 | SHOULD | ✅ | | | | |
-| R23 | B7 產業分類 | SHOULD | ✅ | | | | |
-| R24 | B9、B10 前端 | COULD | ✅ | | | | |
-| R25 | B11 log 等級 | COULD | ✅ | | | | |
+| R16 | B1 OutputGate 誤判年份／代號 | MUST | ✅ | OutputGate_ExcludesContextNumbersButKeepsFinancialClaims：3 個正案例先失敗 | 5 個正反案例、拒答事件與 artifact、UI 新舊圖及原因顯示 | 64613f2 | 不忽略代號同值的財務金額 |
+| R17 | B3 情境偷換＋澄清 | MUST | ✅ | 轉入既有持股原本 scenario_invalid | 守恆／其他持股／錯誤目標／替換拒絕／回覆取保存值 | 84cd17e | 自然語言路由澄清於 R34 再驗收 |
+| R18 | B2 優化建議 | MUST | ✅ | 無情境的優化建議原本仍 passed | 提交 Guard、足夠／不足資料 gate、四指標與差異取同快照 | 98dd7e5 | |
+| R19 | B4 路由重試＋log | MUST | ✅ | 見下方本項修正前失敗紀錄 | 完整 R27 與永久回歸測試 | 05d0363 | |
+| R20 | B8 拖累正負號 | SHOULD | ✅ | 見下方本項修正前失敗紀錄 | 完整 R27 與永久回歸測試 | 0923b51 | |
+| R21 | B6 VaR 樣本不足 | SHOULD | ✅ | 見下方本項修正前失敗紀錄 | 完整 R27 與永久回歸測試 | b346fdf | |
+| R22 | B5 數字口徑 | SHOULD | ✅ | 見下方本項修正前失敗紀錄 | 完整 R27 與永久回歸測試 | d0dd186 | |
+| R23 | B7 產業分類 | SHOULD | ✅ | 見下方本項修正前失敗紀錄 | 完整 R27 與永久回歸測試 | b6efae2 | |
+| R24 | B9、B10 前端 | COULD | ✅ | 見下方本項修正前失敗紀錄 | 完整 R27 與永久回歸測試 | d4f0a26 | |
+| R25 | B11 log 等級 | COULD | ✅ | 見下方本項修正前失敗紀錄 | 完整 R27 與永久回歸測試 | a6cdc44 | |
 
 ### 驗證
 
 | # | 驗收條件 | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
-| R26 | 8 題 eval 不退步 | SHOULD | ⬜ | | | |
-| R27 | 全部驗證全綠 | 每次 commit | ✅ | 補充規格同步時完整驗證通過，見下表 | 本項提交 | 每項重新執行 |
+| R26 | 8 題 eval 不退步 | SHOULD | ⛔ | 舊回答離線重算 7/8；新 live 未執行 | 終驗提交 | |
+| R27 | 全部驗證全綠 | 每次 commit | ✅ | 每項完整 R27；最後紀錄見下方 | 各項提交 | 每項重新執行 |
 
 ### 補充規格：角色、方法、來源與路由
 
 | # | 驗收條件（摘要） | 優先 | 狀態 | 證明 | Commit | 備註 |
 |---|---|---|---|---|---|---|
-| R28 | 共用基礎＋角色＋本角色 skill 目錄＋已載入全文；唯讀 load_skill、至少 3 個 skill、載入上限與可追溯紀錄 | MUST | ✅ | 角色隔離／下一輪全文／批次上限／不可擴權／雜湊／設定擴充／trajectory | 本項提交 | 與 R9 一併做；保留法說會原 prompt，刪 Supporting skill；不能擴大權限；記錄 id／版本／雜湊及 trajectory |
-| R29 | Router 只選工作流與參數，不選 skill／capability | MUST | ✅ | | | 與 R9 一併做；取代先前 Router 選 playbook 的方案 |
-| R30 | 投組任務型工具 ≤ 8；37 個數學函式不可直接呼叫；重用情境計算 | MUST | ✅ | 六工具白名單、全數底層函式拒絕、各工具數值注入拒絕、快照／所有權情境測試 | 本項提交 | R5–R7 完成前先驗收；load_skill 不計入 8 個上限 |
-| R31 | 研究角色來源規則與可確定性檢查的 OutputGate | MUST | ✅ | prompt／證據中繼資料、6 組來源錯置正反例 | 本項提交 | R16 後優先補做；直接／補充來源不可錯置，表格／目錄／封面不得充當風險或實質證據 |
-| R32 | 台積電／鴻海風險、法說會新題庫與原始 PDF 核實紀錄；validate 通過 | SHOULD | ✅ | | | R26 前；至少各 1 題，Garage 原始 PDF 核對文件、實體頁碼、摘錄前保持 verified: false；與原 8 題分開計分 |
-| R33 | 新題庫 investigation、skill trajectory、拆解實驗 A（MaxTurns=1）與 C | COULD | ⛔ | | | R32 核實後、R26 前或一起做；沿用累計 US$10 預算，無法確認剩餘額度先記錄阻塞 |
-| R34 | 入口／追問免 LLM 路由、程式訊號、權限與參數驗證、低信心及不支援情境澄清 | MUST | ✅ | | | 與 R9 一併做；每種情況均有測試，不猜投組或替換情境；混合問題單 run 不跨角色 |
-| R35 | 合併對話與 Router 為一次 LLM 呼叫，輸出 D14 結構 | SHOULD | ✅ | | | 與 R9 一併做；保護直接回覆、澄清、拒絕、重置、修訂上次 run；明確入口仍為零次路由呼叫 |
-| R36 | 約 20–30 句 Router 題庫，程式評分與準確率／混淆矩陣 | SHOULD | ⛔ | | | R26 前或一起做；涵蓋研究、投組、混合、模糊、越權、無投組與超出情境能力；不用 LLM judge |
+| R28 | 共用基礎＋角色＋本角色 skill 目錄＋已載入全文；唯讀 load_skill、至少 3 個 skill、載入上限與可追溯紀錄 | MUST | ✅ | 角色隔離、上限、hash、prompt 全文、拒絕越權 | d8301ea、d47b0f6 | 與 R9 一併做；保留法說會原 prompt，刪 Supporting skill；不能擴大權限；記錄 id／版本／雜湊及 trajectory |
+| R29 | Router 只選工作流與參數，不選 skill／capability | MUST | ✅ | Router schema 不含 skill／capability | 05d0363 | 與 R9 一併做；取代先前 Router 選 playbook 的方案 |
+| R30 | 投組任務型工具 ≤ 8；37 個數學函式不可直接呼叫；重用情境計算 | MUST | ✅ | 6 任務工具；37 函式無工具可見性 | 1298ffa | R5–R7 完成前先驗收；load_skill 不計入 8 個上限 |
+| R31 | 研究角色來源規則與可確定性檢查的 OutputGate | MUST | ✅ | 來源歸屬、風險頁及錯置 gate 回歸 | 624d07d | R16 後優先補做；直接／補充來源不可錯置，表格／目錄／封面不得充當風險或實質證據 |
+| R32 | 台積電／鴻海風險、法說會新題庫與原始 PDF 核實紀錄；validate 通過 | SHOULD | ✅ | 2 題 PDF 原文＋渲染核實，validate 通過 | 649ac38 | R26 前；至少各 1 題，Garage 原始 PDF 核對文件、實體頁碼、摘錄前保持 verified: false；與原 8 題分開計分 |
+| R33 | 新題庫 investigation、skill trajectory、拆解實驗 A（MaxTurns=1）與 C | COULD | ⛔ | 未付費實跑；A/C 狀態及預算限制已記錄 | 44e63d2 | R32 核實後、R26 前或一起做；沿用累計 US$10 預算，無法確認剩餘額度先記錄阻塞 |
+| R34 | 入口／追問免 LLM 路由、程式訊號、權限與參數驗證、低信心及不支援情境澄清 | MUST | ✅ | 入口／追問／不支援情境／權限／低信心測試 | 05d0363 | 與 R9 一併做；每種情況均有測試，不猜投組或替換情境；混合問題單 run 不跨角色 |
+| R35 | 合併對話與 Router 為一次 LLM 呼叫，輸出 D14 結構 | SHOULD | ✅ | 對話到 workflow 一次模型分類；固定入口零次 | 05d0363 | 與 R9 一併做；保護直接回覆、澄清、拒絕、重置、修訂上次 run；明確入口仍為零次路由呼叫 |
+| R36 | 約 20–30 句 Router 題庫，程式評分與準確率／混淆矩陣 | SHOULD | ⛔ | 26 題＋程式 scorer／混淆矩陣工具；live 未執行 | 44e63d2 | R26 前或一起做；涵蓋研究、投組、混合、模糊、越權、無投組與超出情境能力；不用 LLM judge |
 
 ## 更新後執行順序
 
-已完成 R2、R3、R4、R16；R1 防護基礎完成，待移除舊註冊後總驗收。R5–R7 已完成並提交。
+R1–R25、R28–R32、R34–R35 均完成。R26、R33、R36 live 因預算覆蓋不足阻塞；題庫／離線工具已交付，未將未測項標為通過。
 
 `R1 → R2 → R3 → R4 → R16 → R31 → R30 → R5–R7 → R17 → R18 → R6 再驗收 → R8 → R9＋R28＋R29＋R34＋R35 → R19 → R10 → R11 → R12 → R13–R15 → R20–R25 → R32 → R33（環境與預算允許）＋R36 → R26`
 
@@ -92,43 +92,44 @@
 |---|---|---|---|---|---|---|
 | 2026-11-03 09:20 | R1 防護基礎 | PASS | 986/986，0 skipped | 無變更 | 75 passed | build PASS／124 passed |
 | 2026-11-03 | 補充規格與排程同步（含未提交迴圈草稿的工作目錄） | PASS | 994/994，0 skipped；隔離 PostgreSQL | 無變更 | 75 passed | build PASS／126 passed |
+| 2026-11-03 | 最後完整 R27（final-release） | PASS | 879/879，0 skipped；隔離 PostgreSQL | 無變更 | 83 passed | build PASS／127 passed |
 
 ## 刪除清單
 
 | 檔案 | 行數 | 理由 |
 |---|---|---|
-| `src/EquityLens.Api/Services/Agents/AgentDynamicPlanCoordinator.cs` | 181 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/AgentLoopController.cs` | 256 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/ClaimSetValidation.cs` | 105 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/DraftRevisionAgent.cs` | 180 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/DraftRevisionNodeHandlers.cs` | 220 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/DynamicPlanValidation.cs` | 346 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/DynamicWorkflowPlanning.cs` | 492 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/EvidenceAssessor.cs` | 92 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/EvidenceReanalysisWorkflow.cs` | 234 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/EvidenceRemediationAgent.cs` | 188 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/EvidenceRemediationNodeHandlers.cs` | 430 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/EvidenceRemediationWorkflowDefinitionProvider.cs` | 51 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/EvidenceRetrievalPlanAgent.cs` | 73 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/FeedbackRevisionWorkflow.cs` | 154 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/PlannerInvocation.cs` | 90 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/PortfolioDiagnosisNarrativeAgent.cs` | 78 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/ResearchInvestigationWorkflow.cs` | 474 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Api/Services/Agents/SourcePolicyRules.cs` | 35 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Web/src/services/agentRegistryAdmin.ts` | 39 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Web/src/views/admin/AgentRegistryView.vue` | 217 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `src/EquityLens.Web/src/views/admin/__tests__/AgentRegistryView.test.ts` | 129 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/AgentRunExecutorLoopPlanningTests.cs` | 141 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/DynamicWorkflowPlanningTests.cs` | 406 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceAssessorTests.cs` | 154 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceReanalysisWorkflowTests.cs` | 111 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceRemediationWorkflowTests.cs` | 445 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceRetrievalPlanAgentTests.cs` | 47 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/LlmDraftRevisionAgentTests.cs` | 123 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/PlannerInvocationTests.cs` | 223 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/PortfolioDiagnosisLoopTests.cs` | 141 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/ResearchQualityReviewLoopPolicyTests.cs` | 115 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
-| `tests/EquityLens.Api.Tests/Services/Agents/SourcePolicyRulesTests.cs` | 76 | 已刪機制／入口及其專用測試；有效行為移至固定圖與工具測試 |
+| `src/EquityLens.Api/Services/Agents/AgentDynamicPlanCoordinator.cs` | 181 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/AgentLoopController.cs` | 256 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/ClaimSetValidation.cs` | 105 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/DraftRevisionAgent.cs` | 180 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/DraftRevisionNodeHandlers.cs` | 220 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/DynamicPlanValidation.cs` | 346 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/DynamicWorkflowPlanning.cs` | 492 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/EvidenceAssessor.cs` | 92 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/EvidenceReanalysisWorkflow.cs` | 234 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/EvidenceRemediationAgent.cs` | 188 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/EvidenceRemediationNodeHandlers.cs` | 430 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/EvidenceRemediationWorkflowDefinitionProvider.cs` | 51 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/EvidenceRetrievalPlanAgent.cs` | 73 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/FeedbackRevisionWorkflow.cs` | 154 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/PlannerInvocation.cs` | 90 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/PortfolioDiagnosisNarrativeAgent.cs` | 78 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/ResearchInvestigationWorkflow.cs` | 474 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Api/Services/Agents/SourcePolicyRules.cs` | 35 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Web/src/services/agentRegistryAdmin.ts` | 39 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Web/src/views/admin/AgentRegistryView.vue` | 217 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `src/EquityLens.Web/src/views/admin/__tests__/AgentRegistryView.test.ts` | 129 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/AgentRunExecutorLoopPlanningTests.cs` | 141 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/DynamicWorkflowPlanningTests.cs` | 476 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceAssessorTests.cs` | 154 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceReanalysisWorkflowTests.cs` | 111 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceRemediationWorkflowTests.cs` | 445 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/EvidenceRetrievalPlanAgentTests.cs` | 47 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/LlmDraftRevisionAgentTests.cs` | 123 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/PlannerInvocationTests.cs` | 223 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/PortfolioDiagnosisLoopTests.cs` | 141 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/ResearchQualityReviewLoopPolicyTests.cs` | 115 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
+| `tests/EquityLens.Api.Tests/Services/Agents/SourcePolicyRulesTests.cs` | 76 | 已刪機制／入口及其專用測試；仍有效行為由固定圖、工具與相容性測試覆蓋 |
 
 ## 收斂前後對照（R15）
 
@@ -136,7 +137,7 @@
 |---|---|---|
 | 可建立的工作流 | 9 | 3 |
 | catalog node type | 54 | 13 |
-| `Services/Agents` 行數 | 11,674 | 7,550（R10 提交點） |
+| `Services/Agents` 行數 | 11,674 | 7,596（遞迴計算所有 .cs，含 Loop；減少 4,078，約 34.9%） |
 | 編排模式 | Static／Stateful／DynamicStateful | 固定 DAG＋節點內 Agent loop |
 
 ## 阻塞
@@ -149,7 +150,26 @@
 
 ## 給 Reviewer 的摘要
 
-（結束前填寫：完成了什麼、沒完成什麼、收斂前後數字、已知風險、正式站問題處理結果、建議的 merge 與部署步驟）
+交付分支：`refactor/three-workflows`，基準 `8903e48`。所有實作與驗證提交推至同分支；未合併 main、未部署、未新增 migration、未改正式資料，也未恢復排程。`src/App.vue` 與 `appsettings.json` 相對基準零差異。
+
+**已完成**：R1–R25、R28–R32、R34–R35。三工作流／13 種 node type／13 個正式 handler；共用 durable loop、六個投組任務工具、三個研究工具與共用 load_skill、三個方法設定檔。原 planner capability 與 Supporting skill registry 已移除。Services/Agents 由 11,674 減為 7,596 行（含 Loop 子目錄），約減少 34.9%。
+
+**未完成**：R26 新八題 live 不退步驗收、R33 補充題及拆解實驗、R36 真實 Router 準確率。缺完整歷史費用，不能確認 US$10 剩餘額度；本次新增付費呼叫與費用都是 0。舊回答離線重算仍 7/8，不能代表新分支。Router 26 題與評分工具已交付，0/26 observed、accuracy:null。C 的操作定義也未在引用報告中找到。
+
+Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 轉入持股不偷換、B4 Router 重試及遮罩 log、B5 口徑揭露及模擬數值不冒充歷史估計、B6 每期限有效視窗門檻、B7 產業大類與原分類保存、B8 負貢獻過濾及空清單、B9 問題摘要、B10 空投組不呼叫風險、B11 正式 SQL Warning 均有回歸。這些是隔離驗證結果，未聲稱正式站已更新。
+
+相容性與限制：舊 ResearchAgent／CriticReview／投組及退役工作流依版本與節點形狀唯讀；GET 保留且新增摘要欄位，續跑回 409。新的歷史 VaR／ES 在樣本不足時為 null，外部消費端需支援缺值。產業正規化使新風險輸入 hash 改變，舊 Risk Run 可能不再可重用。風險偏好無資料欄位時回 unavailable，不虛構偏好。新情境追問缺參數會澄清。財報題庫仍是狹窄開發集，沒有全面能力結論。
+
+原始 PDF：R32 以本機原檔逐頁核實；台積電 hash 與 DB 相符，鴻海 DB 無原 hash。Garage 目前 bucket 為空，發布前需要獨立恢復與下載核驗，這次沒有上傳或資料遷移。
+
+建議 merge／部署順序（僅建議，本次未執行）：
+
+1. Review 本分支及 `comparison.json`／Router not_run 報告，先確認費用覆蓋，完成隔離 live R26／R36；R33 依可選優先度及具體實驗條件執行。
+2. 備份部署版本、DB、Redis 工作佇列與 outbox、Garage 物件及配置，記錄可回復映像。確認原始檔可下載。
+3. 排程維護時間，停止舊 worker 及新的 run 建立，等待有效租約排空。清查未完成舊圖，保留唯讀並透過新版相容層安全終止；不要改寫定義，不讓新舊 worker 混跑。
+4. 使用者核准後才合併 main 並部署同版 API／worker／前端；驗證三工作流、研究接受／修訂／拒答、追問、投組情境、審批暫停與核准／拒絕、跨使用者隔離、舊 run GET 與 409、工具／租約恢復、空投組、Production log 設定。
+5. 若需回復，先停止新版 run 建立與 worker，保留事故後資料快照，再回復舊映像及一致的 DB／佇列／物件快照。新版圖不可交給舊 worker；沒有 schema migration 不代表可混跑兩版。回復後核對新增資料保留／重建方式，避免覆蓋未備份工作。
+
 
 ## 實作紀錄
 
@@ -320,3 +340,11 @@
 - Router 新題庫 26 題；獨立程式評分 action／workflow／參數，輸出兩種混淆矩陣及逐題結果；不使用 LLM judge。五個測試驗證缺測、錯參數、混淆矩陣、重複／未知 ID 與情境目的地。
 - 因預算覆蓋不完整，真實分類未執行：0/26 observed、accuracy:null，不以 fixture 回覆冒充模型實測。新題 investigation、A／C 拆解亦未執行；狀態及恢復步驟已寫在報告。
 - 完整 R27：build PASS、878/878（隔離 PostgreSQL，0 skipped）、EF 無變更、pytest 83、前端 build PASS／127 tests。無付費呼叫。本項只交付離線部分，R33／R36 不標全數完成。
+
+### R26 舊基準重算與最終驗收
+
+- 原題庫依 verified／excluded_reason 恰有 8 題；保存的 53b5db1 AgentLoop 回答用現行評分器離線重算仍為 7/8。逐題舊分數／新未測欄位、來源回答與題庫 hash 見 docs/eval-verification/2026-11-03-three-workflows/comparison.json。新 live 因預算阻塞，未聲稱不退步。
+- 隔離資料 74 securities、241 documents、8,363 chunks／embeddings，與舊 manifest 筆數相同；尚未以此推定內容完全相同。原八題與補充兩題維持獨立。
+- 終驗另補投組同批分析＋中斷恢復：獨立 MathResults 累積保留，已成功工具不再呼叫。廢棄名稱搜尋僅命中 migrations 與兩處集中 legacy 相容檔；App.vue／appsettings.json 相對基準零差異。
+
+- 最後完整 R27（final-release）：後端 build PASS、879/879（隔離 PostgreSQL，0 skipped）、EF 無模型變更、eval pytest 83 passed、前端 build PASS／127 tests。git diff --check 通過。R26 live 仍阻塞，這些套件通過不替代模型 eval。

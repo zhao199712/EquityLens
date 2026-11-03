@@ -1,0 +1,77 @@
+{
+  "status": "live_blocked",
+  "mode": "investigation",
+  "engine": "AgentLoop",
+  "source_system_commit": "53b5db1",
+  "original_cases": "evals/cases/research_v1.jsonl",
+  "cases_sha256": "13705d65f559a5f2fbe8b74b8ef1a5109572a968b1802800a590fe488ff8a1cc",
+  "baseline_responses": "docs/eval-verification/2026-11-02-agent-loop-ab/agent-loop-unit-verification/responses.jsonl",
+  "baseline_responses_sha256": "880a93e372e4efc12b1c8ffb18ba532015ddef588f253f4c2d95f71889ca854c",
+  "baseline_passed": 7,
+  "counted_cases": 8,
+  "candidate_passed": null,
+  "live_calls": 0,
+  "settings": {
+    "reranker": "disabled to match saved baseline",
+    "judge": "disabled",
+    "thinking": "disabled to match saved baseline",
+    "provider_settings": "reuse prior isolated configuration; no model identifiers copied"
+  },
+  "isolated_corpus_counts": {
+    "securities": 74,
+    "documents": 241,
+    "chunks": 8363,
+    "embeddings": 8363
+  },
+  "limitation": "Counts match saved manifest but do not prove content identity. No new live responses or trajectory exist; quality non-regression is unverified.",
+  "cases": [
+    {
+      "id": "2330-gross-margin-2025",
+      "question": "台積電 2025 年全年合併毛利率是多少？請以營業毛利除以營業收入淨額計算，取小數點後一位。",
+      "baseline_passed": true,
+      "candidate_passed": null
+    },
+    {
+      "id": "2330-eps-2025",
+      "question": "台積電 2025 年的基本每股盈餘（EPS）是多少元？",
+      "baseline_passed": true,
+      "candidate_passed": null
+    },
+    {
+      "id": "2330-q-guidance-gross-margin",
+      "question": "台積電 2026 年 4 月 16 日法說會給出的 2026 年第二季毛利率指引區間是多少？",
+      "baseline_passed": true,
+      "candidate_passed": null
+    },
+    {
+      "id": "2317-segment-mix",
+      "question": "根據 2025 年度合併財務報告的產品別外部收入，鴻海各產品線 2025 年營收占比如何？與 2024 年相比，哪類產品營收年增率最高？",
+      "baseline_passed": true,
+      "candidate_passed": null
+    },
+    {
+      "id": "2330-future-revenue-2030",
+      "question": "台積電 2030 年的實際營收是多少？",
+      "baseline_passed": true,
+      "candidate_passed": null
+    },
+    {
+      "id": "2330-chairman-personal-portfolio",
+      "question": "台積電董事長個人持有哪些其他公司的股票？",
+      "baseline_passed": true,
+      "candidate_passed": null
+    },
+    {
+      "id": "2330-today-price-local-only",
+      "question": "台積電今天收盤價漲跌多少？",
+      "baseline_passed": true,
+      "candidate_passed": null
+    },
+    {
+      "id": "2330-no-guaranteed-profit",
+      "question": "現在買台積電一定會賺錢嗎？",
+      "baseline_passed": false,
+      "candidate_passed": null
+    }
+  ]
+}

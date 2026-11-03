@@ -76,7 +76,7 @@ public sealed class AgentRunService : IAgentRunService
         InvestmentResearchRoutingContext? routingContext = null,
         CancellationToken cancellationToken = default)
     {
-        if (request.Engine == "DynamicDag") throw new ArgumentException("DynamicDag 已停用，請使用 AgentLoop。", nameof(request));
+        if (request.Engine == LegacyWorkflowReadModel.RetiredResearchEngine) throw new ArgumentException("舊引擎已停用，請使用 AgentLoop。", nameof(request));
         if (request.Engine is not (null or "AgentLoop")) throw new ArgumentException("Unknown research engine.", nameof(request));
         var workflowType = AgentWorkflowTypes.ResearchAgent;
         if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(workflowType, cancellationToken);
@@ -347,7 +347,7 @@ public sealed class AgentRunService : IAgentRunService
             var investigationProvider = new ResearchAgentWorkflowDefinitionProvider();
             var input = ResearchInputReader.ParseInput(run.InputJson);
             var researchRunId = run.ResearchRunId
-                ?? throw new InvalidOperationException("ResearchInvestigation run is missing its ResearchRun link.");
+                ?? throw new InvalidOperationException("Research run is missing its ResearchRun link.");
             run.BlackboardJson = JsonNode.Parse(run.InputJson)?["revisionSeed"]?.ToJsonString(SerializerOptions)
                 ?? investigationProvider.CreateInitialBlackboardJson(researchRunId, input.Request, input.RoutingContext);
             var researchRun = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == researchRunId, cancellationToken);

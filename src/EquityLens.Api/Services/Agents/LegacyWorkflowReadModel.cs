@@ -7,6 +7,7 @@ namespace EquityLens.Api.Services.Agents;
 /// <summary>唯讀相容層：保留歷史 JSON 與 API 摘要，絕不建立或執行舊圖。</summary>
 internal static class LegacyWorkflowReadModel
 {
+    public const string RetiredResearchEngine = "DynamicDag";
     public const string Research = "ResearchInvestigation";
     public static bool OwnsResearchArtifact(string type) => type is "ResearchInvestigation" or "FeedbackRevision";
     public static AgentLoopSummaryResponse? BuildLoopSummary(AgentRun run, IReadOnlyList<AgentRunNode> nodes)

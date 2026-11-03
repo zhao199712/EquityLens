@@ -37,7 +37,7 @@ public static class ResearchInputReader
         var envelope = JsonSerializer.Deserialize<ResearchAgentInput>(inputJson, AgentNodeJson.SerializerOptions);
         if (envelope?.Request is not null) return envelope;
         var legacy = JsonSerializer.Deserialize<ResearchAskRequest>(inputJson, AgentNodeJson.SerializerOptions)
-            ?? throw new InvalidOperationException("ResearchInvestigation input is invalid.");
+            ?? throw new InvalidOperationException("Research input is invalid.");
         return new(legacy, null);
     }
 
