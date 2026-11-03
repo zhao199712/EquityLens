@@ -1,0 +1,9 @@
+{
+  "label": "three-workflows-protocol-fix",
+  "mode": "investigation",
+  "engine": "AgentLoop",
+  "base_url": "http://127.0.0.1:5535",
+  "system_commit": "9f6006564b18b45a6fd58a7b6b36e72b36bc68ea",
+  "started_at": "2026-11-03T03:16:22+00:00",
+  "notes": "Original eight verified non-excluded cases; isolated corpus; reranker and thinking disabled; independent user-authorized USD1 cap, USD0.70 LLM admission cap; prior run upper USD0.1526758 included in shared USD1 cap and USD0.10 embedding reserve. Single run; no scorer changes."
+}

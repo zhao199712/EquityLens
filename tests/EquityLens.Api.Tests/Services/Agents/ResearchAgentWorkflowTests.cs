@@ -226,6 +226,14 @@ public sealed class ResearchAgentWorkflowTests
     [InlineData("金額 3,255,827 百萬元 ÷ 金額 8,103,105 百萬元 ≈ 90%[1]", "單位：新台幣百萬元；3,255,827、8,103,105", true)]
     [InlineData("金額 1.1341 十億元[1]", "金額 11.341 億元", false)]
     [InlineData("營收增加[1]", "營收增加", false)]
+    [InlineData("股數 25,928,262 仟股[1]", "普通股加權平均股數（仟股） 25,928,262 25,927,556 基本每股盈餘（元）66.26", false)]
+    [InlineData("股數 25,928,262 千股[1]", "普通股加權平均股數(千股) 25,928,262 25,927,556", false)]
+    [InlineData("金額 25,928,262 仟元[1]", "普通股加權平均股數（仟股）25,928,262 25,927,556", true)]
+    [InlineData("金額 25,928,262 元[1]", "普通股加權平均股數（仟股）25,928,262 25,927,556", true)]
+    [InlineData("EPS 66,260 元[1]", "普通股加權平均股數（仟股）25,928,262 基本每股盈餘（元）66.26", true)]
+    [InlineData("淨利 1,717,882,627 仟元[1]", "歸屬淨利 $1,717,882,627 股數（仟股）25,928,262", true)]
+    [InlineData("營收 100 仟元[1]", "單位：新台幣仟元 營收 100；股數（仟股）100", false)]
+    [InlineData("金額 100 仟元[1]", "單位：新台幣仟元 營收 500；股數（仟股）100", true)]
     public void NumberGate_ChecksCitedQuote_WithNormalizationAndUnits(string answer, string quote, bool blocking)
     {
         var result = ResearchNumberTraceability.Check(answer,

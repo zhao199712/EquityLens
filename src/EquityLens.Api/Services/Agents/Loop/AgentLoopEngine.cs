@@ -109,7 +109,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     state.CompletionTokens += response.CompletionTokens;
                     state.CostUsd += Cost(response.PromptTokens, response.CompletionTokens);
                     turn = new AgentLlmTurn { ExecutionAttempt = context.Run.ExecutionAttempt, Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 5, Provider = chat.Provider, Model = response.Model,
+                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 6, Provider = chat.Provider, Model = response.Model,
                         RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(systemPrompt + prompt))),
                         PromptTokens = response.PromptTokens, CompletionTokens = response.CompletionTokens,
                         EstimatedCostUsd = Cost(response.PromptTokens, response.CompletionTokens), LatencyMs = timer.ElapsedMilliseconds,
@@ -410,5 +410,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         來源角色：Primary 是直接來源，Supporting 是補充來源；不得把補充來源事實歸給直接來源。風險題不可把年報揭露說成法說會提到。
         財報表格頁不可當作風險證據；目錄頁與封面不可當作實質證據。引用須明示正確的文件類型，不確定來源歸屬時說明限制。
         不能編造來源或數值。修訂時針對使用者 feedback、原答案、critic 及 outputGate 指出的問題修正；回饋與原答案不是可驗證證據，仍需引用工具來源。
+        精確回答使用者詢問的項目，避免附加不必要的財務數字。若 outputGate.passed=false，即使 critic 接受也必須修正：對 CheckNumber 找出同句引用中的明確單位；無法核實時移除非必要的附加數字，不可自行假設仟元或原樣重送。必要答案缺乏證據才 give_up。
+        風險說明直接陳述已核實的風險因素、可能損失與報酬不確定性，避免複述使用者承諾報酬的前提，讓警語離開問句脈絡也不致誤讀。
         """;
 }

@@ -9,7 +9,7 @@ namespace EquityLens.Api.Services.Agents.Loop;
 internal static partial class ResearchNumberTraceability
 {
     internal sealed record Result(bool Blocking, IReadOnlyList<string> Warnings);
-    private sealed record Number(decimal Value, string Kind, bool AllowUnitlessMoney = true);
+    private sealed record Number(decimal Value, string Kind, bool AllowUnitlessMoney = true, int Offset = -1);
 
     internal static Result Check(string answer, IReadOnlyList<JsonObject> citations, string? question = null, string? ticker = null)
     {
@@ -83,7 +83,20 @@ internal static partial class ResearchNumberTraceability
 
     private static IReadOnlyList<Number> ExtractQuote(string text)
     {
+        text = Reference().Replace(text.Normalize(NormalizationForm.FormKC).Replace('−', '-'), "");
         var numbers = Extract(text);
+        // 股數的單位常在列名，不能沿用財報整頁的仟元，也不能擴散到下一個 EPS／金額列。
+        var shareRanges = ShareHeaderValues().Matches(text).Select(m => m.Groups["values"]).ToArray();
+        var shareNumbers = numbers.Where(n => n.Kind == "plain"
+            && shareRanges.Any(r => n.Offset >= r.Index && n.Offset < r.Index + r.Length)).ToArray();
+        var shareOffsets = shareNumbers.Select(n => n.Offset).ToHashSet();
+        numbers = numbers.Select(n => shareOffsets.Contains(n.Offset)
+            ? n with { AllowUnitlessMoney = false } : n).ToList();
+        foreach (var number in shareNumbers)
+        {
+            try { numbers.Add(new(number.Value * 1000m, "shares", false)); }
+            catch (OverflowException) { }
+        }
         // 財報通常在表頭一次宣告單位，欄位中的數字不重複標示。
         var compact = Regex.Replace(text.Normalize(NormalizationForm.FormKC), @"\s+", "");
         var header = Regex.Match(compact[..Math.Min(compact.Length, 800)], @"(?:新台幣|新臺幣)(十億|百萬|仟|千|億|萬)元");
@@ -97,7 +110,7 @@ internal static partial class ResearchNumberTraceability
         var perShareSection = Regex.Match(text, @"(?:基\s*本|稀\s*釋)\s*每\s*股\s*盈\s*餘");
         var tableAmounts = perShareSection.Success ? Extract(text[..perShareSection.Index]) : numbers;
         var expanded = numbers.Select((n, i) => i < tableAmounts.Count ? n with { AllowUnitlessMoney = false } : n).ToList();
-        foreach (var number in tableAmounts.Where(x => x.Kind == "plain"))
+        foreach (var number in tableAmounts.Where(x => x.Kind == "plain" && !shareOffsets.Contains(x.Offset)))
         {
             try { expanded.Add(new(number.Value * scale, "money")); }
             catch (OverflowException) { }
@@ -117,7 +130,7 @@ internal static partial class ResearchNumberTraceability
             var kind = unit is "%" or "百分點" or "個百分點" ? "percent" : unit == "倍" ? "multiple"
                 : unit == "股" ? "shares" : unit is "元" or "美元" || mult.Length > 0 ? "money" : "plain";
             var scale = mult switch { "兆" => 1_000_000_000_000m, "十億" => 1_000_000_000m, "百萬" => 1_000_000m, "億" => 100_000_000m, "萬" => 10_000m, "千" or "仟" => 1000m, _ => 1m };
-            try { result.Add(new(kind == "percent" ? value : value * scale, kind)); }
+            try { result.Add(new(kind == "percent" ? value : value * scale, kind, Offset: m.Index)); }
             catch (OverflowException) { /* 超出 decimal 範圍不進入計算。 */ }
         }
         return result;
@@ -129,6 +142,8 @@ internal static partial class ResearchNumberTraceability
 
     [GeneratedRegex(@"\[(\d+)\]")]
     private static partial Regex Reference();
+    [GeneratedRegex(@"\((?:仟|千)股\)\s*(?<values>(?:\$?\s*[-+]?\d[\d,]*(?:\.\d+)?[\s|]*)+)")]
+    private static partial Regex ShareHeaderValues();
     [GeneratedRegex(@"([-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)\s*(十億|百萬|兆|億|萬|千|仟)?\s*(%|個百分點|百分點|美元|元|倍|股)?")]
     private static partial Regex Numeric();
 }

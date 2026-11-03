@@ -137,7 +137,7 @@ R1–R25、R28–R32、R34–R35 均完成。R26 已獲本次獨立 US$1 授權�
 |---|---|---|
 | 可建立的工作流 | 9 | 3 |
 | catalog node type | 54 | 13 |
-| `Services/Agents` 行數 | 11,674 | 7,596（遞迴計算所有 .cs，含 Loop；減少 4,078，約 34.9%） |
+| `Services/Agents` 行數 | 11,674 | 7,687（遞迴計算所有 .cs，含 Loop；減少 3,987，約 34.2%） |
 | 編排模式 | Static／Stateful／DynamicStateful | 固定 DAG＋節點內 Agent loop |
 
 ## 阻塞
@@ -153,7 +153,7 @@ R1–R25、R28–R32、R34–R35 均完成。R26 已獲本次獨立 US$1 授權�
 
 交付分支：`refactor/three-workflows`，基準 `8903e48`。所有實作與驗證提交推至同分支；未合併 main、未部署、未新增 migration、未改正式資料，也未恢復排程。`src/App.vue` 與 `appsettings.json` 相對基準零差異。
 
-**已完成**：R1–R25、R28–R32、R34–R35。三工作流／13 種 node type／13 個正式 handler；共用 durable loop、六個投組任務工具、三個研究工具與共用 load_skill、三個方法設定檔。原 planner capability 與 Supporting skill registry 已移除。Services/Agents 由 11,674 減為 7,596 行（含 Loop 子目錄），約減少 34.9%。
+**已完成**：R1–R25、R28–R32、R34–R35。三工作流／13 種 node type／13 個正式 handler；共用 durable loop、六個投組任務工具、三個研究工具與共用 load_skill、三個方法設定檔。原 planner capability 與 Supporting skill registry 已移除。Services/Agents 由 11,674 減為 7,687 行（含 Loop 子目錄），約減少 34.2%。
 
 **未完成**：R26 不退步驗收未通過：本次獨立 US$1 授權下執行原 8 題，6/8，較舊基準少鴻海產品線題；詳見新 live 報告。37 次 LLM 呼叫保守估價 US$0.052676，加完整 embedding 預留後上界 US$0.152676，沒有追加重跑。R33 補充題／拆解實驗與 R36 真實 Router 準確率仍未執行；本次授權不涵蓋它們，歷史 US$10 累計仍不完整。Router 26 題與評分工具已交付，0/26 observed、accuracy:null。C 的操作定義也未在引用報告中找到。
 
@@ -367,3 +367,11 @@ Part B：B1 年份／代號誤擋與拒答呈現、B2 優化須有情境、B3 �
 - 一般報酬承諾問句改以風險揭露為可回答範圍，提示先檢索並引用真實段落；沒有降低 gate、修改 scorer 或替安全回覆附上無關引用。
 - 完整 R27（protocol-fix）：後端 build、891/891（隔離 PostgreSQL，0 skipped）、EF 無模型變更、pytest 83、前端 build／127 tests；targeted loop 40 tests。新增 12 個測試，包含錯誤後中斷恢復、舊決策恢復與證據視窗。
 - R26 live 分數在重跑前仍維持 6/8 未通過；接著在同一獨立 US$1 上限的剩餘額度中重跑原 8 題，保存獨立報告。只改功能分支，不合併 main、不部署。
+
+### R26 第二輪與股數列單位修正
+
+- `9f60065` 原 8 題重跑為 6/8：鴻海恢復通過；EPS 因附加數字的單位追溯未通過；保證獲利題引用已通過，但否定句包含禁詞被既有 scorer 判失敗。完整中間結果保留於 docs/eval-verification/2026-11-03-three-workflows-protocol-fix/，未改題庫或規則。
+- `unit-repro-before` 29 個數字案例中 3 個失敗：2 個明示仟／千股的欄名未換算，1 個把同欄裸數字誤用為金額。修正按原文位置限定股數單位範圍，不擴散到金額／EPS 列；增加同值不同列、不明金額單位仍拒絕等回歸。
+- prompt v6 明示即使 Critic 接受，也要處理 outputGate 阻擋；缺乏單位來源時移除不必要的附加數字或補證據。風險回答直接陳述風險，不複述承諾獲利前提。
+- 完整 R27（unit-context-release）：build、899/899（隔離 PostgreSQL，0 skipped）、EF 無模型變更、pytest 83、前端 build／127 tests。此階段新增 8 個數字回歸。
+- 前兩輪 LLM 加各輪 embedding 預留的累計上界 US$0.315680；最後重跑仍受同一 US$1 額度限制。R26 在最後重跑前仍為未通過。
