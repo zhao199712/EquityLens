@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
+import PortfolioScenarioComparison, { type ScenarioComparison, type HoldingRisk } from '../../components/agents/PortfolioScenarioComparison.vue'
+import ResearchAgentSummary from '../../components/agents/ResearchAgentSummary.vue'
 import AgentRunProgress from '../../components/agents/AgentRunProgress.vue'
 import CapabilityRequestStatus from '../../components/agents/CapabilityRequestStatus.vue'
 import {
@@ -59,9 +61,15 @@ interface PortfolioRiskMetrics {
   concentrationHhi?: number | null
   largestWeight?: number | null
   volatilityRiskShare?: number | null
+  contributions?: HoldingRisk[] | null
 }
 
 interface PortfolioDiagnosisOutput {
+  scenarioComparison?: ScenarioComparison | null
+  analysisPeriod?: { from: string; to: string } | null
+  observationCount?: number | null
+  modelQuality?: string | null
+  method?: string | null
   summary: string
   portfolioReturn?: number | null
   benchmarkReturn?: number | null
@@ -398,7 +406,8 @@ const nextActionLabel = computed(() => {
             </dl>
           </div>
 
-          <AgentRunProgress
+          <ResearchAgentSummary v-if="run.run.workflowType === 'ResearchAgent'" :detail="run" />
+          <AgentRunProgress v-else
             :nodes="run.nodes"
             :workflow-definition="run.workflowDefinitionJson"
             :run-status="run.run.status"
@@ -406,7 +415,7 @@ const nextActionLabel = computed(() => {
             :completed-at-utc="run.run.completedAtUtc"
           />
 
-          <div v-if="run.loopSummary" class="prestige-panel prestige-panel-pad result-panel" data-testid="loop-summary">
+          <div v-if="run.loopSummary && run.run.workflowType !== 'ResearchAgent'" class="prestige-panel prestige-panel-pad result-panel" data-testid="loop-summary">
             <h3 class="panel-title">{{ run.loopSummary.loopType === 'PortfolioDiagnosis' ? 'Portfolio Diagnosis Loop' : 'Research Quality Loop' }}</h3>
             <div class="stat-grid">
               <div><div class="prestige-label stat-caption">狀態</div><div class="stat-value">{{ run.loopSummary.status }}</div></div>
@@ -439,7 +448,7 @@ const nextActionLabel = computed(() => {
           />
 
           <!-- Waiting for output -->
-          <div v-if="!isTerminalStatus || run.outputJson === null" class="prestige-empty waiting-block">
+          <div v-if="run.run.workflowType !== 'ResearchAgent' && (!isTerminalStatus || run.outputJson === null)" class="prestige-empty waiting-block">
             <div style="font-size: 14px; margin-bottom: 8px">等待背景工作完成</div>
             <div style="font-size: 12px">結果產出後會自動顯示在這裡</div>
           </div>
@@ -537,11 +546,14 @@ const nextActionLabel = computed(() => {
           <!-- PortfolioDiagnosis Result -->
           <div v-if="portfolioDiagnosisOutput" class="prestige-panel prestige-panel-pad result-panel">
             <h3 class="panel-title">AI 投組診斷報告</h3>
+            <p v-if="portfolioDiagnosisOutput.analysisPeriod" class="body-text">分析期間：{{ portfolioDiagnosisOutput.analysisPeriod.from }} ～ {{ portfolioDiagnosisOutput.analysisPeriod.to }} · 觀測筆數：{{ portfolioDiagnosisOutput.observationCount ?? '未提供' }}</p>
+            <p class="body-text">模型品質：{{ portfolioDiagnosisOutput.modelQuality === 'Unvalidated' ? '尚未回測驗證' : portfolioDiagnosisOutput.modelQuality ?? '未提供' }} · {{ portfolioDiagnosisOutput.method ?? '計算方法請見技術明細' }}</p>
+            <PortfolioScenarioComparison v-if="portfolioDiagnosisOutput.scenarioComparison" :comparison="portfolioDiagnosisOutput.scenarioComparison" />
             <div class="stat-grid">
               <div><div class="prestige-label stat-caption">投組報酬</div><div class="stat-value">{{ formatPercent(portfolioDiagnosisOutput.portfolioReturn) }}</div></div>
               <div><div class="prestige-label stat-caption">大盤報酬</div><div class="stat-value">{{ formatPercent(portfolioDiagnosisOutput.benchmarkReturn) }}</div></div>
               <div><div class="prestige-label stat-caption">相對報酬</div><div class="stat-value" :style="{ color: (portfolioDiagnosisOutput.activeReturn ?? 0) >= 0 ? '#7fa387' : '#b05c5c' }">{{ formatPercent(portfolioDiagnosisOutput.activeReturn) }}</div></div>
-              <div><div class="prestige-label stat-caption">證據覆蓋</div><div class="stat-value">{{ portfolioDiagnosisOutput.evidenceStatus === 'complete' ? '完整' : '部分' }}</div></div>
+              <div><div class="prestige-label stat-caption">證據覆蓋</div><div class="stat-value">{{ portfolioDiagnosisOutput.evidenceStatus === 'complete' ? '必要欄位齊全' : '部分資料不足' }}</div></div>
             </div>
             <div class="summary-block"><div class="prestige-label stat-caption">摘要</div><div class="body-text">{{ portfolioDiagnosisOutput.summary }}</div></div>
             <div v-if="portfolioDiagnosisOutput.interpretation" class="summary-block" style="margin-top: 18px">
@@ -558,8 +570,13 @@ const nextActionLabel = computed(() => {
                 <div><div class="prestige-label stat-caption">投組波動率</div><div class="stat-value">{{ formatPercent(riskMetrics.portfolioVolatility) }}</div></div>
                 <div><div class="prestige-label stat-caption">集中度 HHI</div><div class="stat-value">{{ formatHhi(riskMetrics.concentrationHhi) }}</div></div>
                 <div><div class="prestige-label stat-caption">最大持倉權重</div><div class="stat-value">{{ formatPercent(riskMetrics.largestWeight) }}</div></div>
-                <div><div class="prestige-label stat-caption">波動風險貢獻</div><div class="stat-value">{{ formatPercent(riskMetrics.volatilityRiskShare) }}</div></div>
+
               </div>
+            </div>
+            <div v-if="riskMetrics" class="summary-block">
+              <div class="prestige-label stat-caption">逐股年化波動風險貢獻（當期固定權重；與歷史固定股數波動率口徑不同）</div>
+              <p v-if="!riskMetrics.contributions?.length" class="body-text">未提供逐股明細；全體合計份額不能代表單一股票風險。</p>
+              <div v-for="item in riskMetrics.contributions ?? []" :key="item.ticker" class="body-text">{{ item.ticker }} · 權重 {{ formatPercent(item.weight) }} · 年化波動貢獻 {{ formatPercent(item.componentVolatility) }} · 風險占比 {{ formatPercent(item.componentRiskShare) }}</div>
             </div>
             <div class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">主要拖累</div>

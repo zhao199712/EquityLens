@@ -88,6 +88,7 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<IAgentNodeHandler, DraftRevisedAnswerNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, FinalizeRevisionNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, LoadPortfolioDiagnosisContextNodeHandler>();
+        builder.Services.AddScoped<IAgentNodeHandler, EvaluatePortfolioScenariosNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, ResolvePortfolioRiskEvidenceNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, PreparePortfolioRiskMathInputsNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, ExecutePortfolioRiskMathNodeHandler>();

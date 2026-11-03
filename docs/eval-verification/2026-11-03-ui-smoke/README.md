@@ -1,0 +1,118 @@
+# 正式站瀏覽器驗收 — 2026-11-03
+
+在 `https://equitylens.pages.dev/` 透過瀏覽器註冊獨立測試帳號，建立「0050 成分股 UI 驗收」。所有交易均為帳務模擬，沒有券商下單。未更動既有帳號持倉。帳號密碼不存入版本控制。
+
+## 研究：通過
+
+- UI 提問：根據台積電 2025 年年報，2025 年基本每股盈餘是多少元？請附上來源及頁碼。
+- Agent run：`d3477310-0770-4819-9850-6c2b09af3508`，ResearchAgent / Succeeded，8.4 秒。
+- Research run：`51f6a883-4e02-47a4-b886-58ab3e98c53b`，Answered，8380ms。
+- 答案為基本 EPS 66.26 元；兩項引用分別為年報第 10、58 頁，已在引用頁核對原文。
+- 單題 UI smoke，不代表重新完成八題 eval。
+
+![研究答案](research.jpg)
+
+## 50 檔組合：建立成功；Risk Run：資料門檻阻擋
+
+- Portfolio：`cd87a30e-9d4c-424e-bfac-47d98833aca9`。
+- 名單來源：[元大 0050 官方持股比重](https://www.yuantaetfs.com/product/detail/0050/ratio)，頁面日期 2026-11-02，展開 More 後共 50 檔。
+- 各檔模擬股數為官方股數除以 1,000,000 向下取整（至少 1 股），交易日期 2026-11-02，採系統收盤價。未納入基金現金與期貨，不能視為精確複製 0050。
+- UI 最終顯示 50 檔，約 240 萬元；台積電權重 57.94%。持股數量逐筆核對。
+- 從 Risk Runs 選取該組合，建立請求遭 `risk.insufficient_prices` 拒絕，沒有成功的風險結果。
+- 正式 DB 唯讀核對：50 檔共同日線為 **241 天**（2025-11-03 至 2026-11-02），該組合 `risk_calculation_run` 筆數 **0**。
+- 唯一少於 352 筆的成分股為 **6446 藥華藥（241 筆）**。實際建立路徑使用 `PreparePortfolioRiskBacktestInputAsync`，要求 252 + 100 = **352** 個共同交易日。先補齊可查證的歷史價格，再重跑；不可填造資料或默默移除成分股。
+
+![風險計算阻擋](risk-blocked.jpg)
+
+## 發現的待修問題
+
+1. **連續新增持股競態**：`handleAddStock` 在刷新完成前先關閉表單，使用者可開始下一筆；稍後 `selectHolding` 會覆寫新的股票選擇。實測一次把預定中華電 93 股寫為華碩 93 股。測試帳已用同日同價的模擬賣出抵銷，再正確新增中華電；最終華碩 16 股、中華電 93 股。保留校正紀錄，沒有刪除資料。後續操作等待新增流程結束並在送出前核對標的。
+2. **風險錯誤文案錯誤**：實際要求 352 天，UI 把 `risk.insufficient_prices` 固定轉成不足 120 筆。
+3. **風險狀態誤導**：建立請求失敗、run 尚不存在，仍顯示 QUEUED。應顯示建立失敗及真實門檻。
+
+本次僅執行 UI 驗收與唯讀診斷，尚未修補上述程式問題或部署新版本。正式 AgentLoop 預設維持啟用。
+
+## 使用者指定五檔再測：Risk 與 Monte Carlo 通過
+
+另建「五檔成分股 Risk 驗收」，Portfolio `b8790cf8-b132-4330-b53f-cc89e78dfbf3`，保留原 50 檔組合。沿用原測試的股數與 2026-11-02 收盤價，並非等權配置。
+
+| 股票 | 股數 | 結果頁權重 |
+|---|---:|---:|
+| 台積電 2330 | 596 | 81.77% |
+| 聯發科 2454 | 35 | 8.18% |
+| 台達電 2308 | 47 | 3.75% |
+| 富邦金 2881 | 203 | 1.91% |
+| 鴻海 2317 | 297 | 4.39% |
+
+透過正式 UI 進入 Risk Runs，顯示 COMPLETED。正式 DB 唯讀核對兩筆持久化結果皆 Completed，selected model 皆為 VT-GARCH-t + Joint-Vector FHS，fallback reason 為空：
+
+- risk：`9531eef2-4a74-44b2-bd38-ed3c6b7f658f`。
+- monte-carlo：`89b1ed99-254d-4ac8-a7f8-8376b2defc4e`。
+- 10,000 次模擬，lookback 252 個日報酬，資料日 2026-11-02，Fit Health Healthy。
+- 1 日 VaR 95% **-2.51%**（約 -42,700 元），ES 95% **-3.51%**，VaR 99% **-4.06%**，ES 99% **-5.15%**。
+- 條件波動率年化 **28.70%**；歷史最大回撤 **-30.03%**。
+- 已實際捲動並看到 Monte Carlo 路徑圖完成載入。
+
+這次完成的是執行與畫面 smoke；Risk Quality 仍為 Unvalidated，未宣稱模型統計驗證通過。UI 的歷史模擬法與正式模型對照列顯示相同數字，壓力測試與回測區塊仍未見完整結果，應另查呈現與載入邏輯，不列為本次通過項目。台積電高度集中，因此不能把上述數字當成等權五檔或完整 0050 的風險。
+
+![五檔計算完成](five-stock-completed.jpg)
+![五檔蒙地卡羅路徑](five-stock-monte-carlo.jpg)
+
+## 台積電 Reports 財報功能：未通過
+
+依使用者要求，從導覽 Reports 進入 `/financial-reports`，建立 ticker `2330`、公司「台積電 2330 UI 財報驗收」、類型 Financial Report。列表短暫新增 ID 5，但點開 `/financial-reports/5` 後仍顯示固定的「TSMC 2025 Q1 財報分析 / AI MEMO」。返回列表後，新增項目消失，恢復四筆預設卡片。
+
+原始碼核對：`FinancialReportListView.vue` 的 `reports` 是硬編碼陣列，`createReport` 只 push 前端 ref，沒有 API 或持久化；`FinancialReportDetailView.vue` 的指標、AI Memo、引用、Critic Notes 與 Portfolio Impact 均為固定內容，未依路由 ID 載入真實報告。
+
+具體問題：
+
+- 同頁 KPI 營收 NT$85.2B，AI Memo 與引用卻寫 NT$25.8B，展示數值互相矛盾。
+- 建立時選 Financial Report，明細仍顯示 AI MEMO，未反映輸入。
+- Citations 的頁碼與「高可信度」也是硬編碼，不能當成檢索或驗證成功的證據。
+- 返回列表即遺失新增項目，無法完成真實財報建立、保存及讀取驗收。
+
+本結果與前述 Research 頁的台積電 EPS 真實 AgentLoop smoke 分開計算。Reports 尚未接通後端，不可因 Research 已成功而宣稱財報管理功能完成。本次未修改產品程式或部署。
+
+![台積電財報靜態內容與數值矛盾](tsmc-report-static.jpg)
+
+## Ask Agent 與 Agent Runs：主要流程通過
+
+從 Ask Agent 提問台積電 2025 年基本／稀釋 EPS，建立 `e95c1787-e9f7-41ef-bb20-68a3d20f4633`，ResearchAgent Succeeded，8.7 秒。對話顯示進度與 Agent Run 連結，完成後回填 66.26／66.25 元及第 58、10 頁。
+
+接著省略公司名稱追問「那 2024 年呢？同樣列出基本與稀釋每股盈餘，並附來源頁碼。」路由目標正確延續台積電 2330，建立 `f930b78a-d629-4cd3-9f54-ff9f0c447a09`，最後 Succeeded，回填基本／稀釋 EPS 均為 45.25 元，答案標註第 11 頁。此輪以 UI 串接與上下文驗收為主，未另外核對 2024 原始 PDF。
+
+已驗證：Agent Runs 列表顯示新 run、輸入 run ID 可篩選到單筆、詳情顯示路由目標與狀態、進度及略過節點、除錯資訊可展開並看到 RunSucceeded 事件。重新整理 Ask Agent 後，側欄仍保存四則訊息，點選可載入完整對話與兩筆結果。
+
+待改善：Workflow 篩選選單只有 CriticReview / DraftRevision，未提供 ResearchAgent；Ask Agent 重整後先新增空白對話，而非恢復原本選取的對話。本次未測取消、重試或審批流程。
+
+重整時也確認正式站已更新移除 Reports / Dashboard 的導覽入口（`faca94a` 的修改已可在瀏覽器看到）。
+
+![Ask Agent 追問結果](ask-agent-followup.jpg)
+
+## AgentLoop UI 改版驗收（01:36）
+
+正式前端：`f684b20` + `46d697d`，Cloudflare Pages main 部署成功；GitHub 前端、後端、Mathematics、eval harness checks 全部成功。此次沒有部署後端或修改 DB schema。前端本地 18 files / 121 tests 通過。
+
+- 既有成功 run `e95c1787-e9f7-41ef-bb20-68a3d20f4633`：五階段、修訂不需要、EPS 66.26／66.25、第 58／10 頁引用、OutputGate 與 Critic 通過；LLM 2 turns、5995 tokens、US$0.006934（僅迴圈 LLM 記錄）。不再顯示 16/16。
+- 新問答 run `8dcbb37b-a2a6-454f-9071-681fedef9bce`：18.3 秒，完成研究及修訂，但 OutputGate `UntraceableNumbers` 拒絕。頁面正確區分 Succeeded 與 CitationValidationFailed；最終回覆資料不足、無引用。警告包含 money 1717882627000、shares 25928262000 的數值追溯問題。**此題答案驗收失敗，不算成財報正確性通過。** 此次只改前端，不放寬 gate。
+- 同對話追問 run `14973665-9c40-4131-8236-483c8707165e`：5.9 秒，稀釋 EPS 66.25 元，第 58／10 頁，OutputGate／Critic 通過；Ask Agent 與詳細頁答案一致。
+- 新兩次執行的迴圈 LLM 估算合計 US$0.031819（0.024918 + 0.006901），不含 Router/Critic/embedding/reranker，仍沿用既有 US$10 總預算保留額，不宣稱此為完整 API 帳單。
+- Ask Agent 執行中無暫存草稿或節點百分比；完成後顯示正式答案。卡片 API 沒有時間欄位，耗時導向詳情查閱。
+- 390×844 手機版五階段垂直排列，DOM scrollWidth/clientWidth 皆 390；已還原 viewport。ResearchAgent／WaitingForFeedback 篩選選項可見，ResearchAgent 篩選可用。
+- 本次未實際觸發取消、重試、人工批准；這些沿用既有功能並由前端回歸測試保障，不宣稱新增實機驗證。
+
+截圖：[成功摘要](agent-loop-summary.jpg)、[手機版](agent-loop-mobile.jpg)、[品質拒絕](agent-loop-refusal.jpg)、[新問答與追問](agent-loop-chat.jpg)。
+
+## 國巨高權重與 Ask Agent 投組診斷（01:42）
+
+使用者要求在測試投組加入高比例國巨並詢問風險管理優化。沿用 `b8790cf8-b132-4330-b53f-cc89e78dfbf3`（五檔成分股 Risk 驗收），新增模擬買入國巨 2327 共 3,407 股，2026-11-02 系統收盤價 498.50，權重 50.00%，原持倉未刪除或減持。
+
+- 投組頁同一 1Y 顯示：波動率 22.32% → 44.74%、最大回撤 -14.38% → -40.98%；總值約 1.70M → 3.40M。這是頁面風險指標，不當作真實持有期間績效或模型回測驗證。
+- 第一個 Ask run `50205687-04b7-4b76-a468-5a83b458cfb2`：PortfolioDiagnosis，舊 Risk Run 被 DATE_RANGE_MISMATCH / NO_COMPATIBLE_RISK_RUN 排除，0 重用 / 8 新算，經發布報告批准後 Succeeded。僅批准 WritesAgentTrace，不涉及交易。Risk Quality 仍為 Unvalidated。
+- 診斷預設期間 2026-10-02～2026-11-02，波動率 43.19%、最大回撤 -17.44%、HHI 0.4198、歷史 VaR/ES -5.88%；不能與投組頁 1Y 數字直接視為矛盾。投組/主動報酬資料不足。
+- 第一份敘述把 aggregate volatilityRiskShare=1 解讀成單一股票驅動，並一度由 VaR=ES 推論沒有厚尾，屬過度推論；未視為完全正確的分析。
+- 包含「核對上一份報告」的追問回傳「上一份研究尚未完成或不支援修正」，未建立新 run。改成明確指定 portfolioId 的情境分析後成功建立第二個 run `55c79bb0-e35f-425e-80b7-2e9b7a32418e`，批准發布後 Succeeded。
+- 第二份解讀明確承認未提供國巨 30% / 20% + 現金情境重算，未偽造優化後數字；指出缺乏逐股貢獻證據及 VaR=ES 不足推論沒有厚尾。提出監控最大權重、HHI、波動、回撤、VaR/ES 及補回測，但沒有實際求解最優權重或量化門檻。
+- 未對原投組執行任何再平衡。國巨仍保留約 50% 測試部位。此次是瀏覽器驗收，沒有修改後端或重新部署服務。兩次新診斷及路由呼叫沿用既有 API 預算保留額，未取得完整供應商帳單。
+
+截圖：[新增持倉](yageo-holdings.jpg)、[首次診斷](yageo-diagnosis.jpg)、[情境分析](yageo-scenarios.jpg)、[限制說明](yageo-scenario-detail.jpg)。

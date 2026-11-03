@@ -33,13 +33,29 @@ public sealed class AgentWorkflowQueryService(
             .OrderBy(x => x.Name)
             .Select(x => new InvestmentResearchPortfolioOption(x.Id, x.Name, x.BaseCurrency, x.Holdings.Count))
             .ToListAsync(cancellationToken);
+        PortfolioDiagnosisInput? parentInput = null;
+        if (request.ParentAgentRunId is Guid parentId)
+        {
+            var parent = await db.AgentRuns.AsNoTracking().SingleOrDefaultAsync(x => x.Id == parentId && x.UserId == userId, cancellationToken);
+            if (parent is null || parent.WorkflowType != AgentWorkflowTypes.PortfolioDiagnosis || parent.Status != AgentRunStatuses.Succeeded)
+                throw new AgentWorkflowQueryException("previous_run_not_ready", "原投組診斷尚未完成或無法存取。");
+            parentInput = PortfolioDiagnosisWorkflowDefinitionProvider.ParseInput(parent.InputJson);
+            question = $"投資組合 {parentInput.PortfolioId} 的後續診斷：{question}";
+        }
         var decision = await router.RouteAsync(question, portfolios, cancellationToken);
+        if (parentInput is not null && decision.WorkflowType != AgentWorkflowTypes.PortfolioDiagnosis)
+            throw new AgentWorkflowQueryException("portfolio_followup_required", "請明確說明此投組要補充的分析或情境。");
 
         if (string.Equals(decision.WorkflowType, AgentWorkflowTypes.PortfolioDiagnosis, StringComparison.OrdinalIgnoreCase))
         {
-            var portfolioId = ResolvePortfolio(decision.PortfolioId, portfolios);
+            if (decision.RoutingContext.ClarifyingQuestions.Count > 0)
+                throw new AgentWorkflowQueryException("scenario_clarification_required", string.Join(" ", decision.RoutingContext.ClarifyingQuestions));
+            var portfolioId = parentInput?.PortfolioId ?? ResolvePortfolio(decision.PortfolioId, portfolios);
+            PortfolioScenarioCalculator.ValidateRequests(decision.RoutingContext.Scenarios);
             var (from, to) = ResolveDiagnosisWindow(decision.RoutingContext.ContextEnvelope.Horizon, question);
-            var created = await agentRuns.CreatePortfolioDiagnosisAsync(userId, portfolioId, from, to, decision.RoutingContext, cancellationToken);
+            if (parentInput is not null) { from = parentInput.From; to = parentInput.To; }
+            var routing = decision.RoutingContext with { ParentAgentRunId = request.ParentAgentRunId };
+            var created = await agentRuns.CreatePortfolioDiagnosisAsync(userId, portfolioId, from, to, routing, cancellationToken);
             return Response(created.Id, null, created.WorkflowType, created.Status, decision.RoutingContext);
         }
 

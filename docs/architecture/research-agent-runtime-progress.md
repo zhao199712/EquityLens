@@ -3,7 +3,23 @@
 > 對應設計：[`research-agent-runtime.md`](research-agent-runtime.md)。驗收以設計文件開頭的「任務簡報」A1–A17 為準。
 > 實作者每完成一個項目就更新本檔並 commit。Reviewer 早上只看這一份就能知道做到哪裡。
 
+> 最新狀態（2026-11-03 00:02）：使用者已授權正式部署，AgentLoop 已成為正式預設，四項 migration 已套用且 smoke 通過。下方保留舊預設的描述為當時歷史決策，已由此次授權取代。詳見 [部署紀錄](research-agent-runtime-deployment.md)。
+
 ## 開工基準
+
+### 2026-11-03 移除靜態頁面
+
+後續正式站重整已確認導覽生效。Ask Agent 的台積電 EPS 提問與「那 2024 年呢」追問皆建立 ResearchAgent 並 Succeeded，結果回填與對話保存正常；Agent Runs 列表、ID 搜尋、詳情及除錯事件正常。Workflow 篩選缺少 ResearchAgent、重整先開空白對話仍待改善。詳見 [UI 驗收紀錄](../eval-verification/2026-11-03-ui-smoke/README.md)。
+
+依使用者要求刪除 Dashboard、Financial Reports 列表與明細元件及導覽。一般登入／註冊與首頁 CTA 改到 Portfolios；舊網址分別重新導向 Portfolios / Research。移除已刪頁面的測試，更新登入與路由測試；前端 build 成功、17 個測試檔案共 110 項通過。Research、風險頁與管理端報表管理保留。
+
+### 2026-11-03 01:05 正式 UI 驗收
+
+台積電 Reports 財報管理另行實測未通過：列表建立僅存前端記憶體，返回即消失；明細、引用與 Critic 均為硬編碼，營收 KPI 與內文不一致。此頁尚未串接後端，與已通過的 Research AgentLoop 分開看待。證據見同份瀏覽器驗收紀錄。
+
+後續依使用者指定，以台積電、聯發科、台達電、富邦金、鴻海另建五檔組合重跑：risk 與 monte-carlo 均 Completed，採 VT-GARCH-t + Joint-Vector FHS，無 fallback，路徑圖已顯示。1 日 VaR 95% -2.51%、ES 95% -3.51%；台積電權重 81.77%。模型統計驗證仍 Unvalidated，詳細參數與證據見下方驗收紀錄。
+
+獨立帳號研究 smoke 通過（ResearchAgent 8.4 秒、EPS 66.26、兩項引用）；0050 全部 50 檔模擬持倉建立完成。Risk Run 建立遭資料門檻拒絕：6446 只有 241 筆，低於實際 352 共同日要求；沒有產生風險結果。另發現新增持股競態、門檻錯誤文案及無 run 仍顯示 QUEUED。詳見 [瀏覽器驗收紀錄](../eval-verification/2026-11-03-ui-smoke/README.md)，此三項尚待修補。
 
 | 項目 | 值 |
 |---|---|
@@ -21,21 +37,21 @@
 | A1 | 租約被他人持有時不 ack | MUST | ✅ | AgentRunWorkerTests | Phase 1 | lease lost 亦不 ack |
 | A2 | 執行中斷的節點可被接手，run 不失敗 | MUST | ✅ | AgentExecutorBoundaryTests | Phase 1 | 含中斷預算耗盡 |
 | A3 | 租約續約；失去租約者無法寫入 | MUST | ✅ | AgentLeasePostgresTests | Phase 1 | 真實 PostgreSQL，5 個測試 |
-| A4 | AgentLoop 引擎不呼叫 graph planner；預設仍 v1 | MUST | ✅ | ResearchAgentWorkflowTests.Engine / ForbiddenPlanner | Phase 2–4 | |
+| A4 | AgentLoop 引擎不呼叫 graph planner；預設依部署設定 | MUST | ✅ | ResearchAgentWorkflowTests.Engine / ForbiddenPlanner | Phase 2–4 | 正式已授權啟用 AgentLoop |
 | A5 | LLM 自主選工具；同輪平行；每次呼叫有紀錄 | MUST | ✅ | ResearchAgentLoopTests.ToolCalls_RunConcurrently | Phase 2–4 | |
 | A6 | 違規呼叫被拒絕、記錄、回饋 | MUST | ✅ | GuardDenial / ToolBudget / SourcePolicy tests | Phase 2–4 | |
 | A7 | 中斷後從下一輪續跑，不重做工具 | MUST | ✅ | CrashAfterCommittedTurn / CrashWithinTurn | Phase 2–4 | |
-| A8 | 預算／無進展／格式錯誤時優雅停止 | MUST | ✅ | ProtocolFailure / TokenBudget tests | Phase 2–4 | |
-| A9 | 輸出與 v1 相容（Critic、harness 不改） | MUST | ✅ | FixedWorkflow end-to-end tests | Phase 2–4 | |
+| A8 | 預算／無進展／格式錯誤時優雅停止 | MUST | ✅ | ProtocolFailure / TokenBudget / NoProgress tests | Phase 2–4 / 6f0f5f9 | NoProgress 補測尚在測試分支 |
+| A9 | 輸出契約與既有 Critic／harness 相容 | MUST | ✅ | FixedWorkflow end-to-end tests | Phase 2–4 | |
 | A10 | 確定性關卡攔截 → 修訂一次 → 仍失敗則拒答 | MUST | ✅ | FixedWorkflow revision / OutputGate / NumberGate tests | Phase 2–4 | |
 | A11 | 每輪 LLM 決策可查詢 | MUST | ✅ | TwoTurns / detail LlmTurns tests | Phase 2–4 | |
 | A12 | harness `--engine` 與軌跡指標；舊檔可 rescore | SHOULD | ✅ | evals/tests/test_trajectory.py | Phase 2–4 | |
 | A13 | 副作用工具審批（參數綁定、冪等、Reject 附理由） | SHOULD | ✅ | ToolApprovalTests / ToolApprovalPostgresTests | Phase 4 | 測試工具；正式工具仍唯讀 |
 | A14 | OTel span 與 metrics | SHOULD | ✅ | Telemetry_ParentsParallelToolsToTurn | Phase 2–4 | |
 | A15 | 依風險觸發人工審閱 | COULD | ⬜ | | | |
-| A16 | 實際 A/B 報告 | COULD | ✅ | 限定公司 8 題與完整原始結果 | docs 階段 | 未達預設切換門檻 |
+| A16 | 實際 A/B 報告 | COULD | ✅ | 限定公司 8 題與完整原始結果 | docs 階段 | 最新兩輪數值門檻達標；正式已授權切換，非 holdout |
 | — | 合併為單一 `QualityGate`、DAG 縮為約 6 節點 | COULD | ⬜ | | | |
-| A17 | build / test / migration / pytest 全綠 | 每次 commit | ✅ | 942 backend / 70 pytest / 無 pending model | c953970 | 後續修改仍需再驗證 |
+| A17 | build / test / migration / pytest 全綠 | 每次 commit | ✅ | 979 backend / 75 pytest / 無 pending model | 6f0f5f9 | 08:12 隔離驗證，零 skipped；測試分支 |
 
 ## 每次 commit 的驗證紀錄
 
@@ -44,6 +60,9 @@
 | 2026-11-02 | A1–A3 | 通過 | 885 / 885，0 skipped | 無 pending | 60 通過 |
 | 2026-11-02 | A4–A12、A14 | 通過（test build） | 915 / 915，0 skipped | 無 pending；隔離 DB migration 成功 | 69 通過 |
 | 2026-11-02 | A13 / 數字 gate 實測修正 | 通過 | 924 / 924，0 skipped | 無 pending；隔離 DB migration 成功 | 69 通過 |
+| 2026-11-02 | 明示算式、單位與風險回覆；同步 exclusions | 通過（test build） | 958 / 958，0 skipped | 無 pending（無模型修改） | 75 通過 |
+
+08:12 收尾驗證：測試分支 `6f0f5f9`，test build 成功，後端 **979/979、0 skipped**，EF 無 pending model，eval harness **75/75**。後端整合測試連線指向隔離 PostgreSQL 55432，未使用正式資料庫。
 
 ## Migration 清單
 
@@ -72,7 +91,7 @@
 
 ## 早上給 Reviewer 的摘要
 
-核心 A1–A14 已完成；固定 DAG + Agent Loop 保留 v1 預設。最新 c4e0d85 限定公司 A/B 為 v1 6/8、v4 7/8，本輪比較門檻達標；仍需確認百萬元補強後穩定性，依指示維持 v1 預設。展示腳本實跑 EPS 66.26 元成功，面試稿與完整實驗報告已備妥。已補明示百分比除法驗證，尚待補強後重複 A/B；風險人工審閱與 Critic 節點合併仍是 COULD。不可把展示成功當作整體品質已通過。
+核心 A1–A14 已完成；固定 DAG + Agent Loop 保留 v1 預設。最新兩輪限定公司 A/B 均為 DynamicDag 6/8、AgentLoop 7/8，延遲與成本比較門檻達標；依指示維持舊引擎預設。展示腳本實跑 EPS 66.26 元成功，面試稿與完整實驗報告已備妥。已補明示百分比除法驗證與百萬元補強後重複 A/B；風險人工審閱與 Critic 節點合併仍是 COULD。不可把展示成功當作整體品質已通過。
 
 ## 執行紀錄（2026-11-02 夜間）
 
@@ -121,3 +140,100 @@
 
 - `c4e0d85` 完整 A/B：v1 6/8、v4 7/8，無 PASS→FAIL。p95 12.021s / 11.617s；完整 provider LLM 未快取上界 US$0.047930 / US$0.027647（不含 embedding）。本輪數值門檻達標，仍依使用者要求保留 v1 預設。政策題 behavior/keywords 正確，因原 scorer 要求引用而 FAIL；保留 KI-004，不改評分規則。
 - 百萬／十億倍率已補齊，新增鴻海實際量級的比例正反例；958/958 後端測試通過。下一輪確認補強後相同行為，避免僅依單輪好結果交付。
+
+- 已快轉同步 Claude `379022b`；原始題庫的 excluded_reason 決定計分，75 項 harness 測試通過。使用者再次確認只有鴻海、台積電財報正確，維持三題排除。舊 subset 檔僅保留重現歷史，新執行改用原始題庫。
+- `53b5db1` 補強後完整重跑仍為 DynamicDag 6/8、AgentLoop 7/8，無原通過題退步。p95 10.993s / 11.486s；provider 未快取上界 US$0.047583 / US$0.027497（不含 embedding）。原始結果保留於 `*-unit-verification`。
+- 為補錯誤前提覆蓋，另建單題 supplemental：將已核實的稀釋 EPS 66.25 誤稱基本 EPS，要求更正；使用同份原件第 58 頁證據，不增加原 8 題分母。規則測試不足以辨識數字角色顛倒，實測後另人工核對。
+
+- 錯誤前提 supplemental 實測：兩引擎規則均 1/1，人工確認基本 66.26／稀釋 66.25 角色正確。DynamicDag 附帶淨利「元」與股數「仟股」算式有千倍單位不一致，另記人工缺陷，不掩蓋在 PASS 分數下。這是可更正的錯誤前提，仍不代表覆蓋不存在業務的拒答情境。原 8 題分數不變。
+
+- 2026-11-02 23:46 續跑：Git clean，必做／應做已完成，保留 COULD 項。新增展示腳本離線 replay，顯示來源 commit／時間、原始評分、回答、引用及工具統計；不偽造完整 turn trace、不呼叫 API。成功 EPS、政策 FAIL、錯誤前提與不存在 case 的錯誤處理皆實跑確認。此次外部 API 費用 US$0。
+
+## 合併 main 與舊版備份
+
+- 使用者明確授權先備份舊版，再合併新架構至 main。
+- 合併前 main：`434e645d466d0a5104b54dbaffcc279f95bde583`；遠端備份分支 `backup/main-before-research-runtime-20261102-434e645` 已推送並核對相同 SHA。此為 Git 程式碼快照，非資料庫備份；正式 DB 未變更。
+- 合併來源：`feat/research-agent-runtime`，tip `c395b9b`；包含 Claude excluded_reason `379022b`。保留 merge commit 與功能分支歷史，不 squash。
+- 合併前 Release build/test：958/958（含隔離 PostgreSQL、零 skipped）；eval harness 75/75；題庫 validate：13 題、2 未核實、3 excluded。
+- 預設仍為 DynamicDag，新引擎以 engine=AgentLoop 啟用。沒有部署或操作正式服務；GitHub workflow 僅 build/test。四項新 migration 只在隔離 DB 驗證，實際部署前仍需套用。
+
+- 2026-11-03 正式部署：先保留舊映像與完整 DB 備份（含停止 API 後快照），再套用四項 migration、重啟 API。公開 HTTPS 請求省略 engine，確認 ResearchAgent / Succeeded / Answered，EPS 66.26，引用第 10／58 頁。正式 compose 啟用 AgentLoop 與 thinking=false；其餘既有設定保留。續跑指令已更新，避免回復過期的舊預設要求。
+
+## AgentLoop 前端呈現更新（2026-11-03）
+
+- ResearchAgent 詳情新增五階段摘要、最終答案／引用、獨立品質結果與 LLM 呼叫紀錄；不再用 16 個實體節點百分比代表研究進度。修訂略過標示不需要修訂。
+- 接上既有 llmTurns；統計包含已記錄 attempts，費用僅代表研究／修訂迴圈，不含其他模型與檢索服務。證據數明確標為最後一輪。
+- Ask Agent 卡片移除 ResearchAgent 節點進度；既有卡片 API 沒有時間欄位，因此耗時放在詳細頁，不新增輪詢或後端 API。其他 workflows 與批准、取消、重試維持既有路徑。
+- 前端 18 個測試檔、120 個測試通過，正式 build 通過；新增 10 個測試涵蓋暫存答案隔離、拒答、政策回覆、修訂略過、重試統計及舊資料缺漏。瀏覽器發布驗證另記 UI smoke 報告。
+- 正式前端 `46d697d` 已發布；121 個前端測試及 GitHub 各項 CI 通過。瀏覽器驗證成功紀錄、拒答紀錄、追問、ResearchAgent 篩選及 390px 手機版。新基本 EPS 題因數值追溯被 gate 拒答；稀釋 EPS 追問成功 66.25。保留答案品質缺口，未放寬 gate；完整證據見 UI smoke 報告。
+- 01:42 使用者指定國巨高權重測試：在原五檔模擬投組新增 2327 共 3,407 股，權重 50%。Ask Agent 兩次 PortfolioDiagnosis 成功發布；舊風險快照未重用。發現修正追問路由不支援 PortfolioDiagnosis，以及缺少假設權重重算；初次敘述有風險貢獻／厚尾過度推論，第二份明確承認限制並修正解讀。詳見 UI smoke 國巨測試節，未進行程式修復或變更後端。
+
+## 投組四項修正（2026-11-03 02:06）
+
+- 功能分支 `feat/portfolio-scenario-analysis`：PortfolioDiagnosis 修正追問保留父版本／投組／期間；逐股風險貢獻；唯讀減碼轉現金工具；期間／品質／情境比較 UI。預設分析一年，短樣本僅提供配置。
+- 後端 977/977（含真實隔離 PostgreSQL，零 skipped）、前端 124/124、production build 通過。獨立 Python 對保存的合成價格快照重算原組合與兩情境，四項風險指標誤差 <1e-8。
+- 瀏覽器隔離驗收：國巨 50% → 30%／20% 兩情境、報告批准成功；原對話修正追問建立子診斷成功，六檔持股／零筆交易不變。首次發現舊診斷與情境基準容易混用，已補提示與畫面標示，第二輪明確使用同口徑基準。
+- 實測是明確標示的合成行情，非正式價格回測。原財報題庫及分數不動。六次模型呼叫按既有設定估算 US$0.009039，非帳單；正式環境未部署、未變更。
+- 報告、原始輸出、可重跑驗證與截圖：`../eval-verification/2026-11-03-portfolio-scenarios/README.md`。
+
+
+## 02:08 排程驗收與面試文件核對
+
+- 起始 Git clean，功能分支已與 origin 同步（`d2a0b71`）。沒有新增功能或再次部署。
+- 修正面試稿及 A/B 報告開頭過期的 v1 預設描述；明確區分歷史實驗決策、正式 AgentLoop 預設，以及尚未部署的投組情境功能。
+- 面試稿新增合成行情情境展示、LLM／確定性計算分工、風險貢獻口徑、追問父子關係與尚未完成的真實行情／模型回測。
+- 離線 EPS replay 成功：原 `53b5db1` 紀錄回答 66.26 元，來源第 10 頁；投組獨立快照重算三列 PASS。本次無外部 API 呼叫，新增費用 US$0。
+
+
+## 02:12 使用者授權投組部署
+
+- 使用者明確要求部署及推送 GitHub；main merge `d8af5ef` 已推送，前後端發布成功。API healthy，AgentLoop 預設與原環境設定不變。
+- 部署前保留 Git 分支、舊 API 映像與私有 DB dump；本次無 migration、無持倉／交易變更。正式瀏覽器登入及歷史報告可讀，已看到新版 UI；沒有新模型呼叫。
+- 面試稿與情境報告同步更新部署狀態，保留合成行情驗收與真實行情回測的區分。詳細備份與映像見部署紀錄。
+
+## 03:09 部署後 CI 核對
+
+- 起始 main `8e8e0c6` 工作目錄乾淨、與 origin 同步。使用者要求的 README 設計決策移除已保留，不重新加入架構解說。
+- 該提交的 Cloudflare Pages、Backend、Frontend、Mathematics、Eval harness 五項遠端檢查皆 success。正式 API healthy，預設仍為 AgentLoop，映像與 02:12 部署一致。
+- 可核對的提交 SHA、檢查連結及時間保存在 `../eval-verification/2026-11-03-portfolio-scenarios/release-checks.json`。本次只補部署後驗證紀錄，沒有新增功能、部署、模型呼叫或資料變更，新增費用 US$0。
+- 仍未宣稱完成：正式行情下的新情境完整問答回歸、VaR 覆蓋率回測、獨立 holdout 題組；現有合成行情與開發集成績不替代這些驗收。
+
+## 04:10 故障恢復展示驗收
+
+- 起始 main `a95831a` 工作目錄乾淨。依面試稿執行兩項故障恢復測試，2/2 通過，無略過：`CrashWithinTurn_ReusesPersistedSuccessfulCall`、`CrashAfterExternalEffect_ReplaysSameIdempotencyKey_NotTheEffect`。
+- 面試稿補上可解說的斷言：已保存工具不新增呼叫；副作用恢復呼叫兩次但效果一次。明示前者使用預建中斷狀態，後者以取消注入故障，均不是實際 kill process／DB crash 演練。
+- 將記憶體 fake 工具驗證與既有真實 PostgreSQL 整合驗證分開描述，避免面試過度承諾 exactly-once。
+- 本次只更新 docs，不改 README、產品程式或正式服務。外部 API 新增費用 US$0。
+
+
+## 05:11 財報 eval 題目範圍核對
+
+- 起始 main `59af2e1` 工作目錄乾淨。用原始 research_v1 題庫對兩份 unit-verification 保存回答離線重評；v1 6/8、v4 7/8，結果未變。
+- 程式核對 13 題／11 verified／3 excluded／8 計分，兩引擎保存回答的 case IDs 與目前計分集合完全一致；補充錯誤前提及投組案例未混入。
+- 原始報告不覆寫；新增 scope-audit-20261103.json 保存題目範圍、來源 SHA256 及重評摘要，A/B 報告補上核對說明。本次不是新增獨立 A/B 輪次。
+- 無評分器、題庫、README 或正式環境變更；模型呼叫 0，新增費用 US$0。
+
+## 06:11 驗收條件與證據索引
+
+- 起始 main `4c317b6` 工作目錄乾淨。逐項核對 A1–A17 的測試名稱、實作及既有驗收報告，在架構設計文件 §15 補上可點選的證據索引；15 個相對連結確認存在。
+- 明示 A4 的預設 v1 已被後續使用者部署授權覆蓋；A7 恢復先處理 pending turn，而非直接略過；A9 是輸出契約相容，不是 harness 完全零變更。
+- 保留未完成與覆蓋限制：A15 研究結果風險觸發人工審閱尚未實作；ResearchAgentLoop NoProgress 有停止路徑，但目前沒有獨立命名的專項邊界測試，不能拿其他 workflow 的 NoProgress 測試代替；CI success 不等於所有 PostgreSQL 整合測試未 skip。
+- 本次只補證據索引，不重跑已完成套件、不改產品程式與 README、不操作正式服務。外部 API 新增費用 US$0。
+
+
+## 07:11 NoProgress 邊界測試補齊
+
+- 從乾淨 main `a73886d` 建立 `test/research-loop-no-progress`，只新增測試及更新證據索引，沒有修改 runtime 或部署正式服務。
+- `NoProgress_EmptySearches_StopWithoutAnotherModelCall_AndRemainStoppedOnResume`：兩輪空結果以 NoProgress 停止、標準拒答、checkpoint 保存停止原因；恢復不新增模型／工具呼叫。
+- `NoProgress_DuplicateEvidence_AllowsOneFinalDraft_WithNoFurtherTools`：首次取得證據後兩輪重複證據，提供一次不含工具的最終起草機會，停止原因仍為 NoProgress，保留唯一證據與回答。
+- `dotnet test ... --filter FullyQualifiedName~ResearchAgentLoopTests`：20/20 通過，0 skipped。這是 fake provider／工具與記憶體 DB 的確定性邊界測試，不代表程序崩潰或真實模型測試。
+- 功能分支推送供後續合併；沒有重跑財報 A/B，原分數不變，外部 API 新增費用 US$0。
+
+
+## 08:12 測試分支完整驗證
+
+- 起始 `test/research-loop-no-progress`／`6f0f5f9` 乾淨且與 origin 同步。完整 dotnet test 含隔離 PostgreSQL：979 passed、0 failed、0 skipped；建置成功。
+- EF `migrations has-pending-model-changes --no-build`：無模型變更，不需 migration；未執行 database update。
+- eval harness 使用既有 `/tmp/equitylens-runtime-venv`：75 passed。系統 Python 未安裝 pytest，切回既有驗證環境後成功，沒有安裝或變更專案依賴。
+- 更新上方驗收表的部署預設、A8 測試與 A17 最新數字。仍不把 CI、mock 測試、隔離 PostgreSQL、合成行情及正式行情混為同一證據。
+- 本輪沒有改產品程式、README、財報題庫或正式服務；測試分支尚未合併。模型呼叫 0，新增費用 US$0。原 0050 全成分股資料門檻與 UI 缺陷、A15 及實際行情情境回歸等未完成事項維持揭露。

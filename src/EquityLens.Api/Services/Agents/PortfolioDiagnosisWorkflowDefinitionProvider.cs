@@ -25,24 +25,42 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
         Guid portfolioId,
         DateOnly from,
         DateOnly to,
-        InvestmentResearchRoutingContext? routingContext = null) => new()
+        InvestmentResearchRoutingContext? routingContext = null)
     {
-        Id = Guid.NewGuid(), UserId = userId, WorkflowType = AgentWorkflowTypes.PortfolioDiagnosis,
-        AgentType = AgentTypes.Portfolio, Status = AgentRunStatuses.Pending,
-        InputJson = AgentNodeJson.Serialize(new PortfolioDiagnosisInput(portfolioId, from, to, routingContext)),
-        BlackboardJson = CreateInitialBlackboardJson(portfolioId, from, to, routingContext),
-        WorkflowDefinitionJson = Definition().ToJsonString(AgentNodeJson.SerializerOptions),
-        CreatedAtUtc = DateTime.UtcNow,
-        Nodes = [
-            Node(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext),
-            Node(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, PortfolioDiagnosisNodeTypes.ResolveRiskEvidence),
-            Node(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeTypes.PrepareInputs),
-            new AgentRunNode { Id = Guid.NewGuid(), NodeKey = PortfolioRiskMathNodeKeys.ExecuteCore, NodeType = PortfolioRiskMathNodeTypes.Execute, Status = AgentNodeStatuses.Pending, InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-portfolio-return", "calculate-concentration", "calculate-annualized-volatility", "calculate-max-drawdown" } }) },
-            Node(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution),
-            Node(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile),
-            Node(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses),
-            Node(PortfolioDiagnosisNodeKeys.EvaluateQuality, PortfolioDiagnosisNodeTypes.EvaluateQuality)]
-    };
+        var run = new AgentRun()
+        {
+            Id = Guid.NewGuid(), UserId = userId, WorkflowType = AgentWorkflowTypes.PortfolioDiagnosis,
+            AgentType = AgentTypes.Portfolio, Status = AgentRunStatuses.Pending,
+            InputJson = AgentNodeJson.Serialize(new PortfolioDiagnosisInput(portfolioId, from, to, routingContext)),
+            BlackboardJson = CreateInitialBlackboardJson(portfolioId, from, to, routingContext),
+            WorkflowDefinitionJson = Definition().ToJsonString(AgentNodeJson.SerializerOptions),
+            CreatedAtUtc = DateTime.UtcNow,
+            Nodes = [
+                Node(PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext),
+                Node(PortfolioDiagnosisNodeKeys.ResolveRiskEvidence, PortfolioDiagnosisNodeTypes.ResolveRiskEvidence),
+                Node(PortfolioRiskMathNodeKeys.PrepareInputs, PortfolioRiskMathNodeTypes.PrepareInputs),
+                new AgentRunNode { Id = Guid.NewGuid(), NodeKey = PortfolioRiskMathNodeKeys.ExecuteCore, NodeType = PortfolioRiskMathNodeTypes.Execute, Status = AgentNodeStatuses.Pending, InputJson = AgentNodeJson.Serialize(new { operations = new[] { "calculate-portfolio-return", "calculate-concentration", "calculate-annualized-volatility", "calculate-max-drawdown" } }) },
+                Node(PortfolioDiagnosisNodeKeys.CalculateAttribution, PortfolioDiagnosisNodeTypes.CalculateAttribution),
+                Node(PortfolioDiagnosisNodeKeys.LoadRiskProfile, PortfolioDiagnosisNodeTypes.LoadRiskProfile),
+                Node(PortfolioDiagnosisNodeKeys.PrioritizeRiskAnalyses, PortfolioDiagnosisNodeTypes.PrioritizeRiskAnalyses),
+                Node(PortfolioDiagnosisNodeKeys.EvaluateQuality, PortfolioDiagnosisNodeTypes.EvaluateQuality)]
+        };
+
+        if (routingContext?.Scenarios is { Count: > 0 })
+        {
+            var node = Node("evaluatePortfolioScenarios", PortfolioScenarioCalculator.NodeType);
+            run.Nodes.Add(node);
+            var definition = JsonNode.Parse(run.WorkflowDefinitionJson)!.AsObject();
+            definition["nodes"]!.AsArray().Add(N(node.NodeKey, node.NodeType));
+            var edges = definition["edges"]!.AsArray();
+            var previous = edges.Single(x => x!["from"]!.GetValue<string>() == PortfolioDiagnosisNodeKeys.LoadContext);
+            edges.Remove(previous);
+            edges.Add(E(PortfolioDiagnosisNodeKeys.LoadContext, node.NodeKey));
+            edges.Add(E(node.NodeKey, PortfolioDiagnosisNodeKeys.ResolveRiskEvidence));
+            run.WorkflowDefinitionJson = definition.ToJsonString(AgentNodeJson.SerializerOptions);
+        }
+        return run;
+    }
 
     public static PortfolioDiagnosisInput ParseInput(string inputJson) =>
         System.Text.Json.JsonSerializer.Deserialize<PortfolioDiagnosisInput>(inputJson, AgentNodeJson.SerializerOptions)

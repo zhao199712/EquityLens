@@ -1,0 +1,45 @@
+{
+  "verifiedAtUtc": "2026-11-02T19:09:37.740782+00:00",
+  "sourceCommit": "8e8e0c6a99df83a2b6d7dd39d866bea779f65f12",
+  "checks": [
+    {
+      "name": "Cloudflare Pages",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-11-02T18:17:31Z",
+      "details_url": "https://dash.cloudflare.com/?to=/aa16918123cae4d885eec915c42027e1/pages/view/equitylens/c949c1ef-ee11-4dd3-b70b-60bd7346aadf"
+    },
+    {
+      "name": "Backend build and test",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-11-02T18:19:19Z",
+      "details_url": "https://github.com/zhao199712/EquityLens/actions/runs/41498953936/job/125461836789"
+    },
+    {
+      "name": "Frontend build and test",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-11-02T18:18:10Z",
+      "details_url": "https://github.com/zhao199712/EquityLens/actions/runs/41498953936/job/125461836660"
+    },
+    {
+      "name": "Mathematics tests",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-11-02T18:18:25Z",
+      "details_url": "https://github.com/zhao199712/EquityLens/actions/runs/41498953936/job/125461836624"
+    },
+    {
+      "name": "Eval harness tests",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-11-02T18:17:49Z",
+      "details_url": "https://github.com/zhao199712/EquityLens/actions/runs/41498953936/job/125461836182"
+    }
+  ],
+  "apiImage": "sha256:d97fe450b66aec2947ecb385e728de855ed00cb103cb9cef4ef2b455f7890967",
+  "apiHealth": "healthy",
+  "researchEngine": "AgentLoop",
+  "scope": "Read-only release verification; no new model calls, no deployment, no portfolio writes."
+}

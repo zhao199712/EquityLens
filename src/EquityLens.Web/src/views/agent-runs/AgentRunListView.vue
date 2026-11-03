@@ -12,6 +12,8 @@ const error = ref('')
 const filterWorkflow = ref('')
 const filterStatus = ref('')
 
+const workflowTypes = computed(() => [...new Set(['ResearchAgent', 'ResearchInvestigation', 'CriticReview', 'DraftRevision', 'ResearchQualityReview', 'EvidenceRemediation', 'EvidenceReanalysis', 'PortfolioDiagnosis', ...runs.value.map(run => run.workflowType)])])
+
 const filteredRuns = computed(() => {
   const q = search.value.trim().toLowerCase()
   return runs.value.filter((run) =>
@@ -71,13 +73,13 @@ function statusColor(status: string) {
         <input v-model="search" placeholder="搜尋 workflow / agent / ID..." class="prestige-input filter-search" />
         <select v-model="filterWorkflow" class="prestige-input filter-select">
           <option value="">全部 Workflow</option>
-          <option value="CriticReview">CriticReview</option>
-          <option value="DraftRevision">DraftRevision</option>
+          <option v-for="workflow in workflowTypes" :key="workflow" :value="workflow">{{ workflow }}</option>
         </select>
         <select v-model="filterStatus" class="prestige-input filter-select">
           <option value="">全部狀態</option>
           <option value="Pending">Pending</option>
           <option value="Running">Running</option>
+          <option value="WaitingForFeedback">WaitingForFeedback</option>
           <option value="WaitingForApproval">WaitingForApproval</option>
           <option value="Succeeded">Succeeded</option>
           <option value="Failed">Failed</option>

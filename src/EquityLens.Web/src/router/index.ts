@@ -3,7 +3,6 @@ import { useAuthStore } from '../stores/auth'
 
 const LoginView = () => import('../views/auth/LoginView.vue')
 const RegisterView = () => import('../views/auth/RegisterView.vue')
-const DashboardView = () => import('../views/DashboardView.vue')
 const HomeView = () => import('../views/home/HomeView.vue')
 const StyleLabView = () => import('../views/home-lab/StyleLabView.vue')
 const AuroraHomeView = () => import('../views/home-lab/AuroraHomeView.vue')
@@ -15,8 +14,6 @@ const PortfolioListView = () => import('../views/portfolios/PortfolioListView.vu
 const PortfolioDetailView = () => import('../views/portfolios/PortfolioDetailView.vue')
 const RiskRunListView = () => import('../views/risk/RiskRunListView.vue')
 const RiskRunDetailView = () => import('../views/risk/RiskRunDetailView.vue')
-const FinancialReportListView = () => import('../views/reports/FinancialReportListView.vue')
-const FinancialReportDetailView = () => import('../views/reports/FinancialReportDetailView.vue')
 const SettingsView = () => import('../views/settings/SettingsView.vue')
 const AdminLayout = () => import('../views/admin/AdminLayout.vue')
 const UserManagementView = () => import('../views/admin/UserManagementView.vue')
@@ -41,6 +38,8 @@ const ResearchRunManagementView = () => import('../views/admin/ResearchRunManage
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: '/dashboard', redirect: { name: 'portfolios' } },
+    { path: '/financial-reports/:id?', redirect: { name: 'research' } },
     {
       path: '/login',
       name: 'login',
@@ -102,12 +101,6 @@ export const router = createRouter({
       meta: { requiresAuth: false },
     },
     {
-      path: '/dashboard',
-      name: 'dashboard',
-      component: DashboardView,
-      meta: { requiresAuth: true },
-    },
-    {
       path: '/portfolios',
       name: 'portfolios',
       component: PortfolioListView,
@@ -126,16 +119,6 @@ export const router = createRouter({
       path: '/risk-runs/:id',
       name: 'risk-run-detail',
       component: RiskRunDetailView,
-    },
-    {
-      path: '/financial-reports',
-      name: 'financial-reports',
-      component: FinancialReportListView,
-    },
-    {
-      path: '/financial-reports/:id',
-      name: 'financial-report-detail',
-      component: FinancialReportDetailView,
     },
     {
       path: '/ask-agent',
@@ -253,9 +236,9 @@ router.beforeEach(async (to) => {
   }
 
   if ((to.name === 'login' || to.name === 'register') && authStore.isAuthenticated) {
-    return { name: 'dashboard' }
+    return { name: 'portfolios' }
   }
   if (to.meta.requiresAdmin && authStore.user?.role !== 'Admin') {
-    return { name: 'dashboard' }
+    return { name: 'portfolios' }
   }
 })

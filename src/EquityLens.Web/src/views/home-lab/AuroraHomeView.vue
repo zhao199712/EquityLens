@@ -249,8 +249,8 @@ const feedStatusLabel: Record<string, string> = {
           讓每一個投資決策都有證據可循
         </p>
         <div ref="heroCtaRef" class="hero-cta">
-          <button class="aurora-btn aurora-btn-primary" @click="router.push({ name: 'dashboard' })">
-            進入儀表板
+          <button class="aurora-btn aurora-btn-primary" @click="router.push({ name: 'portfolios' })">
+            查看投資組合
           </button>
           <button class="aurora-btn aurora-btn-ghost" @click="router.push({ name: 'research' })">
             查看 AI 研究

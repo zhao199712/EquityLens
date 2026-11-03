@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Text.Json;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Research;
@@ -11,6 +12,36 @@ namespace EquityLens.Api.Tests.Services.Agents;
 
 public sealed class AgentWorkflowQueryServiceTests
 {
+    [Fact]
+    public async Task PortfolioFollowup_PreservesParentPeriodAndRejectsOtherUsersParent()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid(); var portfolioId = Guid.NewGuid();
+        db.Portfolios.Add(new Portfolio { Id = portfolioId, OwnerUserId = user, Name = "P" });
+        var parent = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(user, portfolioId, new(2025, 1, 1), new(2025, 12, 31));
+        parent.Status = AgentRunStatuses.Succeeded; db.AgentRuns.Add(parent); await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns(); var service = new AgentWorkflowQueryService(db, Router(PortfolioRoute("1m")), runs);
+        await service.CreateAsync(user, new("補充風險分析", parent.Id));
+        Assert.Equal(new DateOnly(2025, 1, 1), runs.From); Assert.Equal(new DateOnly(2025, 12, 31), runs.To);
+        await Assert.ThrowsAsync<AgentWorkflowQueryException>(() => service.CreateAsync(Guid.NewGuid(), new("補充風險分析", parent.Id)));
+        parent.Status = AgentRunStatuses.Running; await db.SaveChangesAsync();
+        await Assert.ThrowsAsync<AgentWorkflowQueryException>(() => service.CreateAsync(user, new("補充風險分析", parent.Id)));
+    }
+
+    [Fact]
+    public async Task Router_ExtractsReadOnlyScenariosAndClarifiesIncompleteRequests()
+    {
+        var json = JsonNode.Parse(PortfolioRoute())!.AsObject();
+        json["scenarios"] = JsonSerializer.SerializeToNode(new[] { new PortfolioScenarioRequest("國巨30%", new Dictionary<string, decimal> { ["2327"] = .3m }) }, AgentNodeJson.SerializerOptions);
+        var route = await Router(json.ToJsonString()).RouteAsync("國巨降至30%留現金", []);
+        Assert.Equal(.3m, route.RoutingContext.Scenarios![0].TargetWeights["2327"]);
+        await using var db = CreateDb(); var user = Guid.NewGuid();
+        db.Portfolios.Add(new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "P" }); await db.SaveChangesAsync();
+        json["clarifyingQuestions"] = new JsonArray("請指定股票及目標權重。");
+        var service = new AgentWorkflowQueryService(db, Router(json.ToJsonString()), new FakeAgentRuns());
+        var error = await Assert.ThrowsAsync<AgentWorkflowQueryException>(() => service.CreateAsync(user, new("降低波動")));
+        Assert.Equal("scenario_clarification_required", error.Code);
+    }
+
     [Fact]
     public async Task PortfolioQuestion_WithOnePortfolio_CreatesDiagnosis()
     {

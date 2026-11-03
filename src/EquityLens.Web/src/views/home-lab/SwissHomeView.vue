@@ -191,8 +191,8 @@ const feedStatusLabel: Record<string, string> = {
             整合投資組合帳務、量化風險與 AI 研究工作流,<br />讓每一個投資決策都有證據可循
           </p>
           <div class="swiss-hero-cta">
-            <button class="swiss-btn swiss-btn-solid" @click="router.push({ name: 'dashboard' })">
-              進入儀表板
+            <button class="swiss-btn swiss-btn-solid" @click="router.push({ name: 'portfolios' })">
+              查看投資組合
             </button>
             <button class="swiss-btn swiss-btn-text" @click="router.push({ name: 'research' })">
               查看 AI 研究

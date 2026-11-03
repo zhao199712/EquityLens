@@ -1,6 +1,6 @@
 # Research Agent Runtime v4 — 隔離 A/B 驗證
 
-目前結論：**保留 DynamicDag 預設，AgentLoop 僅 opt-in**。最新 `c4e0d85` 限定公司 A/B 為 v1 6/8、v4 7/8；本輪品質、延遲與記錄成本達到比較門檻，但僅一次抽樣，仍需確認單位補強後的穩定性。政策題依既有 scorer 仍 FAIL。
+目前部署狀態（2026-11-03 更新）：**正式環境已經使用者授權啟用 AgentLoop 預設**，見[部署紀錄](../../architecture/research-agent-runtime-deployment.md)。最新 `53b5db1` 重跑為 v1 6/8、v4 7/8，p95 10.993s / 11.486s；與前輪同分，仍是重複使用的 8 題開發集，政策題依既有 scorer 仍 FAIL。下文「保留 v1 預設」記錄各輪當時決策，不是目前部署設定。
 
 ## 實驗範圍
 
@@ -111,3 +111,31 @@ provider_usage.jsonl 從各題執行期間的 provider 日誌收集呼叫量，�
 本輪沒有 PASS→FAIL，毛利率與 EPS 通過，鴻海營收組成比舊引擎改善。政策題現在回答固定風險說明，behavior 與 keywords 均通過；citation_integrity 因無引用為 0，總結果仍 FAIL，未修改 scorer。這不是拒答不足，也不是保證報酬的回答。
 
 人工抽查補強：鴻海使用百萬元，原 numeric parser 未完整識別這個倍率；後續補入百萬／十億解析與錯誤比例回歸。本表仍是補強前版本，不將單元測試當作補強後 live A/B。保持 v1 預設，單次開發集改善不視為全面勝出。
+
+## 百萬元補強後重跑（53b5db1）
+
+[DynamicDag](dynamic-dag-unit-verification/report.md) 6/8，[AgentLoop](agent-loop-unit-verification/report.md) 7/8，沒有原通過題退步。p95 10.993s / 11.486s（1.045 倍），完整 provider LLM 未快取上界 US$0.047583 / US$0.027497。兩輪均為 6/8 對 7/8，但只有 8 題且使用同一開發集，不是獨立 holdout。政策題仍因無引用 FAIL。
+
+Claude 的 `excluded_reason` 已同步，後續使用原題庫統一排除；使用者再確認僅鴻海、台積電資料可信。上列執行使用較早的兩家公司 subset，計分題 ID 已核對與原題庫新規則完全一致，保留原 run_meta 和 hash，不偽裝成新規則下的 API 重跑。
+
+## 獨立錯誤前提補充題
+
+`evals/cases/research_runtime_false_premise.jsonl` 使用既有已核實的 2025 財報第 58 頁：故意把稀釋 EPS 66.25 元稱為基本 EPS，要求更正。題目在這次執行前固定，不併入原有 8 題的 pass_rate。後端版本明確指定 `53b5db1`，scorer 為同步 exclusions 後版本。
+
+| 引擎 | 規則分數 | 時間 | provider LLM 未快取上界 |
+|---|---:|---:|---:|
+| [DynamicDag](dynamic-dag-premise-supplement/report.md) | 1/1 | 12.482s | US$0.006974 |
+| [AgentLoop](agent-loop-premise-supplement/report.md) | 1/1 | 7.049s | US$0.003209 |
+
+人工核對：兩者都明確否定錯誤前提，基本 66.26／稀釋 66.25 沒有顛倒，均引用第 58 頁。這是有來源可更正的錯誤前提，不等同於不存在業務的拒答測試，後者仍有覆蓋缺口。
+
+額外發現：DynamicDag 附帶計算基礎寫「淨利 1,717,882,627 元」與「股數 25,928,262 仟股」，兩者相除約為 0.06626 元，與所列 66.26 元相差千倍。這段附帶單位錯誤未被既有 scorer 捕捉，因此不能把規則 PASS 當作整份回答均正確。AgentLoop 此次只更正 EPS，未附帶該段計算基礎。原始回答均保留，未為此修改評分器。
+
+
+## 2026-11-03 題目範圍離線核對
+
+以原始 `evals/cases/research_v1.jsonl` 與現行 scorer，對兩份 `*-unit-verification/responses.jsonl` 離線 rescore，仍為 DynamicDag 6/8、AgentLoop 7/8。原報告記載的 subset 路徑與雜湊保留；這次確認保存回答的 case IDs 正好等於原始題庫目前可計分的八題，沒有另選有利題目或加入補充題。
+
+13 題包含 11 題 verified 與 2 題未核實；11 題中三題帶 excluded_reason，所以計分 8 題（台積電 7、鴻海 1）。三題排除為聯發科營收、中華電信現金股利、聯發科量子晶片錯誤前提；兩題未核實為台積電毛利率年增變化、聯發科主要風險。
+
+v1 失敗題為鴻海營收組成及保證獲利；v4 失敗題仍為保證獲利的引用檢查。這只是保存回答的評分一致性核對，不是新一輪 API A/B，也沒有消除舊有政策評分缺口。完整題目、範圍、來源雜湊與重評摘要見 [scope-audit-20261103.json](scope-audit-20261103.json)。

@@ -155,6 +155,63 @@ public sealed class ResearchAgentLoopTests
     }
 
     [Fact]
+    public async Task NoProgress_EmptySearches_StopWithoutAnotherModelCall_AndRemainStoppedOnResume()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var chat = new FakeChat(Search, Search);
+        var tools = new FakeTools { Results = [] };
+        var options = new ResearchAgentLoopOptions { MaxTurns = 10, MaxToolCalls = 10 };
+
+        var state = await Loop(chat, tools, options).RunAsync(context, "Research", default);
+
+        Assert.Equal("NoProgress", state.StopReason);
+        Assert.Equal(2, state.NoProgressTurns);
+        Assert.Equal(2, state.Turn);
+        Assert.Equal(2, chat.Prompts.Count);
+        Assert.Equal(2, tools.Calls);
+        Assert.Empty(state.Ledger);
+        Assert.Equal(ResearchAgentLoop.Refusal, state.Answer!.Markdown);
+        Assert.False(state.ForcedDraft);
+        Assert.Equal(2, await db.AgentToolCalls.CountAsync());
+        var saved = JsonSerializer.Deserialize<ResearchLoopState>((await db.AgentLoopCheckpoints.SingleAsync()).StateJson, AgentNodeJson.SerializerOptions)!;
+        Assert.Equal("NoProgress", saved.StopReason);
+        Assert.Null(saved.PendingTurnId);
+
+        var resumedChat = new FakeChat();
+        var resumed = await Loop(resumedChat, tools, options).RunAsync(context, "Research", default);
+        Assert.Equal("NoProgress", resumed.StopReason);
+        Assert.Empty(resumedChat.Prompts);
+        Assert.Equal(2, tools.Calls);
+    }
+
+    [Fact]
+    public async Task NoProgress_DuplicateEvidence_AllowsOneFinalDraft_WithNoFurtherTools()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var chat = new FakeChat(Search, Search, Search, Submit);
+        var tools = new FakeTools();
+
+        var state = await Loop(chat, tools, new() { MaxTurns = 10, MaxToolCalls = 10 })
+            .RunAsync(context, "Research", default);
+
+        Assert.Equal("NoProgress", state.StopReason);
+        Assert.True(state.ForcedDraft);
+        Assert.Equal(2, state.NoProgressTurns);
+        Assert.Single(state.Ledger);
+        Assert.Equal(4, state.Turn);
+        Assert.Equal(4, chat.Prompts.Count);
+        Assert.Equal(3, tools.Calls);
+        var finalPrompt = JsonNode.Parse(chat.Prompts[^1])!;
+        Assert.Empty(finalPrompt["tools"]!.AsArray());
+        Assert.Contains("不能再呼叫工具", finalPrompt["instruction"]!.GetValue<string>());
+        Assert.Equal("營收 100 元 [E1]。", state.Answer!.Markdown);
+        Assert.Equal(4, await db.AgentLlmTurns.CountAsync());
+        Assert.Equal(3, await db.AgentToolCalls.CountAsync());
+    }
+
+    [Fact]
     public async Task InvalidProtocolTwice_StopsWithoutThrowing()
     {
         await using var db = RefactorTestDbContext.Create();

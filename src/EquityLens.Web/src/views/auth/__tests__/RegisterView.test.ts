@@ -23,7 +23,7 @@ function createTestRouter() {
     routes: [
       { path: '/login', name: 'login', component: { template: '<div />' } },
       { path: '/register', name: 'register', component: { template: '<div />' } },
-      { path: '/', name: 'dashboard', component: { template: '<div />' } },
+      { path: '/', name: 'portfolios', component: { template: '<div />' } },
     ],
   })
 }
@@ -101,7 +101,7 @@ describe('RegisterView', () => {
     expect(wrapper.find('.prestige-error').text()).toBe('Passwords do not match')
   })
 
-  it('redirects to dashboard on successful registration', async () => {
+  it('redirects to portfolios on successful registration', async () => {
     mockedHttp.post.mockResolvedValueOnce({
       data: {
         accessToken: 'token',
@@ -131,7 +131,7 @@ describe('RegisterView', () => {
         password: 'password123',
         displayName: 'Test User',
       })
-      expect(pushSpy).toHaveBeenCalledWith({ name: 'dashboard' })
+      expect(pushSpy).toHaveBeenCalledWith({ name: 'portfolios' })
     })
   })
 

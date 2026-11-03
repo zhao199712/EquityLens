@@ -58,47 +58,11 @@ AI 研究與證據驗證
 
 ### AI Research Workflow
 
-```text
-問題
- ↓
-Router
- ↓
-Planner
- ↓
-DAG / Contract Validation
- ↓
-Workers
- ↓
-Evidence Check
- ↓
-Critique
- ↓
-Revision
- ↓
-Final Answer
-```
+- 以自然語言提出財報與投資研究問題
+- 搜尋研究資料，產生附來源引用的回答
+- 查看研究紀錄、證據與執行結果
 
-EquityLens 不採用完全自由的 Autonomous Agent，而是以受限制的能力、可驗證的流程與可追蹤的執行紀錄控制 AI 行為。
-
-核心原則：
-
-- LLM 負責語義理解、規劃與生成
-- 程式負責權限、流程與 deterministic validation
-- Capability 必須受到 Skill 授權範圍限制
-- Run、Node、Tool Call、成本與結果皆可追蹤
-
----
-
-## Research Agent Loop
-
-研究請求可用 `engine: "AgentLoop"` 選擇固定 DAG 與自主工具迴圈；未指定時仍使用既有 DynamicDag。新引擎由 LLM 選搜尋工具、參數與起草時機，程式控制來源政策、預算、引用檢查與一次修訂。它不呼叫動態 graph planner；持久化圖與節點狀態仍保留基本一致性檢查。
-
-- 每輪決策與工具結果落盤，接手時重用已完成結果。
-- Heartbeat 與交易式 lease fencing 防止舊 worker 提交結果。
-- 修訂後再次跑 Critic，驗收仍失敗就回標準拒答。
-- 副作用工具需綁定參數審批與下游冪等鍵；目前正式研究工具均唯讀，副作用流程由測試工具驗證。
-
-[設計與驗收](docs/architecture/research-agent-runtime.md) · [實作進度](docs/architecture/research-agent-runtime-progress.md) · [A/B 實測](docs/eval-verification/2026-11-02-agent-loop-ab/README.md) · [面試講稿與示範](docs/architecture/research-agent-runtime-interview.md)
+[研究功能文件](docs/architecture/research-agent-runtime.md) · [A/B 實測](docs/eval-verification/2026-11-02-agent-loop-ab/README.md)
 
 ---
 
@@ -134,9 +98,6 @@ EquityLens 不採用完全自由的 Autonomous Agent，而是以受限制的能�
 
 - **進階風險模型**  
   除了常見 VaR / ES，也整合 EWMA、Monte Carlo 與 MVEWMA-FHS。
-
-- **受限制的 Agent 架構**  
-  LLM 負責規劃與推理，程式則負責權限與執行邊界。
 
 - **可追蹤的研究流程**  
   Node 執行、證據、Tool Call、成本與最終輸出皆可保存與稽核。
@@ -208,15 +169,14 @@ docker compose up -d
 啟動 API：
 
 ```bash
-cd src/EquityLens.Api
-dotnet run
+AgentRuntime__ResearchEngine=AgentLoop dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj
 ```
 
 執行測試：
 
 ```bash
-dotnet test
-pytest
+dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
+python -m pytest evals/tests -q
 ```
 
 實際執行還需要設定 PostgreSQL、Redis、S3、OAuth 與 AI provider 等環境變數。

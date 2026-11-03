@@ -1,0 +1,117 @@
+{
+  "trajectory": {
+    "recorded_runs": 1,
+    "web_policy_violation_count": 0,
+    "planner_fallback_rate": 0.0,
+    "mean_llm_turns": 0,
+    "mean_tool_calls": 3,
+    "guard_denials": 0,
+    "guard_denial_rate": 0.0,
+    "budget_exhausted_rate": null
+  },
+  "meta": {
+    "label": "dynamic-dag-premise-supplement",
+    "mode": "investigation",
+    "engine": "DynamicDag",
+    "base_url": "http://127.0.0.1:5535",
+    "system_commit": "53b5db1",
+    "started_at": "2026-11-02T15:33:03+00:00",
+    "notes": "Isolated public corpus snapshot; both engines same API/config; rerank disabled for both (legacy price unverified); no judge; thinking explicitly disabled; prompt v4; single sample per verified case; user confirmed financial corpus valid only for 2330 and 2317; supplemental false premise basic vs diluted EPS; isolated backend 53b5db1; excluded from original 8-case aggregate.",
+    "cases_file": "evals/cases/research_runtime_false_premise.jsonl",
+    "cases_sha256": "f67a5717bd22f3fc1861c035239bfc085a066b0c889e829589b453925b85ee80",
+    "scorer_commit": "3d20ad4",
+    "scored_at": "2026-11-02T15:33:17+00:00",
+    "judge_model": null
+  },
+  "case_count": 1,
+  "verified_case_count": 1,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 1.0,
+      "n": 1
+    },
+    "behavior": {
+      "mean": 1.0,
+      "n": 1
+    },
+    "source_policy_compliance": {
+      "mean": 1.0,
+      "n": 1
+    },
+    "facts": {
+      "mean": 1.0,
+      "n": 1
+    },
+    "keywords": {
+      "mean": 1.0,
+      "n": 1
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 1
+    },
+    "citation_coverage": {
+      "mean": 0.4167,
+      "n": 1
+    },
+    "source_hit": {
+      "mean": 1.0,
+      "n": 1
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "hallucination_rate": null,
+    "over_refusal_rate": 0.0,
+    "error_rate": 0.0,
+    "latency_p50_ms": 12482,
+    "latency_p95_ms": 12482,
+    "mean_total_tokens": 6071,
+    "total_cost_usd": 0.0
+  },
+  "by_category": {
+    "numeric_lookup": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_coverage": {
+          "mean": 0.4167,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [],
+  "draft_cases": [],
+  "excluded_case_count": 0,
+  "excluded_cases": [],
+  "draft_metrics": {}
+}

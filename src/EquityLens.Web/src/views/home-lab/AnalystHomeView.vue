@@ -206,8 +206,8 @@ const feedStatusLabel: Record<string, string> = {
           <span class="analyst-date">{{ todayLabel }}</span>
         </div>
         <div class="analyst-header-actions">
-          <button class="analyst-btn analyst-btn-solid" @click="router.push({ name: 'dashboard' })">
-            進入儀表板
+          <button class="analyst-btn analyst-btn-solid" @click="router.push({ name: 'portfolios' })">
+            查看投資組合
           </button>
           <button class="analyst-btn analyst-btn-outline" @click="router.push({ name: 'research' })">
             查看 AI 研究

@@ -1,0 +1,27 @@
+{
+  "backend_git": "402ccf7",
+  "image_id": "sha256:63bd30a83ac1b07fdbe0461539b8cadf08f1a64192de582b846ab6e556e1dcdf",
+  "verified_at_utc": "2026-11-02T16:01:59.853683+00:00",
+  "request_engine_omitted": true,
+  "agent_run_id": "d01523e8-8d78-4c40-9e29-797f38cd4130",
+  "research_run_id": "f78f5595-6d85-490d-982b-8e996e6369fe",
+  "workflow_type": "ResearchAgent",
+  "runtime_status": "Succeeded",
+  "research_status": "Answered",
+  "llm_turn_count": 2,
+  "answer": "台積電 2025 年（114年度）基本每股盈餘為新台幣 66.26 元 [1][2]。",
+  "citations": [
+    {
+      "index": 1,
+      "title": "2330 Annual Report 2025",
+      "page": 10
+    },
+    {
+      "index": 2,
+      "title": "2330 Annual Report 2025",
+      "page": 58
+    }
+  ],
+  "observed_provider_calls": 3,
+  "observed_llm_peak_uncached_upper_usd": 0.0027537
+}

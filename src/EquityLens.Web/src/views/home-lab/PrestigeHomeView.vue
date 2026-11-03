@@ -573,7 +573,7 @@ onMounted(async () => {
           讓每一個投資決策都有證據可循
         </p>
         <div class="hero-cta fade-in" style="--d: 0.45s">
-          <button class="btn-gold" @click="router.push({ name: 'dashboard' })">進入儀表板</button>
+          <button class="btn-gold" @click="router.push({ name: 'portfolios' })">查看投資組合</button>
           <button class="btn-text" @click="router.push({ name: 'research' })">查看 AI 研究</button>
         </div>
 
