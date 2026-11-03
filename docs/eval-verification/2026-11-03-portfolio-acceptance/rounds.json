@@ -149,5 +149,29 @@
     "reason": null,
     "raw_sha256": "775751598d84d6eccf8a28aebd95b0ea4d1855a7555d3f709381455ae8e502c7",
     "raw_bytes": 8763829
+  },
+  {
+    "round": 13,
+    "original_directory": "portfolio-eval-20261103-five-fixes",
+    "strict_passed": 12,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": null,
+    "raw_sha256": "55c3a8c7b5c9005beee08a3b9bf0c9ad53463526b3ce79426c4a567d47175d5a",
+    "raw_bytes": 8799069
+  },
+  {
+    "round": 14,
+    "original_directory": "portfolio-eval-20261103-last-two",
+    "strict_passed": 2,
+    "attempted_cases": 2,
+    "not_run": 12,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": true,
+    "reason": "Targeted rerun of multi-scenario and tradeoff only; not a full 14-case result",
+    "raw_sha256": "52eb27c8ac7f5752aa0650e1d59a3c7e17df38e25d110c2c45e46597d9589d72",
+    "raw_bytes": 1670762
   }
 ]

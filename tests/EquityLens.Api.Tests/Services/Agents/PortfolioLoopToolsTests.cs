@@ -154,7 +154,7 @@ public sealed class PortfolioLoopToolsTests
         await using (var db = new RefactorTestDbContext(options))
         { db.Portfolios.Add(new() { Id = id, OwnerUserId = owner, Name = "test" }); await db.SaveChangesAsync(); }
         var dates = Enumerable.Range(0, 130).Select(i => new DateOnly(2025, 1, 1).AddDays(i)).ToArray();
-        var snapshot = new PortfolioScenarioSnapshot(id, DateTime.UtcNow, "TWD", dates[0], dates[^1], dates,
+        var snapshot = new PortfolioScenarioSnapshot(id, DateTime.UtcNow, "TWD", dates[0].AddDays(-7), dates[^1], dates,
             [new("2330", 10, 100, dates.Select((_, i) => 100m + i % 5).ToArray())], 1000, []);
         var requests = new[] { new PortfolioScenarioRequest("減碼", new Dictionary<string, decimal> { ["2330"] = .3m }) };
         var board = new JsonObject { [AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(new PortfolioDiagnosisContext(id, "test", "TWD", dates[0], dates[^1], 1), AgentNodeJson.SerializerOptions),
@@ -168,6 +168,14 @@ public sealed class PortfolioLoopToolsTests
         var expected = PortfolioScenarioCalculator.Calculate(snapshot, requests);
         Assert.Equal(expected.InputHash, actual.InputHash);
         Assert.Equal(expected.Scenarios[0].Metrics!.AnnualizedVolatility, actual.Scenarios[0].Metrics!.AnnualizedVolatility);
+        Assert.Equal(dates[0].ToString("yyyy-MM-dd"), result.Data!["period"]?["from"]?.ToString());
+        Assert.Equal(dates[^1].ToString("yyyy-MM-dd"), result.Data!["period"]?["to"]?.ToString());
+        Assert.Equal(dates[0].AddDays(-7).ToString("yyyy-MM-dd"), result.Data!["period"]?["requestedFrom"]?.ToString());
+        Assert.Equal(dates[1].ToString("yyyy-MM-dd"), result.Data!["period"]?["returnFrom"]?.ToString());
+        Assert.Equal(-.2m, result.Data!["scenarios"]![0]!["weightChanges"]!["2330"]!.GetValue<decimal>());
+        Assert.Equal(.2m, result.Data!["scenarios"]![0]!["cashWeightChange"]!.GetValue<decimal>());
+        Assert.Null(result.Data!["snapshot"]);
+        Assert.DoesNotContain("prices", result.Data.ToJsonString());
         Assert.Null(board[PortfolioScenarioCalculator.ResultKey]);
         var partial = PortfolioLoopTools.CalculateAvailable(snapshot, [requests[0], new("bad", new Dictionary<string, decimal> { ["2330"] = .9m })]);
         Assert.Single(partial.Scenarios);

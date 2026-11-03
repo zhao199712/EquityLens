@@ -101,12 +101,19 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
                 cited.Any(f => f.Data.ToJsonString().Contains(m.Value, StringComparison.Ordinal)) ? "日期" : m.Value);
             var tickers = facts.SelectMany(f => Tickers(f.Data)).ToHashSet(StringComparer.Ordinal);
             text = Regex.Replace(text, @"(?<![\d.])\d{4,6}(?![\d.]|\s*(?:%|％|元|股|百分點))", m => tickers.Contains(m.Value) ? "標的" : m.Value);
-            var separatesBases = Regex.IsMatch(text, @"計算基礎不同|(?:不宜|不可|不能).{0,8}(?:直接|交叉)?比較")
-                && !Regex.IsMatch(text, @"→|差異|百分點|降至|增至");
+            // 「1.47 與 0.90 個百分點」共用尾端單位；僅限相鄰數字串列，不跨指標文字借用單位。
+            const string listNumber = @"[-+]?\d+(?:,\d{3})*(?:\.\d+)?";
+            text = Regex.Replace(text, $@"(?<![\d.])(?<numbers>{listNumber}(?:\s*(?:與|和|及|、|或|~|～|至)\s*{listNumber})+)\s*(?<unit>個百分點|百分點)",
+                m => Regex.Replace(m.Groups["numbers"].Value, listNumber, n => n.Value + m.Groups["unit"].Value));
+            // 解釋兩種口徑不可互換，不等於把它們相減；但實際數字箭頭／改善幅度仍須同一快照。
+            var quantitativeChange = Regex.IsMatch(text, @"\d[^。；;\n]{0,15}→[^。；;\n]{0,15}\d|(?:下降|降低|增加|改善|差額|差異為|降至|增至)[^。；;\n]{0,12}[-+]?\d");
+            var separatesBases = !quantitativeChange && Regex.IsMatch(text,
+                @"(?:口徑|基礎|基準).{0,8}不同|(?:不宜|不可|不能).{0,12}(?:比較|相減|替換|互換|相加)");
             var comparisonClaim = !separatesBases && facts.Any(f => f.Tool == "simulate_weight_scenario")
                 && Regex.IsMatch(text, @"(?<![A-Za-z\d])[-+]?\d+(?:\.\d+)?")
                 && Regex.IsMatch(text, @"波動|VaR|ES|回撤", RegexOptions.IgnoreCase)
-                && (Regex.IsMatch(text, @"比較|情境|調整|差異|差額|→|前後|降至|增至") || text.Contains('|'));
+                && (quantitativeChange || Regex.IsMatch(text, @"比較|差異|差額|前後")
+                    || (text.Contains('|') && cited.Any(f => f.Tool == "simulate_weight_scenario")));
             if (comparisonClaim && cited.Any(f => f.Tool is "run_risk_analysis" or "get_risk_report")) issues.Add("MixedRiskBasis");
             var citations = cited.Where(f => !comparisonClaim || f.Tool == "simulate_weight_scenario").SelectMany(f => Values(f.Data)).ToArray();
             foreach (Match number in Regex.Matches(text, @"(?<![A-Za-z\d])(?<value>[-+]?\d+(?:,\d{3})*(?:\.\d+)?)(?:\s*(?<unit>[%％]|個百分點|百分點))?"))
@@ -127,6 +134,21 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
     internal static string RepairHints(IReadOnlyList<string> rejected, IReadOnlyList<LoopDataFact> facts, LoopAnswer? answer = null)
     {
         var hints = new List<string>();
+        if (answer is not null)
+        {
+            var lines = WithTableCitations(answer.Markdown.Normalize(System.Text.NormalizationForm.FormKC).Replace('−', '-')).Split('\n');
+            foreach (var line in lines.Where(l => !string.IsNullOrWhiteSpace(l)))
+            {
+                var ids = Regex.Matches(line, @"\[(P\d+)\]").Select(m => m.Groups[1].Value).Distinct().ToArray();
+                var problems = Check(new LoopAnswer(line, ids), facts);
+                if (problems.Count == 0) continue;
+                var sources = facts.Where(f => ids.Contains(f.Id)).Select(f => $"[{f.Id}]={f.Tool}");
+                hints.Add("問題段落: " + AgentNodeJson.Trim(line, 350) + "；問題=" + string.Join(",", problems)
+                    + "；目前引用=" + string.Join(",", sources)
+                    + "。逐句補正確來源；風險偏好不能支持風險數字或權重。無法核對就移除非必要數字，不要猜算合計或改引用湊數。");
+                if (hints.Count >= 6) break;
+            }
+        }
         // 日期字串不是數值候選，回報完整日期與真正含有日期的來源供模型核對。
         if (answer is not null)
             foreach (var date in Regex.Matches(answer.Markdown, @"(?<!\d)20\d{2}-\d{2}-\d{2}(?!\d)").Select(m => m.Value).Distinct().Take(8))

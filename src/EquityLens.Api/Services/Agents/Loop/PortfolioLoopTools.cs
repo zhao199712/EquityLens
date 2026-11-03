@@ -165,7 +165,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 var requests = call.Arguments["scenarios"]!.Deserialize<List<PortfolioScenarioRequest>>(AgentNodeJson.SerializerOptions)!;
                 var comparison = CalculateAvailable(snapshot, requests);
                 patch[PortfolioScenarioCalculator.ResultKey] = JsonSerializer.SerializeToNode(comparison, AgentNodeJson.SerializerOptions);
-                data = Object(comparison with { Snapshot = null });
+                data = ScenarioEvidence(comparison);
                 break;
             }
             default:
@@ -206,6 +206,26 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
         if (accepted.Count == 0) throw new AgentWorkflowQueryException("scenario_invalid", string.Join("; ", errors));
         var comparison = PortfolioScenarioCalculator.Calculate(snapshot, accepted);
         return comparison with { Warnings = comparison.Warnings.Concat(errors).ToArray(), ScenarioErrors = errors };
+    }
+
+    /// <summary>保留情境快照的期間及確定性權重差，不把原始價格陣列送入模型。</summary>
+    internal static JsonObject ScenarioEvidence(PortfolioScenarioComparison comparison)
+    {
+        var data = new JsonObject { ["period"] = comparison.Snapshot is { } snapshot
+            ? Object(new { from = snapshot.Dates.Count > 0 ? snapshot.Dates[0] : snapshot.From,
+                to = snapshot.Dates.Count > 0 ? snapshot.Dates[^1] : snapshot.To,
+                returnFrom = snapshot.Dates.Count > 1 ? (DateOnly?)snapshot.Dates[1] : null,
+                requestedFrom = snapshot.From, requestedTo = snapshot.To }) : null };
+        foreach (var item in Object(comparison with { Snapshot = null })) data[item.Key] = item.Value?.DeepClone();
+        if (comparison.Baseline is { } baseline && data["scenarios"] is JsonArray scenarios)
+            for (var i = 0; i < comparison.Scenarios.Count; i++)
+            {
+                var scenario = comparison.Scenarios[i];
+                scenarios[i]!["weightChanges"] = Object(scenario.Weights.ToDictionary(x => x.Key,
+                    x => x.Value - baseline.Weights.GetValueOrDefault(x.Key)));
+                scenarios[i]!["cashWeightChange"] = scenario.CashWeight - baseline.CashWeight;
+            }
+        return data;
     }
 
     private static JsonObject Object(object value) => JsonSerializer.SerializeToNode(value, AgentNodeJson.SerializerOptions)!.AsObject();

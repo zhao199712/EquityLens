@@ -1,6 +1,6 @@
 {
   "backend": {
-    "passed": 995,
+    "passed": 1008,
     "postgres_integration": 18,
     "skipped": 0
   },
@@ -14,12 +14,13 @@
   "mathematics_pytest": 36,
   "eval_pytest": 92,
   "ef_pending_model_changes": false,
-  "live_code_final_verification": "Round 12 complete 9/14; all 14 fixture benchmarks API-verified constant 100; earlier external-benchmark rounds not comparable",
+  "live_code_final_verification": "Prompt 13 full round 12/14; prompt 14 targeted rerun 2/2, other 12 not rerun; do not claim 14/14",
   "authorized_usd": 1,
-  "charged_or_reserved_upper_usd": 0.8387916,
+  "charged_or_reserved_upper_usd": 0.9632685,
   "deployment": "none",
   "original_research_cases": "unchanged",
   "integrated_main": "81c8809",
   "benchmark_isolation_verified_from_round": 12,
-  "evaluated_code": "e7a1bd4 (backend prompt 12); harness adds benchmark preflight"
+  "evaluated_code": "c4b643a plus per-round recorded diff hashes (prompt 13 full, prompt 14 targeted)",
+  "recovery_observed": "round 13 cash: per-turn ToolBudgetExceeded then identical arguments succeeded next turn; invalid-argument recovery not observed"
 }
