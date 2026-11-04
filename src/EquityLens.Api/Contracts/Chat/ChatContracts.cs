@@ -42,4 +42,8 @@ public sealed record ConversationRunCardDto(
     int TotalNodes,
     string? FinalAnswer,
     string? ErrorMessage,
-    IReadOnlyList<string>? QualityIssues = null);
+    IReadOnlyList<string>? QualityIssues = null,
+    IReadOnlyList<ConversationSuggestedActionDto>? SuggestedActions = null);
+
+public sealed record ConversationSuggestedActionDto(
+    string Id, string Label, string Prompt, string? LabelEn = null, string? PromptEn = null);

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Tests.Services.Chat;
 
-public sealed class ConversationServiceTests
+public sealed partial class ConversationServiceTests
 {
     [Fact]
     public async Task RevisePortfolio_UsesLinkedWorkflowInsteadOfResearchFeedback()
