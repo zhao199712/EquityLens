@@ -63,3 +63,36 @@ test('Ask Agent creates a session only after its first message and receives a re
   await expect.poll(() => api.requests.filter(r => r.method === 'POST' && r.path === '/chat/sessions').length).toBe(1)
   await expect(page.getByText('CI 固定回答：請比較減碼國巨轉現金的情境，並確認波動、VaR 與 ES。', { exact: true })).toBeVisible()
 })
+
+for (const role of ['User', 'Admin']) {
+  test(`Agent Run detail tabs for ${role} ignore retired UI fields`, async ({ page }, testInfo) => {
+    await login(page)
+    await page.route('**/api/auth/me', route => route.fulfill({ json: { user: {
+      id: 'ci-user', email: 'browser@example.invalid', displayName: `CI ${role}`, role,
+    } } }))
+    const detail = researchRun('Succeeded')
+    detail.blackboardJson = JSON.stringify({
+      ...JSON.parse(detail.blackboardJson),
+      routingContext: { leadSkill: 'retired-skill', leadSkillDisplayName: '舊技能名稱' },
+      capabilityRequestAssessment: { decision: 'Request', reason: '舊能力評估' },
+      capabilityRequests: [{ capabilityId: 'retired-capability', status: 'Pending' }],
+    })
+    await page.route(`**/api/agent-runs/${agentId}`, route => route.fulfill({ json: detail }))
+    await page.goto(`/agent-runs/${agentId}`)
+    await page.getByRole('button', { name: '展開除錯資訊 ▼', exact: true }).click()
+    const tabs = page.locator('.tab-bar')
+    const expected = ['時間線', '節點', '工具', 'Feedback']
+    if (role === 'Admin') expected.push('Blackboard', 'Workflow')
+    await expect(tabs.locator('button')).toHaveText(expected)
+    await expect(page.locator('[data-testid="routing-stage"]')).toHaveCount(0)
+    await expect(page.locator('body')).not.toContainText(/舊技能名稱|舊能力評估|retired-capability|retired-skill/)
+    await tabs.scrollIntoViewIfNeeded()
+    await page.locator('.debug-panel').screenshot({ path: testInfo.outputPath(`agent-run-tabs-${role.toLowerCase()}.png`) })
+    if (role === 'Admin') {
+      await tabs.getByRole('button', { name: 'Blackboard', exact: true }).click()
+      await expect(page.locator('.tab-pad')).toContainText('Blackboard')
+      await tabs.getByRole('button', { name: 'Workflow', exact: true }).click()
+      await expect(page.locator('.tab-pad')).toContainText('ResearchAgentLoop')
+    }
+  })
+}
