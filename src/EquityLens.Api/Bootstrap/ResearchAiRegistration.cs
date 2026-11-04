@@ -11,6 +11,7 @@ public static class ResearchAiRegistration
     public static void AddEquityLensResearchAi(this WebApplicationBuilder builder)
     {
         // AI / LLM 服務
+        builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));
         builder.Services.Configure<DeepSeekOptions>(builder.Configuration.GetSection("DeepSeek"));
         builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection("Gemini"));
         builder.Services.Configure<RetrievalOptions>(builder.Configuration.GetSection(RetrievalOptions.SectionName));
@@ -46,12 +47,15 @@ public static class ResearchAiRegistration
             case null or "" or "DEEPSEEK":
                 builder.Services.AddHttpClient<IChatCompletionService, DeepSeekChatCompletionService>();
                 break;
+            case "OPENAI":
+                builder.Services.AddHttpClient<IChatCompletionService, OpenAiChatCompletionService>();
+                break;
             case "GEMINI":
                 builder.Services.AddHttpClient<IChatCompletionService, GeminiChatCompletionService>();
                 break;
             default:
                 throw new InvalidOperationException(
-                    $"Unsupported AI:ChatProvider '{chatProvider}'. Supported values: DeepSeek, Gemini.");
+                    $"Unsupported AI:ChatProvider '{chatProvider}'. Supported values: DeepSeek, Gemini, OpenAI.");
         }
         builder.Services.AddScoped<IConversationAgent>(sp => sp.GetRequiredService<InvestmentResearchRouter>());
         builder.Services.AddScoped<IConversationService, ConversationService>();

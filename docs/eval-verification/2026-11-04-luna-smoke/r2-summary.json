@@ -1,0 +1,57 @@
+{
+  "suite": "portfolio-v1",
+  "scorer_version": 2,
+  "attempted": 2,
+  "passed": 0,
+  "not_run": [],
+  "results": [
+    {
+      "case_id": "unprompted",
+      "passed": false,
+      "answer_chars": 0,
+      "checks": {
+        "provider_healthy": true,
+        "no_side_effects": true,
+        "completed_or_clarified": false,
+        "scenario_calculated": false,
+        "quality_passed": false
+      },
+      "recovery_after_rejection": null,
+      "llm_turns": 1,
+      "quality_issues": null,
+      "cost_usd": 0.0003249,
+      "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+      "scorer_version": 2
+    },
+    {
+      "case_id": "volatility-only",
+      "passed": false,
+      "answer_chars": 34,
+      "checks": {
+        "provider_healthy": true,
+        "no_side_effects": true,
+        "completed_or_clarified": true,
+        "direct_cited_volatility": false,
+        "no_irrelevant_scenario_section": true,
+        "quality_passed": false,
+        "default_preference_disclosed": false
+      },
+      "recovery_after_rejection": null,
+      "llm_turns": 2,
+      "quality_issues": [
+        "InsufficientEvidence"
+      ],
+      "cost_usd": 0.000736,
+      "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+      "scorer_version": 2
+    }
+  ],
+  "observed_models": [
+    "gpt-6-luna"
+  ],
+  "limitations": [
+    "Numeric prose is checked by the production gate, not an independent semantic judge.",
+    "No denial means recovery was not observed, not that it passed.",
+    "Qualitative recommendation suitability still requires review."
+  ]
+}

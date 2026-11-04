@@ -1,0 +1,16 @@
+{"id": "6a29f845af014d29b22fb0f3ea8b4a9b", "reserved_usd": 0.001748275}
+{"id": "6a29f845af014d29b22fb0f3ea8b4a9b", "charged_upper_usd": 0.00027370000000000004, "status": 200, "usage": {"input_tokens": 952, "input_tokens_details": {"cache_write_tokens": 0, "cached_tokens": 0}, "output_tokens": 119, "output_tokens_details": {"reasoning_tokens": 31}, "total_tokens": 1071}, "total_upper_usd": 0.00027370000000000004}
+{"id": "64bd420c7c734852ba2b570fd8326a1b", "reserved_usd": 0.003704525}
+{"id": "64bd420c7c734852ba2b570fd8326a1b", "charged_upper_usd": 0.000696175, "status": 200, "usage": {"input_tokens": 2523, "input_tokens_details": {"cache_write_tokens": 2520, "cached_tokens": 0}, "output_tokens": 257, "output_tokens_details": {"reasoning_tokens": 62}, "total_tokens": 2780}, "total_upper_usd": 0.000969875}
+{"id": "fccf4e9be46b4273941a8eaaf4cf6551", "reserved_usd": 0.004633325000000001}
+{"id": "fccf4e9be46b4273941a8eaaf4cf6551", "charged_upper_usd": 0.0009943250000000001, "status": 200, "usage": {"input_tokens": 3497, "input_tokens_details": {"cache_write_tokens": 1904, "cached_tokens": 1590}, "output_tokens": 415, "output_tokens_details": {"reasoning_tokens": 230}, "total_tokens": 3912}, "total_upper_usd": 0.0019642}
+{"id": "e1f1e9227d834d9d9402746464759417", "reserved_usd": 0.00877625}
+{"id": "e1f1e9227d834d9d9402746464759417", "charged_upper_usd": 0.0021595, "status": 200, "usage": {"input_tokens": 8180, "input_tokens_details": {"cache_write_tokens": 6587, "cached_tokens": 1590}, "output_tokens": 638, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 8818}, "total_upper_usd": 0.0041237}
+{"id": "67b03c88943749b9a8ad22c237e0423e", "reserved_usd": 0.001738825}
+{"id": "67b03c88943749b9a8ad22c237e0423e", "charged_upper_usd": 0.00026502499999999995, "status": 200, "usage": {"input_tokens": 929, "input_tokens_details": {"cache_write_tokens": 0, "cached_tokens": 0}, "output_tokens": 112, "output_tokens_details": {"reasoning_tokens": 28}, "total_tokens": 1041}, "total_upper_usd": 0.0043887250000000004}
+{"id": "329ee373e9454f939aafec90cebd1a38", "reserved_usd": 0.0037025}
+{"id": "329ee373e9454f939aafec90cebd1a38", "charged_upper_usd": 0.000641775, "status": 200, "usage": {"input_tokens": 2519, "input_tokens_details": {"cache_write_tokens": 926, "cached_tokens": 1590}, "output_tokens": 150, "output_tokens_details": {"reasoning_tokens": 37}, "total_tokens": 2669}, "total_upper_usd": 0.0050305}
+{"id": "e063e02fcf9a42adabe5527e39f2042f", "reserved_usd": 0.00464075}
+{"id": "e063e02fcf9a42adabe5527e39f2042f", "charged_upper_usd": 0.000838625, "status": 200, "usage": {"input_tokens": 3505, "input_tokens_details": {"cache_write_tokens": 1912, "cached_tokens": 1590}, "output_tokens": 100, "output_tokens_details": {"reasoning_tokens": 34}, "total_tokens": 3605}, "total_upper_usd": 0.005869125}
+{"id": "f595e2e6929643cb97f0c6cbfe955fd3", "reserved_usd": 0.005822}
+{"id": "f595e2e6929643cb97f0c6cbfe955fd3", "charged_upper_usd": 0.001211775, "status": 200, "usage": {"input_tokens": 4799, "input_tokens_details": {"cache_write_tokens": 3206, "cached_tokens": 1590}, "output_tokens": 264, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 5063}, "total_upper_usd": 0.0070809}

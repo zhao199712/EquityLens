@@ -1,0 +1,198 @@
+[
+  {
+    "case_id": "unprompted",
+    "question": "可以給我優化建議嗎？",
+    "answer": "建議優先評估將標的A（9001）由80%減至50%、減出部分暫留現金；這是可量化的降風險方案，不代表必須交易。你目前保存的是預設「依你的風險偏好『穩健』（預設，可在設定修改）」；此設定沒有量化的可承受波動門檻。[P3][P7]\n\n| 同一情境快照指標 | 原組合 | 減碼後留現金 | 差異 |\n|---|---:|---:|---:|\n| 年化波動率 | 24.33% | 15.25% | 年化波動率下降 9.09 個百分點（改善）[P7] |\n| 95%單日歷史 VaR | -2.30% | -1.40% | VaR上升 0.90 個百分點（改善）[P7] |\n| 95%單日期望短缺 | -2.43% | -1.50% | 期望短缺上升 0.92 個百分點（改善）[P7] |\n| 假設最大回撤 | -11.05% | -6.31% | 最大回撤上升 4.74 個百分點（改善）[P7] |\n\n情境採2025-11-14至2026-11-03共252筆觀測、固定權重歷史簡單報酬、現金報酬假設為零；不是帳戶實際績效，且不含費用、滑價及稅負，模型未經回測驗證。[P7] 9001目前權重80%，其波動風險貢獻為99.77%，顯示組合風險高度集中於該持股；情境減碼可降低集中度，但仍保留一半權重，並增加現金配置。[P1][P6][P7] 兩檔核准指數ETF均不可用（找不到證券資料），因此本次未量化轉入ETF的方案。[P1][P7]\n\n帳簿現金資料顯示系統帳簿現金餘額為0 TWD（截至2026-11-04）；該值僅依系統記錄推導，非券商核對餘額。[P1] 工具唯讀，不代表持倉已調整；不保證獲利。",
+    "duration_seconds": 19.514816,
+    "gate": {
+      "passed": true,
+      "limited": true,
+      "blockingIssues": [],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "2ac134f0-c81f-4fc4-8cfe-eb5ef61a541f",
+        "agentRunNodeId": "63337eae-de70-4c91-9e45-6cbd4a821dcf",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "32F4BF905C9DE172D4070469374975E774116CBD04B6150D2BECE89C858F12FD",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉快照、既有風險資料與偏好，再決定情境比較。",
+        "promptTokens": 2523,
+        "completionTokens": 257,
+        "estimatedCostUsd": 0.000696175,
+        "latencyMs": 3305,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:10:11.664277Z"
+      },
+      {
+        "id": "a3c2f7b4-6ea0-4101-a989-0f81295895a2",
+        "agentRunNodeId": "63337eae-de70-4c91-9e45-6cbd4a821dcf",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "FD6D7AA306D418BAA23D3CED63A8F47ED98FBE62977DB149507DCB75D40CAAF7",
+        "action": "call_tools",
+        "thoughtSummary": "ETF 候選皆不可用，先以減碼最大持倉並留現金作單一示例情境，同時補算同期間風險指標。",
+        "promptTokens": 3497,
+        "completionTokens": 415,
+        "estimatedCostUsd": 0.000994325,
+        "latencyMs": 5274,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:10:17.195236Z"
+      },
+      {
+        "id": "3ca80de3-6d90-4398-8e77-2fbbb4eb0b7b",
+        "agentRunNodeId": "63337eae-de70-4c91-9e45-6cbd4a821dcf",
+        "turn": 3,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "0292EBF867BCDF608D9D5341BFD97D4FB8783ECF012B9EDE3F54C0AEB2AFD178",
+        "action": "submit_answer",
+        "thoughtSummary": "以同快照情境結果提出有條件的降風險建議，並交代偏好與模型限制。",
+        "promptTokens": 8180,
+        "completionTokens": 638,
+        "estimatedCostUsd": 0.0021595,
+        "latencyMs": 6993,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:10:24.300344Z"
+      }
+    ],
+    "tools": [
+      {
+        "tool": "get_portfolio_snapshot",
+        "status": "Succeeded"
+      },
+      {
+        "tool": "get_risk_report",
+        "status": "Succeeded"
+      },
+      {
+        "tool": "get_risk_profile",
+        "status": "Succeeded"
+      },
+      {
+        "tool": "run_risk_analysis",
+        "status": "Succeeded"
+      },
+      {
+        "tool": "run_risk_analysis",
+        "status": "Succeeded"
+      },
+      {
+        "tool": "run_risk_analysis",
+        "status": "Succeeded"
+      },
+      {
+        "tool": "simulate_weight_scenario",
+        "status": "Succeeded"
+      }
+    ]
+  },
+  {
+    "case_id": "volatility-only",
+    "question": "這個波動率如何",
+    "answer": "年化波動率為 **24.53%**，以252個共同交易日的日報酬樣本標準差年化計算；這表示報酬起伏程度，不代表預期報酬或保證的損失範圍。[P4]\n\n這項估算涵蓋2025-11-14至2026-11-03，按現有股數固定、歷史權重隨價格變動；不含帳戶現金，也不是 EWMA 波動率。[P4] 風險偏好目前是「依你的風險偏好『穩健』（預設，可在設定修改）」，但沒有量化的可承受波動門檻，因此不能只憑24.53%判定是否超出你的承受範圍。[P3]\n\n工具唯讀，不代表持倉已調整；不保證獲利。",
+    "duration_seconds": 10.192704,
+    "gate": {
+      "passed": true,
+      "limited": true,
+      "blockingIssues": [],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "d7318298-1411-4bae-a563-42b97a22af4b",
+        "agentRunNodeId": "a642d953-29af-4f48-9c82-05b728aa589e",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "EBFD0F4C41134D2F821DB20AA1A1F9C7CBD13078E55B08F24DA5EAD39490D778",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉快照、既有風險結果及已保存的風險偏好，以確認波動率口徑與資料是否足夠。",
+        "promptTokens": 2519,
+        "completionTokens": 150,
+        "estimatedCostUsd": 0.000641775,
+        "latencyMs": 2508,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:10:32.072651Z"
+      },
+      {
+        "id": "75fec622-1e06-426e-98c4-f8fc09ec86ff",
+        "agentRunNodeId": "a642d953-29af-4f48-9c82-05b728aa589e",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "9AA3C4D2583659BF7244E2A5672CC618C970BC54EA9E64849A9377DBA32D2074",
+        "action": "call_tools",
+        "thoughtSummary": "既有風險報告沒有可用波動率，補算核心風險指標。",
+        "promptTokens": 3505,
+        "completionTokens": 100,
+        "estimatedCostUsd": 0.000838625,
+        "latencyMs": 1895,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:10:34.009042Z"
+      },
+      {
+        "id": "c51a7987-eb28-4752-a42b-d2c7f4d9f694",
+        "agentRunNodeId": "a642d953-29af-4f48-9c82-05b728aa589e",
+        "turn": 3,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "7579933F9446934225182191BD33E6FC47441E3089622A5D097B39EB8B390B77",
+        "action": "submit_answer",
+        "thoughtSummary": "年化波動率為24.53%，說明其衡量方式與口徑。",
+        "promptTokens": 4799,
+        "completionTokens": 264,
+        "estimatedCostUsd": 0.001211775,
+        "latencyMs": 3368,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:10:37.421539Z"
+      }
+    ],
+    "tools": [
+      {
+        "tool": "get_portfolio_snapshot",
+        "status": "Succeeded"
+      },
+      {
+        "tool": "get_risk_report",
+        "status": "Succeeded"
+      },
+      {
+        "tool": "get_risk_profile",
+        "status": "Succeeded"
+      },
+      {
+        "tool": "run_risk_analysis",
+        "status": "Succeeded"
+      }
+    ]
+  }
+]

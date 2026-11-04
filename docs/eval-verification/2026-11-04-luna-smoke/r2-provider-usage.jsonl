@@ -1,0 +1,12 @@
+{"id": "46941c5291ed4f4480095cffba208bec", "reserved_usd": 0.0017485}
+{"id": "46941c5291ed4f4480095cffba208bec", "charged_upper_usd": 0.0002548, "status": 200, "usage": {"input_tokens": 948, "input_tokens_details": {"cache_write_tokens": 0, "cached_tokens": 0}, "output_tokens": 83, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 1031}, "total_upper_usd": 0.0002548}
+{"id": "5ddf893bcd8f4d628f0238f6afb0f494", "reserved_usd": 0.00370475}
+{"id": "5ddf893bcd8f4d628f0238f6afb0f494", "charged_upper_usd": 0.000639775, "status": 200, "usage": {"input_tokens": 2519, "input_tokens_details": {"cache_write_tokens": 926, "cached_tokens": 1590}, "output_tokens": 146, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 2665}, "total_upper_usd": 0.000894575}
+{"id": "953db3169546494a801ab20b3ab0d5c3", "reserved_usd": 0.003725}
+{"id": "953db3169546494a801ab20b3ab0d5c3", "charged_upper_usd": 0.0018206, "status": 200, "usage": {"input_tokens": 2536, "input_tokens_details": {"cache_write_tokens": 943, "cached_tokens": 1590}, "output_tokens": 2500, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 5036}, "total_upper_usd": 0.002715175}
+{"id": "5cdb5a8f9a2842388a4fad6e94e4f3e0", "reserved_usd": 0.00173905}
+{"id": "5cdb5a8f9a2842388a4fad6e94e4f3e0", "charged_upper_usd": 0.000249025, "status": 200, "usage": {"input_tokens": 929, "input_tokens_details": {"cache_write_tokens": 0, "cached_tokens": 0}, "output_tokens": 80, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 1009}, "total_upper_usd": 0.0029641999999999997}
+{"id": "7e7db3d8d4834abca33d7ffbfe61df95", "reserved_usd": 0.003702725}
+{"id": "7e7db3d8d4834abca33d7ffbfe61df95", "charged_upper_usd": 0.000677275, "status": 200, "usage": {"input_tokens": 2519, "input_tokens_details": {"cache_write_tokens": 926, "cached_tokens": 1590}, "output_tokens": 221, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 2740}, "total_upper_usd": 0.003641475}
+{"id": "a49e51ed3d93459ca2bef52165740f3a", "reserved_usd": 0.003722975}
+{"id": "a49e51ed3d93459ca2bef52165740f3a", "charged_upper_usd": 0.0006906, "status": 200, "usage": {"input_tokens": 2536, "input_tokens_details": {"cache_write_tokens": 943, "cached_tokens": 1590}, "output_tokens": 240, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 2776}, "total_upper_usd": 0.0043320749999999995}

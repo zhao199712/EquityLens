@@ -72,6 +72,8 @@ public sealed class BootstrapTests
     [Theory]
     [InlineData("DeepSeek", typeof(DeepSeekChatCompletionService))]
     [InlineData("Gemini", typeof(GeminiChatCompletionService))]
+    [InlineData("OpenAI", typeof(OpenAiChatCompletionService))]
+    [InlineData("openai", typeof(OpenAiChatCompletionService))]
     public void ResearchRegistration_SelectsConfiguredChatProvider(string provider, Type expected)
     {
         var builder = CreateBuilder();
