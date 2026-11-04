@@ -1,0 +1,87 @@
+{
+  "suite": "conversation_journey_v1",
+  "as_of_policy": "seed_date_frozen",
+  "as_of_note": "as_of 取 seed 當日 UTC 日期並寫入私有 manifest；跨日期 live 重跑必須重新 seed，fixture hash 不同時不得宣稱回歸改善。",
+  "owners": {
+    "owner_a": {
+      "portfolios": {
+        "alpha": "組合甲",
+        "beta": "組合乙"
+      }
+    },
+    "owner_b": {
+      "portfolios": {
+        "decoy_alpha": "組合甲",
+        "decoy_beta": "組合乙"
+      },
+      "note": "同名不同 ID 的干擾投組，只用於驗證 owner_isolation；任何輪次都不得解析到這些投組。"
+    }
+  },
+  "profiles": {
+    "standard": {
+      "price_points": 253,
+      "weights": {
+        "alpha": {
+          "2330": 0.6,
+          "2317": 0.25,
+          "0050": 0.15
+        },
+        "beta": {
+          "2330": 0.2,
+          "2317": 0.3,
+          "0050": 0.5
+        }
+      }
+    },
+    "no_direct": {
+      "price_points": 253,
+      "weights": {
+        "alpha": {
+          "2317": 0.6,
+          "0050": 0.4
+        },
+        "beta": {
+          "2317": 0.3,
+          "0050": 0.7
+        }
+      },
+      "note": "組合甲沒有 2330 直接持股；0050 的成分權重不提供，間接曝險必須表述為未知。"
+    },
+    "short_history": {
+      "price_points": 61,
+      "weights": {
+        "alpha": {
+          "2330": 0.6,
+          "2317": 0.25,
+          "0050": 0.15
+        },
+        "beta": {
+          "2330": 0.2,
+          "2317": 0.3,
+          "0050": 0.5
+        }
+      },
+      "note": "少於風險分析所需的 121 個共同交易日。"
+    }
+  },
+  "securities": {
+    "2330": {
+      "exchange": "TWSE",
+      "asset_type": "Stock",
+      "currency": "TWD"
+    },
+    "2317": {
+      "exchange": "TWSE",
+      "asset_type": "Stock",
+      "currency": "TWD"
+    },
+    "0050": {
+      "exchange": "TWSE",
+      "asset_type": "ETF",
+      "currency": "TWD"
+    }
+  },
+  "security_identity_rule": "同一 ticker 在 DB 中只能有一筆 security，研究標的與持股解析到同一筆；不同投組共用同一價格序列。",
+  "numeric_golden": null,
+  "numeric_golden_note": "尚未產生與核實；不得預填波動、VaR、ES、回撤或情境結果。"
+}
