@@ -1,0 +1,40 @@
+{
+  "source_commit": "c3a20e18d39cfc72ca6e9ee9c08d9a83bb9a4347",
+  "case_file": "evals/cases/router_v1.jsonl",
+  "case_sha256": "a7a754ab07d9428829b1bdc0f1b2347cbd570dd6c0d046a930ee1cf3048640eb",
+  "case_count": 28,
+  "model": "deepseek-flash",
+  "thinking_enabled": false,
+  "prompt_template": "role-router",
+  "prompt_version": 7,
+  "temperature": 0,
+  "max_output_tokens_per_request": 1400,
+  "classification_calls": 24,
+  "classification_bypass_cases": [
+    "router-20",
+    "router-25",
+    "router-26",
+    "router-28"
+  ],
+  "authorized_cap_usd": 0.5,
+  "estimated_upper_cost_usd": 0.0097716,
+  "prompt_tokens": 23452,
+  "completion_tokens": 2280,
+  "completed_utc": "2026-11-04T03:41:11.181354+00:00",
+  "scope": "Real application routing services + real LLM; EF InMemory fixtures; captured IAgentRunService boundary; no HTTP/middleware/PG/Redis/workers",
+  "offline_router_tests_passed": 77,
+  "offline_scorer_tests_passed": 6,
+  "bypass_reason": {
+    "router-20": "deterministic access rejection",
+    "router-28": "deterministic access rejection",
+    "router-25": "owned followup",
+    "router-26": "explicit research entry"
+  },
+  "prior_run_upper_usd": 0.0094596,
+  "cumulative_upper_usd": 0.0192312,
+  "admitted_remaining_cap_usd": 0.4905404,
+  "offline_eval_tests_passed": 93,
+  "backend_tests_passed": 1081,
+  "postgres_integration_tests_passed": 18,
+  "backend_skipped": 0
+}

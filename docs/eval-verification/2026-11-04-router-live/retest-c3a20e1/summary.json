@@ -1,0 +1,289 @@
+{
+  "status": "complete",
+  "case_count": 28,
+  "observed_count": 28,
+  "missing_count": 0,
+  "accuracy": 1.0,
+  "action_accuracy": 1.0,
+  "workflow_accuracy": 1.0,
+  "parameter_accuracy": 1.0,
+  "action_confusion_matrix": {
+    "route": {
+      "route": 18
+    },
+    "clarify": {
+      "clarify": 7
+    },
+    "reject": {
+      "reject": 2
+    },
+    "direct_reply": {
+      "direct_reply": 1
+    }
+  },
+  "workflow_confusion_matrix": {
+    "Research": {
+      "Research": 9
+    },
+    "Portfolio": {
+      "Portfolio": 9
+    },
+    "None": {
+      "None": 10
+    }
+  },
+  "results": [
+    {
+      "id": "router-01",
+      "category": "research",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-02",
+      "category": "research",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-03",
+      "category": "research",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-04",
+      "category": "research",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-05",
+      "category": "research",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-06",
+      "category": "research",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-07",
+      "category": "portfolio",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-08",
+      "category": "portfolio",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-09",
+      "category": "portfolio",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-10",
+      "category": "portfolio",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-11",
+      "category": "portfolio",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-12",
+      "category": "portfolio_scenario",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-13",
+      "category": "portfolio_scenario",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-14",
+      "category": "mixed",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-15",
+      "category": "mixed",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-16",
+      "category": "ambiguous",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-17",
+      "category": "ambiguous",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-18",
+      "category": "ambiguous",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-19",
+      "category": "ambiguous",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-20",
+      "category": "unauthorized",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-21",
+      "category": "no_portfolio",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-22",
+      "category": "unsupported",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-23",
+      "category": "unsupported",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-24",
+      "category": "conversation",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-25",
+      "category": "followup",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-26",
+      "category": "explicit_entry",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-27",
+      "category": "portfolio_scenario",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    },
+    {
+      "id": "router-28",
+      "category": "prompt_injection",
+      "observed": true,
+      "action_correct": true,
+      "workflow_correct": true,
+      "parameters_correct": true,
+      "passed": true
+    }
+  ]
+}

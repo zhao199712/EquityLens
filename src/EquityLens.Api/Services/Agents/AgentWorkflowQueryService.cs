@@ -41,6 +41,11 @@ public sealed class AgentWorkflowQueryService(
             .OrderBy(x => x.Name)
             .Select(x => new InvestmentResearchPortfolioOption(x.Id, x.Name, x.BaseCurrency, x.Holdings.Count))
             .ToListAsync(cancellationToken);
+        if (ExplicitPortfolioAccess.RequestsUnownedPortfolio(question, portfolios.Select(p => p.Id)))
+        {
+            logger?.LogWarning("Routing rejected: {Category}; field={Field}", "unauthorized_portfolio", "message.portfolioId");
+            throw new AgentWorkflowQueryException("portfolio_forbidden", "無法使用未授權的投資組合。");
+        }
         PortfolioDiagnosisInput? parentInput = null;
         string? parentResearchTicker = null;
         string? parentWorkflow = null;

@@ -315,6 +315,7 @@ public sealed class AgentWorkflowQueryServiceTests
     [Theory]
     [InlineData("把國巨移到台積電")]
     [InlineData("借款加碼國巨")]
+    [InlineData("退休投組借款把國巨加到150%")]
     [InlineData("放空台積電")]
     public async Task UnsupportedOrUnboundScenario_ClarifiesWithoutSubstitution(string question)
     {
@@ -364,6 +365,19 @@ public sealed class AgentWorkflowQueryServiceTests
         Assert.Contains("退休", error.Message); Assert.Contains("成長", error.Message);
         var result = await service.CreateFromDecisionAsync(user, new("分析退休投組"), InvestmentResearchRouter.Fixed(AgentWorkflowTypes.PortfolioDiagnosis, "分析退休投組", a));
         Assert.Equal(AgentWorkflowTypes.PortfolioDiagnosis, result.WorkflowType);
+    }
+
+    [Fact]
+    public async Task FixedFollowup_CannotIgnoreExplicitForeignPortfolioRequest()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid(); var id = Guid.NewGuid();
+        db.Portfolios.Add(new Portfolio { Id=id, OwnerUserId=user, Name="退休" });
+        var parent = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(user, id, new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31));
+        parent.Status = AgentRunStatuses.Succeeded; db.AgentRuns.Add(parent); await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns(); var chat = new FakeChat("must not call");
+        var service = new AgentWorkflowQueryService(db, Router(chat), runs);
+        var error = await Assert.ThrowsAsync<AgentWorkflowQueryException>(() => service.CreateAsync(user, new($"繼續分析投組 {Guid.NewGuid()}", parent.Id)));
+        Assert.Equal("portfolio_forbidden", error.Code); Assert.Null(runs.PortfolioId); Assert.Equal(0, chat.Calls);
     }
 
     private static TestDb CreateDb() => new(new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
