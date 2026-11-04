@@ -94,6 +94,29 @@ public sealed class PortfolioDiagnosisApprovalWorkflowTests
         Assert.Null(output[AgentBlackboardKeys.PortfolioDiagnosisDraft]!["interpretation"]);
     }
 
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task RejectedDraft_DisclosesOnlyAvailableSavedPreference(bool available, bool isDefault)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var statement = isDefault ? "依你的風險偏好『穩健』（預設，可在設定修改）" : "依你的風險偏好『積極』（已保存，可在設定修改）";
+        var board = new JsonObject {
+            [AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(new PortfolioDiagnosisContext(Guid.NewGuid(), "測試", "TWD", new(2025, 1, 1), new(2025, 12, 31), 1), AgentNodeJson.SerializerOptions),
+            ["portfolioLoopAnswer"] = JsonSerializer.SerializeToNode(new LoopAnswer("波動99%。", []), AgentNodeJson.SerializerOptions),
+            ["agentLoopFacts"] = JsonSerializer.SerializeToNode(new[] { new LoopDataFact("P1", "key", "get_risk_profile", new() { ["available"] = available, ["statement"] = statement, ["isDefault"] = isDefault }) }, AgentNodeJson.SerializerOptions)
+        };
+        var run = new AgentRun { Id = Guid.NewGuid(), BlackboardJson = board.ToJsonString() };
+        await new PortfolioQualityGateNodeHandler().ExecuteAsync(new(db, run, new AgentRunNode(), (_, _, _, _, _) => { }));
+        var output = JsonNode.Parse(run.BlackboardJson)!;
+        Assert.False(output["portfolioQualityGate"]!["passed"]!.GetValue<bool>());
+        Assert.Contains("UntraceableNumbers", output["portfolioQualityGate"]!["blockingIssues"]!.ToJsonString());
+        var summary = output[AgentBlackboardKeys.PortfolioDiagnosisDraft]!["summary"]!.ToString();
+        Assert.Equal(available, summary.Contains(statement + " [P1]"));
+        Assert.Null(output[AgentBlackboardKeys.PortfolioDiagnosisDraft]!["interpretation"]);
+    }
+
     private sealed class Fixture(string type) : IAgentNodeHandler
     {
         public string NodeType => type;
