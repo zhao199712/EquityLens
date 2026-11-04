@@ -17,7 +17,6 @@ const examples = [
 
 onMounted(async () => {
   await chat.loadSessions()
-  if (!chat.currentSessionId) await chat.startNewSession()
 })
 
 async function scrollToBottom() {

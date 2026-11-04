@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isRetiredWorkflow } from '../../../services/legacyWorkflows'
 import AgentLoopRunSummary from "../../../components/agents/AgentLoopRunSummary.vue"
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
@@ -203,7 +204,7 @@ const nodeMap = computed(() => {
           <span class="detail-field-label">Error</span>
           <span class="detail-field-value detail-down">{{ run.run.errorMessage }}</span>
         </div>
-        <NSpace v-if="run.run.status === 'Failed' || run.run.status === 'Pending' || run.run.status === 'Running' || run.run.status === 'WaitingForApproval'" class="detail-actions">
+        <NSpace v-if="!isRetiredWorkflow(run.run.workflowType) && ['Failed', 'Pending', 'Running', 'WaitingForApproval'].includes(run.run.status)" class="detail-actions">
           <button v-if="run.run.status === 'Failed'" type="button" class="prestige-btn" @click="handleRetry">
             <NIcon size="16"><ReloadOutline /></NIcon>
             重試
@@ -215,7 +216,7 @@ const nodeMap = computed(() => {
         </NSpace>
       </section>
 
-      <section v-if="pendingApproval" class="prestige-panel prestige-panel-pad detail-section approval-admin" data-testid="admin-approval-panel">
+      <section v-if="pendingApproval && !isRetiredWorkflow(run.run.workflowType)" class="prestige-panel prestige-panel-pad detail-section approval-admin" data-testid="admin-approval-panel">
         <span class="prestige-label detail-label">Human Approval Required</span>
         <div class="detail-field"><span class="detail-field-label">Node</span><span class="detail-field-value">{{ pendingApproval.nodeKey }} · {{ pendingApproval.nodeType }}</span></div>
         <div class="detail-field"><span class="detail-field-label">Side Effect</span><span class="detail-field-value">{{ pendingApproval.sideEffectLevel }}</span></div>

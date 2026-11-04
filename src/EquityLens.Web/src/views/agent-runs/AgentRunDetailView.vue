@@ -2,7 +2,7 @@
 import AgentLoopRunSummary from "../../components/agents/AgentLoopRunSummary.vue"
 import RiskMeasurementBasis from '../../components/agents/RiskMeasurementBasis.vue'
 import type { RiskMeasurementBasis as MeasurementBasis } from '../../services/risk'
-import { legacyWorkflow, type LegacyRevisionOutput } from "../../services/legacyWorkflows"
+import { isRetiredWorkflow, legacyWorkflow, type LegacyRevisionOutput } from "../../services/legacyWorkflows"
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PortfolioScenarioComparison, { type ScenarioComparison, type HoldingRisk } from '../../components/agents/PortfolioScenarioComparison.vue'
@@ -305,6 +305,7 @@ const nextActionLabel = computed(() => {
           <div class="prestige-panel prestige-panel-pad header-panel">
             <div class="run-tags">
               <span class="prestige-tag prestige-mono">{{ run.run.workflowType }}</span>
+              <span v-if="isRetiredWorkflow(run.run.workflowType)" class="prestige-tag">已退役 · 唯讀</span>
               <span class="prestige-tag">{{ run.run.agentType }}</span>
               <span
                 class="prestige-tag"
@@ -316,8 +317,8 @@ const nextActionLabel = computed(() => {
 
             <div class="action-row">
               <button v-if="run.run.parentAgentRunId" class="prestige-btn" @click="router.push({ name: 'agent-run-detail', params: { id: run.run.parentAgentRunId } })">查看父版本</button>
-              <button v-if="run.run.status === 'Failed'" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
-              <button v-if="run.run.status === 'Running' || run.run.status === 'Pending' || run.run.status === 'WaitingForApproval'" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
+              <button v-if="!isRetiredWorkflow(run.run.workflowType) && run.run.status === 'Failed'" class="prestige-btn prestige-btn-solid" :disabled="actionLoading" @click="handleRetry">重試</button>
+              <button v-if="!isRetiredWorkflow(run.run.workflowType) && ['Running', 'Pending', 'WaitingForApproval'].includes(run.run.status)" class="prestige-btn btn-danger" :disabled="actionLoading" @click="handleCancel">取消</button>
               <button class="prestige-btn" :disabled="actionLoading" @click="refresh">重新整理</button>
             </div>
 
@@ -341,7 +342,7 @@ const nextActionLabel = computed(() => {
             </div>
           </div>
 
-          <div v-if="pendingApproval" class="prestige-panel prestige-panel-pad approval-panel" data-testid="approval-panel">
+          <div v-if="pendingApproval && !isRetiredWorkflow(run.run.workflowType)" class="prestige-panel prestige-panel-pad approval-panel" data-testid="approval-panel">
             <span class="prestige-label">HUMAN APPROVAL REQUIRED</span>
             <h3>{{ pendingApproval.nodeKey }}</h3>
             <div class="approval-meta">
