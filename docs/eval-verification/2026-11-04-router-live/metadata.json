@@ -1,0 +1,25 @@
+{
+  "source_commit": "ba7e36b0c0d3e5a9f9386ed3b4eec1617520a649",
+  "case_file": "evals/cases/router_v1.jsonl",
+  "case_sha256": "a7a754ab07d9428829b1bdc0f1b2347cbd570dd6c0d046a930ee1cf3048640eb",
+  "case_count": 28,
+  "model": "deepseek-flash",
+  "thinking_enabled": false,
+  "prompt_template": "role-router",
+  "prompt_version": 6,
+  "temperature": 0,
+  "max_output_tokens_per_request": 1400,
+  "classification_calls": 26,
+  "classification_bypass_cases": [
+    "router-25",
+    "router-26"
+  ],
+  "authorized_cap_usd": 0.5,
+  "estimated_upper_cost_usd": 0.0094596,
+  "prompt_tokens": 21808,
+  "completion_tokens": 2431,
+  "completed_utc": "2026-11-04T03:32:56.361255+00:00",
+  "scope": "Real application routing services + real LLM; EF InMemory fixtures; captured IAgentRunService boundary; no HTTP/middleware/PG/Redis/workers",
+  "offline_router_tests_passed": 67,
+  "offline_scorer_tests_passed": 6
+}
