@@ -134,4 +134,15 @@ describe('AgentQueryView', () => {
     expect(answer.html()).toContain('<strong>結論</strong>')
     expect(wrapper.get('.run-status').classes()).toContain('run-status--succeeded')
   })
+
+  it('does not send when Enter only confirms an IME candidate', async () => {
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    const composer = wrapper.find('textarea')
+    await composer.setValue('台積電')
+    await composer.trigger('keydown', { key: 'Enter', isComposing: true })
+    await composer.trigger('keydown', { key: 'Enter', keyCode: 229 })
+    expect(chat.sendMessage).not.toHaveBeenCalled()
+    await composer.trigger('keydown', { key: 'Enter' })
+    expect(chat.sendMessage).toHaveBeenCalledWith('台積電')
+  })
 })

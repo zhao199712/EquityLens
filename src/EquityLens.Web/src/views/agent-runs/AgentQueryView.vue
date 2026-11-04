@@ -3,6 +3,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { useChatStore } from '../../stores/chat'
 import { renderMarkdown } from '../../utils/markdown'
+import { isSubmitEnter } from '../../utils/keyboard'
 
 const chat = useChatStore()
 const input = ref('')
@@ -39,7 +40,7 @@ async function send(text?: string) {
 }
 
 function keydown(event: KeyboardEvent) {
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (isSubmitEnter(event)) {
     event.preventDefault()
     send()
   }
