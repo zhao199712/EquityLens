@@ -58,11 +58,92 @@ AI 研究與證據驗證
 
 ### AI Research Workflow
 
-- 以自然語言提出財報與投資研究問題
-- 搜尋研究資料，產生附來源引用的回答
-- 查看研究紀錄、證據與執行結果
+以自然語言詢問財報、法說會或投資組合問題，由 AI Agent 自主決定如何查資料、算風險、整理答案；
+工具權限、數字驗證、人工審批與結果提交則由程式保證。
 
-[研究功能文件](docs/architecture/research-agent-runtime.md) · [A/B 實測](docs/eval-verification/2026-11-02-agent-loop-ab/README.md)
+> **設計原則：控制邊界與結果，不控制路線。**
+> 失敗只會多花一點錢的決策（查什麼、查幾次、何時起草）交給 LLM；
+> 失敗會產生錯誤數字、越權或副作用的決策（資料來源權限、數值計算、是否提交答案、是否執行副作用）由確定性程式決定。
+
+#### 三個工作流
+
+```text
+Ask Agent / 研究頁 / 投組頁
+          │
+          ▼
+   Router：只決定角色（研究或投組）與參數；入口與追問不經 LLM，
+           模糊時由一次 LLM 呼叫分類，參數缺漏、越權或超出能力一律回澄清
+          │
+   ┌──────┴───────────────────────────────┐
+   ▼                                      ▼
+ResearchAgent（研究問答、回饋修訂）     PortfolioDiagnosis（投組診斷與優化）
+validate → detectIntent                 loadContext
+  → researchAgent 🔁                      → portfolioAgent 🔁
+  → qualityGate                           → portfolioQualityGate
+  → [reviseAgent 🔁 → reviseQualityGate]?  → approve 🧑（人工審批，必經）
+  → finalizeResearch                      → finalize ／ finalizeRejected
+
+CriticReview（Admin 用，只評分不修改）：loadResearchRun → qualityGate → finalizeCriticReport
+```
+
+🔁 = 節點內的受控 Agent 迴圈。外框是固定 DAG（建立 run 時就決定，執行中不再長出節點），
+共 3 個工作流、13 種 node type。
+
+#### Agent 迴圈怎麼運作
+
+每一輪：組 prompt → LLM 以 JSON 回傳動作（呼叫工具／提交答案／放棄）→ **先把決策寫入資料庫** →
+工具參數與權限檢查 → 同一輪的工具**平行執行**，每個結果先落盤再合併 → 寫 checkpoint → 判斷是否停止。
+
+| 機制 | 做法 |
+|---|---|
+| 預算 | 每個迴圈最多 6 輪、16 次工具呼叫、1 次網路搜尋、載入 3 個 skill，另有 token 與金額上限 |
+| 停止條件 | 提交答案、預算用完、連續無進展、輸出格式連續錯誤；查不到資料就放棄，由系統產生標準拒答 |
+| 中斷恢復 | worker 當機後，新 worker 從上一輪 checkpoint 接手，已成功的工具呼叫不重做 |
+| 證據壓縮 | 證據完整保存在 ledger，送給 LLM 時只放有長度上限的摘錄 |
+
+#### 工具與 Skill
+
+| 角色 | 工具（全部唯讀） |
+|---|---|
+| 研究 | `search_local`（本地財報與法說會，Hybrid 檢索＋rerank）、`search_web`（受來源政策限制）、`get_document_page` |
+| 投組 | `get_portfolio_snapshot`、`get_risk_report`（優先重用已計算的 Risk Run）、`run_risk_analysis`、`get_performance_attribution`、`simulate_weight_scenario`（減碼轉現金或轉入核准的指數 ETF，例如 0050、006208）、`get_risk_profile` |
+
+- **工具以任務為單位**：數十個底層風險數學函式只在工具內部使用，不直接開放給 LLM；**LLM 不能傳入價格、報酬或權重等數值資料**，數字一律由工具從資料庫讀取。
+- **Skill 由 Agent 自行載入**：prompt 只列出 skill 目錄，Agent 需要時呼叫 `load_skill` 載入完整方法（目前有法說會要點、市場事件、投組降波動優化）。Skill 只能增加說明，不能擴大工具權限；每次載入都記錄 id、版本與內容雜湊。
+- **來源政策由結構保證**：例如 `LocalOnly` 時 `search_web` 不會出現在工具清單，就算被呼叫也會被拒絕並記錄。
+
+#### 品質關卡與人工審批
+
+- **Quality Gate（確定性程式）**：檢查引用是否存在、答案中的數字能否追溯到引用來源（處理千分位、仟元／百萬／十億等單位；百分比算式會用來源數字重新計算）、來源角色是否正確（例如不可把年報揭露說成法說會內容）、是否違反來源政策；之後再交給 Critic 評論。不合格就修訂一次，仍不合格則改為標準拒答。
+- **投組結論必經人工審批**：審批期間 run 持久化暫停、不佔用 worker；核准才發布，拒絕需附理由。
+- **副作用工具審批機制**：審批綁定具體工具呼叫與參數雜湊，核准後重新驗證並以冪等鍵執行（目前正式工具皆為唯讀，此機制以測試工具驗證）。
+
+#### 可靠性與可觀測性
+
+- **Durable runtime**：Redis Streams 佇列、租約 heartbeat 與 fencing（失去租約的 worker 無法寫入）、中斷節點接手、outbox、集中式狀態機
+- **完整稽核紀錄**：每一輪 LLM 決策（模型、prompt 版本與雜湊、動作、思考摘要、token、成本、延遲）、每次工具呼叫（含被拒絕者與原因）、事件與 checkpoint 都可查詢
+- **OpenTelemetry**：迴圈輪次、LLM 呼叫與工具執行皆有 span，同一輪平行的工具呼叫掛在同一個父 span 下
+
+#### 評估
+
+所有改動以 eval 決定去留，報告保留每一輪原始結果，不挑選最佳答案。
+
+| 評估 | 結果 | 說明 |
+|---|---|---|
+| 研究問答（台積電、鴻海共 8 題計分） | **7/8** | 與舊引擎 A/B：舊引擎 6/8；輸入 token −46%、估算 LLM 成本 −42%。唯一失敗為政策題的引用評分規則（已知問題） |
+| 投組驗收（14 題，同一版本連跑兩輪） | **13/14、14/14** | 含無提示優化、情境比較、資料不足、拒絕保證報酬；持股與交易前後不變 |
+| 風險與法說會補充題 | 已依原始 PDF 核實 | 獨立計分，不併入原 8 題 |
+| Router（26 題） | 題庫與程式評分工具已完成 | 真實模型分類尚未執行 |
+
+限制：題庫小且為反覆使用的開發集，單次抽樣，不能推論全面優劣；A/B 當時兩邊皆停用 reranker，與正式設定不同。
+聯發科與中華電信的財報擷取有已知問題，相關題目以 `excluded_reason` 排除計分。
+
+[Agent Runtime 設計](docs/architecture/research-agent-runtime.md) ·
+[三工作流收斂規格](docs/architecture/remove-dynamic-dag.md) ·
+[研究 A/B 與成本分析](docs/eval-verification/2026-11-02-agent-loop-ab/README.md) ·
+[收斂後驗收](docs/eval-verification/2026-11-03-three-workflows-final-eval/README.md) ·
+[投組驗收](docs/eval-verification/2026-11-03-portfolio-acceptance/README.md) ·
+[Eval harness](evals/README.md)
 
 ---
 
