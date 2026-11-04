@@ -2,7 +2,7 @@
 
 這份評估集沿著「某家公司財報如何 → 對我的投組可能有什麼影響 → 如何降低波動」驗收連續任務，並以 journey-00 重現 2026-11-04 正式站回報的投組記憶問題。
 
-**目前狀態：** 只有題庫、fixture 規格與 validator。尚未實作 runner、seed 與逐輪 scorer，也沒有執行任何模型評估。所有案例標記為 `draft`，不產生通過率。
+**目前狀態：** 已有題庫、validator、seed、runner、程式 scorer 與離線 rescore。本次實作只以假的 HTTP/SSE 和資料庫介面測試，尚未執行真實模型評估。所有案例仍為 `draft`；程式檢查結果與覆蓋率獨立呈現，不宣稱完整對話已通過。
 
 - 題庫：`evals/cases/conversation_journey_v1.jsonl`（11 組、45 輪）
 - Fixture 規格：`evals/cases/conversation_journey_v1.fixture.json`
@@ -51,11 +51,11 @@ python -m pytest tests/test_conversation.py
 | `no_direct` | 2317 60%、0050 40% | 2317 30%、0050 70% | 組合甲沒有 2330 直接持股；不提供 0050 成分權重 |
 | `short_history` | 同 standard | 同 standard | 61 個價格點，少於風險分析所需的 121 個共同交易日 |
 
-這些是待實作的合成行情規格，**不是已 seed 的資料或實際投組**。既有 `portfolio_seed` 每個帳號只有一個投組，不能直接拿來執行本題庫。同一個 ticker 在資料庫中只能有一筆 security，研究標的與持股要解析到同一筆；不同投組共用同一個價格序列。
+這些由 seed 產生的合成行情規格，**不是已 seed 的資料或實際投組**。既有 `portfolio_seed` 每個帳號只有一個投組，不能直接拿來執行本題庫。同一個 ticker 在資料庫中只能有一筆 security，研究標的與持股要解析到同一筆；不同投組共用同一個價格序列。
 
 **as_of 政策（`seed_date_frozen`）：** 產品的診斷期間預設以執行當天往前推一年，因此行情日期取 seed 當天的 UTC 日期，並寫入私有 manifest 凍結。同一天的不同版本可以共用 fixture；跨日期 live 重跑必須重新 seed，fixture hash 不同時，不得宣稱回歸改善。已保存的結果可以隨時離線重評。
 
-數值 golden 尚未產生與核實，fixture 的 `numeric_golden` 為 `null`，validator 會拒絕預填的數值。獨立核實持倉權重、NAV、波動、VaR、ES、回撤與情境差異之後，案例才能從 `draft` 升級為 `verified`。
+規格檔的 `numeric_golden` 保持 `null`，validator 拒絕預填。Seed 依實際四捨五入後的股數獨立計算權重、NAV、波動、VaR、ES、回撤與指定情境，放在產生的 manifest，並記錄 `numeric_verification`。`review_status` 另表示人工核實題目與成功條件；兩者分開記錄，seed 不會自動把 draft 升級為 verified。
 
 研究輪引用 `research_v1` 中已核實的 2330 毛利率、基本 EPS 與 2317 產品別收入題目；validator 會確認這些題目為 verified、未被排除，且 ticker 一致。研究 oracle 是 verified，不代表整段對話自動 verified。
 
@@ -70,9 +70,9 @@ python -m pytest tests/test_conversation.py
 - `conversation_success` 是整段對話的語義目標，需要人工覆核或經校準的 judge，不是可執行的斷言。沒有評分器的條件不能自動算通過。
 - `review_status: draft` 表示 fixture 與完整 oracle 尚未驗證；不是模型已失敗，也不是已通過。
 
-每項斷言保存 `pass`／`fail`／`unverifiable`／`not_applicable` 與證據位置，失敗時另存失敗分類。必要證據缺失不得算 pass。完整對話通過需要所有必備條件與適用的語義條件成立；身分錯誤、越權或副作用任何一項發生即失敗，不能被答案品質平均掉。
+每項斷言保存 `pass`／`fail`／`unverifiable` 與證據位置，失敗時另存失敗分類。必要證據缺失不得算 pass。完整對話通過需要所有必備條件與適用的語義條件成立；身分錯誤、越權或副作用任何一項發生即失敗，不能被答案品質平均掉。
 
-待審批的投組報告需保存 draft、Quality Gate 與審批後結果。未來的 runner 只能在隔離合成帳號的政策允許時核准唯讀 WorkflowGate，不能處理交易或 ToolCall 授權。
+待審批的投組報告需保存 draft、Quality Gate 與審批後結果。runner 只在隔離合成帳號核准指定的唯讀 WorkflowGate，不能處理交易或 ToolCall 授權。
 
 ## 驗收檢查字典
 
@@ -259,7 +259,102 @@ Fixture：`standard`；6 輪。
 
 ## 後續接上 Harness 的順序
 
-1. **階段 1：** 建立多投組合成 fixture 與 runner，只執行 deterministic 檢查。先跑 journey-00、journey-04（切換）與 journey-10（重置）。在投組記憶修正之前，journey-00 預期在 t3 失敗，失敗分類為 `bug`。
+1. **階段 1（已實作）：** 多投組合成 fixture、runner 與 deterministic 檢查。先跑 journey-00、journey-04（切換）與 journey-10（重置）。在投組記憶修正之前，journey-00 預期在 t3 失敗，失敗分類為 `bug`。
 2. 修正投組記憶後以同一 fixture 重跑，確認 journey-00 由失敗轉為通過，保存前後兩份結果。
 3. **階段 2：** 接上 judge 與校準，semantic 檢查先以 shadow 模式報告。
-4. 保存原始逐輪結果與 metadata，支援離線 rescore，以及在相同 fixture 與 scorer 下 compare；live eval 依既有隔離與預算政策執行。
+4. 保存原始逐輪結果與 metadata，使用離線 rescore 比較同一批回答；跨產品版本報告比較必須核對題庫、fixture、語料與模型條件。本階段沒有新增自動 compare 命令。
+
+## 執行 seed、run 與 rescore
+
+### 環境與隔離
+
+先依 [portfolio-eval.md](portfolio-eval.md) 建立已遷移的隔離服務。每個 profile 使用不同的資料庫、API 連接埠和 Redis／快取命名空間；資料庫名稱必須以 `_eval` 結尾。資料庫容器的 Compose project label 限 `equitylens-runtime`、`equitylens-portfolio-eval`、`equitylens-conversation-eval`。停用行情同步工作，避免合成價格被外部行情替換；行情、持倉與現金都會在執行前核對，行情另於每個案例後複查。
+
+Seed 可重用語料快照既有的單一 security，但 ticker／exchange／currency／asset_type 必須一致，且該 security 不得有行情。已 seed 的資料庫不能再次 seed；不會刪除既有價格或投組。每個案例建立自己的 owner_a／owner_b，因此同日重測另一個產品版本也要準備另一份隔離資料庫與新帳號；相同日期／版本的生成器會得到相同 fixture hash。帳號已出現 Session 時 runner 拒絕重用。
+
+```bash
+cd evals
+python -m pip install -e '.[test]'
+python -m equitylens_eval.conversation validate
+python -m pytest
+
+# 範例：僅建立 standard profile；路徑放在 repository 外。
+python -m equitylens_eval.conversation seed \
+  --profile standard --base-url http://127.0.0.1:5535 \
+  --container journey-standard-db --database journey_standard_eval \
+  --username equitylens --manifest /tmp/journey-standard.private.json
+```
+
+Seed 的 `as_of` 預設為當日 UTC，live seed 不接受其他日期。私有 manifest 使用 0600 權限，含臨時帳號密碼，絕不可提交。它在註冊帳號前以獨占方式建立；失敗時留下 `state: seeding` 與已建立帳號供診斷，不可交給 runner。使用新環境重新 seed，不自動清除失敗環境。
+
+### 研究語料
+
+journey-00 不依賴財報，可以不提供語料。其餘案例需要已核實、已匯入且完成 embedding 的語料快照；seed 不下載或捏造財報、不建立 embedding。將現有核實紀錄對應的文件寫成 corpus proof，再以 `seed --corpus /tmp/corpus-proof.json` 指定：
+
+```json
+{
+  "version": "reviewed-corpus-2026-11-02",
+  "case_refs": [
+    "2330-gross-margin-2025",
+    "2330-eps-2025",
+    "2317-segment-mix"
+  ],
+  "documents": {
+    "<isolated-DB-document-UUID>": "<uploaded-file-SHA256>"
+  }
+}
+```
+
+文件 ID／雜湊必須填入隔離資料庫中的實值，`case_refs` 必須對應題庫的已核實題目；proof 是人工核實聲明，不會因為雜湊相同就替代人工核實。Harness 保存文件中繼資料、chunk 內容與 embedding 指紋，執行前重新比對。不提供 proof、未涵蓋該案例引用，或語料缺失／變更時，該案例記為 `dependency_failed`，不送出聊天請求。
+
+### Live 執行
+
+先配置外部 provider 預算限制，涵蓋 Router、Agent、Critic、embedding、reranker、搜尋等實際使用服務。`CONVERSATION_EVAL_BUDGET_ENFORCED=1` 是操作者對外部設定的聲明，**本 harness 不提供每月 US$100 的跨服務硬上限**。它沿用 budget proxy ledger 的 `reserved_usd`／`charged_upper_usd`／`status` 格式，偵測 provider 錯誤或未結算請求後停止。報告不把 Agent token 小計冒充總帳單。
+
+```bash
+# API_SHA 是實際被測 API 的 build SHA。
+CONVERSATION_EVAL_BUDGET_ENFORCED=1 \
+python -m equitylens_eval.conversation run \
+  --manifest /tmp/journey-standard.private.json \
+  --case journey-00 --include-unverified \
+  --system-commit "$API_SHA" \
+  --usage-ledger /tmp/provider_usage.jsonl \
+  --out /tmp/journey-run-01
+```
+
+先驗證 journey-00，再以已備妥語料的環境加入 `--case journey-04 --case journey-10`。執行全部案例時，省略 `--case`，並重複指定三份 profile 的 `--manifest`。預設每輪逾時 360 秒，可用 `--timeout` 調整。所有題目目前為 draft，須明確帶 `--include-unverified` 才會執行。
+
+每輪等待真實 Run 完成後才繼續。只自動核准 PortfolioDiagnosis 的 `approvePortfolioDiagnosis / WaitForHumanApproval / WorkflowGate / ReadOnly`；先保存審批前的 draft，再取得完成結果。未知審批、執行失敗、SSE 不完整或逾時會停止該案例並嘗試取消已建立的 Run；後輪標為 `not_run`。取消未確認時停止整批，避免持續送入新案例。非預期澄清本身仍會保存並依固定腳本繼續，不臨時補問法。
+
+### 證據與離線重評
+
+輸出目錄必須是新目錄，包含：
+
+| 檔案 | 內容 |
+| --- | --- |
+| `responses.jsonl` | 各案例原始逐輪事件、回答、Run／工具／Quality Gate、Session／ConversationTurn／Run input，以及前後持倉快照 |
+| `checkpoints.jsonl` | 每個 SSE 事件與輪次完成時的增量 checkpoint；中斷後仍可人工檢查 |
+| `cases.json`、`research.json`、`fixtures.json` | 本次使用的題目與評分依據；fixture 已去除帳號憑證 |
+| `run_meta.json` | 被測 API SHA、harness SHA／來源雜湊／dirty 狀態、題庫與 fixture 雜湊 |
+| `score_meta.json` | scorer 版本與來源；重評時另記原始目錄 |
+| `summary.json`、`report.md` | 逐項證據位置、結果、失敗分類、程式檢查覆蓋率及完整對話狀態 |
+
+```bash
+python -m equitylens_eval.conversation rescore \
+  --responses /tmp/journey-run-01/responses.jsonl \
+  --out /tmp/journey-run-01-rescored
+```
+
+Rescore 使用保存的題庫、研究 oracle 與 fixture，驗證它們的雜湊；不接觸 API／資料庫／模型，不改原始結果或 API SHA。不能用改動過的 fixture 宣稱相同條件下改善。`run`／`rescore` exit code：0 表示沒有觀測到 fail 且所有選定案例已處理，1 表示有 fail 或未執行案例；**exit 0 不代表完整對話已通過**，仍須查看 `unverifiable` 和驗證覆蓋率。
+
+### 本階段評分界線
+
+- Run input、黑板與工具結果中任何投組 ID 不符即失敗；只有文字名稱正確不能通過。缺少有效工具 scope 則為 unverifiable。
+- 比較必須符合 seed 凍結的價格／持倉／NAV，獨立重算 sample volatility、95% historical nearest-rank VaR、ES 與假設回撤。現金零報酬、年化 252；風險數字容差 1e-7、資產金額容差 0.01。明確條件必須由同一個情境全部滿足。
+- 研究程式檢查重用已核實數值、來源命中與引用索引檢查；不宣稱驗證了整段回答的語意、來源角色或未來預測。
+- 列舉的回答沒有結構化 portfolio IDs、Router 實際歷史輸入沒有持久化，因此 `owned_portfolio_list`／`reset_boundary` 不能僅因名稱出現或 context 清空就算通過；已知錯誤仍可判 fail。
+- 所有 semantic checks 保留 unverifiable。回歸錯誤、能力缺口與依賴失敗分開統計；未知不補零。Draft 不進完整成功率，必要項目未驗證時顯示 N/A。
+
+離線測試使用假的 HTTP/SSE／資料庫介面，涵蓋全 45 輪、錯誤資源綁定、金額與風險計算反例、審批與逾時、seed 防重複與 corpus 指紋、報告與離線重評。這些是 harness 的測試，不代表真實 Agent 已通過 11 組案例。
+
+2026-11-04 已補做 GPT-6 Luna 的 journey-00 真實整合測試，修正審閱節點契約後三輪完成；11 項通過、1 項 unverifiable。測試範圍、兩次成本與限制見 [實測紀錄](../eval-verification/2026-11-04-conversation-harness/README.md)。

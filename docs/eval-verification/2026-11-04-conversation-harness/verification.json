@@ -1,0 +1,252 @@
+{
+  "attempts": [
+    {
+      "attempt": 1,
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "budget": {
+        "cap_usd": 0.5,
+        "charged_upper_usd": 0.0042093,
+        "pending_upper_usd": 0,
+        "database": "equitylens_journey_smoke_20261104_r1_eval"
+      },
+      "provider_calls": 5,
+      "provider_http_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "input_tokens": 17268,
+      "output_tokens": 648,
+      "turns": [
+        {
+          "turn": "t1",
+          "user": "我有幾個投資組合？",
+          "status": "completed",
+          "error": null,
+          "answer": "請選擇投資組合（回覆完整名稱或序號）：1. 組合乙；2. 組合甲",
+          "actions": [
+            "DirectResponse"
+          ],
+          "workflow": null,
+          "run_status": null,
+          "tools": [],
+          "quality_gate": null,
+          "approvals": []
+        },
+        {
+          "turn": "t2",
+          "user": "組合甲",
+          "status": "completed",
+          "error": null,
+          "answer": "目前投組：組合甲。請告訴我要分析的問題。",
+          "actions": [
+            "DirectResponse"
+          ],
+          "workflow": null,
+          "run_status": null,
+          "tools": [],
+          "quality_gate": null,
+          "approvals": []
+        },
+        {
+          "turn": "t3",
+          "user": "這個波動率如何？",
+          "status": "failed",
+          "error": "unsupported_approval",
+          "answer": null,
+          "actions": [
+            "RouteWorkflow"
+          ],
+          "workflow": "PortfolioDiagnosis",
+          "run_status": "WaitingForFeedback",
+          "tools": [
+            {
+              "name": "get_portfolio_snapshot",
+              "status": "Succeeded"
+            },
+            {
+              "name": "get_risk_report",
+              "status": "Succeeded"
+            },
+            {
+              "name": "run_risk_analysis",
+              "status": "Succeeded"
+            },
+            {
+              "name": "get_risk_profile",
+              "status": "Succeeded"
+            }
+          ],
+          "quality_gate": {
+            "passed": true,
+            "limited": true,
+            "blockingIssues": [],
+            "rejectedNumbers": []
+          },
+          "approvals": [
+            {
+              "nodeKey": "approvePortfolioDiagnosis",
+              "nodeType": "WaitForHumanApproval",
+              "scope": "WorkflowGate",
+              "sideEffectLevel": "ReadOnly",
+              "status": "Pending"
+            }
+          ]
+        }
+      ],
+      "run_meta": {
+        "suite": "conversation_journey_v1",
+        "system_commit": "921c8ce878934862e4ff6e30ad72a9a0f8f6f363",
+        "harness_commit": "921c8ce878934862e4ff6e30ad72a9a0f8f6f363",
+        "cases_hash": "cf38ab33759d045bbf8c46b9815ae0d4661964dd3c034f109045fb151df5db2e",
+        "research_hash": "7cfe5910c90937c5891d800116f2cc900fb63ab1ae26d4944dd8bdb6073cfc8f",
+        "fixtures_hash": "d26567a355f29d78290b0b70ddc7a3c007c6ca32ecca18cf2fa6b014c77c1b80",
+        "fixture_hashes": [
+          "972aa06d8caec094fb9bc35ef582b98e5c6519daf88698c9acc21327ad1b4744"
+        ],
+        "harness_source_hash": "037e682adee34a166671f3ad9dcf73baa319b09407f59690192100d7c13972fc",
+        "harness_dirty": false,
+        "model_cost": "unknown; external ledger",
+        "selected": [
+          "journey-00"
+        ]
+      },
+      "private_artifact_sha256": {
+        "responses.jsonl": "da5edf5d4090758c1a2b8f4c965bf280c616bb82fee41137abb49dbf361531f2",
+        "fixtures.json": "6eb0e349598314de7f36996db0cb6ac7967cdafcd84bec40b94df2f941bd675e",
+        "cases.json": "cc607c9e27d6a2ea83fe657298b7b671e121df3d31f930b20d53be41be7864d6",
+        "research.json": "10ce9c6ee702e71c6dee85323f3d04b1a61a12e0e743cdb5ecbc34d847273f6f"
+      }
+    },
+    {
+      "attempt": 2,
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "budget": {
+        "cap_usd": 0.4957907,
+        "charged_upper_usd": 0.004305150000000001,
+        "pending_upper_usd": 0,
+        "database": "equitylens_journey_smoke_20261104_r2_eval"
+      },
+      "provider_calls": 5,
+      "provider_http_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "input_tokens": 17454,
+      "output_tokens": 756,
+      "turns": [
+        {
+          "turn": "t1",
+          "user": "我有幾個投資組合？",
+          "status": "completed",
+          "error": null,
+          "answer": "請選擇投資組合（回覆完整名稱或序號）：1. 組合乙；2. 組合甲",
+          "actions": [
+            "DirectResponse"
+          ],
+          "workflow": null,
+          "run_status": null,
+          "tools": [],
+          "quality_gate": null,
+          "approvals": []
+        },
+        {
+          "turn": "t2",
+          "user": "組合甲",
+          "status": "completed",
+          "error": null,
+          "answer": "目前投組：組合甲。請告訴我要分析的問題。",
+          "actions": [
+            "DirectResponse"
+          ],
+          "workflow": null,
+          "run_status": null,
+          "tools": [],
+          "quality_gate": null,
+          "approvals": []
+        },
+        {
+          "turn": "t3",
+          "user": "這個波動率如何？",
+          "status": "completed",
+          "error": null,
+          "answer": "[P3] 投組年化波動率為 **19.25%**；以產品參考上限 **18.00%** 對照，略高，為上限的 **1.07 倍**。此比較依系統預設「穩健」偏好，尚未完成個人風險評估，應視為參考而非個人化結論。[P4]\n\n[P3] 口徑為 2025-11-17 至 2026-11-04、252 個共同交易日的日報酬樣本標準差年化；按現有股數固定、歷史權重隨價格變動計算，且不含帳戶現金。[P3]\n\n工具唯讀，不代表持倉已調整；不保證獲利。\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P4]。",
+          "actions": [
+            "RouteWorkflow"
+          ],
+          "workflow": "PortfolioDiagnosis",
+          "run_status": "Succeeded",
+          "tools": [
+            {
+              "name": "get_portfolio_snapshot",
+              "status": "Succeeded"
+            },
+            {
+              "name": "get_risk_report",
+              "status": "Succeeded"
+            },
+            {
+              "name": "run_risk_analysis",
+              "status": "Succeeded"
+            },
+            {
+              "name": "get_risk_profile",
+              "status": "Succeeded"
+            }
+          ],
+          "quality_gate": {
+            "passed": true,
+            "limited": true,
+            "blockingIssues": [],
+            "rejectedNumbers": []
+          },
+          "approvals": [
+            {
+              "nodeKey": "approvePortfolioDiagnosis",
+              "nodeType": "WaitForHumanApproval",
+              "scope": "WorkflowGate",
+              "sideEffectLevel": "ReadOnly",
+              "status": "Approved"
+            }
+          ]
+        }
+      ],
+      "run_meta": {
+        "suite": "conversation_journey_v1",
+        "system_commit": "921c8ce878934862e4ff6e30ad72a9a0f8f6f363",
+        "harness_commit": "921c8ce878934862e4ff6e30ad72a9a0f8f6f363",
+        "cases_hash": "cf38ab33759d045bbf8c46b9815ae0d4661964dd3c034f109045fb151df5db2e",
+        "research_hash": "7cfe5910c90937c5891d800116f2cc900fb63ab1ae26d4944dd8bdb6073cfc8f",
+        "fixtures_hash": "b25a59c4f474bb2493bf148895597c9269c7d18a018ccfea080f6c0fff9b4bb1",
+        "fixture_hashes": [
+          "972aa06d8caec094fb9bc35ef582b98e5c6519daf88698c9acc21327ad1b4744"
+        ],
+        "harness_source_hash": "3870d5be8fddfcda3e4834946e1de1922ea825c2ddaf1881b6cd41932f9b3e04",
+        "harness_dirty": true,
+        "model_cost": "unknown; external ledger",
+        "selected": [
+          "journey-00"
+        ]
+      },
+      "private_artifact_sha256": {
+        "responses.jsonl": "8419793271ceed1166d69650b08616b79c0a6a34b7129bc82e3c323c60f64258",
+        "fixtures.json": "aec64252cbddd38d5343adbd56fe91c3df36dc15efba6586932ca853de40b486",
+        "cases.json": "cc607c9e27d6a2ea83fe657298b7b671e121df3d31f930b20d53be41be7864d6",
+        "research.json": "10ce9c6ee702e71c6dee85323f3d04b1a61a12e0e743cdb5ecbc34d847273f6f"
+      }
+    }
+  ],
+  "combined_cap_usd": 0.5,
+  "combined_charged_upper_usd": 0.00851445,
+  "live_rescore_summary_equal": true,
+  "offline_tests_passed": 187,
+  "full_suite_live_tested": false,
+  "llm_judge_enabled": false
+}

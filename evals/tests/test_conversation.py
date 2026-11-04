@@ -132,8 +132,10 @@ def test_rejects_turn_count_mismatch_and_missing_required_fields(suite):
     _expect_invalid(suite, lambda cases, _: _case(cases, 'journey-00')['turns'][2]['expected'].pop('portfolio_ref'), 'requires portfolio_ref')
 
 
-def test_rejects_verified_status_and_prefilled_goldens(suite):
-    _expect_invalid(suite, lambda cases, _: _case(cases, 'journey-01').update(review_status='verified'), 'numeric goldens')
+def test_contract_review_is_separate_from_seed_numeric_verification(suite):
+    cases, fixture, research = copy.deepcopy(suite)
+    _case(cases, 'journey-01')['review_status'] = 'verified'
+    conv.validate_cases(cases, fixture, research)
     _expect_invalid(suite, lambda _, fixture: fixture.update(numeric_golden={'vol': 0.2}), 'must not be prefilled')
 
 

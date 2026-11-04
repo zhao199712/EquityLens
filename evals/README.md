@@ -170,7 +170,7 @@ export EVAL_JUDGE_MODEL=deepseek-flash
 
 ## 多輪對話評估集（草稿）
 
-單輪題目每題都開新對話、每個帳號只有一個投組，抓不到「選定投組後追問卻被要求重新指定」這類跨輪問題。`cases/conversation_journey_v1.jsonl` 是獨立的多輪 suite，目前只有題庫、fixture 規格與 validator，尚未有 runner，也不產生通過率：
+單輪題目每題都開新對話、每個帳號只有一個投組，抓不到「選定投組後追問卻被要求重新指定」這類跨輪問題。`cases/conversation_journey_v1.jsonl` 是獨立的多輪 suite，已提供題庫驗證、隔離 seed、多輪 runner、程式 scorer 與離線 rescore。Draft 和未驗證的語意項目不計為完整成功：
 
 ```bash
 python -m equitylens_eval.conversation validate

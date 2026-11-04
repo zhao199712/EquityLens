@@ -1,0 +1,10 @@
+{"id": "5fa0132d663c4df39ff8edf82969dce4", "reserved_usd": 0.002619025}
+{"id": "5fa0132d663c4df39ff8edf82969dce4", "charged_upper_usd": 0.000357025, "usage": {"input_tokens": 1289, "input_tokens_details": {"cache_write_tokens": 1286, "cached_tokens": 0}, "output_tokens": 134, "output_tokens_details": {"reasoning_tokens": 54}, "total_tokens": 1423}, "status": 200, "total_upper_usd": 0.000357025}
+{"id": "cbdf0a9309a7417aaacd987a633bf359", "reserved_usd": 0.005676325}
+{"id": "cbdf0a9309a7417aaacd987a633bf359", "charged_upper_usd": 0.000541325, "usage": {"input_tokens": 2237, "input_tokens_details": {"cache_write_tokens": 169, "cached_tokens": 1942}, "output_tokens": 76, "output_tokens_details": {"reasoning_tokens": 27}, "total_tokens": 2313}, "status": 200, "total_upper_usd": 0.00089835}
+{"id": "deb6069ba331457b9a203f7ba24351e6", "reserved_usd": 0.007369225}
+{"id": "deb6069ba331457b9a203f7ba24351e6", "charged_upper_usd": 0.000803725, "usage": {"input_tokens": 3501, "input_tokens_details": {"cache_write_tokens": 1433, "cached_tokens": 1942}, "output_tokens": 32, "output_tokens_details": {"reasoning_tokens": 10}, "total_tokens": 3533}, "status": 200, "total_upper_usd": 0.001702075}
+{"id": "9d72ab14b63748ff95b1a7a2a3d841be", "reserved_usd": 0.008657125}
+{"id": "9d72ab14b63748ff95b1a7a2a3d841be", "charged_upper_usd": 0.0012207250000000002, "usage": {"input_tokens": 5061, "input_tokens_details": {"cache_write_tokens": 2993, "cached_tokens": 1942}, "output_tokens": 164, "output_tokens_details": {"reasoning_tokens": 146}, "total_tokens": 5225}, "status": 200, "total_upper_usd": 0.0029228}
+{"id": "db50126318eb4d97a2df9238b2673bd1", "reserved_usd": 0.009230200000000001}
+{"id": "db50126318eb4d97a2df9238b2673bd1", "charged_upper_usd": 0.00138235, "usage": {"input_tokens": 5366, "input_tokens_details": {"cache_write_tokens": 3298, "cached_tokens": 1942}, "output_tokens": 350, "output_tokens_details": {"reasoning_tokens": 132}, "total_tokens": 5716}, "status": 200, "total_upper_usd": 0.004305150000000001}
