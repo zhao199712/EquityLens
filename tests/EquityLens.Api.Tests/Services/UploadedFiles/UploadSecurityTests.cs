@@ -91,6 +91,24 @@ public sealed class UploadSecurityTests
         Assert.Null(await service.CreateDownloadUrlAsync(db.UploadedFiles.Single().Id));
     }
 
+    [Fact]
+    public async Task SeedMetadata_DoesNotCreateDownloadUrl()
+    {
+        using var db = RefactorTestDbContext.Create();
+        var user = new TestUser();
+        var file = new EquityLens.Api.Data.Entities.UploadedFile
+        {
+            Id = Guid.NewGuid(), UploadedByUserId = user.UserId, OriginalFileName = "seed.pdf",
+            ObjectKey = "unavailable/seed.pdf", BucketName = "seed-unavailable",
+            StorageProvider = "SeedMetadata", UploadStatus = "Unavailable"
+        };
+        db.UploadedFiles.Add(file);
+        await db.SaveChangesAsync();
+        // RecordingStorage returns a non-null URL, so null proves storage was bypassed.
+        var service = new UploadedFileService(db, user, new RecordingStorage());
+        Assert.Null(await service.CreateDownloadUrlAsync(file.Id));
+    }
+
     private sealed class TestUser : ICurrentUserContext
     {
         public Guid UserId { get; } = Guid.NewGuid();

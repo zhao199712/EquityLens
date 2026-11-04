@@ -72,7 +72,8 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<IAgentRunExecutor, AgentRunExecutor>();
         builder.Services.AddScoped<IAgentRunService, AgentRunService>();
         builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();
-        builder.Services.AddHostedService<BackgroundJobWorker>();
+        if (builder.Configuration.GetValue("BackgroundJobs:Enabled", true))
+            builder.Services.AddHostedService<BackgroundJobWorker>();
         builder.Services.AddHostedService<AgentRunWorker>();
         builder.Services.AddHostedService<AgentRunWakeOutboxDispatcher>();
         builder.Services.AddHostedService<RiskPythonShadowResultWorker>();

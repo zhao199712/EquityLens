@@ -110,6 +110,9 @@ public sealed class UploadedFileService : IUploadedFileService
             return null;
         }
 
+        // Seed 僅保留文件關聯；沒有 PDF 本體時不得產生失效的下載簽章。
+        if (file.StorageProvider == "SeedMetadata") return null;
+
         var lifetime = TimeSpan.FromMinutes(15);
         var expiresAt = DateTime.UtcNow.Add(lifetime);
         var url = await _objectStorage.CreatePresignedDownloadUrlAsync(file.ObjectKey, lifetime, cancellationToken);

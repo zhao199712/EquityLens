@@ -6,3 +6,5 @@
 - Production data、下載的原始檔與大型暫存輸出不應提交到 Git。
 
 目前的 demo market price CSV 可搭配 `database/postgres/scripts/import-demo-market-prices.sql` 匯入本機 PostgreSQL。
+
+- `seed/`：Cloud seed 的固定成分名單與私有 Release 校驗碼；不含資料本體。操作方式見 [Cloud seed](../docs/development/cloud-seed.md)。
