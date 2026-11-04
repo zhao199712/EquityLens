@@ -67,7 +67,7 @@ internal static class PortfolioComparisonClaims
             // 引用只作用於當行；不得拿別處碰巧可支持的情境代替目前主張。
             var ids = Regex.Matches(line, @"\[(P\d+)\]").Select(m => m.Groups[1].Value).ToHashSet();
             var cited = facts.Where(f => ids.Contains(f.Id) && f.Tool == "simulate_weight_scenario").ToArray();
-            var pattern = $@"(?<metrics>(?:{MetricPattern})(?:\s*[與和及、]\s*(?:{MetricPattern}))*)\s*的?\s*(?<improvement>改善幅度|改善程度)?\s*(?<negation>並非|不是|不)?\s*(?:略|明顯|都|均|皆|更)?\s*(?<direction>大於|小於|高於|低於|等於)\s*(?<target>[^，,。；;\[\n]+)";
+            var pattern = $@"(?<metrics>(?:{MetricPattern})(?:\s*[與和及、]\s*(?:{MetricPattern}))*)\s*的?\s*(?<improvement>改善幅度|改善程度)?\s*(?<negation>並非|不是|不)?\s*(?:略|明顯|都|均|皆|更)?\s*(?<direction>大於|小於|高於|低於|等於)\s*(?<target>(?:情境\s*)?「[^」\r\n]+」|[^，,。；;\[\n]+)";
             foreach (Match claim in Regex.Matches(line, pattern, RegexOptions.IgnoreCase))
             {
                 // 數值門檻（例如使用者希望波動低於某百分比）不是兩情境優劣判斷。

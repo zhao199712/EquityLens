@@ -1,0 +1,1 @@
+{"case_id": "volatility-only", "final_answer": "想了解哪個標的或哪個投組的波動率？目前可選投組為「組合甲」，也可直接指定公司或代號。", "draft_answer": null, "quality_gate": null, "stop_reason": null, "scenario_summary": {}, "risk_profile_facts": [], "llm_turns": null, "tool_calls": [], "raw_row_sha256": "5724fc9ed20b867c7a14b2da423f035c4f5a1d6715720a69963b08cc9e2abe75"}

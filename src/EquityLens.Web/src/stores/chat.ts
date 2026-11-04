@@ -96,28 +96,29 @@ export const useChatStore = defineStore('chat', {
     },
 
     async startNewSession() {
-      const existing = this.sessions.find((s) => s.messageCount === 0)
-      if (existing) {
-        this.currentSessionId = existing.id
-        this.messages = []
-        return
-      }
-      try {
-        const session = await createSession()
-        this.sessions.unshift(session)
-        this.currentSessionId = session.id
-        this.messages = []
-      } catch {
-        this.error = 'Failed to create session'
-      }
+      if (this.isStreaming) return
+      this.currentSessionId = null
+      this.messages = []
+      this.error = null
+      this.conversationAction = null
     },
 
     async sendMessage(content: string) {
       const authStore = useAuthStore()
-      if (!authStore.token) return
+      if (!authStore.token || !content.trim() || this.isStreaming) return
+      this.isStreaming = true
 
       if (!this.currentSessionId) {
-        await this.startNewSession()
+        try {
+          const existing = this.sessions.find(session => session.messageCount === 0)
+          const session = existing ?? await createSession()
+          if (!existing) this.sessions.unshift(session)
+          this.currentSessionId = session.id
+        } catch {
+          this.error = 'Failed to create session'
+          this.isStreaming = false
+          return
+        }
       }
 
       const sessionId = this.currentSessionId!

@@ -1,3 +1,5 @@
+import { createPinia, setActivePinia } from 'pinia'
+import { useAuthStore } from '../../../stores/auth'
 import { legacyWorkflow } from '../../../services/legacyWorkflows'
 import { mount } from '@vue/test-utils'
 import { computed, ref } from 'vue'
@@ -7,6 +9,7 @@ import { decideAgentApproval } from '../../../services/agentRuns'
 
 interface MockRun {
   run: Record<string, unknown>
+  events: unknown[]
   nodes: unknown[]
   workflowDefinitionJson: Record<string, unknown>
   toolCalls: unknown[]
@@ -42,6 +45,8 @@ vi.mock('../../../services/agentRuns', () => ({
   retryAgentRun: vi.fn(),
 }))
 
+vi.mock('../../../services/http', () => ({ http: {} }))
+
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: 'run-1' } }),
   useRouter: () => ({ push: vi.fn() }),
@@ -53,7 +58,9 @@ vi.stubGlobal('IntersectionObserver', class {
   disconnect() {}
 })
 
-const stubs = { AgentRunProgress: true, CapabilityRequestStatus: true }
+const stubs = { AgentRunProgress: true }
+
+beforeEach(() => { setActivePinia(createPinia()) })
 
 function diagnosisRun(riskMetrics: Record<string, number | null> | null, interpretation?: string | null): MockRun {
   return {
@@ -63,6 +70,7 @@ function diagnosisRun(riskMetrics: Record<string, number | null> | null, interpr
       createdAtUtc: '2026-07-27T13:46:23Z', startedAtUtc: '2026-07-27T13:46:24Z',
       completedAtUtc: '2026-07-27T13:47:00Z', errorMessage: null,
     },
+    events: [],
     nodes: [],
     workflowDefinitionJson: { nodes: [], edges: [] },
     toolCalls: [],
@@ -206,5 +214,54 @@ describe('AgentRunDetailView human approval panel', () => {
     expect(reject?.attributes('disabled')).toBeDefined()
     await wrapper.get('.approval-comment').setValue('風險過高')
     expect(reject?.attributes('disabled')).toBeUndefined()
+  })
+})
+
+
+describe('AgentRunDetailView role-scoped tabs and legacy data', () => {
+  it.each(['User', 'Admin'])('shows only the allowed tabs for %s', async (role) => {
+    useAuthStore().user = { id: 'user-1', email: 'test@example.invalid', displayName: 'Test', role }
+    state.agentRun.value = diagnosisRun(null)
+    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
+    await wrapper.get('.debug-toggle').trigger('click')
+    const expected = ['時間線', '節點', '工具', 'Feedback']
+    if (role === 'Admin') expected.push('Blackboard', 'Workflow')
+    expect(wrapper.findAll('.tab-btn').map(tab => tab.text())).toEqual(expected)
+    if (role === 'Admin') {
+      await wrapper.findAll('.tab-btn')[4]!.trigger('click')
+      expect(wrapper.get('.tab-pad').text()).toContain('Blackboard')
+      useAuthStore().user!.role = 'User'
+      await wrapper.vm.$nextTick()
+      expect(wrapper.find('.tab-pad').exists()).toBe(false)
+      expect(wrapper.get('.tab-btn.active').text()).toBe('時間線')
+    }
+  })
+
+  it.each(['User', 'Admin'])('ignores obsolete fields without breaking the report for %s', (role) => {
+    useAuthStore().user = { id: 'user-1', email: 'test@example.invalid', displayName: 'Test', role }
+    const item = diagnosisRun(null, '保留投組診斷內容')
+    // Historical fields may be incomplete, including a missing contextEnvelope.
+    item.blackboardJson = {
+      routingContext: { leadSkill: 'retired-skill', leadSkillDisplayName: '舊技能名稱' },
+      capabilityRequestAssessment: { decision: 'Request', reason: '舊能力評估' },
+      capabilityRequests: [{ capabilityId: 'retired-capability', status: 'Pending' }],
+    }
+    state.agentRun.value = item
+    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
+    expect(wrapper.text()).toContain('保留投組診斷內容')
+    expect(wrapper.find('[data-testid="routing-stage"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toMatch(/retired-skill|舊技能名稱|舊能力評估|retired-capability|等待 Planner/)
+  })
+
+  it.each([
+    ['CriticReview', { summary: '保留審查結論', recommendedNextAction: 'AcceptAnswer' }, '保留審查結論'],
+    [legacyWorkflow.draft, { revisedAnswer: '保留修訂答案' }, '保留修訂答案'],
+  ])('preserves %s output', (workflow, output, expected) => {
+    const item = diagnosisRun(null)
+    item.run.workflowType = workflow
+    item.outputJson = output
+    state.agentRun.value = item
+    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
+    expect(wrapper.text()).toContain(expected)
   })
 })

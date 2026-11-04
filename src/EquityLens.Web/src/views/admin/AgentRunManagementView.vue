@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { workflowReadFilters } from "../../services/legacyWorkflows"
+import { isRetiredWorkflow } from '../../services/legacyWorkflows'
+import WorkflowReadFilter from '../../components/agents/WorkflowReadFilter.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -62,7 +63,7 @@ const columns: DataTableColumns<AgentRunListItem> = [
     key: 'workflowType',
     width: 140,
     render(row) {
-      return h(NTag, { size: 'small', type: 'default', bordered: true }, { default: () => row.workflowType })
+      return h(NTag, { size: 'small', type: 'default', bordered: true }, { default: () => row.workflowType + (isRetiredWorkflow(row.workflowType) ? ' · 已退役（唯讀）' : '') })
     },
   },
   {
@@ -122,10 +123,10 @@ const columns: DataTableColumns<AgentRunListItem> = [
     render(row) {
       return h(NSpace, { size: 'small' }, () => [
         h(NButton, { size: 'small', onClick: () => openDetail(row.id) }, { icon: () => h(NIcon, null, () => h(EyeOutline)) }),
-        row.status === 'Failed'
+        !isRetiredWorkflow(row.workflowType) && row.status === 'Failed'
           ? h(NButton, { size: 'small', type: 'warning', onClick: () => handleRetry(row.id) }, { icon: () => h(NIcon, null, () => h(ReloadOutline)) })
           : null,
-        row.status === 'Pending' || row.status === 'Running' || row.status === 'WaitingForApproval'
+        !isRetiredWorkflow(row.workflowType) && ['Pending', 'Running', 'WaitingForApproval'].includes(row.status)
           ? h(NPopconfirm, { onPositiveClick: () => handleCancel(row.id) }, {
               trigger: () => h(NButton, { size: 'small', type: 'error' }, { icon: () => h(NIcon, null, () => h(CloseCircleOutline)) }),
               default: () => '確定取消此 Agent Run？',
@@ -137,15 +138,19 @@ const columns: DataTableColumns<AgentRunListItem> = [
 ]
 
 onMounted(loadRuns)
+watch([filterWorkflow, filterStatus], loadRuns)
+let loadVersion = 0
 
 async function loadRuns() {
+  const version = ++loadVersion
   loading.value = true
   try {
-    runs.value = await listAgentRuns({ limit: 200 })
+    const result = await listAgentRuns({ limit: 200, workflowType: filterWorkflow.value || undefined, status: filterStatus.value || undefined })
+    if (version === loadVersion) runs.value = result
   } catch {
-    message.error('無法載入 Agent Run 列表。')
+    if (version === loadVersion) message.error('無法載入 Agent Run 列表。')
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
@@ -223,10 +228,7 @@ watch(() => route.params.id, () => {
           class="prestige-input admin-search"
           placeholder="搜尋 workflow / agent / ID..."
         />
-        <select v-model="filterWorkflow" class="prestige-input admin-select">
-          <option value="">全部 Workflow</option>
-          <option v-for="type in workflowReadFilters" :key="type" :value="type">{{ type }}</option>
-        </select>
+        <WorkflowReadFilter v-model="filterWorkflow" :observed-types="runs.map(run => run.workflowType)" />
         <select v-model="filterStatus" class="prestige-input admin-select">
           <option value="">全部狀態</option>
           <option value="Pending">Pending</option>

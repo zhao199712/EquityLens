@@ -1,0 +1,27 @@
+{
+  "default": {
+    "value": "Balanced",
+    "label": "穩健",
+    "isDefault": true,
+    "statement": "依你的風險偏好『穩健』（預設，可在設定修改）"
+  },
+  "invalid_status": 400,
+  "saved": [
+    {
+      "value": "Conservative",
+      "persisted": true,
+      "isDefault": false
+    },
+    {
+      "value": "Balanced",
+      "persisted": true,
+      "isDefault": false
+    },
+    {
+      "value": "Aggressive",
+      "persisted": true,
+      "isDefault": false
+    }
+  ],
+  "anonymous_status": 401
+}

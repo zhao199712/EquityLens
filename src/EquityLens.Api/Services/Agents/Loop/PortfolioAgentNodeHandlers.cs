@@ -47,10 +47,16 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         if (issues.Contains("OptimizationScenarioRequired")) summary = "優化問題尚未取得同一快照的完整情境比較，無法提供改善幅度。";
         if (issues.Contains("OptimizationDataUnavailable")) summary = "共同歷史資料不足，無法比較優化前後的波動、VaR、ES 與最大回撤；請補足資料。";
         if (comparison is not null) summary = ScenarioSummary(comparison);
+        var interpretation = issues.Count == 0 ? answer?.Markdown
+            : comparison?.Status == "Calculated" && issues.All(i => i is "UntraceableNumbers" or "MixedRiskBasis" or "ScenarioComparisonDirectionMismatch" or "UnverifiedScenarioComparison")
+                ? VerifiedParagraphs(answer, facts) : null;
+        // 偏好是已保存的工具事實，正常與降級報告皆揭露；不依賴模型記得重述。
+        summary = WithRiskPreference(summary, facts)!;
+        interpretation = WithRiskPreference(interpretation, facts);
         var output = new PortfolioDiagnosisOutput(summary, attribution?.PortfolioReturn, attribution?.BenchmarkReturn, attribution?.ActiveReturn,
             attribution?.Holdings.Where(x => x.Contribution < 0).OrderBy(x => x.Contribution).Take(3).ToArray() ?? [],
             attribution?.Holdings.Where(x => x.Contribution > 0).OrderByDescending(x => x.Contribution).Take(3).ToArray() ?? [], [],
-            limited ? "Limited" : "complete", metrics, issues.Count == 0 ? answer?.Markdown : comparison?.Status == "Calculated" && issues.All(i => i is "UntraceableNumbers" or "MixedRiskBasis" or "ScenarioComparisonDirectionMismatch" or "UnverifiedScenarioComparison") ? VerifiedParagraphs(answer, facts) : null, comparison, diagnosis,
+            limited ? "Limited" : "complete", metrics, interpretation, comparison, diagnosis,
             "Unvalidated", board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>(),
             "既有持股歷史重建；情境採固定權重、含現金的共同快照；模型未經回測驗證", attribution?.CoverageStatus,
             (board[AgentBlackboardKeys.MathResults] as JsonArray)?.OfType<JsonObject>()
@@ -61,6 +67,16 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         context.Node.OutputJson = board["portfolioQualityGate"]!.ToJsonString();
         context.AddEvent(context.Run, context.Node, "PortfolioQualityGateEvaluated", issues.Count == 0 ? "Passed" : "Limited", new { issues });
         return Task.CompletedTask;
+    }
+
+    internal static string? WithRiskPreference(string? text, IReadOnlyList<LoopDataFact> facts)
+    {
+        if (text is not null && facts.LastOrDefault(f => f.Tool == "get_risk_profile"
+                && f.Data["available"]?.ToString() == "true") is { } profile
+            && profile.Data["statement"]?.ToString() is { Length: > 0 } statement
+            && !text.Contains(statement, StringComparison.Ordinal))
+            return text + $"\n\n{statement} [{profile.Id}]。";
+        return text;
     }
 
     internal static bool RequiresScenario(JsonObject board) => Regex.IsMatch(

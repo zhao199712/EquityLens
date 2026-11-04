@@ -90,7 +90,27 @@ public sealed class ConversationService(
                 .OrderBy(x => x.Name)
                 .Select(x => new ConversationPortfolioOption(x.Id, x.Name))
                 .ToListAsync(cancellationToken);
-            var entry = await EntryDecisionAsync(userId, content, context, cancellationToken);
+            var priorActive = ReadGuid(context, "activePortfolioId");
+            if (!portfolios.Any(p => p.Id == priorActive)) context.Remove("activePortfolioId");
+            var named = PortfolioSelection.Named(content, portfolios.Select(p => (p.Id, p.Name))).ToArray();
+            var choice = Regex.Match(content, @"^(?:第)?([1-9][0-9]*)(?:個|項)?[。！\s]*$");
+            if (named.Length == 0 && choice.Success && context["portfolioOptions"] is JsonArray options
+                && int.TryParse(choice.Groups[1].Value, out var index) && index <= options.Count
+                && Guid.TryParse(options[index - 1]?.ToString(), out var optionId) && portfolios.Any(p => p.Id == optionId))
+                named = [optionId];
+            if (named.Length == 1) context["activePortfolioId"] = named[0].ToString();
+            else if (named.Length > 1) context.Remove("activePortfolioId");
+            var activePortfolioId = ReadGuid(context, "activePortfolioId");
+            var selectionOnly = named.Length == 1 && (choice.Success || portfolios.Any(p => p.Id == named[0] && (content == p.Name || content == p.Id.ToString())));
+            var inventory = Regex.IsMatch(content, @"^(?:請問)?我(?:有幾個|有哪些|的)投資組合[？?。\s]*$");
+            var entry = inventory
+                ? LocalDecision(ConversationActions.DirectResponse, portfolios.Count == 0 ? "目前沒有投資組合，請先到「投資組合」頁面建立。" : PortfolioOptionsText(portfolios))
+                : selectionOnly
+                    ? LocalDecision(ConversationActions.DirectResponse, $"目前投組：{portfolios.Single(p => p.Id == activePortfolioId).Name}。請告訴我要分析的問題。")
+                    : named.Length > 0 && activePortfolioId != priorActive ? null : await EntryDecisionAsync(userId, content, context, cancellationToken);
+            if (inventory || selectionOnly || named.Length > 0 && activePortfolioId != priorActive)
+            { context.Remove("lastAgentRunId"); context.Remove("lastResearchRunId"); }
+            if (inventory) context["portfolioOptions"] = JsonSerializer.SerializeToNode(portfolios.Select(p => p.Id), Json);
             var inputContext = context.DeepClone().AsObject();
             var securities = await db.Securities.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.Ticker, x.Name }).ToListAsync(cancellationToken);
             inputContext["tickerCandidates"] = JsonSerializer.SerializeToNode(securities.Where(x => content.Contains(x.Ticker, StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrWhiteSpace(x.Name) && content.Contains(x.Name, StringComparison.OrdinalIgnoreCase))).Take(10), Json);
@@ -110,9 +130,9 @@ public sealed class ConversationService(
             {
                 if (decision.Action == ConversationActions.RouteWorkflow)
                 {
-                    created = decision.Route is { } route
-                        ? await workflowQueries.CreateFromDecisionAsync(userId, new(decision.StandaloneQuery!, route.RoutingContext.ParentAgentRunId), route, cancellationToken)
-                        : await workflowQueries.CreateAsync(userId, new(decision.StandaloneQuery!), cancellationToken);
+                    created = await workflowQueries.CreateForConversationAsync(userId,
+                        new(decision.StandaloneQuery!, decision.Route?.RoutingContext.ParentAgentRunId), decision.Route,
+                        content, activePortfolioId, cancellationToken);
                     turn.AgentRunId = created.AgentRunId;
                     turn.ResearchRunId = created.ResearchRunId;
                 }
@@ -126,7 +146,8 @@ public sealed class ConversationService(
                         throw new ConversationException("previous_run_not_ready", "上一份研究尚未完成或不支援修正。");
                     if (parent.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
                     {
-                        created = await workflowQueries.CreateAsync(userId, new(decision.StandaloneQuery!, parentId), cancellationToken);
+                        created = await workflowQueries.CreateForConversationAsync(userId, new(decision.StandaloneQuery!, parentId),
+                            null, content, activePortfolioId, cancellationToken);
                         turn.AgentRunId = created.AgentRunId;
                         turn.ResearchRunId = null;
                     }
@@ -145,8 +166,10 @@ public sealed class ConversationService(
             {
                 routingRejected = exception.Code is "portfolio_forbidden" or "routing_rejected";
                 routingFailure = exception.Code == "portfolio_required"
-                    ? $"{exception.Message}請先到「投資組合」頁面建立投資組合後再詢問。"
+                    ? portfolios.Count == 0 ? "目前沒有可供診斷的投資組合。請先到「投資組合」頁面建立投資組合後再詢問。" : PortfolioOptionsText(portfolios)
                     : exception.Message;
+                if (exception.Code == "portfolio_required" && portfolios.Count > 0)
+                    context["portfolioOptions"] = JsonSerializer.SerializeToNode(portfolios.Select(p => p.Id), Json);
             }
 
             var action = routingFailure is null ? decision.Action : routingRejected ? ConversationActions.RejectUnsafe : ConversationActions.AskClarification;
@@ -236,11 +259,17 @@ public sealed class ConversationService(
         return Local(ConversationActions.RouteWorkflow, "沿用上一份分析的角色繼續處理。", content, route);
     }
 
+    private static ConversationAgentDecision LocalDecision(string action, string response) =>
+        new(action, response, null, "portfolio_context", "high", new(), "", "", "", 0, 0, 0);
+
+    private static string PortfolioOptionsText(IReadOnlyList<ConversationPortfolioOption> portfolios) =>
+        "請選擇投資組合（回覆完整名稱或序號）：" + string.Join("；", portfolios.Select((p, i) => $"{i + 1}. {p.Name}"));
+
     private static JsonObject MergeContext(JsonObject current, JsonObject patch)
     {
         var result = current.DeepClone() as JsonObject ?? new JsonObject();
         foreach (var item in patch)
-            if (item.Key is not ("lastAgentRunId" or "lastResearchRunId"))
+            if (item.Key is not ("lastAgentRunId" or "lastResearchRunId" or "activePortfolioId" or "portfolioOptions"))
                 result[item.Key] = item.Value?.DeepClone();
         return result;
     }

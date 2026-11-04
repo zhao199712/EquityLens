@@ -1,0 +1,16 @@
+{
+  "previous_metadata_hash": "6d5df5f28fcd0868b3b5d74b16a3afee221ec20664b8a05916bb6ad46cde133f",
+  "current_fixture_hash": "5dde7b8fafd674dc89c04f426a1bbf71a72ee8ed7495fb9eab5820cbb45fc8df",
+  "direct_snapshot_comparison": {
+    "unprompted": true,
+    "lower-volatility": true,
+    "concentration": true,
+    "cash": true,
+    "transfer": true,
+    "diversified": true,
+    "short-history": true,
+    "preference": true,
+    "multi-scenario": true,
+    "tradeoff": true
+  }
+}

@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Globalization;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Data;
+using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.PortfolioValuations;
 using Microsoft.EntityFrameworkCore;
@@ -24,7 +25,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             "run_risk_analysis" => "以快照補算 Core、TailRisk 或 RiskContribution；不可輸入數值資料。",
             "get_performance_attribution" => "取得持股與產業的正負績效貢獻。",
             "simulate_weight_scenario" => "比較一至三個減碼情境；targetWeights 僅列減碼來源、使用 0 到 1 的最終權重且不得高於目前權重。cash 留現金不指定 transferToTicker；holding 必須指定另一檔既有持股 transferToTicker，不把轉入股放在 targetWeights。index_etf 可轉入 snapshot 中 Ready 的 0050／006208，不必已持有；不能指定其他新標的。未指定情境的優化問題比較留現金與一個可用 ETF；不改變持倉。",
-            _ => "讀取使用者已保存的風險偏好；缺少時回 unavailable，不推測。"
+            _ => "讀取已保存偏好或明示穩健預設（isDefault）；沿用 statement，不能推測量化承受門檻。"
         }, Schema(name))).ToArray();
 
     // 顯示值由同一份工具結果確定性產生，原始數值仍保留供 gate 驗證。
@@ -175,8 +176,10 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 break;
             }
             default:
-                // 目前沒有使用者偏好欄位；不得把治理警示當成使用者風險承受度。
-                data = Object(new { available = false, reason = "尚未保存使用者風險偏好，請向使用者確認。" });
+                var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == scope.UserId && x.IsActive, ct);
+                if (user is null) return new([], "User unavailable", "user_not_found");
+                var profile = RiskPreferenceProfile.FromSaved(user.RiskPreference);
+                data = Object(new { available = true, profile.Value, profile.Label, profile.IsDefault, profile.Statement });
                 patch["userRiskPreference"] = data.DeepClone();
                 break;
         }

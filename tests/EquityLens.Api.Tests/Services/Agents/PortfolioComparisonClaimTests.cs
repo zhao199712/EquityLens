@@ -67,6 +67,26 @@ public class PortfolioComparisonClaimTests
         Assert.Empty(PortfolioComparisonClaims.Check("另一減碼配置的 VaR 改善幅度大於現金 [P1]", [fact]));
     }
 
+    [Theory]
+    [InlineData("減碼至六成，餘額留現金", "減碼至四成，餘額留現金")]
+    [InlineData("方案甲,現金", "方案乙;現金")]
+    public void CanonicalStatementsWithPunctuationInNames_StillRequireExactEvidenceAndDirection(string first, string second)
+    {
+        var (_, _, comparison) = Fixture();
+        comparison = comparison with { Scenarios = comparison.Scenarios.Select((s, i) => s with {
+            Name = i == 0 ? first : second, RemainderPolicy = "cash", TransferToTicker = null
+        }).ToArray() };
+        var fact = new LoopDataFact("P1", "scenario", "simulate_weight_scenario", PortfolioLoopTools.ScenarioEvidence(comparison));
+        foreach (var statement in PortfolioComparisonClaims.Statements(comparison))
+        {
+            Assert.Empty(PortfolioComparisonClaims.Check(statement + " [P1]", [fact]));
+            var reversed = statement.Contains("大於") ? statement.Replace("大於", "小於") : statement.Replace("小於", "大於");
+            Assert.Contains("ScenarioComparisonDirectionMismatch", PortfolioComparisonClaims.Check(reversed + " [P1]", [fact]));
+            Assert.Contains("UnverifiedScenarioComparison", PortfolioComparisonClaims.Check(statement + " [P9]", [fact]));
+            Assert.Contains("UnverifiedScenarioComparison", PortfolioComparisonClaims.Check(statement.Replace(second, "不存在的情境") + " [P1]", [fact]));
+        }
+    }
+
     [Fact]
     public void DerivedComparisonsHandleEqualAndWorseOutcomes()
     {

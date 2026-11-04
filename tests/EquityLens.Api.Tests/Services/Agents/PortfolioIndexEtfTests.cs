@@ -68,6 +68,9 @@ public sealed class PortfolioIndexEtfTests
     }
 
     [Theory]
+    [InlineData("absent", false)]
+    [InlineData("duplicate-security", false)]
+    [InlineData("portfolio-currency", false)]
     [InlineData("complete", true)]
     [InlineData("missing", false)]
     [InlineData("unadjusted", false)]
@@ -85,7 +88,9 @@ public sealed class PortfolioIndexEtfTests
         if (mode == "holding-unadjusted") s = s with { PriceBasis = "MixedOrClose" };
         var etf = new Security { Id = Guid.NewGuid(), Ticker = "0050", Exchange = mode == "exchange" ? "NYSE" : "TWSE", Name = "ETF",
             AssetType = mode == "stock" ? "Stock" : "ETF", Currency = mode == "currency" ? "USD" : "TWD", IsActive = mode != "inactive" };
-        db.Securities.Add(etf);
+        if (mode == "portfolio-currency") s = s with { Currency = "USD" };
+        if (mode != "absent") db.Securities.Add(etf);
+        if (mode == "duplicate-security") db.Securities.Add(new Security { Id = Guid.NewGuid(), Ticker = "0050", Exchange = "OTHER", Currency = "USD", AssetType = "Stock" });
         foreach (var d in s.Dates)
         {
             if (mode == "missing" && d == s.Dates[20]) continue;
@@ -104,7 +109,16 @@ public sealed class PortfolioIndexEtfTests
         Assert.Empty(await db.PortfolioHoldings.ToListAsync());
         Assert.Empty(await db.PortfolioTransactions.ToListAsync());
         if (ready) Assert.All(result.Assets.Single(a => a.Ticker == "0050").Prices, price => Assert.Equal(50, price));
-        else Assert.NotNull(candidate.Reason);
+        else {
+            Assert.NotNull(candidate.Reason);
+            var expected = mode switch {
+                "absent" => "找不到證券資料", "duplicate-security" => "證券資料有重複（2 筆）",
+                "inactive" => "未啟用", "exchange" => "交易所不符", "currency" or "portfolio-currency" => "幣別不符",
+                "stock" => "AssetType 不是 ETF", "missing" or "unadjusted" => "缺還原收盤價 1 天",
+                "duplicate" => "還原收盤價有重複（1 天）", "short" => "至少需要120", _ => "既有持股缺少完整還原收盤價"
+            };
+            Assert.Contains(expected, candidate.Reason);
+        }
     }
 
     [Fact]

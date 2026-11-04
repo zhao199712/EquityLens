@@ -33,6 +33,7 @@ export class MockApi {
   requests: Array<{ method: string; path: string; body: any; headers: Record<string, string> }> = []
   unexpected: string[] = []
   errors: string[] = []
+  riskPreference: string | null = null
   hasPortfolio = false
   hasHolding = false
   rejectLogin = false
@@ -66,6 +67,11 @@ export class MockApi {
       const body = request.postData() ? request.postDataJSON() : null
       this.requests.push({ method, path, body, headers: request.headers() })
       const reply = (json: unknown, status = 200) => route.fulfill({ status, json })
+      if (path === '/settings/risk-preference' && (method === 'GET' || method === 'PUT')) {
+        if (method === 'PUT') this.riskPreference = body.value
+        const value = this.riskPreference ?? 'Balanced'
+        return reply({ value, label: value === 'Balanced' ? '穩健' : value === 'Conservative' ? '保守' : '積極', isDefault: this.riskPreference === null, statement: '測試偏好' })
+      }
       if (method === 'POST' && path === '/auth/login') return this.rejectLogin ? reply({ message: 'Invalid credentials' }, 401) : reply(auth)
       if (method === 'GET' && path === '/auth/me') return reply({ user })
       if (method === 'GET' && path === '/market/ticker') return reply([])

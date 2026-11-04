@@ -215,6 +215,63 @@ public sealed class ConversationServiceTests
         await Assert.ThrowsAsync<ConversationException>(() => service.ProcessAsync(Guid.NewGuid(), session.Id, request));
     }
 
+    [Theory]
+    [InlineData("高beta")]
+    [InlineData("2")]
+    public async Task UserSelection_PersistsSwitchesAndResetsWithoutTrustingModel(string choice)
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid();
+        var a = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "低波動" };
+        var b = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "高beta" };
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = user };
+        db.Portfolios.AddRange(a, b); db.ChatSessions.Add(session); await db.SaveChangesAsync();
+        var agent = new PortfolioAgent(a.Id); var runs = new FakeAgentRuns();
+        var service = new ConversationService(db, agent, new AgentWorkflowQueryService(db, new InvestmentResearchRouter(new CountingChat()), runs), runs, new AgentWorkflowCatalog());
+        var inventory = await service.ProcessAsync(user, session.Id, new("我有幾個投資組合", Guid.NewGuid()));
+        Assert.Contains("高beta", inventory.Content);
+        await service.ProcessAsync(user, session.Id, new(choice, Guid.NewGuid()));
+        Assert.Equal(b.Id.ToString(), JsonNode.Parse(session.ContextJson)!["activePortfolioId"]!.ToString());
+        await service.ProcessAsync(user, session.Id, new("這個波動率如何", Guid.NewGuid()));
+        Assert.Equal(b.Id, runs.PortfolioId); // model tried selecting A in both ID and rewritten question
+        Assert.Equal(AgentWorkflowTypes.PortfolioDiagnosis, runs.CreatedWorkflow);
+        await service.ProcessAsync(user, session.Id, new("低波動的波動率如何", Guid.NewGuid()));
+        Assert.Equal(a.Id, runs.PortfolioId);
+        await service.ProcessAsync(user, session.Id, new("重置對話", Guid.NewGuid()));
+        Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("activePortfolioId"));
+        var ambiguous = await service.ProcessAsync(user, session.Id, new("這個波動率如何", Guid.NewGuid()));
+        Assert.Equal(ConversationActions.AskClarification, ambiguous.Action);
+        Assert.Contains("高beta", ambiguous.Content);
+        Assert.DoesNotContain("建立投資組合", ambiguous.Content);
+        Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("activePortfolioId"));
+    }
+
+    [Fact]
+    public async Task PreviouslySelectedPortfolio_IsRevalidatedAfterOwnershipChanges()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid(); var a = Guid.NewGuid();
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = user, ContextJson = new JsonObject { ["activePortfolioId"] = a }.ToJsonString() };
+        db.ChatSessions.Add(session);
+        db.Portfolios.AddRange(new Portfolio { Id = a, OwnerUserId = Guid.NewGuid(), Name = "別人" },
+            new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "甲" }, new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "乙" });
+        await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns();
+        var agent = new PortfolioAgent(null);
+        var service = new ConversationService(db, agent, new AgentWorkflowQueryService(db, new InvestmentResearchRouter(new CountingChat()), runs), runs, new AgentWorkflowCatalog());
+        var result = await service.ProcessAsync(user, session.Id, new("波動率如何", Guid.NewGuid()));
+        Assert.Equal(ConversationActions.AskClarification, result.Action);
+        Assert.Null(runs.PortfolioId);
+        Assert.DoesNotContain("別人", result.Content);
+        Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("activePortfolioId"));
+    }
+
+    private sealed class PortfolioAgent(Guid? inventedId) : IConversationAgent
+    {
+        public Task<ConversationAgentDecision> DecideAsync(ConversationAgentInput input, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ConversationAgentDecision(ConversationActions.RouteWorkflow, "分析", "分析低波動的波動率", "test", "high",
+                new JsonObject { ["activePortfolioId"] = inventedId?.ToString(), ["portfolioOptions"] = new JsonArray(inventedId?.ToString()) }, "", "test", "test", 0, 0, 0,
+                InvestmentResearchRouter.Fixed(AgentWorkflowTypes.PortfolioDiagnosis, input.Message, inventedId)));
+    }
+
     private sealed class CountingChat : IChatCompletionService
     {
         public int Calls; public ChatCompletionRequest? Last;
@@ -264,10 +321,12 @@ public sealed class ConversationServiceTests
     private sealed class FakeAgentRuns : IAgentRunService
     {
         public string? CreatedWorkflow;
+        public Guid? PortfolioId;
         public Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default)
         { CreatedWorkflow = AgentWorkflowTypes.ResearchAgent; return Task.FromResult((new AgentRunSummaryResponse(Guid.NewGuid(), CreatedWorkflow, "Research", AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0), Guid.NewGuid())); }
         public Task<AgentRunSummaryResponse> CreateCriticReviewAsync(Guid userId, Guid researchRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default)
+        { PortfolioId = portfolioId; CreatedWorkflow = AgentWorkflowTypes.PortfolioDiagnosis; return Task.FromResult(new AgentRunSummaryResponse(Guid.NewGuid(), CreatedWorkflow, "Portfolio", AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0)); }
         public Task<SubmitAgentFeedbackResponse> SubmitFeedbackAsync(Guid runId, Guid userId, SubmitAgentFeedbackRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AgentRunSummaryResponse>> ListChildrenAsync(Guid parentRunId, Guid userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AgentRunSummaryResponse>> ListAsync(Guid? userId, int limit = 50, string? workflowType = null, string? status = null, Guid? researchRunId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
