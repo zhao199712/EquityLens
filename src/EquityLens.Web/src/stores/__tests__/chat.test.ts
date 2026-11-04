@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useChatStore } from '../chat'
 import { useAuthStore } from '../auth'
@@ -28,6 +28,8 @@ describe('chat store', () => {
     setActivePinia(createPinia())
     vi.resetAllMocks()
   })
+
+  afterEach(() => { vi.useRealTimers() })
 
   describe('startNewSession()', () => {
     it('新對話先清空畫面，不建立或選取 session', async () => {
@@ -129,4 +131,107 @@ describe('chat store', () => {
       expect(store.error).toBeNull()
     })
   })
+  function deferred<T>() {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>(r => { resolve = r })
+    return { promise, resolve }
+  }
+  function message(id = 'message'): chatService.ChatMessage {
+    return { id, role: 'assistant', content: '完成', toolName: null, sequenceNumber: 1, createdAtUtc: '', messageType: 'AgentRun', agentRunId: 'run', runCard: {
+      agentRunId: 'run', researchRunId: null, workflowType: 'PortfolioDiagnosis', status: 'Succeeded', currentStage: null,
+      currentStageDisplayName: null, completedNodes: 5, totalNodes: 5, finalAnswer: '結果', errorMessage: null,
+      suggestedActions: [{ id: 'risk', label: '風險', prompt: '高beta的風險' }],
+    } }
+  }
+
+  it('clears old messages immediately and ignores a late session load', async () => {
+    const old = deferred<chatService.ChatMessage[]>()
+    mocked.getMessages.mockReturnValueOnce(old.promise).mockResolvedValueOnce([message('new')])
+    const store = useChatStore()
+    store.currentSessionId = 'a'; store.messages = [message()]
+    const loading = store.selectSession('a')
+    expect(store.messages).toEqual([])
+    expect(store.isLoadingMessages).toBe(true)
+    await store.selectSession('b')
+    old.resolve([message('old')]); await loading
+    expect(store.messages.map(m => m.id)).toEqual(['new'])
+    expect(store.currentSessionId).toBe('b')
+  })
+
+  it('rejects late polling even after switching away and back to the same session', async () => {
+    vi.useFakeTimers()
+    const late = deferred<chatService.ConversationRunCard>()
+    mocked.getRunCard.mockReturnValueOnce(late.promise)
+    const store = useChatStore()
+    store.currentSessionId = 'a'; store.messages = [message()]
+    const poll = store.pollRunCard('message', 'run')
+    await vi.advanceTimersByTimeAsync(2000)
+    mocked.getMessages.mockResolvedValueOnce([]).mockResolvedValueOnce([{ ...message(), runCard: { ...message().runCard!, suggestedActions: [] } }])
+    await store.selectSession('b'); await store.selectSession('a')
+    late.resolve(message().runCard!); await poll
+    expect(store.messages[0].runCard?.suggestedActions).toEqual([])
+  })
+
+  it('reset invalidates in-flight polls and streams and clears old actions', async () => {
+    vi.useFakeTimers()
+    useAuthStore().token = 'test'
+    const late = deferred<chatService.ConversationRunCard>()
+    mocked.getRunCard.mockReturnValueOnce(late.promise)
+    const store = useChatStore()
+    store.currentSessionId = 'a'; store.messages = [message()]
+    const poll = store.pollRunCard('message', 'run')
+    await vi.advanceTimersByTimeAsync(2000)
+    await store.sendMessage('重置對話')
+    expect(store.messages[0].runCard?.suggestedActions).toEqual([])
+    late.resolve(message().runCard!); await poll
+    expect(store.messages[0].runCard?.suggestedActions).toEqual([])
+    const callbacks = mocked.sendMessageStream.mock.calls[0]!
+    mocked.getMessages.mockResolvedValueOnce([])
+    await store.selectSession('b')
+    callbacks[3]('late text'); callbacks[7]('late', message().runCard!); callbacks[8]('test', 0, 0)
+    expect(store.messages).toEqual([])
+    expect(store.streamingContent).toBe('')
+    expect(store.currentSessionId).toBe('b')
+  })
+
+  it('does not revive actions after a reset response is reloaded', async () => {
+    const old = message(); old.runCard!.suggestedActions = []
+    mocked.getMessages.mockResolvedValueOnce([old, { ...message('reset'), content: '已重置對話', runCard: null, agentRunId: null, messageType: 'Text' }])
+    await useChatStore().selectSession('a')
+    expect(useChatStore().messages.at(-1)?.runCard).toBeNull()
+    expect(useChatStore().messages[0].runCard?.suggestedActions).toEqual([])
+  })
+
+  it('ignores a late session list after clearing the store', async () => {
+    const late = deferred<chatService.ChatSession[]>()
+    mocked.listSessions.mockReturnValueOnce(late.promise)
+    const store = useChatStore()
+    const loading = store.loadSessions()
+    store.clear()
+    late.resolve([session('old', 2)]); await loading
+    expect(store.sessions).toEqual([])
+  })
+
+  it('keeps older run progress updating while a new message hides its suggestions', async () => {
+    vi.useFakeTimers()
+    useAuthStore().token = 'test'
+    const late = deferred<chatService.ConversationRunCard>()
+    mocked.getRunCard.mockReturnValueOnce(late.promise)
+    const store = useChatStore()
+    store.currentSessionId = 'a'; store.messages = [message()]
+    store.messages[0].runCard!.status = 'Running'
+    const poll = store.pollRunCard('message', 'run')
+    await vi.advanceTimersByTimeAsync(2000)
+    await store.sendMessage('下一個問題')
+    late.resolve(message().runCard!); await poll
+    expect(store.messages[0].runCard?.status).toBe('Succeeded')
+    expect(store.messages[0].runCard?.suggestedActions).toEqual([])
+    const callbacks = mocked.sendMessageStream.mock.calls[0]!
+    callbacks[3]('新回覆'); callbacks[8]('test', 0, 0)
+    const count = store.messages.length
+    callbacks[7]('old', message().runCard!); callbacks[8]('test', 0, 0)
+    expect(store.messages).toHaveLength(count)
+    expect(store.messages.at(-1)?.runCard).toBeNull()
+  })
+
 })

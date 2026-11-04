@@ -32,7 +32,8 @@ public sealed class ConversationService(
     IConversationAgent agent,
     IAgentWorkflowQueryService workflowQueries,
     IAgentRunService agentRuns,
-    IAgentWorkflowCatalog workflowCatalog) : IConversationService
+    IAgentWorkflowCatalog workflowCatalog,
+    ConversationSuggestedActionProvider? suggestions = null) : IConversationService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -237,7 +238,8 @@ public sealed class ConversationService(
         var issues = AgentNodeJson.ParseBlackboard(run.BlackboardJson)["portfolioQualityGate"]?["blockingIssues"]?.Deserialize<List<string>>(AgentNodeJson.SerializerOptions);
         return new(run.Id, run.ResearchRunId, run.WorkflowType, run.Status, waiting ? "Approval" : currentContract?.Stage, waiting ? "等待人工審閱" : currentContract?.DisplayName,
             run.Nodes.Count(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped),
-            run.Nodes.Count, finalAnswer, run.ErrorMessage, issues);
+            run.Nodes.Count, finalAnswer, run.ErrorMessage, issues,
+            suggestions is null ? [] : await suggestions.ForRunAsync(userId, sessionId, run, finalAnswer, cancellationToken));
     }
 
     private async Task<ConversationAgentDecision?> EntryDecisionAsync(Guid userId, string content, JsonObject context, CancellationToken ct)

@@ -34,6 +34,8 @@ interface ChatState {
   currentSessionId: string | null
   messages: ChatMessage[]
   isStreaming: boolean
+  isLoadingMessages: boolean
+  viewVersion: number
   streamingContent: string
   toolExecutions: ToolExecution[]
   error: string | null
@@ -46,6 +48,8 @@ export const useChatStore = defineStore('chat', {
     currentSessionId: null,
     messages: [],
     isStreaming: false,
+    isLoadingMessages: false,
+    viewVersion: 0,
     streamingContent: '',
     toolExecutions: [],
     error: null,
@@ -58,10 +62,11 @@ export const useChatStore = defineStore('chat', {
   },
 
   actions: {
-    clear() {
-      this.sessions = []
-      this.currentSessionId = null
+    resetView(sessionId: string | null = null) {
+      this.viewVersion++
+      this.currentSessionId = sessionId
       this.messages = []
+      this.isLoadingMessages = false
       this.isStreaming = false
       this.streamingContent = ''
       this.toolExecutions = []
@@ -69,52 +74,67 @@ export const useChatStore = defineStore('chat', {
       this.conversationAction = null
     },
 
+    clear() {
+      this.resetView()
+      this.sessions = []
+    },
+
     async loadSessions() {
+      const version = this.viewVersion
       try {
-        this.sessions = await listSessions()
+        const sessions = await listSessions()
+        if (this.viewVersion !== version) return
+        this.sessions = sessions
         if (this.currentSessionId && !this.sessions.some((s) => s.id === this.currentSessionId)) {
-          this.currentSessionId = null
-          this.messages = []
+          this.resetView()
         }
       } catch {
-        this.error = 'Failed to load sessions'
+        if (this.viewVersion === version) this.error = 'Failed to load sessions'
       }
     },
 
     async selectSession(sessionId: string) {
-      this.currentSessionId = sessionId
+      this.resetView(sessionId)
+      const version = this.viewVersion
+      this.isLoadingMessages = true
       try {
-        this.messages = await getMessages(sessionId)
+        const messages = await getMessages(sessionId)
+        if (this.viewVersion !== version) return
+        this.messages = messages
         for (const message of this.messages) {
           if (message.runCard && !['Succeeded', 'Failed', 'Cancelled'].includes(message.runCard.status)) {
             this.pollRunCard(message.id, message.runCard.agentRunId)
           }
         }
       } catch {
-        this.error = 'Failed to load messages'
+        if (this.viewVersion === version) this.error = 'Failed to load messages'
+      } finally {
+        if (this.viewVersion === version) this.isLoadingMessages = false
       }
     },
 
     async startNewSession() {
       if (this.isStreaming) return
-      this.currentSessionId = null
-      this.messages = []
-      this.error = null
-      this.conversationAction = null
+      this.resetView()
     },
 
     async sendMessage(content: string) {
       const authStore = useAuthStore()
-      if (!authStore.token || !content.trim() || this.isStreaming) return
+      if (!authStore.token || !content.trim() || this.isStreaming || this.isLoadingMessages) return
+      const version = this.viewVersion
+      let finished = false
+      const isCurrent = () => this.viewVersion === version && !finished
       this.isStreaming = true
 
       if (!this.currentSessionId) {
         try {
           const existing = this.sessions.find(session => session.messageCount === 0)
           const session = existing ?? await createSession()
+          if (!isCurrent()) return
           if (!existing) this.sessions.unshift(session)
           this.currentSessionId = session.id
         } catch {
+          if (!isCurrent()) return
           this.error = 'Failed to create session'
           this.isStreaming = false
           return
@@ -133,6 +153,9 @@ export const useChatStore = defineStore('chat', {
         agentRunId: null,
         runCard: null,
       }
+      for (const message of this.messages) {
+        if (message.runCard) message.runCard.suggestedActions = []
+      }
       this.messages.push(userMsg)
 
       this.isStreaming = true
@@ -148,25 +171,32 @@ export const useChatStore = defineStore('chat', {
         content,
         authStore.token,
         (delta) => {
+          if (!isCurrent()) return
           this.streamingContent += delta
         },
         (tool, args) => {
+          if (!isCurrent()) return
           this.toolExecutions.push({ tool, args })
         },
         (tool, preview) => {
+          if (!isCurrent()) return
           const last = this.toolExecutions[this.toolExecutions.length - 1]
           if (last && last.tool === tool) {
             last.preview = preview
           }
         },
         (action) => {
+          if (!isCurrent()) return
           this.conversationAction = action
         },
         (messageId, runCard) => {
+          if (!isCurrent()) return
           createdMessageId = messageId
           createdRunCard = runCard
         },
         (_model, _promptTokens, _completionTokens) => {
+          if (!isCurrent()) return
+          finished = true
           const assistantMsg: ChatMessage = {
             id: createdMessageId ?? generateId(),
             role: 'assistant',
@@ -197,6 +227,8 @@ export const useChatStore = defineStore('chat', {
           }
         },
         (message) => {
+          if (!isCurrent()) return
+          finished = true
           this.error = message
           this.isStreaming = false
         },
@@ -205,14 +237,16 @@ export const useChatStore = defineStore('chat', {
 
     async pollRunCard(messageId: string, agentRunId: string) {
       const sessionId = this.currentSessionId
+      const version = this.viewVersion
       if (!sessionId) return
       for (let attempt = 0; attempt < 90; attempt++) {
         await new Promise(resolve => setTimeout(resolve, 2000))
-        if (this.currentSessionId !== sessionId) return
+        if (this.currentSessionId !== sessionId || this.viewVersion !== version) return
         try {
           const card = await getRunCard(sessionId, agentRunId)
+          if (this.currentSessionId !== sessionId || this.viewVersion !== version) return
           const message = this.messages.find(item => item.id === messageId)
-          if (message) message.runCard = card
+          if (message) message.runCard = message === this.messages.at(-1) ? card : { ...card, suggestedActions: [] }
           if (['Succeeded', 'Failed', 'Cancelled'].includes(card.status)) return
         } catch {
           return
@@ -225,8 +259,7 @@ export const useChatStore = defineStore('chat', {
         await deleteSession(sessionId)
         this.sessions = this.sessions.filter((s) => s.id !== sessionId)
         if (this.currentSessionId === sessionId) {
-          this.currentSessionId = null
-          this.messages = []
+          this.resetView()
         }
       } catch {
         this.error = 'Failed to delete session'

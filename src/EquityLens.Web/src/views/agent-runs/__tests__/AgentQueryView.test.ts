@@ -3,12 +3,14 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentQueryView from '../AgentQueryView.vue'
+import i18n from '../../../locales'
 
 const chat = reactive({
   sessions: [] as Array<{ id: string; title: string | null; messageCount: number; updatedAtUtc: string }>,
   currentSessionId: null as string | null,
   messages: [] as Array<Record<string, unknown>>,
   isStreaming: false,
+  isLoadingMessages: false,
   streamingContent: '',
   error: null as string | null,
   loadSessions: vi.fn(async () => undefined),
@@ -23,6 +25,8 @@ vi.mock('../../../stores/chat', () => ({ useChatStore: () => chat }))
 describe('AgentQueryView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    i18n.global.locale.value = 'zh-TW'
+    chat.isLoadingMessages = false
     chat.sessions = []
     chat.currentSessionId = 'session-1'
     chat.messages = []
@@ -45,6 +49,101 @@ describe('AgentQueryView', () => {
     card.status = 'Succeeded'; card.finalAnswer = '最終答案'
     await flushPromises()
     expect(wrapper.text()).toContain('最終答案')
+  })
+
+  const suggestions = [
+    { id: 'volatility', label: '如何降低波動率？', prompt: '接著，針對投資組合「高beta」，如何降低波動率？', labelEn: 'How can I reduce volatility?', promptEn: 'For portfolio “高beta”, how could volatility be reduced?' },
+    { id: 'contributors', label: '哪些持股貢獻最多風險？', prompt: '接著，針對投資組合「高beta」，哪些持股貢獻最多風險？' },
+  ]
+  function completedMessage() {
+    return { id: 'completed', role: 'assistant', content: '分析完成', runCard: {
+      agentRunId: 'run', workflowType: 'PortfolioDiagnosis', status: 'Succeeded', finalAnswer: '風險分析結果',
+      completedNodes: 5, totalNodes: 5, suggestedActions: suggestions,
+    } }
+  }
+
+  it('fills and focuses a suggestion without sending, then sends the reviewed text with IME protection', async () => {
+    chat.messages = [completedMessage()]
+    const wrapper = mount(AgentQueryView, { attachTo: document.body, global: { stubs: { RouterLink: true } } })
+    await wrapper.get('.suggested-action-btn').trigger('click')
+    await flushPromises()
+    const composer = wrapper.get('textarea')
+    expect((composer.element as HTMLTextAreaElement).value).toBe(suggestions[0].prompt)
+    expect(document.activeElement).toBe(composer.element)
+    expect(chat.sendMessage).not.toHaveBeenCalled()
+    expect(chat.startNewSession).not.toHaveBeenCalled()
+    expect(chat.selectSession).not.toHaveBeenCalled()
+    await composer.setValue(suggestions[0].prompt.replace('高beta', '退休'))
+    await composer.trigger('keydown', { key: 'Enter', isComposing: true })
+    await composer.trigger('keydown', { key: 'Enter', keyCode: 229 })
+    expect(chat.sendMessage).not.toHaveBeenCalled()
+    await composer.trigger('keydown', { key: 'Enter' })
+    expect(chat.sendMessage).toHaveBeenCalledExactlyOnceWith(suggestions[0].prompt.replace('高beta', '退休'))
+    wrapper.unmount()
+  })
+
+  it('disables suggestions while any draft exists, including whitespace', async () => {
+    chat.messages = [completedMessage()]
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    for (const draft of ['我的草稿', ' ']) {
+      await wrapper.get('textarea').setValue(draft)
+      expect(wrapper.get('.suggested-action-btn').attributes('disabled')).toBeDefined()
+      await wrapper.get('.suggested-action-btn').trigger('click')
+      expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe(draft)
+    }
+    expect(chat.sendMessage).not.toHaveBeenCalled()
+    await wrapper.get('textarea').setValue('')
+    expect(wrapper.get('.suggested-action-btn').attributes('disabled')).toBeUndefined()
+  })
+
+  it('shows localized labels and fills the complete English prompt', async () => {
+    i18n.global.locale.value = 'en'
+    chat.messages = [completedMessage()]
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    expect(wrapper.get('[aria-label="Suggested follow-ups"]').text()).toContain('How can I reduce volatility?')
+    await wrapper.get('.suggested-action-btn').trigger('click')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe(suggestions[0].promptEn)
+    expect(chat.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it.each(['Pending', 'Running', 'WaitingForApproval', 'WaitingForFeedback', 'Failed', 'Cancelled'])('hides suggestions for %s', (status) => {
+    const message = completedMessage(); message.runCard.status = status; chat.messages = [message]
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    expect(wrapper.find('.suggested-actions').exists()).toBe(false)
+  })
+
+  it('only shows the latest reply, including after completion, loading or reset', async () => {
+    chat.messages = [completedMessage()]
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    expect(wrapper.findAll('.suggested-actions')).toHaveLength(1)
+    chat.isLoadingMessages = true
+    await flushPromises()
+    expect(wrapper.find('.suggested-actions').exists()).toBe(false)
+    chat.isLoadingMessages = false
+    chat.messages.push({ id: 'next', role: 'user', content: '重置對話' })
+    await flushPromises()
+    expect(wrapper.find('.suggested-actions').exists()).toBe(false)
+    chat.messages.push({ id: 'reset', role: 'assistant', content: '已重置對話' })
+    await flushPromises()
+    expect(wrapper.find('.suggested-actions').exists()).toBe(false)
+    chat.messages = [completedMessage(), { ...completedMessage(), id: 'new' }]
+    await flushPromises()
+    expect(wrapper.findAll('.suggested-actions')).toHaveLength(1)
+    chat.isStreaming = true
+    await flushPromises()
+    expect(wrapper.find('.suggested-actions').exists()).toBe(false)
+  })
+
+  it('treats an absent API field as empty and suppresses quality-limited results', async () => {
+    chat.messages = [completedMessage()]
+    const card = chat.messages[0].runCard as Record<string, unknown>
+    card.suggestedActions = undefined
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    expect(wrapper.find('.suggested-actions').exists()).toBe(false)
+    card.suggestedActions = suggestions
+    card.qualityIssues = ['unverified_number']
+    await flushPromises()
+    expect(wrapper.find('.suggested-actions').exists()).toBe(false)
   })
 
   it('uses the shared conversation session on mount', async () => {

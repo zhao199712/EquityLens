@@ -20,7 +20,16 @@ export interface ChatMessage {
   runCard: ConversationRunCard | null
 }
 
+export interface ConversationSuggestedAction {
+  id: string
+  label: string
+  prompt: string
+  labelEn?: string | null
+  promptEn?: string | null
+}
+
 export interface ConversationRunCard {
+  suggestedActions?: ConversationSuggestedAction[] | null
   qualityIssues?: string[] | null
   agentRunId: string
   researchRunId: string | null

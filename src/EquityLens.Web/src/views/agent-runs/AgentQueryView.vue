@@ -1,14 +1,38 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { useChatStore } from '../../stores/chat'
 import { renderMarkdown } from '../../utils/markdown'
 import { isSubmitEnter } from '../../utils/keyboard'
+import i18n from '../../locales'
 
 const chat = useChatStore()
 const input = ref('')
 const messageList = ref<HTMLElement | null>(null)
 const composer = ref<HTMLTextAreaElement | null>(null)
+const english = computed(() => i18n.global.locale.value === 'en')
+const suggestedMessage = computed(() => {
+  if (chat.isStreaming || chat.isLoadingMessages || chat.error || !chat.currentSessionId) return null
+  const message = chat.messages.at(-1)
+  const card = message?.runCard
+  return message?.role === 'assistant' && card?.status === 'Succeeded' && card.finalAnswer?.trim()
+    && !card.errorMessage && !card.qualityIssues?.length && card.suggestedActions?.length ? message : null
+})
+const suggestedActions = computed(() => (suggestedMessage.value?.runCard?.suggestedActions ?? []).slice(0, 3).map(action => ({
+  id: action.id,
+  label: english.value ? action.labelEn ?? action.label : action.label,
+  prompt: english.value ? action.promptEn ?? action.prompt : action.prompt,
+})))
+
+async function fillSuggestion(id: string) {
+  if (input.value.length > 0 || chat.isStreaming || chat.isLoadingMessages) return
+  const action = suggestedActions.value.find(item => item.id === id)
+  if (!action) return
+  input.value = action.prompt
+  await nextTick()
+  resizeComposer()
+  composer.value?.focus()
+}
 
 const examples = [
   { label: '投組風險範例', question: '我的投資組合最近一年的波動、最大回撤與集中風險如何？' },
@@ -29,10 +53,11 @@ async function scrollToBottom() {
 
 watch(() => chat.streamingContent, () => { scrollToBottom() })
 watch(() => chat.messages.length, () => { scrollToBottom() })
+watch(suggestedMessage, () => { scrollToBottom() })
 
 async function send(text?: string) {
   const value = (text ?? input.value).trim()
-  if (!value || chat.isStreaming) return
+  if (!value || chat.isStreaming || chat.isLoadingMessages) return
   input.value = ''
   resizeComposer()
   await chat.sendMessage(value)
@@ -142,6 +167,23 @@ function formatTime(updatedAtUtc: string) {
               <p v-if="message.runCard.errorMessage" class="prestige-error">{{ message.runCard.errorMessage }}</p>
               <RouterLink :to="{ name: 'agent-run-detail', params: { id: message.runCard.agentRunId } }">查看 Agent Run →</RouterLink>
             </section>
+            <section v-if="suggestedMessage?.id === message.id" class="suggested-actions" :aria-label="english ? 'Suggested follow-ups' : '建議追問'">
+              <p>{{ english ? 'You can ask next' : '你也可以接著問' }}</p>
+              <div class="suggested-action-options">
+                <button
+                  v-for="action in suggestedActions"
+                  :key="action.id"
+                  type="button"
+                  class="suggested-action-btn"
+                  :title="action.prompt"
+                  :disabled="input.length > 0 || chat.isStreaming || chat.isLoadingMessages"
+                  @click="fillSuggestion(action.id)"
+                >{{ action.label }}</button>
+              </div>
+              <small>{{ input.length > 0
+                ? (english ? 'Clear your draft to choose another question.' : '清空草稿後即可選擇其他追問。')
+                : (english ? 'Choose a question to edit, then send when ready.' : '點選後填入輸入框，可修改並確認後送出。') }}</small>
+            </section>
           </div>
         </article>
 
@@ -166,13 +208,13 @@ function formatTime(updatedAtUtc: string) {
           maxlength="2000"
           rows="1"
           placeholder="輸入訊息…（Enter 送出，Shift+Enter 換行）"
-          :disabled="chat.isStreaming"
+          :disabled="chat.isStreaming || chat.isLoadingMessages"
           @keydown="keydown"
           @input="resizeComposer"
         />
         <div class="composer-side">
           <small>{{ input.length }} / 2000</small>
-          <button class="prestige-btn prestige-btn-solid" :disabled="!input.trim() || chat.isStreaming" @click="send()">
+          <button class="prestige-btn prestige-btn-solid" :disabled="!input.trim() || chat.isStreaming || chat.isLoadingMessages" @click="send()">
             {{ chat.isStreaming ? '處理中…' : '送出' }}
           </button>
         </div>
@@ -228,9 +270,19 @@ function formatTime(updatedAtUtc: string) {
 .typing span:nth-child(3) { animation-delay: .4s; }
 @keyframes typing { 0%, 80%, 100% { transform: scale(.6); opacity: .4; } 40% { transform: scale(1); opacity: 1; } }
 
+/* Suggested questions */
+.suggested-actions { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--gold-border-soft); }
+.suggested-actions p { margin: 0 0 8px; color: var(--gold); font-size: 13px; }
+.suggested-actions small { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.suggested-action-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.suggested-action-btn { max-width: 100%; padding: 8px 12px; border: 1px solid var(--gold-border); border-radius: 18px; background: rgba(201,168,106,.06); color: var(--gold); font: inherit; font-size: 13px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.suggested-action-btn:hover:not(:disabled) { background: rgba(201,168,106,.14); }
+.suggested-action-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.suggested-action-btn:disabled { opacity: .5; cursor: not-allowed; }
+
 /* Run card */
 .run-card { display: grid; gap: 10px; margin-top: 14px; padding: 14px; border: 1px solid var(--gold-border-soft); border-radius: 8px; background: rgba(0,0,0,.2); }
-.run-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--gold); }
+.run-card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; color: var(--gold); }
 .run-status { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .run-status--running, .run-status--pending { color: var(--gold); }
 .run-status--succeeded { color: #4ade80; }
