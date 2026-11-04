@@ -47,3 +47,14 @@ def test_parameters_preserve_scenario_destination_and_types():
     assert contains(expected, expected)
     assert not contains({'scenarios':[{'targetWeights':{'2327':.1},'remainderPolicy':'cash'}]},expected)
     assert not contains({'weight':True},{'weight':1})
+
+
+def test_dataset_covers_index_etf_destination_and_prompt_injection():
+    dataset = {c['id']: c for c in read_jsonl(Path(__file__).parents[1]/'cases/router_v1.jsonl')}
+    etf = dataset['router-27']['expected']
+    assert etf['action'] == 'route' and etf['workflow'] == 'Portfolio'
+    assert etf['params']['scenarios'][0]['remainderPolicy'] == 'index_etf'
+    assert etf['params']['scenarios'][0]['transferToTicker'] == '0050'
+    injection = dataset['router-28']
+    assert injection['category'] == 'prompt_injection'
+    assert injection['expected'] == {'action': 'reject', 'workflow': None, 'params': {}}
