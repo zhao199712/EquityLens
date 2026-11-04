@@ -1,0 +1,106 @@
+{
+  "suite": "conversation_journey_v1",
+  "scorer_version": 1,
+  "results": [
+    {
+      "case_id": "journey-00",
+      "review_status": "draft",
+      "checks": [
+        {
+          "check": "same_session",
+          "status": "pass",
+          "evidence": "responses/journey-00/initial",
+          "reason": "",
+          "failure_class": null
+        },
+        {
+          "check": "owner_isolation",
+          "status": "pass",
+          "evidence": "responses/journey-00/turns/*/after",
+          "reason": "Observed owner and portfolio scope; not a general authorization penetration test",
+          "failure_class": null
+        },
+        {
+          "check": "no_holdings_mutation",
+          "status": "pass",
+          "evidence": "responses/journey-00/before,after",
+          "reason": "",
+          "failure_class": null
+        },
+        {
+          "check": "trace_complete",
+          "status": "unverifiable",
+          "evidence": "responses/journey-00/turns",
+          "reason": "Missing evidence is unverifiable",
+          "failure_class": "bug"
+        },
+        {
+          "check": "action",
+          "status": "pass",
+          "evidence": "responses/journey-00/turns/t1/events",
+          "reason": "Observed conversation action and persisted run creation",
+          "failure_class": null
+        },
+        {
+          "check": "owned_portfolio_list",
+          "status": "unverifiable",
+          "evidence": "responses/journey-00/turns/t1",
+          "reason": "Response has no structured list of emitted portfolio IDs",
+          "failure_class": "bug"
+        },
+        {
+          "check": "action",
+          "status": "pass",
+          "evidence": "responses/journey-00/turns/t2/events",
+          "reason": "Observed conversation action and persisted run creation",
+          "failure_class": null
+        },
+        {
+          "check": "no_premature_execution",
+          "status": "pass",
+          "evidence": "responses/journey-00/turns/t2",
+          "reason": "",
+          "failure_class": null
+        },
+        {
+          "check": "execution",
+          "status": "fail",
+          "evidence": "responses/journey-00/turns/t3",
+          "reason": "unsupported_approval",
+          "failure_class": "bug"
+        },
+        {
+          "check": "resource_binding",
+          "status": "unverifiable",
+          "evidence": "responses/journey-00/turns/t3",
+          "reason": "Turn did not complete",
+          "failure_class": "dependency_failed"
+        },
+        {
+          "check": "selection_retained",
+          "status": "unverifiable",
+          "evidence": "responses/journey-00/turns/t3",
+          "reason": "Turn did not complete",
+          "failure_class": "dependency_failed"
+        }
+      ],
+      "status": "fail",
+      "conversation_success": null
+    }
+  ],
+  "attempted": 1,
+  "failed": 1,
+  "deterministic_pass_rate": 0.8571428571428571,
+  "deterministic_coverage": 0.6363636363636364,
+  "conversation_success_rate": null,
+  "conversation_denominator": 0,
+  "failure_counts": {
+    "bug": 1,
+    "capability_gap": 0,
+    "dependency_failed": 0
+  },
+  "unresolved_cases": 0,
+  "cost_usd": null,
+  "cost_scope": "Unknown total cost; no judge calls; API/provider billing is external",
+  "not_run": []
+}

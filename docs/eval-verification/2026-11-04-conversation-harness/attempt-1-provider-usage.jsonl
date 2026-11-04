@@ -1,0 +1,10 @@
+{"id": "269e19a9715948db851bdaded41d8b02", "reserved_usd": 0.002619025}
+{"id": "269e19a9715948db851bdaded41d8b02", "charged_upper_usd": 0.00035202500000000006, "usage": {"input_tokens": 1289, "input_tokens_details": {"cache_write_tokens": 1286, "cached_tokens": 0}, "output_tokens": 124, "output_tokens_details": {"reasoning_tokens": 46}, "total_tokens": 1413}, "status": 200, "total_upper_usd": 0.00035202500000000006}
+{"id": "ba1ddcc2f5cc42ac9f826e9527376b6b", "reserved_usd": 0.005676325}
+{"id": "ba1ddcc2f5cc42ac9f826e9527376b6b", "charged_upper_usd": 0.000526375, "usage": {"input_tokens": 2235, "input_tokens_details": {"cache_write_tokens": 2109, "cached_tokens": 0}, "output_tokens": 47, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 2282}, "status": 200, "total_upper_usd": 0.0008784000000000001}
+{"id": "36db0c6f1dad42de81e93f35097b881b", "reserved_usd": 0.0069316000000000004}
+{"id": "36db0c6f1dad42de81e93f35097b881b", "charged_upper_usd": 0.0007998500000000001, "usage": {"input_tokens": 3466, "input_tokens_details": {"cache_write_tokens": 1398, "cached_tokens": 1942}, "output_tokens": 40, "output_tokens_details": {"reasoning_tokens": 18}, "total_tokens": 3506}, "status": 200, "total_upper_usd": 0.00167825}
+{"id": "61ccfa818d184cf183e1afd211d45d63", "reserved_usd": 0.008685924999999999}
+{"id": "61ccfa818d184cf183e1afd211d45d63", "charged_upper_usd": 0.001154875, "usage": {"input_tokens": 5055, "input_tokens_details": {"cache_write_tokens": 2987, "cached_tokens": 1942}, "output_tokens": 35, "output_tokens_details": {"reasoning_tokens": 17}, "total_tokens": 5090}, "status": 200, "total_upper_usd": 0.002833125}
+{"id": "5f7772df9e57474ba4f406072170dc6f", "reserved_usd": 0.008855799999999999}
+{"id": "5f7772df9e57474ba4f406072170dc6f", "charged_upper_usd": 0.0013761749999999999, "usage": {"input_tokens": 5223, "input_tokens_details": {"cache_write_tokens": 3155, "cached_tokens": 1942}, "output_tokens": 402, "output_tokens_details": {"reasoning_tokens": 184}, "total_tokens": 5625}, "status": 200, "total_upper_usd": 0.0042093}

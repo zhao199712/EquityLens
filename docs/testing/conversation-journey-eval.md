@@ -324,7 +324,7 @@ python -m equitylens_eval.conversation run \
 
 先驗證 journey-00，再以已備妥語料的環境加入 `--case journey-04 --case journey-10`。執行全部案例時，省略 `--case`，並重複指定三份 profile 的 `--manifest`。預設每輪逾時 360 秒，可用 `--timeout` 調整。所有題目目前為 draft，須明確帶 `--include-unverified` 才會執行。
 
-每輪等待真實 Run 完成後才繼續。只自動核准 PortfolioDiagnosis 的 `approve / WaitForHumanApproval / WorkflowGate / ReadOnly`；先保存審批前的 draft，再取得完成結果。未知審批、執行失敗、SSE 不完整或逾時會停止該案例並嘗試取消已建立的 Run；後輪標為 `not_run`。取消未確認時停止整批，避免持續送入新案例。非預期澄清本身仍會保存並依固定腳本繼續，不臨時補問法。
+每輪等待真實 Run 完成後才繼續。只自動核准 PortfolioDiagnosis 的 `approvePortfolioDiagnosis / WaitForHumanApproval / WorkflowGate / ReadOnly`；先保存審批前的 draft，再取得完成結果。未知審批、執行失敗、SSE 不完整或逾時會停止該案例並嘗試取消已建立的 Run；後輪標為 `not_run`。取消未確認時停止整批，避免持續送入新案例。非預期澄清本身仍會保存並依固定腳本繼續，不臨時補問法。
 
 ### 證據與離線重評
 
@@ -356,3 +356,5 @@ Rescore 使用保存的題庫、研究 oracle 與 fixture，驗證它們的雜�
 - 所有 semantic checks 保留 unverifiable。回歸錯誤、能力缺口與依賴失敗分開統計；未知不補零。Draft 不進完整成功率，必要項目未驗證時顯示 N/A。
 
 離線測試使用假的 HTTP/SSE／資料庫介面，涵蓋全 45 輪、錯誤資源綁定、金額與風險計算反例、審批與逾時、seed 防重複與 corpus 指紋、報告與離線重評。這些是 harness 的測試，不代表真實 Agent 已通過 11 組案例。
+
+2026-11-04 已補做 GPT-6 Luna 的 journey-00 真實整合測試，修正審閱節點契約後三輪完成；11 項通過、1 項 unverifiable。測試範圍、兩次成本與限制見 [實測紀錄](../eval-verification/2026-11-04-conversation-harness/README.md)。

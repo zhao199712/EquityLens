@@ -114,10 +114,11 @@ class FakeSystem:
                 self.details[rid] = dict(run=dict(id=rid, workflowType=workflow, status='Succeeded'), nodes=[],
                                         blackboardJson=json.dumps(board), outputJson=json.dumps({'summary': '測試回答'}),
                                         toolCalls=tools, approvals=[])
-                if self.failure == 'approval' or self.failure == 'unsafe_approval':
+                if self.failure in ('approval', 'unsafe_approval', 'unknown_approval_node'):
                     self.details[rid]['approvals'] = [dict(id='approval', status='Pending', scope='WorkflowGate',
-                        sideEffectLevel='ReadOnly' if self.failure == 'approval' else 'ExternalWrite',
-                        nodeKey='approve', nodeType='WaitForHumanApproval')]
+                        sideEffectLevel='ExternalWrite' if self.failure == 'unsafe_approval' else 'ReadOnly',
+                        nodeKey='unexpectedGate' if self.failure == 'unknown_approval_node' else 'approvePortfolioDiagnosis',
+                        nodeType='WaitForHumanApproval')]
                     self.details[rid]['run']['status'] = 'AwaitingApproval'
                 if self.failure == 'timeout':
                     self.details[rid]['run']['status'] = 'Running'
@@ -189,7 +190,7 @@ def test_selected_portfolio_switch_and_reset_workflows(cid):
         assert any(c['check'] == 'reset_boundary' and c['status'] == 'unverifiable' for c in scored['checks'])
 
 
-@pytest.mark.parametrize('failure', ['sse', 'incomplete', 'timeout', 'unsafe_approval', 'run_failed'])
+@pytest.mark.parametrize('failure', ['sse', 'incomplete', 'timeout', 'unsafe_approval', 'unknown_approval_node', 'run_failed'])
 def test_failed_execution_is_saved_and_later_turns_not_run(failure):
     # Use a portfolio first turn so timeout/approval failures occur before the last turn.
     case = copy.deepcopy(CASES[0])
@@ -200,9 +201,9 @@ def test_failed_execution_is_saved_and_later_turns_not_run(failure):
     assert raw['turns'][1]['status'] == 'not_run'
     assert raw['after'] is not None
     assert checkpoints[0]['turns'][0]['events']
-    if failure in ('timeout', 'unsafe_approval'):
+    if failure in ('timeout', 'unsafe_approval', 'unknown_approval_node'):
         assert system.cancelled
-    if failure == 'unsafe_approval':
+    if failure in ('unsafe_approval', 'unknown_approval_node'):
         assert not system.approved
 
 

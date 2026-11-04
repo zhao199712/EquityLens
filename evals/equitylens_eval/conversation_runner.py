@@ -145,7 +145,7 @@ def wait_run(client, run_id, row, timeout, poll_interval):
             if not (detail['run'].get('workflowType') == 'PortfolioDiagnosis'
                     and approval.get('scope') == 'WorkflowGate'
                     and approval.get('sideEffectLevel') == 'ReadOnly'
-                    and approval.get('nodeKey') == 'approve'
+                    and approval.get('nodeKey') == 'approvePortfolioDiagnosis'
                     and approval.get('nodeType') == 'WaitForHumanApproval'):
                 raise ExecutionStopped('unsupported_approval')
             if approval['id'] not in approved:
