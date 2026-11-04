@@ -39,6 +39,7 @@ import {
   type UpsertCashFlowRequest,
 } from '../../services/portfolioCashFlows.ts'
 import { getSecurityPrices, syncSecurityPrices } from '../../services/marketPrices.ts'
+import { isSubmitEnter } from '../../utils/keyboard'
 import {
   resolveSecurity,
   searchSecurities,
@@ -674,6 +675,12 @@ function invalidateSecuritySelection() {
   searchingSecurities.value = false
   closingPriceStatus.value = ''
   if (priceSource.value === 'Close') addStockForm.value.price = 0
+}
+
+function onSecurityQueryKeydown(event: KeyboardEvent) {
+  if (!isSubmitEnter(event)) return
+  event.preventDefault()
+  handleSearchSecurities()
 }
 
 async function handleSearchSecurities() {
@@ -1322,7 +1329,7 @@ onMounted(loadPortfolioData)
                     @input="invalidateSecuritySelection"
                     class="prestige-input"
                     placeholder="搜尋股票代號或名稱，例如 TSM / AAPL / 2330"
-                    @keyup.enter="handleSearchSecurities"
+                    @keydown="onSecurityQueryKeydown"
                   />
                   <button class="prestige-btn small" :disabled="searchingSecurities" @click="handleSearchSecurities">
                     {{ searchingSecurities ? 'SEARCHING...' : 'SEARCH' }}

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import { createResearchInvestigation, listResearchRuns, type ResearchRunSummary } from '../../services/research'
+import { isSubmitEnter } from '../../utils/keyboard'
 
 const router = useRouter()
 const runs = ref<ResearchRunSummary[]>([])
@@ -37,8 +38,14 @@ async function loadRuns() {
   }
 }
 
+function onQuestionKeydown(event: KeyboardEvent) {
+  if (!isSubmitEnter(event)) return
+  event.preventDefault()
+  handleAsk()
+}
+
 async function handleAsk() {
-  if (!ticker.value.trim() || !question.value.trim()) return
+  if (askLoading.value || !ticker.value.trim() || !question.value.trim()) return
   askLoading.value = true
   askError.value = ''
   try {
@@ -86,7 +93,7 @@ function statusColor(status: string) {
           <h3 class="ask-title">提出研究問題</h3>
           <div class="ask-grid">
             <input v-model="ticker" placeholder="股票代號（如 2330）" class="prestige-input ask-ticker" />
-            <input v-model="question" placeholder="研究問題" class="prestige-input ask-question" @keyup.enter="handleAsk" />
+            <input v-model="question" placeholder="研究問題" class="prestige-input ask-question" @keydown="onQuestionKeydown" />
           </div>
           <div class="ask-actions">
             <button class="prestige-btn prestige-btn-solid" :disabled="askLoading || !ticker.trim() || !question.trim()" @click="handleAsk">
