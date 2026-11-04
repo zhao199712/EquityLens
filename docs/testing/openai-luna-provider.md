@@ -64,3 +64,5 @@ export AgentRuntime__ResearchAgentLoop__OutputUsdPerMillion=0.5
 ## 後續完整 14 題
 
 同版單輪完整驗證為 **8/14**，不建議正式切換；詳見 [逐題結果與接入問題](openai-luna-full14.md)。前述 2/2 是先前兩題 smoke，不能代表全套穩定性。
+
+原生工具接入後，修正版本兩輪離線 v4 分數為 12/14、12/14；詳見 [原生協定修正與完整驗證](openai-luna-native-tools.md)。仍未達切換門檻，正式服務不變。

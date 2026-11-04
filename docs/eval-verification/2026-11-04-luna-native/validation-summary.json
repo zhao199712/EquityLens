@@ -1,0 +1,58 @@
+{
+  "backend": {
+    "passed": 1126,
+    "failed": 0,
+    "skipped": 0,
+    "postgres_tests": 18
+  },
+  "eval_pytest": {
+    "passed": 110
+  },
+  "diagnostics": {
+    "r1": {
+      "parse_errors": 0,
+      "http_failures": 0,
+      "scenario_recoveries": 0,
+      "tool_denials": 0,
+      "give_up": 0,
+      "math_check_failures": [],
+      "no_side_effects": true
+    },
+    "r2": {
+      "parse_errors": 0,
+      "http_failures": 0,
+      "scenario_recoveries": 0,
+      "tool_denials": 0,
+      "give_up": 0,
+      "math_check_failures": [],
+      "no_side_effects": true
+    },
+    "r3": {
+      "parse_errors": 0,
+      "http_failures": 0,
+      "scenario_recoveries": 0,
+      "tool_denials": 0,
+      "give_up": 1,
+      "math_check_failures": [],
+      "no_side_effects": true
+    },
+    "medium-target": {
+      "parse_errors": 0,
+      "http_failures": 0,
+      "scenario_recoveries": 0,
+      "tool_denials": 0,
+      "give_up": 0,
+      "math_check_failures": [],
+      "no_side_effects": true
+    }
+  },
+  "authorized_total_usd": 50,
+  "upper_usd": 0.21693715000000005,
+  "costs": {
+    "r1": 0.055960050000000004,
+    "r2": 0.06262020000000001,
+    "r3": 0.07021190000000004,
+    "medium-target": 0.028145000000000003
+  },
+  "same_final_runtime_metadata": true
+}

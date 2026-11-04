@@ -1,0 +1,30 @@
+{
+  "lower-volatility": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "concentration": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "preference": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  },
+  "tradeoff": {
+    "from": "2025-11-14",
+    "to": "2026-11-03",
+    "points": 355,
+    "index_value": 100,
+    "return": 0
+  }
+}
