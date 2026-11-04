@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Encodings.Web;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 
@@ -9,6 +10,7 @@ namespace EquityLens.Api.Services.Ai;
 /// <summary>Responses API 轉接器，沿用應用程式的 JSON 動作協定與工具 Guard。</summary>
 public sealed class OpenAiChatCompletionService : IChatCompletionService
 {
+    private static readonly JsonSerializerOptions WireJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     private readonly HttpClient http;
     private readonly OpenAiOptions options;
     private readonly ILogger<OpenAiChatCompletionService>? logger;
@@ -23,7 +25,7 @@ public sealed class OpenAiChatCompletionService : IChatCompletionService
             throw new InvalidOperationException("Unsupported OpenAI reasoning effort.");
     }
     public bool SupportsNativeTools => true;
-    public int EstimateInputBytes(ChatCompletionRequest request) => Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(Payload(request))) + 1024;
+    public int EstimateInputBytes(ChatCompletionRequest request) => Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(Payload(request), WireJson)) + 1024;
     public string Provider => "openai";
     public string Model => options.Model;
 
@@ -35,7 +37,7 @@ public sealed class OpenAiChatCompletionService : IChatCompletionService
         var payload = Payload(request);
         using var message = new HttpRequestMessage(HttpMethod.Post, "responses");
         message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
-        message.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        message.Content = new StringContent(JsonSerializer.Serialize(payload, WireJson), Encoding.UTF8, "application/json");
         using var response = await http.SendAsync(message, cancellationToken);
         if (!response.IsSuccessStatusCode)
             // 供應商錯誤可能含原文／敏感資料，不能寫入 exception、事件或 telemetry。

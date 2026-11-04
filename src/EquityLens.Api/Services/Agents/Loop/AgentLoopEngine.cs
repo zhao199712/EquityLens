@@ -358,11 +358,12 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         }
     }
 
+    // 每輪以目前證據快照為準；只續接最近一輪呼叫與結果，完整歷史留在 checkpoint 供稽核。
     private ChatCompletionRequest CompletionRequest(string system, string prompt, LoopToolScope scope, ResearchLoopState state) =>
         new(system, prompt, .1, _options.MaxOutputTokens, ChatResponseFormat.JsonObject,
             chat.SupportsNativeTools ? new ChatToolProtocol(
                 (state.ForcedDraft ? Array.Empty<LoopToolDefinition>() : _tools.Visible(scope))
-                    .Select(x => new ChatFunction(x.Name, x.Description, x.Parameters)).ToArray(), state.NativeExchanges) : null);
+                    .Select(x => new ChatFunction(x.Name, x.Description, x.Parameters)).ToArray(), state.NativeExchanges.TakeLast(1).ToArray()) : null);
 
     private static async Task CompleteNativeExchangeAsync(ResearchLoopState state, AgentLlmTurn turn, AgentNodeExecutionContext context, CancellationToken ct)
     {

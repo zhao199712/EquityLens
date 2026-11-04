@@ -17,8 +17,12 @@
 測試涵蓋原生呼叫與文字分離、必填引用、權重還原／重複 key、續傳 reasoning 與 call_id、預算、Guard 拒絕後修正、研究與投組中斷恢復、審批釋放租約／核准／拒絕／冪等。
 實際移除原生回應映射，新增測試失敗；恢復後通過。移除評分器同義詞修正，兩個正例失敗、四個反例通過；恢復後通過。
 
-後端 build 成功；完整後端 1125 passed / 0 failed / 0 skipped（包含真實隔離 PostgreSQL）；eval pytest 101 passed。既有 NU1510、NU1900 與 xUnit 警告保留。
+後端 build 成功；完整後端 1126 passed / 0 failed / 0 skipped（包含真實隔離 PostgreSQL）；eval pytest 101 passed。既有 NU1510、NU1900 與 xUnit 警告保留。
 
 真實 AI：使用者授權本輪總上限 US$50（更正先前誤解的 0.20）；以費用代理記錄並攔截。尚未核實目前 API key 是否適用 Pro credits，成本為保守估計，不宣稱免費。預定同一版本完整 14 題兩輪，報告保留所有失敗與未跑題。
 
 無 migration、無 appsettings.json 修改、無前端變更；不合併 main、不部署。
+
+## 初次真實驗證後的預算修正
+
+第一輪已正常呼叫工具，但重送所有供應商歷史使保守 token 預留過早觸頂，無法執行數字修正輪次。改為每輪只續傳最近一輪原生呼叫及結果，搭配當前完整授權證據快照；完整歷史仍存在 checkpoint。JSON 直接以 UTF-8 傳送中文，預留按實際線路 payload bytes 計算；不調高既有 token／費用限額。新增長歷史回歸測試。第一輪完整保留，不與修正後兩輪合併宣稱穩定通過。

@@ -659,8 +659,8 @@ public sealed class ResearchAgentLoopTests
         await new AgentLoopEngine(resumed, tools, Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio)
             .RunAsync(context, portfolio ? "Portfolio" : "Research", default);
         Assert.Equal(1, tools.Calls);
-        Assert.Equal(2, resumed.Requests[0].ToolProtocol!.Exchanges.Count);
-        Assert.Contains("E1", resumed.Requests[0].ToolProtocol!.Exchanges[1].Results.ToJsonString());
+        Assert.Single(resumed.Requests[0].ToolProtocol!.Exchanges);
+        Assert.Contains("E1", resumed.Requests[0].ToolProtocol!.Exchanges[0].Results.ToJsonString());
         Assert.DoesNotContain("example_tool", resumed.Requests[0].SystemPrompt);
         Assert.Contains(await db.AgentToolCalls.ToListAsync(), x => x.Status == "Denied");
     }
@@ -696,6 +696,29 @@ public sealed class ResearchAgentLoopTests
             .RunAsync(await Context(db), "Research", default);
         Assert.Equal("BudgetExhausted", result.StopReason);
         Assert.Empty(chat.Requests);
+    }
+
+    [Fact]
+    public async Task NativeReplayWindowsOldTransportButKeepsCurrentEvidenceAndAuditHistory()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var checkpoint = new ResearchLoopState { Turn = 2, StartedAtUtc = DateTime.UtcNow,
+            Ledger = [new("E1", Evidence())], NativeExchanges = [
+                new() { Turn = 1, Output = new JsonArray(new JsonObject { ["type"] = "message", ["content"] = new string('x', 100000) }) },
+                new() { Turn = 2, Output = NativeChat.Output(Search), Results = new JsonArray(new JsonObject { ["type"] = "function_call_output", ["call_id"] = "c1", ["output"] = "persisted" }) }
+            ] };
+        db.Add(new AgentLoopCheckpoint { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            StateJson = AgentNodeJson.Serialize(checkpoint) });
+        await db.SaveChangesAsync();
+        var chat = new NativeChat(Submit);
+        var state = await new AgentLoopEngine(chat, new FakeTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System)
+            .RunAsync(context, "Research", default);
+        Assert.Equal("AnswerSubmitted", state.StopReason);
+        Assert.Single(chat.Requests[0].ToolProtocol!.Exchanges);
+        Assert.Equal(2, chat.Requests[0].ToolProtocol!.Exchanges[0].Turn);
+        Assert.Contains("E1", chat.Requests[0].UserPrompt);
+        Assert.Equal(3, state.NativeExchanges.Count); // 包含本輪；舊傳輸資料仍保存供恢復與稽核。
     }
 
     private sealed class NativeChat(params string[] responses) : IChatCompletionService
