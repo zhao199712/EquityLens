@@ -31,8 +31,13 @@ internal static class PortfolioIndexEtfs
         foreach (var candidate in Universe)
         {
             string? reason = null;
-            var matches = securities.Where(x => x.Ticker == candidate.Ticker && Matches(x, snapshot.Currency)).ToArray();
-            if (matches.Length != 1) reason = "缺少唯一、啟用、同幣別且確認為 TWSE ETF 的證券資料。";
+            var matches = securities.Where(x => x.Ticker == candidate.Ticker).ToArray();
+            if (matches.Length == 0) reason = "找不到證券資料。";
+            else if (matches.Length > 1) reason = $"證券資料有重複（{matches.Length} 筆）。";
+            else if (!matches[0].IsActive) reason = "證券未啟用。";
+            else if (matches[0].Exchange != "TWSE") reason = "交易所不符：須為 TWSE。";
+            else if (matches[0].Currency != "TWD" || snapshot.Currency != "TWD") reason = "幣別不符：證券與投組須同為 TWD。";
+            else if (!string.Equals(matches[0].AssetType, "ETF", StringComparison.OrdinalIgnoreCase)) reason = "AssetType 不是 ETF。";
             else if (snapshot.PriceBasis != "AdjustedClose") reason = "既有持股缺少完整還原收盤價，不能與 ETF 混用價格口徑。";
             else if (snapshot.Dates.Count < 121) reason = "至少需要120筆同期間共同日報酬。";
             else
@@ -43,8 +48,10 @@ internal static class PortfolioIndexEtfs
                 var prices = await db.MarketPrices.AsNoTracking().Where(x => x.SecurityId == securityId && x.Interval == "1d"
                     && x.PriceTime >= start && x.PriceTime <= end).ToListAsync(ct);
                 var map = prices.GroupBy(x => DateOnly.FromDateTime(x.PriceTime)).ToDictionary(g => g.Key, g => g.ToArray());
-                if (snapshot.Dates.Any(d => !map.TryGetValue(d, out var rows) || rows.Length != 1 || rows[0].Close <= 0 || rows[0].AdjustedClose is not > 0))
-                    reason = "缺少完整同期間還原收盤價（或有重複日資料）；不以原始收盤價代替，不縮短期間。";
+                var duplicateDays = snapshot.Dates.Count(d => map.TryGetValue(d, out var rows) && rows.Length > 1);
+                var missingDays = snapshot.Dates.Count(d => !map.TryGetValue(d, out var rows) || rows.All(r => r.Close <= 0 || r.AdjustedClose is not > 0));
+                if (duplicateDays > 0) reason = $"還原收盤價有重複（{duplicateDays} 天）；缺還原收盤價 {missingDays} 天，不縮短期間。";
+                else if (missingDays > 0) reason = $"缺還原收盤價 {missingDays} 天；不以原始收盤價代替，不縮短期間。";
                 else
                 {
                     var series = snapshot.Dates.Select(d => map[d][0].AdjustedClose!.Value).ToArray();

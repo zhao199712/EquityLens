@@ -124,6 +124,23 @@ export default {
     },
   },
   settings: {
+    risk: {
+      "title": "Risk preference",
+      "description": "Used to explain portfolio analysis. This preference is not a suitability assessment or a guaranteed risk limit.",
+      "current": "Saved preference:",
+      "default": "(default, editable here)",
+      "explicit": "(explicitly saved)",
+      "label": "Risk preference",
+      "Conservative": "Conservative",
+      "Balanced": "Balanced",
+      "Aggressive": "Aggressive",
+      "save": "Save risk preference",
+      "saving": "Saving…",
+      "saved": "Risk preference saved.",
+      "loading": "Loading risk preference…",
+      "loadError": "Unable to load your preference. Reload to try again.",
+      "saveError": "Could not save. Your saved preference is unchanged; please try again."
+},
     pageTitle: 'Settings',
     pageEyebrow: 'Display preferences',
     language: {

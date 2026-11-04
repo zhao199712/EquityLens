@@ -31,7 +31,7 @@ def load_cases(path=CASE_PATH):
     if len({c['id'] for c in cases}) != len(cases):
         raise ValueError('duplicate case id')
     for c in cases:
-        if c['expected'] not in ('scenario', 'clarify', 'limited', 'refuse_guarantee'):
+        if c['expected'] not in ('scenario', 'clarify', 'limited', 'refuse_guarantee', 'volatility_only'):
             raise ValueError('unknown expectation')
         if c['fixture'] not in ('concentrated', 'balanced', 'short', 'tradeoff'):
             raise ValueError('unknown fixture')
@@ -96,6 +96,13 @@ def score(case, raw):
     if case['expected'] == 'scenario':
         checks['scenario_calculated'] = bool(calculated)
         checks['quality_passed'] = gate.get('passed') is True
+    elif case['expected'] == 'volatility_only':
+        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', answer) if p.strip() and not p.strip().startswith('#')]
+        first = paragraphs[0] if paragraphs else ''
+        checks['direct_cited_volatility'] = bool(re.search(r'波動.{0,80}\d+(?:\.\d+)?\s*%', first)) and bool(re.search(r'\[P\d+\]', first))
+        checks['no_irrelevant_scenario_section'] = not calculated and not bool(re.search(r'情境比較|未執行.{0,8}情境|未進行.{0,8}情境', answer))
+        checks['quality_passed'] = gate.get('passed') is True
+        checks['default_preference_disclosed'] = '穩健' in answer and '預設' in answer and '設定修改' in answer
     elif case['expected'] == 'clarify':
         checks['clarified_without_substitution'] = bool(raw.get('clarification')) or (not calculated and bool(re.search(r'澄清|請.*(?:指定|提供|確認)|無法|不支援', answer)))
     elif case['expected'] == 'limited':
@@ -134,7 +141,7 @@ def score(case, raw):
     scenario_calls = [c for c in calls if c.get('toolName') == 'simulate_weight_scenario']
     rejected = [i for i,c in enumerate(scenario_calls) if c.get('status') in ('Denied','Failed')]
     recovery = None if not rejected else any(c.get('status') == 'Succeeded' for c in scenario_calls[rejected[0]+1:])
-    return dict(case_id=case['id'], passed=all(checks.values()), checks=checks, recovery_after_rejection=recovery,
+    return dict(case_id=case['id'], passed=all(checks.values()), answer_chars=len(answer), checks=checks, recovery_after_rejection=recovery,
                 llm_turns=len(detail.get('llmTurns') or []), quality_issues=gate.get('blockingIssues'),
                 cost_usd=sum(t.get('estimatedCostUsd',0) for t in detail.get('llmTurns') or []),
                 cost_scope='agent turns only; total admission ledger is provider_usage.jsonl', scorer_version=SCORER_VERSION)

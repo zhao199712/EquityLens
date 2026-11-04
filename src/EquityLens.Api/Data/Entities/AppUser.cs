@@ -8,6 +8,7 @@ public class AppUser
     public string? PasswordHash { get; set; }
     public string? GoogleSubject { get; set; }
     public string Role { get; set; } = "User";
+    public string? RiskPreference { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;

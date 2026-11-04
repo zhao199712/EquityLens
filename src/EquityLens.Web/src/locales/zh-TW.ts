@@ -124,6 +124,23 @@ export default {
     },
   },
   settings: {
+    risk: {
+      "title": "風險偏好",
+      "description": "用於投組分析的解讀，不代表適合度評估或保證的風險承受門檻。",
+      "current": "已保存的偏好：",
+      "default": "（預設，可在此修改）",
+      "explicit": "（已明確保存）",
+      "label": "風險偏好",
+      "Conservative": "保守",
+      "Balanced": "穩健",
+      "Aggressive": "積極",
+      "save": "儲存風險偏好",
+      "saving": "儲存中…",
+      "saved": "風險偏好已儲存。",
+      "loading": "正在讀取風險偏好…",
+      "loadError": "無法讀取風險偏好，請重新整理再試。",
+      "saveError": "儲存失敗，已保存的偏好沒有改變，請重試。"
+},
     pageTitle: '設定',
     pageEyebrow: '顯示偏好',
     language: {

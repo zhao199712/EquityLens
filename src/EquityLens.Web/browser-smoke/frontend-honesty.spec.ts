@@ -1,11 +1,11 @@
 import { test, expect, login, researchRun, agentId } from './fixtures'
 
-test('Settings only changes display language, immediately and after reload', async ({ page, api }, testInfo) => {
+test('Settings persists language and the real risk preference', async ({ page, api }, testInfo) => {
   await login(page)
   await page.goto('/settings')
   await expect(page.locator('#display-language')).toBeVisible()
   await expect(page.locator('main.settings-view')).not.toContainText(/GPT|Temperature|Critic|Yahoo|Save Settings|Reset Defaults/)
-  await expect(page.locator('main.settings-view button')).toHaveCount(0)
+  await expect(page.locator('main.settings-view button')).toHaveCount(1)
   const before = api.requests.length
   await page.getByLabel('Display Language', { exact: true }).selectOption('zh-TW')
   await expect(page.locator('main h1')).toHaveText('設定')
@@ -13,6 +13,14 @@ test('Settings only changes display language, immediately and after reload', asy
   await page.reload()
   await expect(page.locator('main h1')).toHaveText('設定')
   await expect(page.getByLabel('顯示語言', { exact: true })).toHaveValue('zh-TW')
+  await expect(page.getByTestId('saved-risk-preference')).toContainText('預設')
+  await page.getByLabel('風險偏好', { exact: true }).selectOption('Conservative')
+  await page.getByRole('button', { name: '儲存風險偏好', exact: true }).click()
+  await expect(page.getByRole('status')).toHaveText('風險偏好已儲存。')
+  expect(api.requests.some(r => r.method === 'PUT' && r.path === '/settings/risk-preference' && r.body.value === 'Conservative')).toBe(true)
+  await page.reload()
+  await expect(page.getByTestId('saved-risk-preference')).toContainText('保守')
+  await expect(page.getByTestId('saved-risk-preference')).not.toContainText('預設')
   await page.screenshot({ path: testInfo.outputPath('settings.png'), fullPage: true })
 })
 

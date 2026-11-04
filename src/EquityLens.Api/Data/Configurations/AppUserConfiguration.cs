@@ -18,6 +18,7 @@ public class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
         builder.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(512);
         builder.Property(x => x.GoogleSubject).HasColumnName("google_subject").HasMaxLength(255);
         builder.Property(x => x.Role).HasColumnName("role").HasMaxLength(32).HasDefaultValue("User");
+        builder.Property(x => x.RiskPreference).HasColumnName("risk_preference").HasMaxLength(16);
         builder.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasDefaultValueSql("now()");
         builder.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc").HasDefaultValueSql("now()");

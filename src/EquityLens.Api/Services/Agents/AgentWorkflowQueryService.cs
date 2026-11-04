@@ -14,6 +14,10 @@ public interface IAgentWorkflowQueryService
     Task<AgentWorkflowQueryCreatedResponse> CreateAsync(Guid userId, CreateAgentWorkflowQueryRequest request, CancellationToken cancellationToken = default);
     Task<AgentWorkflowQueryCreatedResponse> CreateFromDecisionAsync(Guid userId, CreateAgentWorkflowQueryRequest request, InvestmentResearchRouteDecision decision, CancellationToken cancellationToken = default)
         => CreateAsync(userId, request, cancellationToken);
+    // 僅供已驗證 session 的伺服器呼叫；不從 HTTP DTO 或模型解析此選擇。
+    Task<AgentWorkflowQueryCreatedResponse> CreateForConversationAsync(Guid userId, CreateAgentWorkflowQueryRequest request,
+        InvestmentResearchRouteDecision? decision, string userMessage, Guid? activePortfolioId, CancellationToken cancellationToken = default)
+        => decision is null ? CreateAsync(userId, request, cancellationToken) : CreateFromDecisionAsync(userId, request, decision, cancellationToken);
 }
 
 public sealed class AgentWorkflowQueryException(string code, string message) : InvalidOperationException(message)
@@ -30,7 +34,11 @@ public sealed class AgentWorkflowQueryService(
         => CreateCoreAsync(userId, request, null, cancellationToken);
     public Task<AgentWorkflowQueryCreatedResponse> CreateFromDecisionAsync(Guid userId, CreateAgentWorkflowQueryRequest request, InvestmentResearchRouteDecision decision, CancellationToken cancellationToken = default)
         => CreateCoreAsync(userId, request, decision, cancellationToken);
-    private async Task<AgentWorkflowQueryCreatedResponse> CreateCoreAsync(Guid userId, CreateAgentWorkflowQueryRequest request, InvestmentResearchRouteDecision? selected, CancellationToken cancellationToken)
+    public Task<AgentWorkflowQueryCreatedResponse> CreateForConversationAsync(Guid userId, CreateAgentWorkflowQueryRequest request,
+        InvestmentResearchRouteDecision? decision, string userMessage, Guid? activePortfolioId, CancellationToken cancellationToken = default)
+        => CreateCoreAsync(userId, request, decision, cancellationToken, userMessage, activePortfolioId);
+    private async Task<AgentWorkflowQueryCreatedResponse> CreateCoreAsync(Guid userId, CreateAgentWorkflowQueryRequest request, InvestmentResearchRouteDecision? selected, CancellationToken cancellationToken,
+        string? userMessage = null, Guid? activePortfolioId = null)
     {
         var question = request.Question?.Trim();
         if (string.IsNullOrWhiteSpace(question)) throw new AgentWorkflowQueryException("question_required", "請輸入問題。");
@@ -41,7 +49,7 @@ public sealed class AgentWorkflowQueryService(
             .OrderBy(x => x.Name)
             .Select(x => new InvestmentResearchPortfolioOption(x.Id, x.Name, x.BaseCurrency, x.Holdings.Count))
             .ToListAsync(cancellationToken);
-        if (ExplicitPortfolioAccess.RequestsUnownedPortfolio(question, portfolios.Select(p => p.Id)))
+        if (ExplicitPortfolioAccess.RequestsUnownedPortfolio(userMessage ?? question, portfolios.Select(p => p.Id)))
         {
             logger?.LogWarning("Routing rejected: {Category}; field={Field}", "unauthorized_portfolio", "message.portfolioId");
             throw new AgentWorkflowQueryException("portfolio_forbidden", "無法使用未授權的投資組合。");
@@ -84,7 +92,8 @@ public sealed class AgentWorkflowQueryService(
         {
             if (decision.RoutingContext.ClarifyingQuestions.Count > 0)
                 throw new AgentWorkflowQueryException("scenario_clarification_required", string.Join(" ", decision.RoutingContext.ClarifyingQuestions));
-            var portfolioId = parentInput?.PortfolioId ?? ResolvePortfolio(decision.PortfolioId, portfolios, question);
+            // 模型改寫的 standalone query 和 portfolioId 均不得當作使用者的選擇。
+            var portfolioId = ResolvePortfolio(portfolios, userMessage ?? question, activePortfolioId ?? parentInput?.PortfolioId);
             PortfolioScenarioCalculator.ValidateRequests(decision.RoutingContext.Scenarios);
             await ValidateScenarioIntentAsync(portfolioId, question, decision.RoutingContext.Scenarios, cancellationToken);
             var (from, to) = ResolveDiagnosisWindow(decision.RoutingContext.ContextEnvelope.Horizon, question);
@@ -114,12 +123,13 @@ public sealed class AgentWorkflowQueryService(
             routing.LeadSkill, routing.LeadSkillDisplayName, routing.Confidence, routing.Objective,
             routing.ContextEnvelope, routing.InferredFields, routing.ClarifyingQuestions);
 
-    private static Guid ResolvePortfolio(Guid? selected, IReadOnlyList<InvestmentResearchPortfolioOption> portfolios, string question)
+    private static Guid ResolvePortfolio(IReadOnlyList<InvestmentResearchPortfolioOption> portfolios, string question, Guid? activePortfolioId)
     {
-        if (portfolios.Count == 1) return portfolios[0].Id;
         if (portfolios.Count == 0) throw new AgentWorkflowQueryException("portfolio_required", "目前沒有可供診斷的投資組合。");
-        var named = portfolios.Where(p => question.Contains(p.Name, StringComparison.OrdinalIgnoreCase) || question.Contains(p.Id.ToString(), StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (named.Length == 1 && (selected is null || named[0].Id == selected)) return named[0].Id;
+        var named = PortfolioSelection.Named(question, portfolios.Select(p => (p.Id, p.Name))).ToArray();
+        if (named.Length == 1) return named[0];
+        if (named.Length == 0 && activePortfolioId is Guid active && portfolios.Any(p => p.Id == active)) return active;
+        if (named.Length == 0 && portfolios.Count == 1) return portfolios[0].Id;
         throw new AgentWorkflowQueryException("portfolio_required", "請指定要診斷的投資組合：" + string.Join("、", portfolios.Select(p => p.Name)));
     }
 

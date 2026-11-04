@@ -172,6 +172,7 @@ public sealed class PortfolioLoopToolsTests
         await db.SaveChangesAsync();
         var board = JsonNode.Parse(PortfolioDiagnosisWorkflowDefinitionProvider.CreateInitialBlackboardJson(id, from, to, null))!.AsObject();
         board[AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(new PortfolioDiagnosisContext(id, "test", "TWD", from, to, 1), AgentNodeJson.SerializerOptions);
+        db.Users.Add(new() { Id = owner }); await db.SaveChangesAsync();
         var tools = new PortfolioLoopTools(services.GetRequiredService<IServiceScopeFactory>());
         var scope = new LoopToolScope(owner, new("", "test"), [], false, DomainContext: board);
         if (name == "run_risk_analysis")
@@ -186,7 +187,18 @@ public sealed class PortfolioLoopToolsTests
         if (name == "get_risk_report") { Assert.Equal("Hit", result.Data["evidence"]!["cacheStatus"]!.GetValue<string>()); Assert.Equal(.2m, result.Data["metrics"]!["annualizedVolatility"]!.GetValue<decimal>()); }
         if (name == "run_risk_analysis") Assert.Equal(4, result.Data["results"]!.AsArray().Count);
         if (name == "get_performance_attribution") Assert.Equal("complete", result.Data["attribution"]!["coverageStatus"]!.GetValue<string>());
-        if (name == "get_risk_profile") Assert.False(result.Data["available"]!.GetValue<bool>());
+        if (name == "get_risk_profile") {
+            Assert.True(result.Data["available"]!.GetValue<bool>());
+            Assert.True(result.Data["isDefault"]!.GetValue<bool>());
+            Assert.Equal("Balanced", result.Data["value"]!.ToString());
+            Assert.Contains("預設，可在設定修改", result.Data["statement"]!.ToString());
+            var user = await db.Users.SingleAsync(x => x.Id == owner);
+            user.RiskPreference = "Conservative"; await db.SaveChangesAsync();
+            var saved = await tools.InvokeAsync(scope, new("saved", name, new()), default);
+            Assert.False(saved.Data!["isDefault"]!.GetValue<bool>());
+            Assert.Equal("Conservative", saved.Data["value"]!.ToString());
+            Assert.Equal("保守", saved.Data["label"]!.ToString());
+        }
         Assert.Equal(10, (await db.PortfolioHoldings.SingleAsync()).Quantity);
         Assert.Empty(await db.PortfolioTransactions.ToListAsync());
     }

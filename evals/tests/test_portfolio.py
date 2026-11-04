@@ -122,3 +122,16 @@ def test_benchmark_preflight_rejects_external_or_incomplete_data_before_ai():
             if expected: assert verify_benchmark(client, 'test', dates)['return'] == 0
             else:
                 with pytest.raises(ValueError, match='Benchmark isolation failed'): verify_benchmark(client, 'test', dates)
+
+
+def test_volatility_question_requires_direct_cited_answer_without_scenario_padding():
+    from equitylens_eval.portfolio import ROOT
+    case = load_cases(ROOT / 'cases/portfolio_conversation_v1.jsonl')[0]
+    raw = successful()
+    del raw['detail']['blackboardJson']['portfolioScenarioComparison']
+    answer = '年化波動率為24.53%，反映歷史報酬變動。[P1]\n\n依你的風險偏好『穩健』（預設，可在設定修改）[P2]'
+    raw['detail']['outputJson'] = {'interpretation': answer}
+    assert score(case, raw)['passed']
+    for bad in ['先來看看配置。\n\n' + answer, answer.replace('[P1]', ''), answer + '\n\n## 情境比較\n本次未執行情境模擬。', answer.replace('預設，可在設定修改', '已確認')]:
+        raw['detail']['outputJson']['interpretation'] = bad
+        assert not score(case, raw)['passed']
