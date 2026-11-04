@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { workflowReadFilters } from "../../services/legacyWorkflows"
-import { computed, onMounted, ref } from 'vue'
+import { isRetiredWorkflow } from '../../services/legacyWorkflows'
+import WorkflowReadFilter from '../../components/agents/WorkflowReadFilter.vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import { listAgentRuns, type AgentRunListItem } from '../../services/agentRuns'
@@ -13,7 +14,7 @@ const error = ref('')
 const filterWorkflow = ref('')
 const filterStatus = ref('')
 
-const workflowTypes = computed(() => [...new Set([...workflowReadFilters, ...runs.value.map(run => run.workflowType)])])
+
 
 const filteredRuns = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -25,16 +26,20 @@ const filteredRuns = computed(() => {
 })
 
 onMounted(loadRuns)
+watch([filterWorkflow, filterStatus], loadRuns)
+let loadVersion = 0
 
 async function loadRuns() {
+  const version = ++loadVersion
   loading.value = true
   error.value = ''
   try {
-    runs.value = await listAgentRuns({ limit: 50 })
+    const result = await listAgentRuns({ limit: 50, workflowType: filterWorkflow.value || undefined, status: filterStatus.value || undefined })
+    if (version === loadVersion) runs.value = result
   } catch {
-    error.value = '無法載入 Agent Run 列表，請稍後再試。'
+    if (version === loadVersion) error.value = '無法載入 Agent Run 列表，請稍後再試。'
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
@@ -72,10 +77,7 @@ function statusColor(status: string) {
       <!-- Filters -->
       <div class="filter-row">
         <input v-model="search" placeholder="搜尋問題 / 標的 / 投組 / ID..." class="prestige-input filter-search" />
-        <select v-model="filterWorkflow" class="prestige-input filter-select">
-          <option value="">全部 Workflow</option>
-          <option v-for="workflow in workflowTypes" :key="workflow" :value="workflow">{{ workflow }}</option>
-        </select>
+        <WorkflowReadFilter v-model="filterWorkflow" :observed-types="runs.map(run => run.workflowType)" />
         <select v-model="filterStatus" class="prestige-input filter-select">
           <option value="">全部狀態</option>
           <option value="Pending">Pending</option>
@@ -107,6 +109,7 @@ function statusColor(status: string) {
               <div class="run-main">
                 <div class="run-tags">
                   <span class="prestige-tag prestige-mono">{{ run.workflowType }}</span>
+                  <span v-if="isRetiredWorkflow(run.workflowType)" class="prestige-tag">已退役 · 唯讀</span>
                   <span class="prestige-tag">{{ run.agentType }}</span>
                   <span
                     class="prestige-tag"
@@ -139,6 +142,7 @@ function statusColor(status: string) {
 
 .filter-row {
   display: flex;
+  align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 20px;

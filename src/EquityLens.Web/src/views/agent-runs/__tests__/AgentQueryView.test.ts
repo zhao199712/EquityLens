@@ -52,11 +52,11 @@ describe('AgentQueryView', () => {
     expect(chat.loadSessions).toHaveBeenCalled()
   })
 
-  it('starts a new session when none is selected', async () => {
+  it('keeps an unsaved draft when none is selected', async () => {
     chat.currentSessionId = null
     mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
     await flushPromises()
-    expect(chat.startNewSession).toHaveBeenCalled()
+    expect(chat.startNewSession).not.toHaveBeenCalled()
   })
 
   it('does not submit an empty message', async () => {
