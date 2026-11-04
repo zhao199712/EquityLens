@@ -1,7 +1,6 @@
 """Multi-turn conversation journey suite: case contract and validation.
 
-This module only validates the case file and fixture specification. It does not
-call the API, seed data or score live runs; those belong to the runner stage.
+Validation and CLI entry point; runtime commands load their dependencies lazily.
 Expected values are for scorers only and must never be sent to the model.
 """
 from __future__ import annotations
@@ -9,6 +8,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import math
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -88,9 +89,13 @@ def validate_fixture(fixture: dict[str, Any]) -> None:
         raise ValueError('owner_b decoys must reuse owner_a portfolio names to test isolation')
     securities = fixture['securities']
     for name, profile in fixture['profiles'].items():
+        if type(profile.get('price_points')) is not int or profile['price_points'] < 2:
+            raise ValueError('price_points must be an integer >= 2')
         if set(profile['weights']) != owned:
             raise ValueError(f'profile {name} must define weights for every owner_a portfolio')
         for alias, weights in profile['weights'].items():
+            if not weights or any(type(v) not in (int, float) or not math.isfinite(v) for v in weights.values()):
+                raise ValueError('weights must be finite numbers')
             if abs(sum(weights.values()) - 1) > 1e-9:
                 raise ValueError(f'profile {name}/{alias} weights must sum to 1')
             if any(ticker not in securities for ticker in weights):
@@ -104,6 +109,8 @@ def _research_index(path: str | Path) -> dict[str, dict[str, Any]]:
 
 
 def _validate_constraints(case_id: str, turn: str, constraints: dict[str, Any], weights: dict[str, float]) -> None:
+    if constraints.get('preserve_other_holdings') is not True:
+        raise ValueError(f'{case_id}/{turn}: preserve_other_holdings must be true')
     mode = constraints.get('mode')
     if mode not in CONSTRAINT_MODES:
         raise ValueError(f'{case_id}/{turn}: unsupported constraint mode {mode!r}')
@@ -111,7 +118,7 @@ def _validate_constraints(case_id: str, turn: str, constraints: dict[str, Any], 
     target = constraints.get('target_weight')
     if source not in weights:
         raise ValueError(f'{case_id}/{turn}: reduction source {source} is not held')
-    if not isinstance(target, (int, float)) or not 0 <= target < weights[source]:
+    if type(target) not in (int, float) or not math.isfinite(target) or not 0 <= target < weights[source]:
         raise ValueError(f'{case_id}/{turn}: target weight must be below the current weight of {source}')
     transfer = constraints.get('transfer_to')
     if mode == 'holding':
@@ -124,6 +131,8 @@ def _validate_constraints(case_id: str, turn: str, constraints: dict[str, Any], 
 def validate_cases(cases: list[dict[str, Any]], fixture: dict[str, Any],
                    research: dict[str, dict[str, Any]]) -> None:
     validate_fixture(fixture)
+    if not cases:
+        raise ValueError('cases must not be empty')
     ids = [case.get('id') for case in cases]
     if len(ids) != len(set(ids)):
         raise ValueError('duplicate conversation case IDs')
@@ -137,8 +146,7 @@ def validate_cases(cases: list[dict[str, Any]], fixture: dict[str, Any],
             raise ValueError(f'{case_id}: unknown case keys {sorted(unknown)}')
         if case.get('review_status') not in {'draft', 'verified'}:
             raise ValueError(f'{case_id}: review_status must be draft or verified')
-        if case['review_status'] == 'verified' and fixture.get('numeric_golden') is None:
-            raise ValueError(f'{case_id}: cannot be verified before numeric goldens exist')
+        # review_status is human contract review; numeric verification lives in the seed manifest.
         profile = fixture['profiles'].get(case.get('fixture'))
         if profile is None:
             raise ValueError(f'{case_id}: unknown fixture profile {case.get("fixture")!r}')
@@ -148,7 +156,11 @@ def validate_cases(cases: list[dict[str, Any]], fixture: dict[str, Any],
             if check not in CHECKS:
                 raise ValueError(f'{case_id}: unknown case check {check}')
         turns = case.get('turns') or []
-        if case.get('max_user_turns') != len(turns):
+        if not turns:
+            raise ValueError(f'{case_id}: turns must not be empty')
+        if not {'same_session', 'owner_isolation', 'no_holdings_mutation', 'trace_complete'} <= set(case.get('case_checks', [])):
+            raise ValueError(f'{case_id}: missing required case checks')
+        if type(case.get('max_user_turns')) is not int or case.get('max_user_turns') != len(turns):
             raise ValueError(f'{case_id}: max_user_turns must equal the number of user turns')
         seen: list[str] = []
         reset_at: int | None = None
@@ -174,6 +186,8 @@ def validate_cases(cases: list[dict[str, Any]], fixture: dict[str, Any],
                 raise ValueError(f'{case_id}/{name}: portfolio_ref {ref} is not an owner_a portfolio')
             if intent['workflow'] is None and any(k in expected for k in ('ticker', 'research_case_refs', 'constraints')):
                 raise ValueError(f'{case_id}/{name}: turns that create no run cannot carry run parameters')
+            if not expected.get('checks'):
+                raise ValueError(f'{case_id}/{name}: checks must not be empty')
             for check in expected.get('checks', []):
                 if check not in CHECKS:
                     raise ValueError(f'{case_id}/{name}: unknown check {check}')
@@ -216,12 +230,18 @@ def summarize(cases: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in ('seed', 'run', 'rescore'):
+        from .conversation_cli import main as runtime_main
+        return runtime_main(argv)
     parser = argparse.ArgumentParser(prog='equitylens_eval.conversation')
     sub = parser.add_subparsers(dest='command', required=True)
     validate = sub.add_parser('validate', help='validate the conversation journey cases and fixture spec')
     validate.add_argument('--cases', default=str(CASE_PATH))
     validate.add_argument('--fixture', default=str(FIXTURE_PATH))
     validate.add_argument('--research', default=str(RESEARCH_PATH))
+    for command in ('seed', 'run', 'rescore'):
+        sub.add_parser(command, help=f'{command} conversation fixtures/evidence (use {command} --help)')
     args = parser.parse_args(argv)
     cases = read_jsonl(args.cases)
     validate_cases(cases, load_fixture(args.fixture), _research_index(args.research))
