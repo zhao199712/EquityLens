@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EquityLens.Api.Contracts.Research;
+using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Ai.Retrieval;
 
 namespace EquityLens.Api.Services.Agents.Loop;
@@ -48,6 +49,7 @@ public sealed record LoopDataFact(string Id, string Key, string Tool, JsonObject
 
 public sealed class ResearchLoopState
 {
+    public List<ChatToolExchange> NativeExchanges { get; set; } = [];
     public int Turn { get; set; }
     public Guid? PendingTurnId { get; set; }
     public List<LoopEvidence> Ledger { get; set; } = [];

@@ -1,0 +1,2 @@
+{"id": "profile-default", "fixture": "concentrated", "question": "這個組合的波動與我的風險偏好是否相符？", "expected": "profile_default"}
+{"id": "profile-conservative", "fixture": "concentrated", "question": "這個組合的波動與我設定的風險偏好是否相符？", "expected": "profile_conservative", "saved_profile": "Conservative"}

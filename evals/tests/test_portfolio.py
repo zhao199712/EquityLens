@@ -135,3 +135,40 @@ def test_volatility_question_requires_direct_cited_answer_without_scenario_paddi
     for bad in ['先來看看配置。\n\n' + answer, answer.replace('[P1]', ''), answer + '\n\n## 情境比較\n本次未執行情境模擬。', answer.replace('預設，可在設定修改', '已確認')]:
         raw['detail']['outputJson']['interpretation'] = bad
         assert not score(case, raw)['passed']
+
+
+def test_risk_profile_cases_are_separate_and_do_not_store_questionnaire_answers():
+    from pathlib import Path
+    cases=load_cases(Path(__file__).parents[1]/'cases/portfolio_risk_profile_v1.jsonl')
+    assert len(cases)==2
+    assert cases[1]['saved_profile']=='Conservative'
+    assert len(load_cases())==14
+    for case in cases:
+        raw=successful()
+        data={'available':True,'value':'Balanced' if case['expected']=='profile_default' else 'Conservative','isDefault':case['expected']=='profile_default','source':'Default' if case['expected']=='profile_default' else 'Manual'}
+        raw['detail']['blackboardJson']['agentLoopFacts']=[{'tool':'get_risk_profile','data':data},{'tool':'run_risk_analysis','data':{'riskProfile':{'profileFit':[{'status':'Above'}]}}}]
+        raw['detail']['outputJson']={'summary':'依預設穩健，可在設定中完成評估' if case['expected']=='profile_default' else '依手動設定保守，參考門檻尚未確認。'}
+        assert score(case,raw)['passed']
+        raw['detail']['blackboardJson']['agentLoopFacts'][0]['data']['answersJson']='sensitive'
+        assert not score(case,raw)['checks']['no_questionnaire_answers']
+
+
+def test_risk_profile_eval_rejects_stale_comparison_claim():
+    case={'id':'profile-default','expected':'profile_default'}
+    raw=successful()
+    raw['detail']['blackboardJson']['agentLoopFacts']=[{'tool':'get_risk_profile','data':{'available':True,'isDefault':True,'value':'Balanced','profileFit':[{'status':'Above'}]}}]
+    raw['detail']['outputJson']={'summary':'依預設穩健，可在設定中完成評估；profileFit 仍為 Unavailable。'}
+    assert not score(case,raw)['checks']['no_stale_fit_claim']
+
+
+def test_profile_evidence_embedded_in_analysis_is_equivalent_and_still_private():
+    case={'id':'profile-conservative','expected':'profile_conservative'}
+    raw=successful()
+    profile={'available':True,'value':'Conservative','isDefault':False,'source':'Manual','profileFit':[{'status':'Above'}]}
+    raw['detail']['blackboardJson']['agentLoopFacts']=[{'tool':'run_risk_analysis','data':{'riskProfile':profile}}]
+    raw['detail']['outputJson']={'summary':'依手動設定保守，波動高於參考門檻。'}
+    assert score(case,raw)['passed']
+    profile['source']='Default'
+    assert not score(case,raw)['checks']['saved_conservative']
+    profile['answersJson']='private'
+    assert not score(case,raw)['checks']['no_questionnaire_answers']

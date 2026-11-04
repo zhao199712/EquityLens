@@ -5,7 +5,7 @@ test('Settings persists language and the real risk preference', async ({ page, a
   await page.goto('/settings')
   await expect(page.locator('#display-language')).toBeVisible()
   await expect(page.locator('main.settings-view')).not.toContainText(/GPT|Temperature|Critic|Yahoo|Save Settings|Reset Defaults/)
-  await expect(page.locator('main.settings-view button')).toHaveCount(1)
+  await expect(page.locator('main.settings-view button')).toHaveCount(2)
   const before = api.requests.length
   await page.getByLabel('Display Language', { exact: true }).selectOption('zh-TW')
   await expect(page.locator('main h1')).toHaveText('設定')
@@ -104,3 +104,38 @@ for (const role of ['User', 'Admin']) {
     }
   })
 }
+
+
+test('Risk assessment saves source and sublevels, reloads, and deletes answers', async ({ page }, testInfo) => {
+  let profile = { value:'Balanced', label:'穩健', isDefault:true, statement:'預設', source:'Default', capacityLevel:null as string|null, willingnessLevel:null as string|null, assessedAt:null as string|null }
+  const defaults = { ...profile }
+  let submissions = 0
+  await page.route('**/api/settings/risk-preference**', async route => {
+    const req=route.request()
+    if (req.method()==='POST') {
+      expect(req.postDataJSON()).toEqual({ c1:1,c2:3,c3:3,w1:3,w2:3,w3:0 })
+      submissions++
+      profile={ ...profile,value:'Conservative',label:'保守',isDefault:false,source:'Questionnaire',capacityLevel:'Conservative',willingnessLevel:'Aggressive',assessedAt:'2026-11-04T00:00:00Z' }
+    }
+    if (req.method()==='DELETE') profile={...defaults}
+    return route.fulfill({json:profile})
+  })
+  await login(page); await page.goto('/settings')
+  await page.locator('#display-language').selectOption('zh-TW')
+  await expect(page.getByTestId('saved-risk-preference')).toContainText('尚未評估')
+  await page.screenshot({path:testInfo.outputPath('settings-unassessed.png'),fullPage:true})
+  await page.getByTestId('assess-risk').click()
+  await expect(page.getByTestId('submit-questionnaire')).toBeDisabled()
+  for (const [key,value] of Object.entries({c1:1,c2:3,c3:3,w1:3,w2:3,w3:0})) await page.locator(`#risk-${key}`).selectOption(String(value))
+  await page.getByTestId('submit-questionnaire').click()
+  await expect(page.getByTestId('risk-sublevels')).toContainText('承受能力： 保守')
+  expect(submissions).toBe(1)
+  await page.reload()
+  await expect(page.getByTestId('risk-sublevels')).toContainText('承受意願： 積極')
+  await expect(page.locator('main.settings-view')).toContainText('問卷評估')
+  await page.screenshot({path:testInfo.outputPath('settings-assessed.png'),fullPage:true})
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('c1')
+  await page.getByTestId('delete-risk').click()
+  await expect(page.getByTestId('saved-risk-preference')).toContainText('尚未評估')
+  await expect(page.getByTestId('risk-sublevels')).toHaveCount(0)
+})

@@ -71,11 +71,11 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
 
     internal static string? WithRiskPreference(string? text, IReadOnlyList<LoopDataFact> facts)
     {
-        if (text is not null && facts.LastOrDefault(f => f.Tool == "get_risk_profile"
-                && f.Data["available"]?.ToString() == "true") is { } profile
-            && profile.Data["statement"]?.ToString() is { Length: > 0 } statement
+        var evidence = facts.Select(f => (Fact:f, Profile:f.Tool == "get_risk_profile" ? f.Data : f.Data["riskProfile"] as JsonObject))
+            .LastOrDefault(x => x.Profile?["available"]?.ToString() == "true");
+        if (text is not null && evidence.Profile?["statement"]?.ToString() is { Length: > 0 } statement
             && !text.Contains(statement, StringComparison.Ordinal))
-            return text + $"\n\n{statement} [{profile.Id}]。";
+            return text + $"\n\n{statement} [{evidence.Fact.Id}]。";
         return text;
     }
 
@@ -105,6 +105,11 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         if (answer is null || string.IsNullOrWhiteSpace(answer.Markdown) || answer.Markdown == AgentLoopEngine.Refusal) return ["InsufficientEvidence"];
         var byId = facts.ToDictionary(x => x.Id, StringComparer.Ordinal);
         if (facts.Count == 0) issues.Add("MissingToolEvidence");
+        var availableProfileFits = facts.Select(f => f.Tool == "get_risk_profile" ? f.Data : f.Data["riskProfile"] as JsonObject)
+            .OfType<JsonObject>().SelectMany(p => (p["profileFit"] as JsonArray)?.OfType<JsonObject>() ?? [])
+            .Any(f => f["status"]?.ToString() is "Above" or "Below" or "At");
+        if (availableProfileFits && Regex.IsMatch(answer.Markdown, @"profileFit[^。\n]{0,160}(?:Unavailable|無法比較|不可用)|非(?:系統|工具)(?:產生的)?\s*(?:profileFit|fit)\s*判定", RegexOptions.IgnoreCase))
+            issues.Add("StaleRiskProfileComparison");
         if (answer.CitedEvidenceIds.Any(x => !byId.ContainsKey(x))) issues.Add("UnknownToolEvidence");
         foreach (var sentence in Regex.Split(WithTableCitations(answer.Markdown.Normalize(System.Text.NormalizationForm.FormKC).Replace('−', '-')), @"[\n]"))
         {
@@ -114,6 +119,32 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             // Markdown 編號不是數據；標題裡真正的指標數字仍須引用。
             text = Regex.Replace(text, @"^\s*(?:#{1,6}\s*)?\d+[.)、]\s+", "");
             var cited = ids.Where(byId.ContainsKey).Select(id => byId[id]).ToArray();
+            var profiles = cited.Select(f => f.Tool == "get_risk_profile" ? f.Data : f.Data["riskProfile"] as JsonObject).OfType<JsonObject>().ToArray();
+            if (facts.Any(f => f.Tool == "get_risk_profile" && f.Data["isDefault"]?.ToString() == "true")
+                && !Regex.IsMatch(text, @"預設|尚未評估")
+                && Regex.IsMatch(text, @"(?:您的|你的)風險偏好(?:為|是|『|「)")) issues.Add("DefaultPreferenceMisrepresented");
+            if (Regex.IsMatch(text, @"偏好|參考|承受|門檻|上限|下限"))
+            {
+                var fits = profiles.SelectMany(p => (p["profileFit"] as JsonArray)?.OfType<JsonObject>() ?? []);
+                foreach (Match bound in Regex.Matches(text, @"(?:參考上限|參考下限|參考門檻)\s*(?:為|是|[:：])?\s*(?<bound>-?\d+(?:\.\d+)?)\s*[%％]"))
+                {
+                    var metricMention = Regex.Matches(text[..bound.Index], @"波動|回撤").LastOrDefault()?.Value;
+                    var expectedMetric = metricMention == "波動" ? "annualVolatility" : metricMention == "回撤" ? "maxDrawdown" : null;
+                    var thresholdKey = expectedMetric == "annualVolatility" ? "annualVolatilityMax" : expectedMetric == "maxDrawdown" ? "maxDrawdownFloor" : null;
+                    var amount = decimal.Parse(bound.Groups["bound"].Value, CultureInfo.InvariantCulture) / 100m;
+                    // 版本化門檻可單獨引用；分析缺失時仍不得宣稱比較結果或自行算倍數。
+                    var approvedThreshold = thresholdKey is not null && profiles.Any(p => p["thresholdStatus"]?.ToString() == "ApprovedProductReference"
+                        && decimal.TryParse(p["thresholds"]?[thresholdKey]?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var t) && t == amount);
+                    if (!approvedThreshold && !fits.Any(f => f["metric"]?.ToString() == expectedMetric && f["status"]?.ToString() != "Unavailable"
+                        && decimal.TryParse(f["threshold"]?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var threshold) && threshold == amount))
+                        issues.Add("UnverifiedProfileFit");
+                }
+                foreach (Match ratio in Regex.Matches(text, @"(?<ratio>\d+(?:\.\d+)?)\s*倍"))
+                    if (!fits.Any(f => f["metric"]?.ToString() == "annualVolatility" && f["status"]?.ToString() != "Unavailable"
+                        && decimal.TryParse(f["ratio"]?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var r)
+                        && r == decimal.Parse(ratio.Groups["ratio"].Value, CultureInfo.InvariantCulture)))
+                        issues.Add("UnverifiedProfileFit");
+            }
             // 帳戶餘額只能由明確帳簿欄位支持，不能借用情境 cashWeight 或其他指標碰巧相同的數字。
             foreach (Match cashClaim in Regex.Matches(text,
                 @"(?:帳戶現金(?:餘額)?|帳簿現金(?:餘額)?|現金餘額)\s*(?:為|是|[:：|])?\s*(?:[A-Z]{3}|NT\$|新[台臺]幣)?\s*(?<value>[-+]?\d+(?:,\d{3})*(?:\.\d+)?)(?![\d.]|\s*[%％])"))
@@ -182,6 +213,10 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
     internal static string RepairHints(IReadOnlyList<string> rejected, IReadOnlyList<LoopDataFact> facts, LoopAnswer? answer = null)
     {
         var hints = new List<string>();
+        var fitSources = facts.Select(f => (Fact: f, Profile: f.Tool == "get_risk_profile" ? f.Data : f.Data["riskProfile"] as JsonObject))
+            .Where(x => (x.Profile?["profileFit"] as JsonArray)?.OfType<JsonObject>().Any(f => f["status"]?.ToString() is "Above" or "Below" or "At") == true).ToArray();
+        if (fitSources.Length > 0 && answer is not null && Check(answer,facts).Any(i => i is "StaleRiskProfileComparison" or "UnverifiedProfileFit"))
+            hints.Add("偏好比較已完成，勿沿用分析前的 Unavailable 或自行推導。引用已保存 profileFit.statement 與期間：" + string.Join("；", fitSources.Select(x => "["+x.Fact.Id+"] "+x.Profile!["profileFit"]!.ToJsonString())));
         if (answer is not null)
         {
             var lines = WithTableCitations(answer.Markdown.Normalize(System.Text.NormalizationForm.FormKC).Replace('−', '-')).Split('\n');
@@ -193,7 +228,9 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
                 var sources = facts.Where(f => ids.Contains(f.Id)).Select(f => $"[{f.Id}]={f.Tool}");
                 hints.Add("問題段落: " + AgentNodeJson.Trim(line, 350) + "；問題=" + string.Join(",", problems)
                     + "；目前引用=" + string.Join(",", sources)
-                    + "。逐句補正確來源；風險偏好不能支持風險數字或權重。無法核對就移除非必要數字，不要猜算合計或改引用湊數。");
+                    + (problems.Contains("MixedRiskBasis")
+                        ? "。本段把現況與情境合併：請換行分成獨立段落，現況／profileFit 引用分析工具，情境比較只引用同快照情境工具；僅改引用或保留同一段的分號無法解決。"
+                        : "。逐句核對正確來源；偏好等級不能支持持股或風險數字，已完成的 profileFit 才能支持其同期間比較。無法核對就移除非必要數字，不猜合計或換引用湊數。"));
                 // 僅提供同一股票、同一欄位且符合顯示精度的現況權重證據，不跨口徑找相近值或自動改引用。
                 if (problems.Contains("UntraceableNumbers") && line.Contains("權重")
                     && !Regex.IsMatch(line, "情境|假設|減碼|調整|風險貢獻|成分風險"))
