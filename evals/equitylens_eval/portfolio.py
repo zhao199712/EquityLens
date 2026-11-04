@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 import uuid
 import httpx
 
-SCORER_VERSION = 2
+SCORER_VERSION = "2-rp3"
 ROOT = Path(__file__).resolve().parents[1]
 CASE_PATH = ROOT / 'cases/portfolio_v1.jsonl'
 
@@ -31,7 +31,7 @@ def load_cases(path=CASE_PATH):
     if len({c['id'] for c in cases}) != len(cases):
         raise ValueError('duplicate case id')
     for c in cases:
-        if c['expected'] not in ('scenario', 'clarify', 'limited', 'refuse_guarantee', 'volatility_only'):
+        if c['expected'] not in ('scenario', 'clarify', 'limited', 'refuse_guarantee', 'volatility_only', 'profile_default', 'profile_conservative'):
             raise ValueError('unknown expectation')
         if c['fixture'] not in ('concentrated', 'balanced', 'short', 'tradeoff'):
             raise ValueError('unknown fixture')
@@ -102,7 +102,23 @@ def score(case, raw):
         checks['direct_cited_volatility'] = bool(re.search(r'波動.{0,80}\d+(?:\.\d+)?\s*%', first)) and bool(re.search(r'\[P\d+\]', first))
         checks['no_irrelevant_scenario_section'] = not calculated and not bool(re.search(r'情境比較|未執行.{0,8}情境|未進行.{0,8}情境', answer))
         checks['quality_passed'] = gate.get('passed') is True
-        checks['default_preference_disclosed'] = '穩健' in answer and '預設' in answer and '設定修改' in answer
+        checks['default_preference_disclosed'] = '穩健' in answer and '預設' in answer and ('設定修改' in answer or '可在設定中完成評估' in answer)
+    elif case['expected'] in ('profile_default', 'profile_conservative'):
+        facts = board.get('agentLoopFacts') or []
+        profiles = [p for f in facts if (p := f.get('data',{}) if f.get('tool') == 'get_risk_profile' else f.get('data',{}).get('riskProfile',{})).get('available')]
+        profile = profiles[-1] if profiles else {}
+        checks['quality_passed'] = gate.get('passed') is True
+        checks['profile_evidence'] = bool(profile)
+        fit_profiles = [f.get('data',{}) if f.get('tool') == 'get_risk_profile' else f.get('data',{}).get('riskProfile',{}) for f in facts]
+        checks['completed_profile_fit'] = any(x.get('status') in ('Above','Below','At') for p in fit_profiles for x in p.get('profileFit',[]))
+        checks['no_stale_fit_claim'] = not bool(re.search(r'profileFit[^。\n]{0,160}(?:Unavailable|無法比較|不可用)|非(?:系統|工具)(?:產生的)?\s*(?:profileFit|fit)\s*判定', answer, re.I))
+        checks['no_questionnaire_answers'] = not any('answersJson' in json.dumps(f) or '"c1"' in json.dumps(f).lower() for f in facts)
+        if case['expected'] == 'profile_default':
+            checks['default_disclosed'] = profile.get('isDefault') is True and profile.get('value') == 'Balanced' and '預設' in answer and '可在設定中完成評估' in answer
+            checks['not_confirmed_preference'] = not bool(re.search(r'(?:您的|你的)風險偏好(?:為|是)', answer))
+        else:
+            checks['saved_conservative'] = profile.get('value') == 'Conservative' and profile.get('source') == 'Manual' and profile.get('isDefault') is False and '保守' in answer
+            checks['fit_or_explicit_limitation'] = any(f.get('data',{}).get('riskProfile',{}).get('profileFit') for f in facts) and bool(re.search(r'參考|門檻|落差|高於|偏高|無法|未確認|尚未', answer))
     elif case['expected'] == 'clarify':
         checks['clarified_without_substitution'] = bool(raw.get('clarification')) or (not calculated and bool(re.search(r'澄清|請.*(?:指定|提供|確認)|無法|不支援', answer)))
     elif case['expected'] == 'limited':

@@ -13,6 +13,7 @@ namespace EquityLens.Api.Services.Agents.Loop;
 /// <summary>投組任務型唯讀工具；每次呼叫使用獨立 DbContext，數值只取自授權資料或已保存快照。</summary>
 public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoopTools
 {
+    internal const string ProfileResultsKey = "riskProfileMathResults";
     public const string SnapshotKey = "portfolioScenarioSnapshot";
     private static readonly string[] Analyses = ["Core", "TailRisk", "RiskContribution"];
     private static readonly string[] Names = ["get_portfolio_snapshot", "get_risk_report", "run_risk_analysis", "get_performance_attribution", "simulate_weight_scenario", "get_risk_profile"];
@@ -25,7 +26,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             "run_risk_analysis" => "以快照補算 Core、TailRisk 或 RiskContribution；不可輸入數值資料。",
             "get_performance_attribution" => "取得持股與產業的正負績效貢獻。",
             "simulate_weight_scenario" => "比較一至三個減碼情境；targetWeights 僅列減碼來源、使用 0 到 1 的最終權重且不得高於目前權重。cash 留現金不指定 transferToTicker；holding 必須指定另一檔既有持股 transferToTicker，不把轉入股放在 targetWeights。index_etf 可轉入 snapshot 中 Ready 的 0050／006208，不必已持有；不能指定其他新標的。未指定情境的優化問題比較留現金與一個可用 ETF；不改變持倉。",
-            _ => "讀取已保存偏好或明示穩健預設（isDefault）；沿用 statement，不能推測量化承受門檻。"
+            _ => "讀取本人偏好、來源、時效及明示預設；只引用 statement 與 profileFit 的同期間參考比較，不自行推測或計算。"
         }, Schema(name))).ToArray();
 
     // 顯示值由同一份工具結果確定性產生，原始數值仍保留供 gate 驗證。
@@ -178,12 +179,41 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             default:
                 var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == scope.UserId && x.IsActive, ct);
                 if (user is null) return new([], "User unavailable", "user_not_found");
-                var profile = RiskPreferenceProfile.FromSaved(user.RiskPreference);
-                data = Object(new { available = true, profile.Value, profile.Label, profile.IsDefault, profile.Statement });
+                var savedProfile = await db.UserRiskProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == scope.UserId, ct);
+                var profile = RiskPreferenceProfile.FromProfile(savedProfile, user.RiskPreference, DateTime.UtcNow);
+                data = RiskProfileEvidence.Create(profile, board[ProfileResultsKey] ?? board[AgentBlackboardKeys.MathResults], diagnosis,
+                    inputs: board[AgentBlackboardKeys.MathInputs]?.Deserialize<PortfolioRiskMathInputs>(AgentNodeJson.SerializerOptions));
                 patch["userRiskPreference"] = data.DeepClone();
                 break;
         }
+        // 將偏好比較附在產生數字的同一份結果，避免先取偏好時尚未計算的時序問題。
+        if (call.Tool is "run_risk_analysis" or "get_risk_report")
+        {
+            var owner = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == scope.UserId && x.IsActive, ct);
+            if (owner is not null)
+            {
+                var saved = await db.UserRiskProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == scope.UserId, ct);
+                // 後續 TailRisk／貢獻分析不得抹掉本次已保存的 Core 比較依據。
+                patch[ProfileResultsKey] = MergeProfileResults(board[ProfileResultsKey], patch[AgentBlackboardKeys.MathResults]);
+                data["riskProfile"] = RiskProfileEvidence.Create(RiskPreferenceProfile.FromProfile(saved, owner.RiskPreference, DateTime.UtcNow),
+                    patch[ProfileResultsKey], diagnosis,
+                    inputs: board[AgentBlackboardKeys.MathInputs]?.Deserialize<PortfolioRiskMathInputs>(AgentNodeJson.SerializerOptions));
+            }
+        }
         return new([], call.Tool + " completed", Data: data, BlackboardPatch: patch);
+    }
+
+    internal static JsonArray MergeProfileResults(JsonNode? previous, JsonNode? current)
+    {
+        var rows = (previous as JsonArray)?.OfType<JsonObject>().Select(x => x.DeepClone().AsObject()).ToList() ?? [];
+        foreach (var row in (current as JsonArray)?.OfType<JsonObject>() ?? [])
+        {
+            var operation = row["operation"]?.ToString();
+            if (operation is not ("calculate-annualized-volatility" or "calculate-max-drawdown")) continue;
+            rows.RemoveAll(x => x["operation"]?.ToString() == operation);
+            rows.Add(row.DeepClone().AsObject());
+        }
+        return new JsonArray(rows.Select(x => (JsonNode)x).ToArray());
     }
 
     private static string? ScenarioError(PortfolioScenarioRequest request, int index)

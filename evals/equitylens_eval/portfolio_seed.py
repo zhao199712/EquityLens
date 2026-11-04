@@ -41,6 +41,12 @@ def seed(base_url, container, database, username, manifest_path, as_of):
         # Bind API identity to this exact DB before any fixture write.
         if sql(f"select count(*) from app_user where id={sql_quote(user_id)} and email={sql_quote(email)};")!='1':
             raise ValueError('API is not using the specified isolated database')
+        if c.get('saved_profile'):
+            if c['saved_profile'] not in ('Conservative', 'Balanced', 'Aggressive'):
+                raise ValueError('invalid synthetic profile')
+            saved = httpx.put(base_url + '/api/settings/risk-preference', json={'value': c['saved_profile']}, headers={'Authorization':'Bearer '+token})
+            saved.raise_for_status()
+            if saved.json().get('source') != 'Manual': raise ValueError('profile was not persisted')
         pid=str(uuid.uuid4()); q=sql_quote
         commands=['BEGIN;',f"insert into portfolio(id,owner_user_id,name,base_currency) values({q(pid)},{q(user_id)},'組合甲','TWD');"]
         total_cost=0

@@ -1,0 +1,3256 @@
+[
+  {
+    "round": 1,
+    "upper_usd": 0.058800299999999986,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 7,
+        "complete_summary": null
+      },
+      "risk-profile": {
+        "saved_responses": 0,
+        "complete_summary": null
+      },
+      "volatility-only": {
+        "saved_responses": 0,
+        "complete_summary": null
+      }
+    }
+  },
+  {
+    "round": 2,
+    "upper_usd": 0.052164,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 4,
+        "complete_summary": null
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp1",
+          "attempted": 2,
+          "passed": 2,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": true,
+              "answer_chars": 627,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0041886,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp1"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": true,
+              "answer_chars": 638,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": true,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0042459,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp1"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 0,
+        "complete_summary": null
+      }
+    }
+  },
+  {
+    "round": 3,
+    "upper_usd": 0.12502259999999998,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 14,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 14,
+          "passed": 9,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "unprompted",
+              "passed": false,
+              "answer_chars": 489,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [
+                "StaleRiskProfileComparison"
+              ],
+              "cost_usd": 0.0082095,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "lower-volatility",
+              "passed": false,
+              "answer_chars": 489,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "volatility_reduced": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "UntraceableNumbers",
+                "UnverifiedProfileFit"
+              ],
+              "cost_usd": 0.0123021,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "concentration",
+              "passed": true,
+              "answer_chars": 622,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.0078066,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "cash",
+              "passed": true,
+              "answer_chars": 720,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.0119709,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "transfer",
+              "passed": false,
+              "answer_chars": 230,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "MixedRiskBasis",
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.0119934,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "nonholding",
+              "passed": true,
+              "answer_chars": 101,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "incomplete",
+              "passed": true,
+              "answer_chars": 87,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "diversified",
+              "passed": false,
+              "answer_chars": 595,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "MixedRiskBasis",
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.012414,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "short-history",
+              "passed": true,
+              "answer_chars": 284,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "honest_limitation": true,
+                "snapshot_present": true,
+                "conservation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "UntraceableNumbers",
+                "MixedRiskBasis",
+                "UnverifiedProfileFit",
+                "OptimizationDataUnavailable"
+              ],
+              "cost_usd": 0.0103002,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "guarantee",
+              "passed": true,
+              "answer_chars": 118,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "no_guarantee": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "preference",
+              "passed": false,
+              "answer_chars": 748,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "preference_conflict": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.0081513,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "invalid-increase",
+              "passed": true,
+              "answer_chars": 68,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "multi-scenario",
+              "passed": true,
+              "answer_chars": 973,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.0123072,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "tradeoff",
+              "passed": true,
+              "answer_chars": 1109,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.0124611,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 2,
+          "passed": 1,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": false,
+              "answer_chars": 70,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": false,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [
+                "StaleRiskProfileComparison"
+              ],
+              "cost_usd": 0.0057744,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": true,
+              "answer_chars": 533,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": true,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0042099,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 0,
+        "complete_summary": null
+      }
+    }
+  },
+  {
+    "round": 4,
+    "upper_usd": 0.0616923,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 3,
+        "complete_summary": null
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 2,
+          "passed": 2,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": true,
+              "answer_chars": 586,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.004464,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": true,
+              "answer_chars": 502,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": true,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0044061,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 0,
+        "complete_summary": null
+      }
+    }
+  },
+  {
+    "round": 5,
+    "upper_usd": 0.015146100000000001,
+    "unsettled_reserved_usd": 0.0158937,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 0,
+        "complete_summary": null
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 2,
+          "passed": 2,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": true,
+              "answer_chars": 504,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0043733999999999995,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": true,
+              "answer_chars": 501,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": true,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0044067,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 0,
+        "complete_summary": null
+      }
+    }
+  },
+  {
+    "round": 6,
+    "upper_usd": 0.14223600000000003,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 14,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 14,
+          "passed": 7,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "unprompted",
+              "passed": true,
+              "answer_chars": 1137,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.0127911,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "lower-volatility",
+              "passed": false,
+              "answer_chars": 423,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "volatility_reduced": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "MixedRiskBasis"
+              ],
+              "cost_usd": 0.012494100000000001,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "concentration",
+              "passed": false,
+              "answer_chars": 895,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.0128799,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "cash",
+              "passed": false,
+              "answer_chars": 344,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "UntraceableNumbers",
+                "MixedRiskBasis"
+              ],
+              "cost_usd": 0.0128544,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "transfer",
+              "passed": false,
+              "answer_chars": 737,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.012571200000000001,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "nonholding",
+              "passed": true,
+              "answer_chars": 106,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "incomplete",
+              "passed": true,
+              "answer_chars": 78,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "diversified",
+              "passed": false,
+              "answer_chars": 574,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "UnverifiedProfileFit",
+                "MixedRiskBasis",
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.0131679,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "short-history",
+              "passed": true,
+              "answer_chars": 284,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "honest_limitation": true,
+                "snapshot_present": true,
+                "conservation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "UntraceableNumbers",
+                "MixedRiskBasis",
+                "OptimizationDataUnavailable"
+              ],
+              "cost_usd": 0.0104631,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "guarantee",
+              "passed": true,
+              "answer_chars": 87,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "no_guarantee": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "preference",
+              "passed": false,
+              "answer_chars": 997,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "preference_conflict": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.0090594,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "invalid-increase",
+              "passed": true,
+              "answer_chars": 60,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "multi-scenario",
+              "passed": true,
+              "answer_chars": 1118,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [],
+              "cost_usd": 0.0164709,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "tradeoff",
+              "passed": false,
+              "answer_chars": 452,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "InsufficientEvidence"
+              ],
+              "cost_usd": 0.013209,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 2,
+          "passed": 2,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": true,
+              "answer_chars": 739,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0045654,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": true,
+              "answer_chars": 719,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": true,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0045873,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 0,
+        "complete_summary": null
+      }
+    }
+  },
+  {
+    "round": 7,
+    "upper_usd": 0.1407114,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 14,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 14,
+          "passed": 8,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "unprompted",
+              "passed": false,
+              "answer_chars": 489,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "InsufficientEvidence"
+              ],
+              "cost_usd": 0.0123831,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "lower-volatility",
+              "passed": false,
+              "answer_chars": 479,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "volatility_reduced": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "MixedRiskBasis",
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.0121431,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "concentration",
+              "passed": false,
+              "answer_chars": 855,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "MixedRiskBasis",
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.012438300000000001,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "cash",
+              "passed": true,
+              "answer_chars": 1015,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.0123537,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "transfer",
+              "passed": false,
+              "answer_chars": 440,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.0119841,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "nonholding",
+              "passed": true,
+              "answer_chars": 101,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "incomplete",
+              "passed": true,
+              "answer_chars": 96,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "diversified",
+              "passed": true,
+              "answer_chars": 861,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.0123477,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "short-history",
+              "passed": true,
+              "answer_chars": 284,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "honest_limitation": true,
+                "snapshot_present": true,
+                "conservation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "InsufficientEvidence",
+                "OptimizationDataUnavailable"
+              ],
+              "cost_usd": 0.0101862,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "guarantee",
+              "passed": true,
+              "answer_chars": 91,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "no_guarantee": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "preference",
+              "passed": false,
+              "answer_chars": 787,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "preference_conflict": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "MixedRiskBasis",
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.0127083,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "invalid-increase",
+              "passed": true,
+              "answer_chars": 158,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "multi-scenario",
+              "passed": false,
+              "answer_chars": 662,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.0129822,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "tradeoff",
+              "passed": true,
+              "answer_chars": 1061,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.0108294,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 2,
+          "passed": 2,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": true,
+              "answer_chars": 563,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0044889000000000005,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": true,
+              "answer_chars": 653,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": true,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0042951,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 1,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 1,
+          "passed": 1,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "volatility-only",
+              "passed": true,
+              "answer_chars": 370,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "direct_cited_volatility": true,
+                "no_irrelevant_scenario_section": true,
+                "quality_passed": true,
+                "default_preference_disclosed": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0039054000000000003,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "deepseek-flash"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      }
+    }
+  },
+  {
+    "round": 8,
+    "upper_usd": 0.10194057499999998,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 14,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 14,
+          "passed": 10,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "unprompted",
+              "passed": false,
+              "answer_chars": 1076,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "InsufficientEvidence"
+              ],
+              "cost_usd": 0.0081716,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "lower-volatility",
+              "passed": false,
+              "answer_chars": 576,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "volatility_reduced": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "MixedRiskBasis"
+              ],
+              "cost_usd": 0.0089174,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "concentration",
+              "passed": true,
+              "answer_chars": 469,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [],
+              "cost_usd": 0.008746725,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "cash",
+              "passed": true,
+              "answer_chars": 604,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [],
+              "cost_usd": 0.0087158,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "transfer",
+              "passed": true,
+              "answer_chars": 617,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.00608455,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "nonholding",
+              "passed": true,
+              "answer_chars": 69,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "incomplete",
+              "passed": true,
+              "answer_chars": 40,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "diversified",
+              "passed": false,
+              "answer_chars": 1283,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "InsufficientEvidence"
+              ],
+              "cost_usd": 0.00840535,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "short-history",
+              "passed": true,
+              "answer_chars": 284,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "honest_limitation": true,
+                "snapshot_present": true,
+                "conservation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "OptimizationDataUnavailable"
+              ],
+              "cost_usd": 0.00856115,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "guarantee",
+              "passed": true,
+              "answer_chars": 307,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "no_guarantee": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.00487965,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "preference",
+              "passed": true,
+              "answer_chars": 674,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "preference_conflict": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [],
+              "cost_usd": 0.007857375,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "invalid-increase",
+              "passed": true,
+              "answer_chars": 53,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "multi-scenario",
+              "passed": true,
+              "answer_chars": 976,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.00485295,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "tradeoff",
+              "passed": false,
+              "answer_chars": 344,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "UnverifiedScenarioComparison"
+              ],
+              "cost_usd": 0.008710975,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 2,
+          "passed": 2,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": true,
+              "answer_chars": 403,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.0028342999999999997,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": true,
+              "answer_chars": 228,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": true,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.002766775,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 1,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 1,
+          "passed": 1,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "volatility-only",
+              "passed": true,
+              "answer_chars": 284,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "direct_cited_volatility": true,
+                "no_irrelevant_scenario_section": true,
+                "quality_passed": true,
+                "default_preference_disclosed": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.005833625,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      }
+    }
+  },
+  {
+    "round": 9,
+    "upper_usd": 0.09884070000000002,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 14,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 14,
+          "passed": 8,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "unprompted",
+              "passed": false,
+              "answer_chars": 821,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "UnverifiedScenarioComparison"
+              ],
+              "cost_usd": 0.009961275,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "lower-volatility",
+              "passed": false,
+              "answer_chars": 512,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "volatility_reduced": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "MixedRiskBasis",
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.008217875,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "concentration",
+              "passed": false,
+              "answer_chars": 524,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "UnverifiedScenarioComparison"
+              ],
+              "cost_usd": 0.008550175,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "cash",
+              "passed": true,
+              "answer_chars": 638,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [],
+              "cost_usd": 0.007984275,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "transfer",
+              "passed": true,
+              "answer_chars": 733,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.005299525,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "nonholding",
+              "passed": true,
+              "answer_chars": 78,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "incomplete",
+              "passed": true,
+              "answer_chars": 52,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "diversified",
+              "passed": true,
+              "answer_chars": 937,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.007519225,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "short-history",
+              "passed": true,
+              "answer_chars": 382,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "honest_limitation": true,
+                "snapshot_present": true,
+                "conservation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "UnverifiedScenarioComparison",
+                "OptimizationDataUnavailable"
+              ],
+              "cost_usd": 0.007511775,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "guarantee",
+              "passed": false,
+              "answer_chars": 70,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "no_guarantee": false
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.0057961,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "preference",
+              "passed": false,
+              "answer_chars": 1076,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "preference_conflict": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [
+                "InsufficientEvidence"
+              ],
+              "cost_usd": 0.00819745,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "invalid-increase",
+              "passed": true,
+              "answer_chars": 27,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "multi-scenario",
+              "passed": true,
+              "answer_chars": 1278,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.005181025,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "tradeoff",
+              "passed": false,
+              "answer_chars": 292,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "MixedRiskBasis",
+                "UntraceableNumbers",
+                "UnverifiedScenarioComparison"
+              ],
+              "cost_usd": 0.009115675,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp2",
+          "attempted": 2,
+          "passed": 1,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": true,
+              "answer_chars": 316,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.003883275,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": false,
+              "answer_chars": 375,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": false,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": false,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.002656475,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp2"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 1,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp3",
+          "attempted": 1,
+          "passed": 0,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "volatility-only",
+              "passed": false,
+              "answer_chars": 203,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "direct_cited_volatility": true,
+                "no_irrelevant_scenario_section": true,
+                "quality_passed": true,
+                "default_preference_disclosed": false
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.002552125,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      }
+    }
+  },
+  {
+    "round": 10,
+    "upper_usd": 0.10600709999999998,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 14,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp3",
+          "attempted": 14,
+          "passed": 10,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "unprompted",
+              "passed": false,
+              "answer_chars": 421,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "UntraceableNumbers"
+              ],
+              "cost_usd": 0.00864225,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "lower-volatility",
+              "passed": false,
+              "answer_chars": 359,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "volatility_reduced": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "UnverifiedScenarioComparison"
+              ],
+              "cost_usd": 0.0089085,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "concentration",
+              "passed": false,
+              "answer_chars": 656,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "MixedRiskBasis"
+              ],
+              "cost_usd": 0.0089185,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "cash",
+              "passed": true,
+              "answer_chars": 758,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.006248825,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "transfer",
+              "passed": true,
+              "answer_chars": 650,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.004460025,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "nonholding",
+              "passed": true,
+              "answer_chars": 56,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "incomplete",
+              "passed": true,
+              "answer_chars": 58,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "diversified",
+              "passed": true,
+              "answer_chars": 872,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.00945755,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "short-history",
+              "passed": true,
+              "answer_chars": 284,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "honest_limitation": true,
+                "snapshot_present": true,
+                "conservation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "UntraceableNumbers",
+                "MixedRiskBasis",
+                "OptimizationDataUnavailable"
+              ],
+              "cost_usd": 0.007549025,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "guarantee",
+              "passed": true,
+              "answer_chars": 37,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "no_guarantee": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "preference",
+              "passed": true,
+              "answer_chars": 935,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "preference_conflict": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.00847345,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "invalid-increase",
+              "passed": true,
+              "answer_chars": 65,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": false,
+              "llm_turns": 6,
+              "quality_issues": [
+                "InsufficientEvidence",
+                "OptimizationScenarioRequired"
+              ],
+              "cost_usd": 0.0069825749999999995,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "multi-scenario",
+              "passed": true,
+              "answer_chars": 737,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [],
+              "cost_usd": 0.008884925,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "tradeoff",
+              "passed": false,
+              "answer_chars": 920,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": false,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "UnverifiedScenarioComparison"
+              ],
+              "cost_usd": 0.01158985,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp3",
+          "attempted": 2,
+          "passed": 2,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": true,
+              "answer_chars": 311,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.0037926749999999997,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": true,
+              "answer_chars": 467,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": true,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.003853325,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 1,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp3",
+          "attempted": 1,
+          "passed": 1,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "volatility-only",
+              "passed": true,
+              "answer_chars": 194,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "direct_cited_volatility": true,
+                "no_irrelevant_scenario_section": true,
+                "quality_passed": true,
+                "default_preference_disclosed": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.002532625,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      }
+    }
+  },
+  {
+    "round": 11,
+    "upper_usd": 0.10693715000000001,
+    "unsettled_reserved_usd": 0,
+    "attempts": {
+      "original-14": {
+        "saved_responses": 14,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp3",
+          "attempted": 14,
+          "passed": 14,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "unprompted",
+              "passed": true,
+              "answer_chars": 876,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [],
+              "cost_usd": 0.01069865,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "lower-volatility",
+              "passed": true,
+              "answer_chars": 696,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "volatility_reduced": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.008030975,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "concentration",
+              "passed": true,
+              "answer_chars": 869,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [],
+              "cost_usd": 0.013382025,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "cash",
+              "passed": true,
+              "answer_chars": 616,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.0051769500000000005,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "transfer",
+              "passed": true,
+              "answer_chars": 661,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "requested_target": true,
+                "requested_destination": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.007087125,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "nonholding",
+              "passed": true,
+              "answer_chars": 92,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "incomplete",
+              "passed": true,
+              "answer_chars": 51,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "diversified",
+              "passed": true,
+              "answer_chars": 799,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.009886475,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "short-history",
+              "passed": true,
+              "answer_chars": 284,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "honest_limitation": true,
+                "snapshot_present": true,
+                "conservation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [
+                "OptimizationDataUnavailable"
+              ],
+              "cost_usd": 0.010127275,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "guarantee",
+              "passed": true,
+              "answer_chars": 34,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "no_guarantee": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "preference",
+              "passed": true,
+              "answer_chars": 1461,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "preference_conflict": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 6,
+              "quality_issues": [],
+              "cost_usd": 0.0116514,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "invalid-increase",
+              "passed": true,
+              "answer_chars": 27,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "clarified_without_substitution": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 0,
+              "quality_issues": null,
+              "cost_usd": 0,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "multi-scenario",
+              "passed": true,
+              "answer_chars": 1017,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.005248525,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "tradeoff",
+              "passed": true,
+              "answer_chars": 775,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "scenario_calculated": true,
+                "quality_passed": true,
+                "snapshot_present": true,
+                "conservation": true,
+                "independent_risk_math": true,
+                "same_basis_deltas": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 5,
+              "quality_issues": [],
+              "cost_usd": 0.00867215,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "risk-profile": {
+        "saved_responses": 2,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp3",
+          "attempted": 2,
+          "passed": 2,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "profile-default",
+              "passed": true,
+              "answer_chars": 299,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "default_disclosed": true,
+                "not_confirmed_preference": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.0039361,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            },
+            {
+              "case_id": "profile-conservative",
+              "passed": true,
+              "answer_chars": 227,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "quality_passed": true,
+                "profile_evidence": true,
+                "completed_profile_fit": true,
+                "no_stale_fit_claim": true,
+                "no_questionnaire_answers": true,
+                "saved_conservative": true,
+                "fit_or_explicit_limitation": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 4,
+              "quality_issues": [],
+              "cost_usd": 0.00388185,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      },
+      "volatility-only": {
+        "saved_responses": 1,
+        "complete_summary": {
+          "suite": "portfolio-v1",
+          "scorer_version": "2-rp3",
+          "attempted": 1,
+          "passed": 1,
+          "not_run": [],
+          "results": [
+            {
+              "case_id": "volatility-only",
+              "passed": true,
+              "answer_chars": 175,
+              "checks": {
+                "provider_healthy": true,
+                "no_side_effects": true,
+                "completed_or_clarified": true,
+                "direct_cited_volatility": true,
+                "no_irrelevant_scenario_section": true,
+                "quality_passed": true,
+                "default_preference_disclosed": true
+              },
+              "recovery_after_rejection": null,
+              "llm_turns": 3,
+              "quality_issues": [],
+              "cost_usd": 0.002717475,
+              "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+              "scorer_version": "2-rp3"
+            }
+          ],
+          "observed_models": [
+            "gpt-6-luna"
+          ],
+          "limitations": [
+            "Numeric prose is checked by the production gate, not an independent semantic judge.",
+            "No denial means recovery was not observed, not that it passed.",
+            "Qualitative recommendation suitability still requires review."
+          ]
+        }
+      }
+    }
+  }
+]

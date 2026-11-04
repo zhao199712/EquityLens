@@ -125,10 +125,11 @@ export default {
   },
   settings: {
     risk: {
+
       "title": "Risk preference",
       "description": "Used to explain portfolio analysis. This preference is not a suitability assessment or a guaranteed risk limit.",
-      "current": "Saved preference:",
-      "default": "(default, editable here)",
+      "current": "Current preference:",
+      "default": "(default, not yet assessed; complete an assessment here)",
       "explicit": "(explicitly saved)",
       "label": "Risk preference",
       "Conservative": "Conservative",
@@ -139,7 +140,63 @@ export default {
       "saved": "Risk preference saved.",
       "loading": "Loading risk preference…",
       "loadError": "Unable to load your preference. Reload to try again.",
-      "saveError": "Could not save. Your saved preference is unchanged; please try again."
+      "saveError": "Could not save. Your saved preference is unchanged; please try again.",
+      "source": "Source:",
+      "sourceDefault": "Default (not assessed)",
+      "sourceManual": "Manual selection",
+      "sourceQuestionnaire": "Questionnaire",
+      "assessedAt": "Assessed on:",
+      "capacity": "Financial capacity:",
+      "willingness": "Risk willingness:",
+      "lowerLevel": "The lower level determines the result",
+      "stale": "This assessment is over 12 months old and may be outdated. Please reassess.",
+      "assess": "Reassess / take questionnaire (recommended)",
+      "cancel": "Cancel assessment",
+      "questionnaireTitle": "Financial capacity and risk willingness",
+      "questionnaireNote": "This is an EquityLens six-question assessment, not the Grable–Lytton scale. Answers are private and are not shared with AI. A manual selection replaces the questionnaire and deletes its answers.",
+      "choose": "Choose an option",
+      "submit": "Submit assessment",
+      "remove": "Delete assessment and answers; return to default",
+      "questions": {
+            "c1": {
+                  "title": "When will you need this invested money?",
+                  "a1": "Within 1 year",
+                  "a2": "In 1–5 years",
+                  "a3": "After 5 years"
+            },
+            "c2": {
+                  "title": "How would a large loss affect your life?",
+                  "a1": "Affect everyday expenses",
+                  "a2": "Delay important plans such as housing or education",
+                  "a3": "No effect on everyday expenses or important plans"
+            },
+            "c3": {
+                  "title": "Excluding this investment, how long can your emergency fund cover expenses?",
+                  "a1": "Less than 3 months",
+                  "a2": "3–6 months",
+                  "a3": "More than 6 months"
+            },
+            "w1": {
+                  "title": "An investment of 1 million falls to 750,000 after a year. What would you do?",
+                  "a1": "Sell all to avoid further losses",
+                  "a2": "Sell some",
+                  "a3": "Hold or add more"
+            },
+            "w2": {
+                  "title": "Which range of possible annual outcomes can you accept?",
+                  "a1": "Worst −5%, best +8%",
+                  "a2": "Worst −15%, best +20%",
+                  "a3": "Worst −35%, best +45%"
+            },
+            "w3": {
+                  "title": "What did you actually do during a large market decline?",
+                  "none": "I have not experienced one",
+                  "a1": "Sold most holdings",
+                  "a2": "Mostly held",
+                  "a3": "Added holdings"
+            }
+      }
+
 },
     pageTitle: 'Settings',
     pageEyebrow: 'Display preferences',

@@ -575,6 +575,136 @@ public sealed class ResearchAgentLoopTests
         Assert.Equal("AnswerSubmitted", state.StopReason);
     }
 
+    [Theory]
+    [InlineData("profileFit 仍為 Unavailable [P1]", "StaleRiskProfileComparison")]
+    [InlineData("年化波動為參考上限的 4.2 倍 [P1]", "UnverifiedProfileFit")]
+    [InlineData("您的風險偏好為穩健 [P1]", "DefaultPreferenceMisrepresented")]
+    public async Task PortfolioProfileRepair_IsDurableAndUsesSavedEvidence(string badText, string issue)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        const string call = """{"action":"call_tools","toolCalls":[{"callId":"profile","tool":"get_risk_profile","arguments":{}}]}""";
+        var bad = AgentNodeJson.Serialize(new { action="submit_answer", answer=new { markdown=badText, citedEvidenceIds=new[]{"P1"} } });
+        AgentLoopEngine Engine(FakeChat chat) => new(chat, new ProfileRepairTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, true);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Engine(new(call,bad)).RunAsync(context,"Portfolio",default));
+        var resumed = new FakeChat("""{"action":"submit_answer","answer":{"markdown":"依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）；年化波動為參考上限的 3.27 倍 [P1]","citedEvidenceIds":["P1"]}}""");
+        var state = await Engine(resumed).RunAsync(context,"Portfolio",default);
+        Assert.Equal(1,state.AnswerRepairCount);
+        Assert.Contains(issue,Assert.Single(resumed.Prompts));
+        Assert.Single(await db.AgentToolCalls.ToListAsync());
+        Assert.Equal("AnswerSubmitted",state.StopReason);
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(state.Answer,state.Facts));
+    }
+
+    private sealed class ProfileRepairTools : IAgentLoopTools
+    {
+        public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("get_risk_profile","fixture",new())];
+        public string? Validate(LoopToolScope scope,LoopToolCall call) => null;
+        public Task<LoopToolResult> InvokeAsync(LoopToolScope scope,LoopToolCall call,CancellationToken ct) => Task.FromResult(new LoopToolResult([],"profile",Data:
+            JsonNode.Parse("""{"isDefault":true,"profileFit":[{"metric":"annualVolatility","value":0.5887,"threshold":0.18,"ratio":3.27,"status":"Above"}],"unrelated":4.2}""")!.AsObject()));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PortfolioAnswerRepair_SecondCorrectionIsDurableBoundedAndStillChecked(bool correct)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        const string call = """{"action":"call_tools","toolCalls":[{"callId":"profile","tool":"get_risk_profile","arguments":{}}]}""";
+        const string bad = """{"action":"submit_answer","answer":{"markdown":"年化波動為參考上限的 4.2 倍 [P1]","citedEvidenceIds":["P1"]}}""";
+        AgentLoopEngine Engine(FakeChat chat) => new(chat,new ProfileRepairTools(),Options.Create(new ResearchAgentLoopOptions()),TimeProvider.System,true);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Engine(new(call,bad,bad)).RunAsync(context,"Portfolio",default));
+        var resumed = new FakeChat(correct ? bad.Replace("4.2","3.27") : bad);
+        var state = await Engine(resumed).RunAsync(context,"Portfolio",default);
+        Assert.Equal(2,state.AnswerRepairCount);
+        Assert.Single(resumed.Prompts);
+        Assert.Single(await db.AgentToolCalls.ToListAsync());
+        var issues=PortfolioQualityGateNodeHandler.Check(state.Answer,state.Facts);
+        if (correct) Assert.Empty(issues);
+        else Assert.Contains("UnverifiedProfileFit",issues);
+        Assert.Equal(4,state.Turn);
+    }
+
+    [Fact]
+    public async Task PortfolioProfileFit_RemainsVisibleAfterLargeAnalysisExcerpt()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var chat = new FakeChat("""{"action":"call_tools","toolCalls":[{"callId":"core","tool":"run_risk_analysis","arguments":{}}]}""", """{"action":"give_up"}""");
+        await new AgentLoopEngine(chat,new LargeProfileTools(),Options.Create(new ResearchAgentLoopOptions()),TimeProvider.System,true).RunAsync(context,"Portfolio",default);
+        var fact = JsonNode.Parse(chat.Prompts[1])!["facts"]![0]!;
+        Assert.Equal("P1",fact["id"]!.ToString());
+        Assert.DoesNotContain("FIT_AT_END",fact["content"]!.ToString());
+        Assert.Equal("FIT_AT_END",fact["riskProfile"]!["profileFit"]![0]!["statement"]!.ToString());
+        Assert.Contains("FIT_AT_END",Assert.Single(await db.AgentToolCalls.ToListAsync()).ResultJson);
+    }
+
+    private sealed class LargeProfileTools : IAgentLoopTools
+    {
+        public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("run_risk_analysis","fixture",new())];
+        public string? Validate(LoopToolScope scope,LoopToolCall call) => null;
+        public Task<LoopToolResult> InvokeAsync(LoopToolScope scope,LoopToolCall call,CancellationToken ct) => Task.FromResult(new LoopToolResult([],"analysis",Data:
+            new() { ["analysisDetails"]=new string('x',6000),["riskProfile"]=JsonNode.Parse("""{"profileFit":[{"statement":"FIT_AT_END"}]}""") }));
+    }
+
+    [Fact]
+    public async Task ParallelCoreAndTailPatches_PreserveProfileEvidenceAcrossRecovery()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        const string calls = """{"action":"call_tools","toolCalls":[{"callId":"core","tool":"run_risk_analysis","arguments":{"analysis":"Core"}},{"callId":"tail","tool":"run_risk_analysis","arguments":{"analysis":"TailRisk"}}]}""";
+        AgentLoopEngine Engine(FakeChat chat) => new(chat,new ProfilePatchTools(),Options.Create(new ResearchAgentLoopOptions()),TimeProvider.System,true);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Engine(new(calls)).RunAsync(context,"Portfolio",default));
+        var chat = new FakeChat("""{"action":"call_tools","toolCalls":[{"callId":"profile","tool":"get_risk_profile","arguments":{}}]}""","""{"action":"give_up"}""");
+        var state = await Engine(chat).RunAsync(context,"Portfolio",default);
+        var profile = state.Facts.Single(f=>f.Tool=="get_risk_profile");
+        Assert.Equal(1,profile.Data["savedCoreCount"]!.GetValue<int>());
+        Assert.Equal(3,await db.AgentToolCalls.CountAsync());
+    }
+
+    private sealed class ProfilePatchTools : IAgentLoopTools
+    {
+        public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("run_risk_analysis","fixture",new()),new("get_risk_profile","fixture",new())];
+        public string? Validate(LoopToolScope scope,LoopToolCall call) => null;
+        public Task<LoopToolResult> InvokeAsync(LoopToolScope scope,LoopToolCall call,CancellationToken ct)
+        {
+            if (call.Tool=="get_risk_profile") return Task.FromResult(new LoopToolResult([],"profile",Data:new() { ["savedCoreCount"]=(scope.DomainContext?[PortfolioLoopTools.ProfileResultsKey] as JsonArray)?.Count ?? 0 }));
+            var core = call.Arguments["analysis"]?.ToString()=="Core";
+            return Task.FromResult(new LoopToolResult([],"analysis",Data:new() { ["analysis"]=call.Arguments["analysis"]!.ToString() },BlackboardPatch:new() {
+                [PortfolioLoopTools.ProfileResultsKey]=core ? JsonNode.Parse("""[{"operation":"calculate-annualized-volatility","value":0.2453}]""") : new JsonArray() }));
+        }
+    }
+
+    [Fact]
+    public async Task ProfilePrompt_ShowsOneCompletedComparisonWithoutMutatingEarlierEvidence()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        const string call = """{"action":"call_tools","toolCalls":[{"callId":"core","tool":"run_risk_analysis","arguments":{"ready":true}},{"callId":"tail","tool":"run_risk_analysis","arguments":{"ready":false}},{"callId":"profile","tool":"get_risk_profile","arguments":{}}]}""";
+        var chat = new FakeChat(call,"""{"action":"give_up"}""");
+        var state = await new AgentLoopEngine(chat,new ProfileWindowTools(),Options.Create(new ResearchAgentLoopOptions()),TimeProvider.System,true).RunAsync(context,"Portfolio",default);
+        var facts = JsonNode.Parse(chat.Prompts[1])!["facts"]!.AsArray();
+        var visible = Assert.Single(facts.Where(f=>f!["riskProfile"] is not null));
+        Assert.Equal("P1",visible!["id"]!.ToString());
+        Assert.Equal("Above",visible["riskProfile"]!["profileFit"]![0]!["status"]!.ToString());
+        Assert.DoesNotContain("Unavailable",facts.ToJsonString());
+        Assert.Contains("Unavailable",state.Facts[1].Data.ToJsonString());
+        Assert.Contains("Unavailable",state.Facts[2].Data.ToJsonString());
+        Assert.Equal(3,await db.AgentToolCalls.CountAsync());
+    }
+
+    private sealed class ProfileWindowTools : IAgentLoopTools
+    {
+        public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => [new("run_risk_analysis","fixture",new()),new("get_risk_profile","fixture",new())];
+        public string? Validate(LoopToolScope scope,LoopToolCall call) => null;
+        public Task<LoopToolResult> InvokeAsync(LoopToolScope scope,LoopToolCall call,CancellationToken ct)
+        {
+            var profile = new JsonObject { ["isDefault"]=true,["profileFit"]=new JsonArray(new JsonObject { ["metric"]="annualVolatility",["status"]=call.Arguments["ready"]?.GetValue<bool>()==true ? "Above" : "Unavailable" }) };
+            return Task.FromResult(new LoopToolResult([],"profile",Data:call.Tool=="get_risk_profile" ? profile : new() { ["riskProfile"]=profile }));
+        }
+    }
+
     [Fact]
     public async Task PortfolioMultipleScenarioFactsAreVisibleWithinBudget()
     {
@@ -637,6 +767,157 @@ public sealed class ResearchAgentLoopTests
             Assert.Equal(3, catalog.ForRole("Research").Count);
         }
         finally { Directory.Delete(directory, true); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NativeGuardResultsAndSuccessfulCallsSurviveRestart(bool portfolio)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var tools = new FakeTools();
+        var denied = Search.Replace("search_local", "search_web");
+        var first = new NativeChat(denied, Search);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => new AgentLoopEngine(first, tools,
+            Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio).RunAsync(context, portfolio ? "Portfolio" : "Research", default));
+        Assert.Contains("ToolNotVisible", first.Requests[1].ToolProtocol!.Exchanges[0].Results.ToJsonString());
+        var saved = JsonSerializer.Deserialize<ResearchLoopState>((await db.AgentLoopCheckpoints.SingleAsync()).StateJson, AgentNodeJson.SerializerOptions)!;
+        Assert.Equal(2, saved.NativeExchanges.Count);
+        Assert.Equal("Succeeded", JsonNode.Parse(saved.NativeExchanges[1].Results[0]!["output"]!.GetValue<string>())!["status"]!.GetValue<string>());
+        var resumed = new NativeChat("""{"action":"give_up","thoughtSummary":"測試結束"}""");
+        await new AgentLoopEngine(resumed, tools, Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio)
+            .RunAsync(context, portfolio ? "Portfolio" : "Research", default);
+        Assert.Equal(1, tools.Calls);
+        Assert.Single(resumed.Requests[0].ToolProtocol!.Exchanges);
+        Assert.Contains("E1", resumed.Requests[0].ToolProtocol!.Exchanges[0].Results.ToJsonString());
+        Assert.DoesNotContain("example_tool", resumed.Requests[0].SystemPrompt);
+        Assert.Contains(await db.AgentToolCalls.ToListAsync(), x => x.Status == "Denied");
+    }
+
+    [Fact]
+    public async Task NativeAnswerRejectionReturnsActionableFeedbackAfterRestart()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        const string call = """{"action":"call_tools","toolCalls":[{"callId":"profile","tool":"get_risk_profile","arguments":{}}]}""";
+        const string bad = """{"action":"submit_answer","answer":{"markdown":"年化波動為參考上限的 4.2 倍 [P1]","citedEvidenceIds":["P1"]}}""";
+        AgentLoopEngine Engine(NativeChat chat) => new(chat,new ProfileRepairTools(),Options.Create(new ResearchAgentLoopOptions()),TimeProvider.System,true);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Engine(new(call,bad)).RunAsync(context,"Portfolio",default));
+        var resumed = new NativeChat(bad.Replace("4.2","3.27"));
+        var state = await Engine(resumed).RunAsync(context,"Portfolio",default);
+        var reply = JsonNode.Parse(Assert.Single(resumed.Requests).ToolProtocol!.Exchanges.Single().Results[0]!["output"]!.GetValue<string>())!;
+        Assert.Equal("Rejected",reply["status"]!.GetValue<string>());
+        Assert.Contains("UnverifiedProfileFit",reply["reason"]!.GetValue<string>());
+        Assert.Contains("4.2",reply["reason"]!.GetValue<string>());
+        Assert.Empty(PortfolioQualityGateNodeHandler.Check(state.Answer,state.Facts));
+        Assert.Single(await db.AgentToolCalls.ToListAsync());
+    }
+
+    [Fact]
+    public async Task NativePendingTurnReusesCommittedToolResultAndPreservesCallId()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var turn = new AgentLlmTurn { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            Turn = 1, PromptVersion = 24, Action = "call_tools", ActionJson = Search };
+        db.Add(turn);
+        db.Add(new AgentLoopCheckpoint { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            StateJson = AgentNodeJson.Serialize(new ResearchLoopState { PendingTurnId = turn.Id, ToolCalls = 1, StartedAtUtc = DateTime.UtcNow,
+                NativeExchanges = [new() { Turn = 1, Output = NativeChat.Output(Search) }] }) });
+        db.Add(new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            AgentLlmTurnId = turn.Id, ToolCallKey = "c1", ToolName = "search_local", Status = "Succeeded",
+            ResultJson = AgentNodeJson.Serialize(new LoopToolResult([Evidence()], "persisted")) });
+        await db.SaveChangesAsync();
+        var tools = new FakeTools(); var chat = new NativeChat(Submit);
+        var result = await new AgentLoopEngine(chat, tools, Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System).RunAsync(context, "Research", default);
+        Assert.Equal(0, tools.Calls);
+        Assert.Equal("AnswerSubmitted", result.StopReason);
+        Assert.Equal("c1", chat.Requests[0].ToolProtocol!.Exchanges[0].Results[0]!["call_id"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task NativeSchemaAndHistoryCostIsReservedBeforeProviderCall()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var chat = new NativeChat(Submit) { ReserveBytes = 1000000 };
+        var result = await new AgentLoopEngine(chat, new FakeTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System)
+            .RunAsync(await Context(db), "Research", default);
+        Assert.Equal("BudgetExhausted", result.StopReason);
+        Assert.Empty(chat.Requests);
+    }
+
+    [Fact]
+    public async Task NativeRepairWindowDropsSupersededFeedbackWithoutDeletingAuditHistory()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var checkpoint = new ResearchLoopState { Turn=3, PromptTokens=30000, StartedAtUtc=DateTime.UtcNow,
+            History=["AnswerQualityRepair: old", "OBSOLETE"+new string('x',40000),"Turn 2: submit_answer",
+                "AnswerQualityRepair: current", "CURRENT actionable feedback", "Turn 3: submit_answer"],
+            NativeExchanges=[new() { Turn=3, Output=new JsonArray(), Results=new JsonArray(new JsonObject {
+                ["type"]="function_call_output",["call_id"]="submit",["output"]="{\"status\":\"Rejected\",\"reason\":\"AnswerQualityRepair: current CURRENT actionable feedback\"}" }) }] };
+        db.Add(new AgentLoopCheckpoint { Id=Guid.NewGuid(),AgentRunId=context.Run.Id,AgentRunNodeId=context.Node.Id,StateJson=AgentNodeJson.Serialize(checkpoint) });
+        await db.SaveChangesAsync();
+        var chat = new NativeChat(Submit);
+        var state = await new AgentLoopEngine(chat,new FakeTools(),Options.Create(new ResearchAgentLoopOptions()),TimeProvider.System)
+            .RunAsync(context,"Research",default);
+        Assert.Equal("AnswerSubmitted",state.StopReason);
+        Assert.DoesNotContain("OBSOLETE",Assert.Single(chat.Requests).UserPrompt);
+        Assert.DoesNotContain("CURRENT",chat.Requests[0].UserPrompt); // 原生工具回覆已包含本輪原因，避免重複。
+        Assert.Contains("CURRENT",chat.Requests[0].ToolProtocol!.Exchanges.Single().Results.ToJsonString());
+        Assert.Contains(state.History,x=>x.Contains("OBSOLETE"));
+    }
+
+    [Fact]
+    public async Task NativeReplayWindowsOldTransportButKeepsCurrentEvidenceAndAuditHistory()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var checkpoint = new ResearchLoopState { Turn = 2, StartedAtUtc = DateTime.UtcNow,
+            Ledger = [new("E1", Evidence())], NativeExchanges = [
+                new() { Turn = 1, Output = new JsonArray(new JsonObject { ["type"] = "message", ["content"] = new string('x', 100000) }) },
+                new() { Turn = 2, Output = NativeChat.Output(Search), Results = new JsonArray(new JsonObject { ["type"] = "function_call_output", ["call_id"] = "c1", ["output"] = "persisted" }) }
+            ] };
+        db.Add(new AgentLoopCheckpoint { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            StateJson = AgentNodeJson.Serialize(checkpoint) });
+        await db.SaveChangesAsync();
+        var chat = new NativeChat(Submit);
+        var state = await new AgentLoopEngine(chat, new FakeTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System)
+            .RunAsync(context, "Research", default);
+        Assert.Equal("AnswerSubmitted", state.StopReason);
+        Assert.Single(chat.Requests[0].ToolProtocol!.Exchanges);
+        Assert.Equal(2, chat.Requests[0].ToolProtocol!.Exchanges[0].Turn);
+        Assert.Contains("E1", chat.Requests[0].UserPrompt);
+        Assert.Equal(3, state.NativeExchanges.Count); // 包含本輪；舊傳輸資料仍保存供恢復與稽核。
+    }
+
+    private sealed class NativeChat(params string[] responses) : IChatCompletionService
+    {
+        public bool SupportsNativeTools => true;
+        public string Provider => "openai";
+        public string Model => "fixture-native";
+        public int ReserveBytes;
+        public int EstimateInputBytes(ChatCompletionRequest request) => ReserveBytes > 0 ? ReserveBytes : System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(request));
+        private readonly Queue<string> pending = new(responses);
+        public List<ChatCompletionRequest> Requests { get; } = [];
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(JsonSerializer.Deserialize<ChatCompletionRequest>(JsonSerializer.Serialize(request))!);
+            if (pending.Count == 0) throw new OperationCanceledException();
+            var content = pending.Dequeue();
+            return Task.FromResult(new ChatCompletionResult(content, Model, 10, 10, Output(content)));
+        }
+        public static JsonArray Output(string content)
+        {
+            var action = JsonNode.Parse(content)!;
+            if (action["action"]!.GetValue<string>() == "submit_answer")
+                return new JsonArray(new JsonObject { ["type"]="function_call",["call_id"]="submit",["name"]="submit_answer",["arguments"]=action["answer"]!.ToJsonString() });
+            if (action["action"]!.GetValue<string>() != "call_tools") return [];
+            return new JsonArray(action["toolCalls"]!.AsArray().Select(x => (JsonNode)new JsonObject {
+                ["type"] = "function_call", ["call_id"] = x!["callId"]!.DeepClone(), ["name"] = x["tool"]!.DeepClone(), ["arguments"] = x["arguments"]!.ToJsonString()
+            }).ToArray());
+        }
     }
 
     private static ResearchAgentLoop Loop(FakeChat chat, FakeTools tools, ResearchAgentLoopOptions? options = null) =>
