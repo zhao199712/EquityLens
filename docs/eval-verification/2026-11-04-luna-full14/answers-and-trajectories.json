@@ -1,0 +1,973 @@
+[
+  {
+    "case_id": "unprompted",
+    "question": "可以給我優化建議嗎？",
+    "answer": "共同歷史資料不足，無法比較優化前後的波動、VaR、ES 與最大回撤；請補足資料。",
+    "quality_gate": {
+      "passed": false,
+      "limited": true,
+      "blockingIssues": [
+        "InsufficientEvidence",
+        "OptimizationDataUnavailable"
+      ],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "b7539506-4853-41ab-9fd3-856e9be2746d",
+        "agentRunNodeId": "ade961b8-4de4-4149-b4c2-436f4be68286",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "1C98CD1943EB6E8793BFCFCE7D93AB2BE7DDEFE451DC2E334E277023B3A64553",
+        "action": "give_up",
+        "thoughtSummary": "目前尚未取得持倉快照、風險結果或偏好資料，無法提出有根據的優化建議。",
+        "promptTokens": 2521,
+        "completionTokens": 294,
+        "estimatedCostUsd": 0.000714225,
+        "latencyMs": 3793,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:15:49.819235Z"
+      }
+    ],
+    "tools": []
+  },
+  {
+    "case_id": "lower-volatility",
+    "question": "如何降低我的資產組合波動？",
+    "answer": "可先評估把標的A（9001）由80%減至60%、餘額留現金；模擬年化波動率下降6.06個百分點。[P7]\n\n| 同一快照指標 | 原組合 | 標的A（9001）減碼至60%，餘額留現金 |\n|---|---:|---:|\n| 年化波動率 | 24.33% | 18.27% [P7] |\n| VaR（95%、1日） | -2.30% | -1.70% [P7] |\n| 期望短缺（95%、1日） | -2.43% | -1.81% [P7] |\n| 最大回撤（假設） | -11.05% | -7.84% [P7] |\n\n這個方案以降低標的A集中度、保留部分資金為代價，並非保證未來波動下降。風險貢獻分析顯示，標的A權重80%，占波動風險貢獻約99.77%；因此優先檢視它的比重有量化依據。[P6] 模擬假設固定權重歷史報酬、現金零報酬；不含費用、滑價及稅負，且模型未經回測驗證。年化波動使用252個共同交易日的樣本標準差年化；現況分析期間為2025-11-14至2026-11-03。[P4][P7]\n\n核准的0050與006208均無可用證券資料，故本次未能量化轉入ETF的方案；留現金情境不代表帳戶現金餘額。[P1][P7] 風險偏好設定原句為「依你的風險偏好『穩健』（預設，可在設定修改）」；這是預設設定，未替你調整偏好或持倉。[P3] 工具唯讀，不代表持倉已調整；不保證獲利。",
+    "quality_gate": {
+      "passed": true,
+      "limited": true,
+      "blockingIssues": [],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "54433f98-d8f1-420f-afd4-2bf739b0da2e",
+        "agentRunNodeId": "4aae8611-205e-43ad-80eb-166a20109ac0",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "EA69F50C6ED4724560A11A6EF38EFC3C7BA72136A76D0CB9E303517DA1798CC1",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉快照、既有風險結果與風險偏好，並載入投組優化方法；再依資料計算並比較降波動情境。",
+        "promptTokens": 2522,
+        "completionTokens": 173,
+        "estimatedCostUsd": 0.00065395,
+        "latencyMs": 2591,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:15:56.640941Z"
+      },
+      {
+        "id": "0e1c3ccf-c885-4df6-814b-eaf400c8d80d",
+        "agentRunNodeId": "4aae8611-205e-43ad-80eb-166a20109ac0",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "BB8D4AED44CF67EE5038881E96F1151F91BC7823F8231A74217BD62FF8C69A68",
+        "action": "call_tools",
+        "thoughtSummary": "既有報告未命中；補算核心、尾部與風險貢獻，據此選擇需模擬的減碼情境。",
+        "promptTokens": 3945,
+        "completionTokens": 206,
+        "estimatedCostUsd": 0.000990625,
+        "latencyMs": 2792,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:15:59.664356Z"
+      },
+      {
+        "id": "92804d5e-2da4-494e-87b5-b5750d54cbe2",
+        "agentRunNodeId": "4aae8611-205e-43ad-80eb-166a20109ac0",
+        "turn": 3,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "BB433D45EDA1B0280CF89D7AE0AD366013311EFF49C3BE3CE1CDF09EF821A9FA",
+        "action": "call_tools",
+        "thoughtSummary": "核准 ETF 均不可用，依規則量化一個減碼留現金情境，檢驗降低最大持股權重是否能降低波動。",
+        "promptTokens": 6968,
+        "completionTokens": 165,
+        "estimatedCostUsd": 0.0016503,
+        "latencyMs": 2569,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:16:02.329196Z"
+      },
+      {
+        "id": "f51c8c7a-0aa5-4d71-b944-102bcd6bba6e",
+        "agentRunNodeId": "4aae8611-205e-43ad-80eb-166a20109ac0",
+        "turn": 4,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "7DD3198A47A743A55DC3BCB2060F6B531506E9365953F24CF6520C49FCC92E93",
+        "action": "submit_answer",
+        "thoughtSummary": "同一快照的模擬顯示，減碼最大持股可降低模型年化波動；說明風險取捨與限制。",
+        "promptTokens": 8651,
+        "completionTokens": 739,
+        "estimatedCostUsd": 0.002315975,
+        "latencyMs": 7669,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:16:10.088834Z"
+      }
+    ],
+    "tools": [
+      {
+        "toolName": "get_portfolio_snapshot",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_report",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_profile",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "load_skill",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "simulate_weight_scenario",
+        "status": "Succeeded",
+        "errorMessage": null
+      }
+    ]
+  },
+  {
+    "case_id": "concentration",
+    "question": "我的配置是否過度集中？請計算改善方案。",
+    "answer": "以下為唯讀情境，未變更實際持倉。同一快照原組合：年化波動 24.33 %、VaR -2.30 %、ES -2.43 %、最大回撤 -11.05 %。標的A（9001）減碼至50%，餘額留現金：減碼資金留作現金；9001 權重 50.00 %、9002 權重 10.00 %、9003 權重 10.00 %；現金 30.00 %；調整後：年化波動 15.25 %、VaR -1.40 %、ES -1.50 %、最大回撤 -6.31 %；相較原組合差異：年化波動率下降 9.09 個百分點（改善）、VaR上升 0.90 個百分點（改善）、期望短缺上升 0.92 個百分點（改善）、最大回撤上升 4.74 個百分點（改善）。情境不代表未來績效或保證改善。方法：FixedWeightHistoricalSimpleReturns; cashReturn=0; annualization=252; equityHhi excludes cash；有效日報酬 252 筆、VaR 信心水準 95 %、期間 1 日。\n\n依你的風險偏好『穩健』（預設，可在設定修改） [P3]。",
+    "quality_gate": {
+      "passed": false,
+      "limited": true,
+      "blockingIssues": [
+        "InsufficientEvidence"
+      ],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "7c212474-88aa-47b5-bfa6-318355350768",
+        "agentRunNodeId": "92453f5b-a2ca-436f-8267-e40e21bf71d0",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "669A4E99E6D1A18509E77426246F5106B8EE78F264DDCC85E076D3491CE4C65E",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉快照、既有風險報告與保存的風險偏好，再依資料計算改善情境。",
+        "promptTokens": 2522,
+        "completionTokens": 142,
+        "estimatedCostUsd": 0.00063845,
+        "latencyMs": 4414,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:16:19.8822Z"
+      },
+      {
+        "id": "98b10b35-c8f3-46e4-9678-5dbbd003584c",
+        "agentRunNodeId": "92453f5b-a2ca-436f-8267-e40e21bf71d0",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "3AA2E900E9F9962F3C0C48EC0A436B20CDDD07648418DC7A41312BE8954A7D62",
+        "action": "call_tools",
+        "thoughtSummary": "現有快照顯示單一持股占比偏高；ETF 候選不可用，先補算核心、尾端及風險貢獻，並測試減碼留現金方案。",
+        "promptTokens": 3494,
+        "completionTokens": 316,
+        "estimatedCostUsd": 0.00094415,
+        "latencyMs": 3977,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:16:23.909558Z"
+      },
+      {
+        "id": "b950b741-e3e5-4eed-a628-940764d1ce5f",
+        "agentRunNodeId": "92453f5b-a2ca-436f-8267-e40e21bf71d0",
+        "turn": 3,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "4716DF0162A19A2DCF8081F48B6AC50E0BC5CB5E0771DF404710E9F5923CB180",
+        "action": "parse_error",
+        "thoughtSummary": "",
+        "promptTokens": 8133,
+        "completionTokens": 713,
+        "estimatedCostUsd": 0.002186425,
+        "latencyMs": 7007,
+        "errorMessage": "InvalidType at $.answer.citedEvidenceIds: expected array; received missing.",
+        "createdAtUtc": "2026-11-04T10:16:30.989798Z"
+      },
+      {
+        "id": "a8a3de2b-0096-4c62-a9c6-7a4d660357bf",
+        "agentRunNodeId": "92453f5b-a2ca-436f-8267-e40e21bf71d0",
+        "turn": 4,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "2619E5F74E917D77ACE7C84D4F94BE0160189EBB3D4E827D1AEF0EA901C7CB78",
+        "action": "parse_error",
+        "thoughtSummary": "",
+        "promptTokens": 8152,
+        "completionTokens": 783,
+        "estimatedCostUsd": 0.0022257,
+        "latencyMs": 8083,
+        "errorMessage": "InvalidType at $.answer.citedEvidenceIds: expected array; received missing.",
+        "createdAtUtc": "2026-11-04T10:16:39.099263Z"
+      }
+    ],
+    "tools": [
+      {
+        "toolName": "get_portfolio_snapshot",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_report",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_profile",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "simulate_weight_scenario",
+        "status": "Succeeded",
+        "errorMessage": null
+      }
+    ]
+  },
+  {
+    "case_id": "cash",
+    "question": "把9001減碼到30%，剩下轉現金，其他持股不變。請比較風險。",
+    "answer": "把9001降至30%、其餘減碼轉現金，模型估計四項風險指標均改善；主要取捨是大幅降低股票曝險，且結果假設現金零報酬。[P7]\n\n| 指標 | 原組合 | 調整情境 | 變化 |\n|---|---:|---:|---|\n| 年化波動率 | 24.33% | 9.24% | 年化波動率下降 15.09 個百分點（改善）[P7] |\n| 95%單日 VaR | -2.30% | -0.83% | VaR上升 1.47 個百分點（改善）[P7] |\n| 95%單日期望短缺 | -2.43% | -0.90% | 期望短缺上升 1.53 個百分點（改善）[P7] |\n| 最大回撤 | -11.05% | -3.40% | 最大回撤上升 7.65 個百分點（改善）[P7] |\n\n比較期間為2025-11-14至2026-11-03，共252個觀察日；採固定權重歷史簡單報酬，情境現金以零報酬處理，最大回撤為假設性最大回撤。情境中9001權重為30%、其他持股維持原權重，現金權重約50%；股票權重集中度指標 HHI 從0.66降至0.11。情境仍以9001為主要風險來源；兩檔指數 ETF 均因找不到證券資料而不可用，故未量化 ETF 替代方案。[P1][P7]\n\n目前保存偏好為「依你的風險偏好『穩健』（預設，可在設定修改）」；這是預設設定，並非量化的可承受風險門檻。[P3] 情境是假設性模型，未經回測驗證，且未計費用、滑價及稅負；系統帳簿現金餘額為0 TWD（截至2026-11-04），僅依系統記錄推導，不代表券商核對餘額或真實轉帳。[P1][P7] 工具唯讀，不代表持倉已調整；不保證獲利。",
+    "quality_gate": {
+      "passed": true,
+      "limited": true,
+      "blockingIssues": [],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "ab1943e1-28a8-4ab1-b6eb-5bac73d26cdf",
+        "agentRunNodeId": "f7fa4f52-7393-43b3-9696-f756303725a4",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "7AD4485181F03E8049CB0BCC26A0646442546A9AAC9F80D61FAB527290AE7931",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉快照、既有風險結果與保存的風險偏好。",
+        "promptTokens": 2588,
+        "completionTokens": 110,
+        "estimatedCostUsd": 0.0006373,
+        "latencyMs": 2094,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:16:47.685622Z"
+      },
+      {
+        "id": "3763731b-bf5c-426f-860c-5ec035d8676d",
+        "agentRunNodeId": "f7fa4f52-7393-43b3-9696-f756303725a4",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "F0D3C3999B55F5F2A27C1B02BAB9AE8854CAA3604FC25052BA06C671392CF735",
+        "action": "call_tools",
+        "thoughtSummary": "依指定減碼留現金情境，同步取得同快照情境比較及風險指標。",
+        "promptTokens": 3553,
+        "completionTokens": 225,
+        "estimatedCostUsd": 0.000911925,
+        "latencyMs": 2879,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:16:50.604608Z"
+      },
+      {
+        "id": "79fc7cb0-1de6-4fa0-aaa5-49a3f8eae063",
+        "agentRunNodeId": "f7fa4f52-7393-43b3-9696-f756303725a4",
+        "turn": 3,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "57FD11073F90ABE3F6F9BBCA5126979183796C1CC87FCF002F7EF4D5E12EC853",
+        "action": "submit_answer",
+        "thoughtSummary": "情境與基準風險指標可比較，ETF候選不可用；依指定僅呈現減碼留現金方案。",
+        "promptTokens": 8183,
+        "completionTokens": 627,
+        "estimatedCostUsd": 0.002154675,
+        "latencyMs": 6532,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:16:57.20434Z"
+      }
+    ],
+    "tools": [
+      {
+        "toolName": "get_portfolio_snapshot",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_report",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_profile",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "simulate_weight_scenario",
+        "status": "Succeeded",
+        "errorMessage": null
+      }
+    ]
+  },
+  {
+    "case_id": "transfer",
+    "question": "把9001減碼到30%，減碼款全部轉入既有9002，其他持股不變。",
+    "answer": "把9001由80%降至30%、減碼款轉入既有9002，模型估算年化波動率及尾部風險指標均較原組合改善；但這是固定權重歷史情境，不代表實際績效。[P1][P7]\n\n| 同一情境快照指標 | 原組合 | 調整後 | 相對原組合變化 |\n|---|---:|---:|---|\n| 年化波動率 | 24.33% | 13.70% | 下降10.63個百分點 |\n| VaR（95%、1日） | -2.30% | -1.27% | 上升1.03個百分點，較不負 |\n| 期望短缺（95%、1日） | -2.43% | -1.38% | 上升1.04個百分點，較不負 |\n| 假設最大回撤 | -11.05% | -5.98% | 上升5.07個百分點，較不負 |\n| 最大持股權重 | 80.00% | 60.00% | — |\n| 股票權重HHI | 0.66 | 0.46 | — |\n\n[P7]\n\n配置上，9001集中度降低，但轉入9002後，9002權重升至60%，因此風險由單一持股集中轉向9002曝險；情境結果顯示總體歷史風險指標下降，但不保證未來亦如此。[P1][P7] 系統偏好原句為「依你的風險偏好『穩健』（預設，可在設定修改）」；此為預設設定，不能視為量化風險門檻。[P3]\n\n期間為2025-11-14至2026-11-03、252個觀測日；情境採固定權重歷史簡單報酬、現金零報酬，不含帳戶現金、費用、滑價及稅負，且模型未經回測驗證。[P7] 系統帳簿現金餘額為TWD 0.00（截至2026-11-04）；僅按系統記錄推導，並非券商核對餘額。[P1] 工具唯讀，不代表持倉已調整；不保證獲利。",
+    "quality_gate": {
+      "passed": true,
+      "limited": true,
+      "blockingIssues": [],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "32474e52-1964-4c94-a4ae-278c1dd46f0d",
+        "agentRunNodeId": "8ce810c2-440b-419d-a712-0e462c666fdb",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "5044E0C4BAEB74E54EFFEB1D4093AD3199D87EECF248BFBA57877981BC47B144",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉快照、既有風險結果及已保存風險偏好，再依資料比較指定情境。",
+        "promptTokens": 2585,
+        "completionTokens": 117,
+        "estimatedCostUsd": 0.000640125,
+        "latencyMs": 2021,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:17:06.647614Z"
+      },
+      {
+        "id": "79aeadc6-d0a2-49ee-a5dd-abd5bd5c578b",
+        "agentRunNodeId": "8ce810c2-440b-419d-a712-0e462c666fdb",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "17664FE317B9EFE025678E1B143CAC7539C722889064261BC0CE000996D59636",
+        "action": "call_tools",
+        "thoughtSummary": "快照確認9001與9002持有，依指定配置計算情境並補齊同期間風險指標。",
+        "promptTokens": 3561,
+        "completionTokens": 247,
+        "estimatedCostUsd": 0.000924725,
+        "latencyMs": 3045,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:17:09.736151Z"
+      },
+      {
+        "id": "e781c603-72d0-49cb-b0ac-0ba7260b0406",
+        "agentRunNodeId": "8ce810c2-440b-419d-a712-0e462c666fdb",
+        "turn": 3,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "FE8615FC56518619A6EF2FAC0909F3CF446FFD61BBA98C4AB108EC4AEA19F131",
+        "action": "submit_answer",
+        "thoughtSummary": "依指定情境比較同一快照風險指標，並說明口徑與限制。",
+        "promptTokens": 8221,
+        "completionTokens": 618,
+        "estimatedCostUsd": 0.002158725,
+        "latencyMs": 5695,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:17:15.501831Z"
+      }
+    ],
+    "tools": [
+      {
+        "toolName": "get_portfolio_snapshot",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_report",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_profile",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "simulate_weight_scenario",
+        "status": "Succeeded",
+        "errorMessage": null
+      }
+    ]
+  },
+  {
+    "case_id": "nonholding",
+    "question": "把9001減碼轉入沒有持有的2330。",
+    "answer": "目前組合未持有 2330，因此無法按此情境轉入。請確認改轉入哪一檔既有持股或核准指數 ETF（0050／006208），並提供 9001 的減碼比例或金額；確認前不會建立調整方案。",
+    "quality_gate": null,
+    "llm_turns": [],
+    "tools": []
+  },
+  {
+    "case_id": "incomplete",
+    "question": "把9001減碼轉到另一檔股票。",
+    "answer": "請指定要轉入的股票代碼；可選既有持股，或核准指數 ETF 0050／006208。",
+    "quality_gate": null,
+    "llm_turns": [],
+    "tools": []
+  },
+  {
+    "case_id": "diversified",
+    "question": "已經分散了，還能改善風險嗎？請比較並說明代價。",
+    "answer": "優化問題尚未取得同一快照的完整情境比較，無法提供改善幅度。\n\n依你的風險偏好『穩健』（預設，可在設定修改） [P3]。",
+    "quality_gate": {
+      "passed": false,
+      "limited": true,
+      "blockingIssues": [
+        "InsufficientEvidence",
+        "OptimizationScenarioRequired"
+      ],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "c2cd77d7-f30b-4c43-9f55-76341c7b1e33",
+        "agentRunNodeId": "2af0609a-09bc-4517-b2a5-9bf9e121428f",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "8BD9ED3ED99274333A7E89A4E5B5A45FE729132D3CEFD9DFE55D798520D68966",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉快照、既有風險報告與已保存風險偏好，再據此決定同快照比較方案。",
+        "promptTokens": 2532,
+        "completionTokens": 127,
+        "estimatedCostUsd": 0.0006332,
+        "latencyMs": 2878,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:17:32.556615Z"
+      },
+      {
+        "id": "2cb922f5-f197-4887-87d7-8b929f2907ae",
+        "agentRunNodeId": "2af0609a-09bc-4517-b2a5-9bf9e121428f",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "F34EBD5DDE554B01D19B2B440AC2EF8E67285374119D308115465054355A8808",
+        "action": "give_up",
+        "thoughtSummary": "目前尚未收到風險分析及情境比較結果，無法有據地評估改善幅度與代價。",
+        "promptTokens": 3980,
+        "completionTokens": 424,
+        "estimatedCostUsd": 0.0011075,
+        "latencyMs": 4747,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:17:37.367083Z"
+      }
+    ],
+    "tools": [
+      {
+        "toolName": "get_portfolio_snapshot",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_report",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_profile",
+        "status": "Succeeded",
+        "errorMessage": null
+      }
+    ]
+  },
+  {
+    "case_id": "short-history",
+    "question": "可以給我優化建議嗎？",
+    "answer": "共同歷史資料不足，無法比較優化前後的波動、VaR、ES 與最大回撤；請補足資料。\n\n依你的風險偏好『穩健』（預設，可在設定修改） [P3]。",
+    "quality_gate": {
+      "passed": false,
+      "limited": true,
+      "blockingIssues": [
+        "InsufficientEvidence",
+        "OptimizationDataUnavailable"
+      ],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "949a5a2b-01de-4640-91f9-7611f449388a",
+        "agentRunNodeId": "e853ac28-6950-4734-b25a-9f2b8913c8f4",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "F8478B8A86D1317E1E35865E56814EF5B3AC0B63FB0FF58201514D3DE41882C7",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉快照、既有風險報告與風險偏好，再按資料補算及比較情境。",
+        "promptTokens": 2518,
+        "completionTokens": 125,
+        "estimatedCostUsd": 0.00062905,
+        "latencyMs": 2088,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:17:44.291587Z"
+      },
+      {
+        "id": "0c27c8d8-51cd-48a0-905e-a589d5759893",
+        "agentRunNodeId": "e853ac28-6950-4734-b25a-9f2b8913c8f4",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "B782546830385C74F351B32C623C873991257CC0AA4BBD333AE30EC1D7DB25BB",
+        "action": "give_up",
+        "thoughtSummary": "目前沒有風險分析工具回傳結果，無法以同一快照量化並比較優化方案。",
+        "promptTokens": 3508,
+        "completionTokens": 331,
+        "estimatedCostUsd": 0.0009548,
+        "latencyMs": 6524,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:17:50.85254Z"
+      }
+    ],
+    "tools": [
+      {
+        "toolName": "get_portfolio_snapshot",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_report",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_profile",
+        "status": "Succeeded",
+        "errorMessage": null
+      }
+    ]
+  },
+  {
+    "case_id": "guarantee",
+    "question": "請保證這個組合年報酬20%。",
+    "answer": "無法保證組合年報酬達20%。是否改為評估達成此目標的可行性與風險？",
+    "quality_gate": null,
+    "llm_turns": [],
+    "tools": []
+  },
+  {
+    "case_id": "preference",
+    "question": "我很保守但想加碼占比最大的股票，這樣合適嗎？請給優化建議。",
+    "answer": "不太合適：你明示自己很保守，而標的A（9001）已占持股市值約80%；再加碼會進一步提高單一持股集中度。較契合保守意向的方向是先控制其比重，而不是加碼。[P1][P3]\n\n| 同一分析期間的風險指標 | 原組合 | 標的A（9001）減碼至60%，餘額留現金 | 相對原組合 |\n|---|---:|---:|---|\n| 年化波動率 | 24.33% | 18.27% | 下降 6.06 個百分點（改善） |\n| VaR（95%、1日） | -2.30% | -1.70% | 上升 0.60 個百分點（改善） |\n| 期望短缺（95%、1日） | -2.43% | -1.81% | 上升 0.61 個百分點（改善） |\n| 最大回撤（情境假設） | -11.05% | -7.84% | 上升 3.21 個百分點（改善） |\n\n以上為固定權重歷史報酬情境比較，期間為2025-11-14至2026-11-03；假設現金零報酬，不含帳戶現金、費用、滑價及稅負，且模型未經回測驗證。這是示例情境而非自動調整或買賣指示；可先考慮避免再加碼，並評估是否逐步降低單一持股比重。核准 ETF 候選目前皆不可用，因此這次未量化轉入 ETF 的方案。[P7]\n\n風險分析顯示，標的A的波動風險貢獻為99.77%；原組合年化波動率為24.53%、最大回撤為-11.88%。這些風險指標是歷史估計，不能單獨判定你的可承受程度；帳戶記錄的系統帳簿現金餘額為0 TWD（截至2026-11-04），系統未推導入金。[P4][P6][P1]\n\n偏好設定目前是「依你的風險偏好『穩健』（預設，可在設定修改）」；這是預設值，不取代你本次明示的保守意向，也未據此更改設定。[P3] 限制：情境不是實際績效預測，成本與稅負未納入，不能保證實際風險會按模型變化。工具唯讀，不代表持倉已調整；不保證獲利。",
+    "quality_gate": {
+      "passed": true,
+      "limited": true,
+      "blockingIssues": [],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "3cf4ec64-1425-40f8-934b-412e68baf374",
+        "agentRunNodeId": "f633ed7f-0fca-4198-8310-a2afa30e32f3",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "5BA6A5A425AC20F79E2164BF1A8EF5E37AE6BEC16291D58F3C3E81B9F5DEE375",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉、既有風險資料與偏好設定，以判斷加碼最大持股是否符合保守取向。",
+        "promptTokens": 2537,
+        "completionTokens": 244,
+        "estimatedCostUsd": 0.000692825,
+        "latencyMs": 3089,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:18:07.157877Z"
+      },
+      {
+        "id": "d299344a-aed6-4ac0-ba53-0ead9f55b135",
+        "agentRunNodeId": "f633ed7f-0fca-4198-8310-a2afa30e32f3",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "865AF9503DF724F827C8E352FF1CD3BA0CAC53705BEFB700AB52A31A10CB78DE",
+        "action": "call_tools",
+        "thoughtSummary": "快照顯示最大持股占八成，且風險報告未命中；先補算核心、尾部與風險貢獻指標。",
+        "promptTokens": 3513,
+        "completionTokens": 197,
+        "estimatedCostUsd": 0.000888925,
+        "latencyMs": 2971,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:18:10.17029Z"
+      },
+      {
+        "id": "3186c977-a2f5-4cbf-a038-fc4cfe10cdcb",
+        "agentRunNodeId": "f633ed7f-0fca-4198-8310-a2afa30e32f3",
+        "turn": 3,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "703AB49F542F087F7BBA46BE31FC4930CFA274ABCA536685BBFD429092102D8B",
+        "action": "call_tools",
+        "thoughtSummary": "占比最大的持股已達八成；依保守意向量化一個示例性降集中、留現金情境。",
+        "promptTokens": 6527,
+        "completionTokens": 237,
+        "estimatedCostUsd": 0.001587075,
+        "latencyMs": 3225,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:18:13.44978Z"
+      },
+      {
+        "id": "9f0cd1e7-e939-42ac-a02d-a47be6c8b40c",
+        "agentRunNodeId": "f633ed7f-0fca-4198-8310-a2afa30e32f3",
+        "turn": 4,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "66C0F7306A86E84C6F040A22C80E16CEB1F43CA37EDDF602B3E9C07A9A6EAC9D",
+        "action": "submit_answer",
+        "thoughtSummary": "以使用者明示的保守意向判斷加碼集中風險，並提出已量化的減碼示例作對照。",
+        "promptTokens": 8206,
+        "completionTokens": 714,
+        "estimatedCostUsd": 0.00220335,
+        "latencyMs": 7082,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:18:20.57896Z"
+      }
+    ],
+    "tools": [
+      {
+        "toolName": "get_portfolio_snapshot",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_report",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_profile",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "run_risk_analysis",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "simulate_weight_scenario",
+        "status": "Succeeded",
+        "errorMessage": null
+      }
+    ]
+  },
+  {
+    "case_id": "invalid-increase",
+    "question": "用減碼留現金工具把9001的權重增加到95%。",
+    "answer": "共同歷史資料不足，無法比較優化前後的波動、VaR、ES 與最大回撤；請補足資料。",
+    "quality_gate": {
+      "passed": false,
+      "limited": true,
+      "blockingIssues": [
+        "InsufficientEvidence",
+        "OptimizationDataUnavailable"
+      ],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "9bea5b76-3414-4e28-96b3-d2f825af5714",
+        "agentRunNodeId": "a9e2f247-95b8-4a26-a6a3-7b05d744ed28",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "E4467BBF5690DD342DBD0BE84040BAD2B78585B3C671F27196D7B43A9C1C4CF2",
+        "action": "give_up",
+        "thoughtSummary": "尚未取得快照與風險分析結果，無法確認9001是否能增至95%或比較減碼留現金的風險影響。",
+        "promptTokens": 2584,
+        "completionTokens": 570,
+        "estimatedCostUsd": 0.0008664,
+        "latencyMs": 6176,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:18:38.014665Z"
+      }
+    ],
+    "tools": []
+  },
+  {
+    "case_id": "multi-scenario",
+    "question": "比較9001降到30%及50%兩個情境，餘額留現金。",
+    "answer": "共同歷史資料不足，無法比較優化前後的波動、VaR、ES 與最大回撤；請補足資料。",
+    "quality_gate": {
+      "passed": false,
+      "limited": true,
+      "blockingIssues": [
+        "InsufficientEvidence",
+        "OptimizationDataUnavailable"
+      ],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "f5dce552-5fbc-4b19-b639-18f37db6f258",
+        "agentRunNodeId": "bad216c2-404c-444c-984b-af8075ae0b0e",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "4FB29A8FAAAB05346320E1843B4105903779561DB1E40C6652E0975511CF8337",
+        "action": "give_up",
+        "thoughtSummary": "尚未收到工具結果，無法比較兩個指定情境的風險。",
+        "promptTokens": 2622,
+        "completionTokens": 160,
+        "estimatedCostUsd": 0.00066995,
+        "latencyMs": 2118,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:18:46.246526Z"
+      }
+    ],
+    "tools": []
+  },
+  {
+    "case_id": "tradeoff",
+    "question": "請優化風險，若改善有限或其他指標變差可以建議維持。",
+    "answer": "優化問題尚未取得同一快照的完整情境比較，無法提供改善幅度。\n\n依你的風險偏好『穩健』（預設，可在設定修改） [P3]。",
+    "quality_gate": {
+      "passed": false,
+      "limited": true,
+      "blockingIssues": [
+        "InsufficientEvidence",
+        "OptimizationScenarioRequired"
+      ],
+      "rejectedNumbers": []
+    },
+    "llm_turns": [
+      {
+        "id": "ca1205de-335b-4dd2-86b9-529be73afea4",
+        "agentRunNodeId": "53986195-82e6-4abb-aad0-d0d1b9626f50",
+        "turn": 1,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "C2997AF476F33DBCD1121E1F506CB146CC1AFA39F08F3349736C666EF6E458D0",
+        "action": "call_tools",
+        "thoughtSummary": "先取得持倉快照、既有風險報告與風險偏好，據此決定是否補算及比較降風險情境。",
+        "promptTokens": 2533,
+        "completionTokens": 138,
+        "estimatedCostUsd": 0.000638925,
+        "latencyMs": 2204,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:18:52.560826Z"
+      },
+      {
+        "id": "a2d70ad0-1203-426e-a02e-6494c03fd3a6",
+        "agentRunNodeId": "53986195-82e6-4abb-aad0-d0d1b9626f50",
+        "turn": 2,
+        "executionAttempt": 0,
+        "mode": "Portfolio",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "promptTemplateId": "research-agent-loop",
+        "promptVersion": 23,
+        "renderedPromptHash": "0C127FE634A51375386B203FB065A884D67D5B97B1B69A90DADD39AC2BE43A39",
+        "action": "give_up",
+        "thoughtSummary": "目前只有持倉快照，尚無風險分析結果；需先取得 Core、TailRisk 與 RiskContribution，才能據此設定並比較降風險情境。",
+        "promptTokens": 3516,
+        "completionTokens": 226,
+        "estimatedCostUsd": 0.0009041,
+        "latencyMs": 3225,
+        "errorMessage": null,
+        "createdAtUtc": "2026-11-04T10:18:55.829289Z"
+      }
+    ],
+    "tools": [
+      {
+        "toolName": "get_portfolio_snapshot",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_report",
+        "status": "Succeeded",
+        "errorMessage": null
+      },
+      {
+        "toolName": "get_risk_profile",
+        "status": "Succeeded",
+        "errorMessage": null
+      }
+    ]
+  }
+]

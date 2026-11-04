@@ -60,3 +60,7 @@ export AgentRuntime__ResearchAgentLoop__OutputUsdPerMillion=0.5
 已整理答案、LLM／工具摘要、所有輪次分數與供應商用量至 [驗證資料](../eval-verification/2026-11-04-luna-smoke/)。完整原始回應留於隔離工作目錄 exports/qa/luna-smoke-20261104*；不提交含登入憑證的 seed manifest。
 
 官方接入依據：[Luna](https://developers.openai.com/api/docs/models/gpt-6-luna)、[Responses API](https://developers.openai.com/api/docs/guides/text)、[Pro API credits](https://developers.openai.com/api/docs/guides/chatgpt-api-credits)。
+
+## 後續完整 14 題
+
+同版單輪完整驗證為 **8/14**，不建議正式切換；詳見 [逐題結果與接入問題](openai-luna-full14.md)。前述 2/2 是先前兩題 smoke，不能代表全套穩定性。
