@@ -191,7 +191,7 @@ public sealed class PortfolioLoopToolsTests
             Assert.True(result.Data["available"]!.GetValue<bool>());
             Assert.True(result.Data["isDefault"]!.GetValue<bool>());
             Assert.Equal("Balanced", result.Data["value"]!.ToString());
-            Assert.Contains("預設，可在設定修改", result.Data["statement"]!.ToString());
+            Assert.Contains("尚未評估，可在設定中完成評估", result.Data["statement"]!.ToString());
             var user = await db.Users.SingleAsync(x => x.Id == owner);
             user.RiskPreference = "Conservative"; await db.SaveChangesAsync();
             var saved = await tools.InvokeAsync(scope, new("saved", name, new()), default);

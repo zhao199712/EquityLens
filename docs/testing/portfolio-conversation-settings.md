@@ -1,5 +1,7 @@
 # 投組對話與前端整合驗收
 
+> 此頁保留最初 S1–S4／P1–P5 驗收歷史。P3 已擴充問卷、量化參考與 Luna 隔離驗證，最新狀態見 [P3 v1](risk-profile-v1.md)，不可將下方早期 13/14 當作最新版結果。
+
 PR #19 已合併至 main：`3d917d6`。本次由該 main 建立 `codex/portfolio-conversation-settings`；實作版本 `3ed9689`，保留 `isSubmitEnter` 的三處輸入法防護。
 
 ## 項目狀態

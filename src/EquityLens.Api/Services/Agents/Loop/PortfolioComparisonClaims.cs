@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -60,7 +61,7 @@ internal static class PortfolioComparisonClaims
 
     internal static IReadOnlyList<string> Check(string markdown, IReadOnlyList<LoopDataFact> facts)
     {
-        if (!facts.Any(f => f.Tool == "simulate_weight_scenario")) return [];
+        var hasScenarios = facts.Any(f => f.Tool == "simulate_weight_scenario");
         var issues = new HashSet<string>();
         foreach (var line in markdown.Split('\n'))
         {
@@ -70,6 +71,28 @@ internal static class PortfolioComparisonClaims
             var pattern = $@"(?<metrics>(?:{MetricPattern})(?:\s*[與和及、]\s*(?:{MetricPattern}))*)\s*的?\s*(?<improvement>改善幅度|改善程度)?\s*(?<negation>並非|不是|不)?\s*(?:略|明顯|都|均|皆|更)?\s*(?<direction>大於|小於|高於|低於|等於)\s*(?<target>(?:情境\s*)?「[^」\r\n]+」|[^，,。；;\[\n]+)";
             foreach (Match claim in Regex.Matches(line, pattern, RegexOptions.IgnoreCase))
             {
+                // 偏好參考門檻是另一種確定性比較，不能因工具清單包含情境就當成情境優劣。
+                // 僅明確的參考對象進此分支，引用、指標、上下限與方向仍必須逐項相符。
+                var target = claim.Groups["target"].Value.Trim().Trim('*');
+                var profileReference = Regex.Match(target, @"^(?:產品)?參考(?<bound>上限|下限|門檻|值|範圍)(?:\s*(?:為|是|[:：])?\s*[-+]?\d+(?:\.\d+)?\s*[%％])?$");
+                if (profileReference.Success)
+                {
+                    var expected = claim.Groups["direction"].Value switch { "高於" or "大於" => "Above", "低於" or "小於" => "Below", _ => "At" };
+                    var profiles = facts.Where(f => ids.Contains(f.Id))
+                        .Select(f => f.Tool == "get_risk_profile" ? f.Data : f.Data["riskProfile"] as JsonObject).OfType<JsonObject>();
+                    var fits = profiles.SelectMany(p => (p["profileFit"] as JsonArray)?.OfType<JsonObject>() ?? []).ToArray();
+                    var valid = !claim.Groups["negation"].Success && !claim.Groups["improvement"].Success;
+                    foreach (Match metric in Regex.Matches(claim.Groups["metrics"].Value, MetricPattern, RegexOptions.IgnoreCase))
+                    {
+                        var key = metric.Value.Contains("波動") ? "annualVolatility" : metric.Value.Contains("回撤") ? "maxDrawdown" : null;
+                        valid &= key is not null && !(key == "annualVolatility" && profileReference.Groups["bound"].Value == "下限")
+                            && !(key == "maxDrawdown" && profileReference.Groups["bound"].Value == "上限")
+                            && fits.Any(f => f["metric"]?.ToString() == key && f["status"]?.ToString() == expected);
+                    }
+                    if (!valid) issues.Add("UnverifiedProfileFit");
+                    continue;
+                }
+                if (!hasScenarios) continue;
                 // 數值門檻（例如使用者希望波動低於某百分比）不是兩情境優劣判斷。
                 if (Regex.IsMatch(claim.Groups["target"].Value, @"^[-+]?\d")) continue;
                 var verified = false;

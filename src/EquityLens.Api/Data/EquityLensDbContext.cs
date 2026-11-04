@@ -26,6 +26,7 @@ public class EquityLensDbContext : DbContext
 
     // Core
     public DbSet<AppUser> Users => Set<AppUser>();
+    public DbSet<UserRiskProfile> UserRiskProfiles => Set<UserRiskProfile>();
     public DbSet<Portfolio> Portfolios => Set<Portfolio>();
     public DbSet<Security> Securities => Set<Security>();
     public DbSet<PortfolioHolding> PortfolioHoldings => Set<PortfolioHolding>();

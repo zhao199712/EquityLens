@@ -4042,6 +4042,66 @@ namespace EquityLens.Api.Migrations
                     b.ToTable("uploaded_file", (string)null);
                 });
 
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.UserRiskProfile", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("AnswersJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("answers_json");
+
+                    b.Property<DateTime?>("AssessedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assessed_at_utc");
+
+                    b.Property<string>("CapacityLevel")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("capacity_level");
+
+                    b.Property<int?>("CapacityScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("capacity_score");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("level");
+
+                    b.Property<string>("QuestionnaireVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("questionnaire_version");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source");
+
+                    b.Property<string>("ThresholdVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("threshold_version");
+
+                    b.Property<string>("WillingnessLevel")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("willingness_level");
+
+                    b.Property<int?>("WillingnessScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("willingness_score");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("user_risk_profile", (string)null);
+                });
+
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentApprovalRequest", b =>
                 {
                     b.HasOne("EquityLens.Api.Data.Entities.AgentRun", "Run")
@@ -4785,6 +4845,15 @@ namespace EquityLens.Api.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("UploadedByUser");
+                });
+
+            modelBuilder.Entity("EquityLens.Api.Data.Entities.UserRiskProfile", b =>
+                {
+                    b.HasOne("EquityLens.Api.Data.Entities.AppUser", null)
+                        .WithOne()
+                        .HasForeignKey("EquityLens.Api.Data.Entities.UserRiskProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EquityLens.Api.Data.Entities.AgentRun", b =>

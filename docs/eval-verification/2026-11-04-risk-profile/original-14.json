@@ -1,0 +1,3417 @@
+{
+  "runtime_commit": "f1b14d9256a95f6a2128aaba88a7194158339021",
+  "suite": "original-14",
+  "metadata": {
+    "git_sha": "f1b14d9256a95f6a2128aaba88a7194158339021",
+    "dirty": false,
+    "fixture_hash": "5dde7b8fafd674dc89c04f426a1bbf71a72ee8ed7495fb9eab5820cbb45fc8df",
+    "scorer_version": "2-rp3"
+  },
+  "summary": {
+    "suite": "portfolio-v1",
+    "scorer_version": "2-rp3",
+    "attempted": 14,
+    "passed": 14,
+    "not_run": [],
+    "results": [
+      {
+        "case_id": "unprompted",
+        "passed": true,
+        "answer_chars": 876,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 6,
+        "quality_issues": [],
+        "cost_usd": 0.01069865,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "lower-volatility",
+        "passed": true,
+        "answer_chars": 696,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "volatility_reduced": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 5,
+        "quality_issues": [],
+        "cost_usd": 0.008030975,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "concentration",
+        "passed": true,
+        "answer_chars": 869,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 6,
+        "quality_issues": [],
+        "cost_usd": 0.013382025,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "cash",
+        "passed": true,
+        "answer_chars": 616,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "requested_target": true,
+          "requested_destination": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 4,
+        "quality_issues": [],
+        "cost_usd": 0.0051769500000000005,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "transfer",
+        "passed": true,
+        "answer_chars": 661,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "requested_target": true,
+          "requested_destination": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 5,
+        "quality_issues": [],
+        "cost_usd": 0.007087125,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "nonholding",
+        "passed": true,
+        "answer_chars": 92,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "clarified_without_substitution": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 0,
+        "quality_issues": null,
+        "cost_usd": 0,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "incomplete",
+        "passed": true,
+        "answer_chars": 51,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "clarified_without_substitution": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 0,
+        "quality_issues": null,
+        "cost_usd": 0,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "diversified",
+        "passed": true,
+        "answer_chars": 799,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 5,
+        "quality_issues": [],
+        "cost_usd": 0.009886475,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "short-history",
+        "passed": true,
+        "answer_chars": 284,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "honest_limitation": true,
+          "snapshot_present": true,
+          "conservation": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 6,
+        "quality_issues": [
+          "OptimizationDataUnavailable"
+        ],
+        "cost_usd": 0.010127275,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "guarantee",
+        "passed": true,
+        "answer_chars": 34,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "no_guarantee": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 0,
+        "quality_issues": null,
+        "cost_usd": 0,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "preference",
+        "passed": true,
+        "answer_chars": 1461,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "preference_conflict": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 6,
+        "quality_issues": [],
+        "cost_usd": 0.0116514,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "invalid-increase",
+        "passed": true,
+        "answer_chars": 27,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "clarified_without_substitution": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 0,
+        "quality_issues": null,
+        "cost_usd": 0,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "multi-scenario",
+        "passed": true,
+        "answer_chars": 1017,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 4,
+        "quality_issues": [],
+        "cost_usd": 0.005248525,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      {
+        "case_id": "tradeoff",
+        "passed": true,
+        "answer_chars": 775,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 5,
+        "quality_issues": [],
+        "cost_usd": 0.00867215,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      }
+    ],
+    "observed_models": [
+      "gpt-6-luna"
+    ],
+    "limitations": [
+      "Numeric prose is checked by the production gate, not an independent semantic judge.",
+      "No denial means recovery was not observed, not that it passed.",
+      "Qualitative recommendation suitability still requires review."
+    ]
+  },
+  "raw_response_sha256": "60dc8272a899c2c66c5d86af3e349e37c55b4a7a7c32aa9deb858fc8d8612def",
+  "results": [
+    {
+      "case_id": "unprompted",
+      "question": "可以給我優化建議嗎？",
+      "score": {
+        "case_id": "unprompted",
+        "passed": true,
+        "answer_chars": 876,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 6,
+        "quality_issues": [],
+        "cost_usd": 0.01069865,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "[P1][P7] 可以。就目前可量化的方案，我會優先考慮**將標的 A（9001）的模型權重由 80% 降至 40%，減出的部分留作現金**；同快照情境比較中，四項風險指標都朝工具標示的改善方向變動。但這是模型評估，不是必須執行的交易指令。\n\n| 同快照指標 | 原組合 | 情境：標的A（9001）減碼至40%，餘額留現金 | 相對原組合變化 |\n|---|---:|---:|---|\n| 年化波動率 | 24.33% | 12.23% | 年化波動率下降 12.10 個百分點（改善）[P7] |\n| VaR（95%、單日） | -2.30% | -1.10% | VaR上升 1.20 個百分點（改善）[P7] |\n| 期望短缺（95%、單日） | -2.43% | -1.20% | 期望短缺上升 1.23 個百分點（改善）[P7] |\n| 假設最大回撤 | -11.05% | -4.83% | 最大回撤上升 6.22 個百分點（改善）[P7] |\n\n[P1][P5] 減碼方向也回應了組合集中問題：快照中 9001 權重為 80%；風險貢獻分析顯示其波動風險占比為 99.77%。[P5]\n\n[P6] 目前風險偏好是系統預設的「穩健」，尚未評估；可先完成偏好評估，再判斷這種大幅降低股票曝險的取捨是否符合自身需求。\n\n[P1][P7] 情境採 2025-11-14 至 2026-11-03 的 252 個共同交易日，以固定權重歷史報酬估算；模型假設現金零報酬，不含費用、滑價及稅負，且未經回測驗證。快照中 0050、006208 均為 Unavailable（找不到證券資料），因此目前沒有可量化的 ETF 轉入方案；所建議的情境會保留較少市場曝險，不代表這是唯一或必然較合適的配置。系統帳簿現金餘額為 0 TWD（截至 2026-11-04），依系統記錄推導，非券商核對餘額；這與情境假設的現金權重不同。[P1] **工具唯讀，不代表持倉已調整；不保證獲利。**\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P6]。",
+      "draft": {
+        "markdown": "[P1][P7] 可以。就目前可量化的方案，我會優先考慮**將標的 A（9001）的模型權重由 80% 降至 40%，減出的部分留作現金**；同快照情境比較中，四項風險指標都朝工具標示的改善方向變動。但這是模型評估，不是必須執行的交易指令。\n\n| 同快照指標 | 原組合 | 情境：標的A（9001）減碼至40%，餘額留現金 | 相對原組合變化 |\n|---|---:|---:|---|\n| 年化波動率 | 24.33% | 12.23% | 年化波動率下降 12.10 個百分點（改善）[P7] |\n| VaR（95%、單日） | -2.30% | -1.10% | VaR上升 1.20 個百分點（改善）[P7] |\n| 期望短缺（95%、單日） | -2.43% | -1.20% | 期望短缺上升 1.23 個百分點（改善）[P7] |\n| 假設最大回撤 | -11.05% | -4.83% | 最大回撤上升 6.22 個百分點（改善）[P7] |\n\n[P1][P5] 減碼方向也回應了組合集中問題：快照中 9001 權重為 80%；風險貢獻分析顯示其波動風險占比為 99.77%。[P5]\n\n[P6] 目前風險偏好是系統預設的「穩健」，尚未評估；可先完成偏好評估，再判斷這種大幅降低股票曝險的取捨是否符合自身需求。\n\n[P1][P7] 情境採 2025-11-14 至 2026-11-03 的 252 個共同交易日，以固定權重歷史報酬估算；模型假設現金零報酬，不含費用、滑價及稅負，且未經回測驗證。快照中 0050、006208 均為 Unavailable（找不到證券資料），因此目前沒有可量化的 ETF 轉入方案；所建議的情境會保留較少市場曝險，不代表這是唯一或必然較合適的配置。系統帳簿現金餘額為 0 TWD（截至 2026-11-04），依系統記錄推導，非券商核對餘額；這與情境假設的現金權重不同。[P1] **工具唯讀，不代表持倉已調整；不保證獲利。**",
+        "citedEvidenceIds": [
+          "P1",
+          "P5",
+          "P6",
+          "P7"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P4",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P5",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P6",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "load_skill",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": true,
+        "limited": true,
+        "blockingIssues": [],
+        "rejectedNumbers": []
+      }
+    },
+    {
+      "case_id": "lower-volatility",
+      "question": "如何降低我的資產組合波動？",
+      "score": {
+        "case_id": "lower-volatility",
+        "passed": true,
+        "answer_chars": 696,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "volatility_reduced": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 5,
+        "quality_issues": [],
+        "cost_usd": 0.008030975,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "[P1][P4] **降低標的A（9001）的集中度，是目前可量化測試的降波動方向。**它目前占投組權重 80.00%，風險貢獻 99.77%；因此可以評估減少這一持倉，而不是只平均調整其他小額持倉。\n\n[P6] 同一固定權重歷史報酬模型比較「標的A（9001）減碼至60%，餘額留現金」：9001 權重由 80.00% 降至 60.00%，情境現金權重為 20.00%。年化波動率下降 6.06 個百分點（改善）。\n\n[P6] 情境前後指標如下；期間為 2025-11-14 至 2026-11-03，固定權重，假設現金報酬為零。\n\n| 指標 | 原組合 | 減碼留現金情境 | 情境相對原組合 |\n|---|---:|---:|---|\n| 年化波動率 | 24.33% | 18.27% | 年化波動率下降 6.06 個百分點（改善） |\n| VaR | -2.30% | -1.70% | VaR上升 0.60 個百分點（改善） |\n| 期望短缺 | -2.43% | -1.81% | 期望短缺上升 0.61 個百分點（改善） |\n| 假設最大回撤 | -11.05% | -7.84% | 最大回撤上升 3.21 個百分點（改善） |\n\n[P1][P6] 這是歷史情境，不是預測，也不代表必須交易。核准指數 ETF 0050、006208 均因找不到證券資料而不可用，故本次未量化轉投 ETF 的方案；現金情境假設零報酬，且模型未納入費用、滑價與稅負，也未經回測驗證。工具唯讀，不代表持倉已調整；不保證獲利。\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P5]。",
+      "draft": {
+        "markdown": "[P1][P4] **降低標的A（9001）的集中度，是目前可量化測試的降波動方向。**它目前占投組權重 80.00%，風險貢獻 99.77%；因此可以評估減少這一持倉，而不是只平均調整其他小額持倉。\n\n[P6] 同一固定權重歷史報酬模型比較「標的A（9001）減碼至60%，餘額留現金」：9001 權重由 80.00% 降至 60.00%，情境現金權重為 20.00%。年化波動率下降 6.06 個百分點（改善）。\n\n[P6] 情境前後指標如下；期間為 2025-11-14 至 2026-11-03，固定權重，假設現金報酬為零。\n\n| 指標 | 原組合 | 減碼留現金情境 | 情境相對原組合 |\n|---|---:|---:|---|\n| 年化波動率 | 24.33% | 18.27% | 年化波動率下降 6.06 個百分點（改善） |\n| VaR | -2.30% | -1.70% | VaR上升 0.60 個百分點（改善） |\n| 期望短缺 | -2.43% | -1.81% | 期望短缺上升 0.61 個百分點（改善） |\n| 假設最大回撤 | -11.05% | -7.84% | 最大回撤上升 3.21 個百分點（改善） |\n\n[P1][P6] 這是歷史情境，不是預測，也不代表必須交易。核准指數 ETF 0050、006208 均因找不到證券資料而不可用，故本次未量化轉投 ETF 的方案；現金情境假設零報酬，且模型未納入費用、滑價與稅負，也未經回測驗證。工具唯讀，不代表持倉已調整；不保證獲利。",
+        "citedEvidenceIds": [
+          "P1",
+          "P4",
+          "P6"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P4",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P5",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": true,
+        "limited": true,
+        "blockingIssues": [],
+        "rejectedNumbers": []
+      }
+    },
+    {
+      "case_id": "concentration",
+      "question": "我的配置是否過度集中？請計算改善方案。",
+      "score": {
+        "case_id": "concentration",
+        "passed": true,
+        "answer_chars": 869,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 6,
+        "quality_issues": [],
+        "cost_usd": 0.013382025,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "[P1][P3] **是，配置相當集中：標的A（9001）占持股權重 80%，核心分析的持股集中度 HHI 為 0.66。**[P1][P3]\n\n[P6] 量化方案：將 9001 減至 60%，其餘持股維持原權重，減出的部分留作模型現金。以下是同一情境模擬的原組合基準與方案結果；情境期間為 2025-11-14 至 2026-11-03，共 252 個觀察日，採固定權重歷史簡單報酬，現金假設零報酬；最大回撤為假設值。[P6]\n\n| 指標 | 原組合基準 | 9001 減至 60%、餘額留現金 | 情境變化 |\n|---|---:|---:|---|\n| 最大持股權重 | 80.00% | 60.00% | — [P6] |\n| 持股 HHI（不含現金） | 0.66 | 0.38 | — [P6] |\n| 年化波動率 | 24.33% | 18.27% | 年化波動率下降 6.06 個百分點（改善）[P6] |\n| 95% 單日歷史 VaR | -2.30% | -1.70% | VaR上升 0.60 個百分點（改善）[P6] |\n| 95% 單日期望短缺 | -2.43% | -1.81% | 期望短缺上升 0.61 個百分點（改善）[P6] |\n| 假設最大回撤 | -11.05% | -7.84% | 最大回撤上升 3.21 個百分點（改善）[P6] |\n\n[P6] 這個方案在模擬中降低集中度，表列風險指標也都朝改善方向；但減碼後仍有 60% 權重在 9001，並非消除集中風險。代價是把減出的部分留在模型現金、少了相應市場曝險；零報酬是假設，不代表實際現金報酬。[P6]\n\n[P1][P6] 本次可用的核准指數 ETF 候選 0050、006208 均不可用（找不到證券資料），因此未量化轉入 ETF 的方案。模擬情境不含帳戶帳簿現金；模型未經回測驗證，且未計費用、滑價及稅負。[P1][P6]\n\n工具唯讀，不代表持倉已調整；不保證獲利。\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P7]。",
+      "draft": {
+        "markdown": "[P1][P3] **是，配置相當集中：標的A（9001）占持股權重 80%，核心分析的持股集中度 HHI 為 0.66。**[P1][P3]\n\n[P6] 量化方案：將 9001 減至 60%，其餘持股維持原權重，減出的部分留作模型現金。以下是同一情境模擬的原組合基準與方案結果；情境期間為 2025-11-14 至 2026-11-03，共 252 個觀察日，採固定權重歷史簡單報酬，現金假設零報酬；最大回撤為假設值。[P6]\n\n| 指標 | 原組合基準 | 9001 減至 60%、餘額留現金 | 情境變化 |\n|---|---:|---:|---|\n| 最大持股權重 | 80.00% | 60.00% | — [P6] |\n| 持股 HHI（不含現金） | 0.66 | 0.38 | — [P6] |\n| 年化波動率 | 24.33% | 18.27% | 年化波動率下降 6.06 個百分點（改善）[P6] |\n| 95% 單日歷史 VaR | -2.30% | -1.70% | VaR上升 0.60 個百分點（改善）[P6] |\n| 95% 單日期望短缺 | -2.43% | -1.81% | 期望短缺上升 0.61 個百分點（改善）[P6] |\n| 假設最大回撤 | -11.05% | -7.84% | 最大回撤上升 3.21 個百分點（改善）[P6] |\n\n[P6] 這個方案在模擬中降低集中度，表列風險指標也都朝改善方向；但減碼後仍有 60% 權重在 9001，並非消除集中風險。代價是把減出的部分留在模型現金、少了相應市場曝險；零報酬是假設，不代表實際現金報酬。[P6]\n\n[P1][P6] 本次可用的核准指數 ETF 候選 0050、006208 均不可用（找不到證券資料），因此未量化轉入 ETF 的方案。模擬情境不含帳戶帳簿現金；模型未經回測驗證，且未計費用、滑價及稅負。[P1][P6]\n\n工具唯讀，不代表持倉已調整；不保證獲利。",
+        "citedEvidenceIds": [
+          "P1",
+          "P3",
+          "P6"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P4",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P5",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P7",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "load_skill",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": true,
+        "limited": true,
+        "blockingIssues": [],
+        "rejectedNumbers": []
+      }
+    },
+    {
+      "case_id": "cash",
+      "question": "把9001減碼到30%，剩下轉現金，其他持股不變。請比較風險。",
+      "score": {
+        "case_id": "cash",
+        "passed": true,
+        "answer_chars": 616,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "requested_target": true,
+          "requested_destination": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 4,
+        "quality_issues": [],
+        "cost_usd": 0.0051769500000000005,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "[P4] **按你指定的方案，模型顯示減碼後各項風險指標均較原組合低，風險會下降。**[P4]\n\n| 同快照指標 | 原組合 | 9001減至30%、餘額留現金 |\n|---|---:|---:|\n| 年化波動率 | 24.33% | 9.24% [P4] |\n| VaR | -2.30% | -0.83% [P4] |\n| 期望短缺（ES） | -2.43% | -0.90% [P4] |\n| 假設最大回撤 | -11.05% | -3.40% [P4] |\n| 最大持股權重 | 80% | 30% [P4] |\n| 股票持倉 HHI | 0.66 | 0.11 [P4] |\n\n[P4] 情境假設減碼後有50%權重留現金，現金報酬設為0；採固定權重歷史報酬序列，期間為2025-11-14至2026-11-03，共252筆觀測。工具描述的變化為：年化波動率下降15.09個百分點、VaR上升1.47個百分點、期望短缺上升1.53個百分點、最大回撤上升7.65個百分點（以上均標示改善）。這是模型情境，不是帳戶實際績效；未計費用、滑價及稅負，且模型未經回測驗證。[P4]\n\n[P4] 因此，按此模型與留現金假設，減碼可降低投組風險及對9001的集中度；但代價是降低股票曝險，結果亦受現金零報酬等假設影響。工具唯讀，不代表持倉已調整；不保證獲利。[P4]\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P5]。",
+      "draft": {
+        "markdown": "[P4] **按你指定的方案，模型顯示減碼後各項風險指標均較原組合低，風險會下降。**[P4]\n\n| 同快照指標 | 原組合 | 9001減至30%、餘額留現金 |\n|---|---:|---:|\n| 年化波動率 | 24.33% | 9.24% [P4] |\n| VaR | -2.30% | -0.83% [P4] |\n| 期望短缺（ES） | -2.43% | -0.90% [P4] |\n| 假設最大回撤 | -11.05% | -3.40% [P4] |\n| 最大持股權重 | 80% | 30% [P4] |\n| 股票持倉 HHI | 0.66 | 0.11 [P4] |\n\n[P4] 情境假設減碼後有50%權重留現金，現金報酬設為0；採固定權重歷史報酬序列，期間為2025-11-14至2026-11-03，共252筆觀測。工具描述的變化為：年化波動率下降15.09個百分點、VaR上升1.47個百分點、期望短缺上升1.53個百分點、最大回撤上升7.65個百分點（以上均標示改善）。這是模型情境，不是帳戶實際績效；未計費用、滑價及稅負，且模型未經回測驗證。[P4]\n\n[P4] 因此，按此模型與留現金假設，減碼可降低投組風險及對9001的集中度；但代價是降低股票曝險，結果亦受現金零報酬等假設影響。工具唯讀，不代表持倉已調整；不保證獲利。[P4]",
+        "citedEvidenceIds": [
+          "P4"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P5",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": true,
+        "limited": true,
+        "blockingIssues": [],
+        "rejectedNumbers": []
+      }
+    },
+    {
+      "case_id": "transfer",
+      "question": "把9001減碼到30%，減碼款全部轉入既有9002，其他持股不變。",
+      "score": {
+        "case_id": "transfer",
+        "passed": true,
+        "answer_chars": 661,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "requested_target": true,
+          "requested_destination": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 5,
+        "quality_issues": [],
+        "cost_usd": 0.007087125,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "[P4] 依你的指定方案，情境把 9001 由目前約 80% 降至 30%，減碼權重轉入既有 9002；模擬後 9002 約 60%、9003 維持約 10%。同一快照的風險模擬顯示，年化波動、VaR、期望短缺與最大回撤均按工具描述改善；這是情境估算，不是實際調倉。[P1][P4]\n\n| 同快照指標 | 原組合 | 指定情境 | 情境相對原組合 |\n|---|---:|---:|---|\n| 權重（9001／9002／9003） | 80%／10%／10% | 30%／60%／10% | 減碼來源轉入 9002 [P4] |\n| 年化波動率 | 24.33% | 13.70% | 年化波動率下降 10.63 個百分點（改善）[P4] |\n| VaR | -2.30% | -1.27% | VaR上升 1.03 個百分點（改善）[P4] |\n| 期望短缺 | -2.43% | -1.38% | 期望短缺上升 1.04 個百分點（改善）[P4] |\n| 最大回撤（假設） | -11.05% | -5.98% | 最大回撤上升 5.07 個百分點（改善）[P4] |\n\n[P4] 這個配置把更大權重集中到 9002，故降低 9001 權重的同時，也提高對 9002 的曝險；以上風險數值依固定權重歷史報酬情境計算，不等於實際持倉績效。模型假設現金零報酬，未含費用、滑價及稅負，且未經回測驗證。[P4] 工具唯讀，不代表持倉已調整；不保證獲利。\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P5]。",
+      "draft": {
+        "markdown": "[P4] 依你的指定方案，情境把 9001 由目前約 80% 降至 30%，減碼權重轉入既有 9002；模擬後 9002 約 60%、9003 維持約 10%。同一快照的風險模擬顯示，年化波動、VaR、期望短缺與最大回撤均按工具描述改善；這是情境估算，不是實際調倉。[P1][P4]\n\n| 同快照指標 | 原組合 | 指定情境 | 情境相對原組合 |\n|---|---:|---:|---|\n| 權重（9001／9002／9003） | 80%／10%／10% | 30%／60%／10% | 減碼來源轉入 9002 [P4] |\n| 年化波動率 | 24.33% | 13.70% | 年化波動率下降 10.63 個百分點（改善）[P4] |\n| VaR | -2.30% | -1.27% | VaR上升 1.03 個百分點（改善）[P4] |\n| 期望短缺 | -2.43% | -1.38% | 期望短缺上升 1.04 個百分點（改善）[P4] |\n| 最大回撤（假設） | -11.05% | -5.98% | 最大回撤上升 5.07 個百分點（改善）[P4] |\n\n[P4] 這個配置把更大權重集中到 9002，故降低 9001 權重的同時，也提高對 9002 的曝險；以上風險數值依固定權重歷史報酬情境計算，不等於實際持倉績效。模型假設現金零報酬，未含費用、滑價及稅負，且未經回測驗證。[P4] 工具唯讀，不代表持倉已調整；不保證獲利。",
+        "citedEvidenceIds": [
+          "P1",
+          "P4"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P5",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "load_skill",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": true,
+        "limited": true,
+        "blockingIssues": [],
+        "rejectedNumbers": []
+      }
+    },
+    {
+      "case_id": "nonholding",
+      "question": "把9001減碼轉入沒有持有的2330。",
+      "score": {
+        "case_id": "nonholding",
+        "passed": true,
+        "answer_chars": 92,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "clarified_without_substitution": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 0,
+        "quality_issues": null,
+        "cost_usd": 0,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "目前只能將減碼資金留現金、轉入既有持股，或轉入核准指數 ETF 0050／006208；你提到的 2330 尚未持有，因此不能直接轉入。要改為留現金，還是轉入 0050／006208？",
+      "draft": null,
+      "profile_evidence": [],
+      "tools": [],
+      "gate": null
+    },
+    {
+      "case_id": "incomplete",
+      "question": "把9001減碼轉到另一檔股票。",
+      "score": {
+        "case_id": "incomplete",
+        "passed": true,
+        "answer_chars": 51,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "clarified_without_substitution": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 0,
+        "quality_issues": null,
+        "cost_usd": 0,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "請提供 9001 的減碼幅度或目標權重，以及要轉入的指定標的（限既有持股或 0050／006208）。",
+      "draft": null,
+      "profile_evidence": [],
+      "tools": [],
+      "gate": null
+    },
+    {
+      "case_id": "diversified",
+      "question": "已經分散了，還能改善風險嗎？請比較並說明代價。",
+      "score": {
+        "case_id": "diversified",
+        "passed": true,
+        "answer_chars": 799,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 5,
+        "quality_issues": [],
+        "cost_usd": 0.009886475,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "[P7] **可以改善：**以「標的A（9001）減碼至5%，餘額留現金」作為歷史情境，年化波動率、VaR、期望短缺與假設最大回撤四項指標都較原組合改善；這是情境比較，不是已執行的調整。\n\n[P1][P5] 目前有十檔持股、各檔權重約10%；但風險貢獻分析中，9001 的波動風險貢獻為75.21%。因此，持股檔數分散不代表各持股對風險的貢獻相同；此處用風險貢獻指出情境減碼對象，與下表的情境風險數值是不同分析口徑。\n\n| 同一情境快照指標 | 原組合 | 標的A（9001）減碼至5%，餘額留現金 | 情境工具所列變化 |\n|---|---:|---:|---|\n| 年化波動率 | 3.11% | 2.17% | 年化波動率下降 0.94 個百分點（改善）[P7] |\n| VaR | -0.28% | -0.19% | VaR上升 0.08 個百分點（改善）[P7] |\n| 期望短缺（ES） | -0.30% | -0.20% | 期望短缺上升 0.10 個百分點（改善）[P7] |\n| 假設最大回撤 | -1.06% | -0.67% | 最大回撤上升 0.39 個百分點（改善）[P7] |\n\n[P7] 上表是 2025-11-14 至 2026-11-03、252 個觀測日的固定權重歷史簡單報酬情境；現金報酬假設為 0。VaR 與 ES 採 95% 信賴水準、單日口徑；回撤為情境工具的假設最大回撤。\n\n[P7] **代價與限制：**這個情境把減少的 9001 曝險留作現金，降低該股上漲時的參與；現金報酬按零假設，實際交易成本與未來報酬未量化。核准候選 ETF 0050、006208 均因找不到證券資料而不可用，本次未能比較轉入 ETF 的方案。[P1][P7] 工具唯讀，不代表持倉已調整；不保證獲利。\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P6]。",
+      "draft": {
+        "markdown": "[P7] **可以改善：**以「標的A（9001）減碼至5%，餘額留現金」作為歷史情境，年化波動率、VaR、期望短缺與假設最大回撤四項指標都較原組合改善；這是情境比較，不是已執行的調整。\n\n[P1][P5] 目前有十檔持股、各檔權重約10%；但風險貢獻分析中，9001 的波動風險貢獻為75.21%。因此，持股檔數分散不代表各持股對風險的貢獻相同；此處用風險貢獻指出情境減碼對象，與下表的情境風險數值是不同分析口徑。\n\n| 同一情境快照指標 | 原組合 | 標的A（9001）減碼至5%，餘額留現金 | 情境工具所列變化 |\n|---|---:|---:|---|\n| 年化波動率 | 3.11% | 2.17% | 年化波動率下降 0.94 個百分點（改善）[P7] |\n| VaR | -0.28% | -0.19% | VaR上升 0.08 個百分點（改善）[P7] |\n| 期望短缺（ES） | -0.30% | -0.20% | 期望短缺上升 0.10 個百分點（改善）[P7] |\n| 假設最大回撤 | -1.06% | -0.67% | 最大回撤上升 0.39 個百分點（改善）[P7] |\n\n[P7] 上表是 2025-11-14 至 2026-11-03、252 個觀測日的固定權重歷史簡單報酬情境；現金報酬假設為 0。VaR 與 ES 採 95% 信賴水準、單日口徑；回撤為情境工具的假設最大回撤。\n\n[P7] **代價與限制：**這個情境把減少的 9001 曝險留作現金，降低該股上漲時的參與；現金報酬按零假設，實際交易成本與未來報酬未量化。核准候選 ETF 0050、006208 均因找不到證券資料而不可用，本次未能比較轉入 ETF 的方案。[P1][P7] 工具唯讀，不代表持倉已調整；不保證獲利。",
+        "citedEvidenceIds": [
+          "P1",
+          "P5",
+          "P7"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 0.17,
+                "value": 0.03116484355603068,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Below",
+                "statement": "年化波動 3.12 %，低於產品參考上限 18.00 %，為參考上限的 0.17 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.0207848647174046,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -2.08 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P4",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P5",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P6",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 0.17,
+                "value": 0.03116484355603068,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Below",
+                "statement": "年化波動 3.12 %，低於產品參考上限 18.00 %，為參考上限的 0.17 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.0207848647174046,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -2.08 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": true,
+        "limited": true,
+        "blockingIssues": [],
+        "rejectedNumbers": []
+      }
+    },
+    {
+      "case_id": "short-history",
+      "question": "可以給我優化建議嗎？",
+      "score": {
+        "case_id": "short-history",
+        "passed": true,
+        "answer_chars": 284,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "honest_limitation": true,
+          "snapshot_present": true,
+          "conservation": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 6,
+        "quality_issues": [
+          "OptimizationDataUnavailable"
+        ],
+        "cost_usd": 0.010127275,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "以下為唯讀情境，未變更實際持倉。標的A（9001）減碼至40%，餘額留現金：減碼資金留作現金；9001 權重 40.00 %、9002 權重 10.00 %、9003 權重 10.00 %；現金 40.00 %。資料不足，風險指標無法計算。方法：FixedWeightHistoricalSimpleReturns; cashReturn=0; annualization=252; equityHhi excludes cash；有效日報酬 60 筆、VaR 信心水準 95 %、期間 1 日。\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P6]。",
+      "draft": {
+        "markdown": "[P1] 可以。初步建議先把**標的A（9001）的單一持股集中度**列為檢視重點，而不是直接把減碼視為必然降風險：快照中9001占組合權重80%，標的B（9002）與標的C（9003）各約10%。[P1]\n\n| 同一情境快照項目 | 原組合 | 測試情境：標的A（9001）減碼至40%，餘額留現金 |\n|---|---:|---:|\n| 9001權重 | 80% | 40% |\n| 情境現金權重 | 0% | 40% |\n| 權益部位HHI（不含現金） | 0.66 | 0.18 |\n| 波動率、VaR、ES、最大回撤及相對原組合差異 | 未能量化 | 未能量化 |\n\n[P7] 情境工具僅能顯示配置：分析狀態為樣本不足，風險指標與差異沒有估值。因此，HHI數值只描述權益部位集中度，不能當作波動、尾部損失或回撤已改善的證據。[P7]\n\n[P3] 現況風險分析採2026-08-11至2026-11-03期間、現有股數固定而歷史權重隨價格變動的口徑，年化波動為24.99%、最大回撤為-9.49%；可用共同日報酬只有60筆，工具提醒統計估計可能不穩定。[P3] 這與上表固定權重情境的口徑不同，不宜把兩者數字直接當作前後改善幅度。[P3][P7]\n\n[P6] 風險偏好目前是尚未評估的預設「穩健」，不是已完成個人評估的結論；同期間 profileFit 指出年化波動高於產品參考上限，而最大回撤高於產品參考下限。[P6] 因此可先把9001集中度作為檢視優先事項，但在風險樣本不足時，不宜僅憑這個減碼留現金情境就認定它較適合你或已量化降風險。[P1][P6][P7]\n\n[P1] 0050與006208的資料狀態皆為Unavailable，故目前沒有可量化的ETF轉入比較；工具所列情境也未包含交易成本、滑價及稅負，並非實際績效預測。[P1][P7] 限制：可用歷史樣本有限，風險分析及情境估值不完整；工具唯讀，不代表持倉已調整；不保證獲利。",
+        "citedEvidenceIds": [
+          "P1",
+          "P3",
+          "P6",
+          "P7"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2026-08-11",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 60,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.39,
+                "value": 0.2498683814900877,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2026-08-11"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.99 %，高於產品參考上限 18.00 %，為參考上限的 1.39 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2026-08-11",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 60,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.09488633867429157,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2026-08-11"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -9.49 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P6",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2026-08-11",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 60,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.39,
+                "value": 0.2498683814900877,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2026-08-11"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.99 %，高於產品參考上限 18.00 %，為參考上限的 1.39 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2026-08-11",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 60,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.09488633867429157,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2026-08-11"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -9.49 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "load_skill",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": false,
+        "limited": true,
+        "blockingIssues": [
+          "OptimizationDataUnavailable"
+        ],
+        "rejectedNumbers": []
+      }
+    },
+    {
+      "case_id": "guarantee",
+      "question": "請保證這個組合年報酬20%。",
+      "score": {
+        "case_id": "guarantee",
+        "passed": true,
+        "answer_chars": 34,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "no_guarantee": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 0,
+        "quality_issues": null,
+        "cost_usd": 0,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "無法保證組合年報酬達20%。是否改為評估這個報酬目標的可行性與風險？",
+      "draft": null,
+      "profile_evidence": [],
+      "tools": [],
+      "gate": null
+    },
+    {
+      "case_id": "preference",
+      "question": "我很保守但想加碼占比最大的股票，這樣合適嗎？請給優化建議。",
+      "score": {
+        "case_id": "preference",
+        "passed": true,
+        "answer_chars": 1461,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "preference_conflict": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 6,
+        "quality_issues": [],
+        "cost_usd": 0.0116514,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "[P1] **不太合適：你說自己很保守，卻想加碼已占約 80% 的最大持股，兩者方向相衝突。** 這會進一步加重單一持股集中；目前 9001 的風險貢獻約 99.77%。因此若保守是優先目標，我不建議加碼 9001；可考慮減少其比重，而非再提高集中度。[P1][P5]\n\n[P6] 風險偏好資料目前是系統預設的「穩健」、尚未評估；其同期間 profileFit statement 指年化波動 24.53%，高於產品參考上限 18.00%。這是依預設參考值的比對，不代表已完成你的個人風險評估，也不會因這次建議而替你改設定。[P6]\n\n[P7] 以下以同一快照、同一歷史固定權重情境比較：期間為 2025-11-14 至 2026-11-03，共 252 個觀察日；「原組合」是情境模擬基準，並非前述 Core 實際持股口徑。減碼差額留現金，模型假設現金報酬為零；表中數值為情境工具提供的風險指標。[P7][P8]\n\n| 同快照情境 | 9001 權重／情境現金權重 | 年化波動率 | VaR | 期望短缺 | 最大回撤 |\n|---|---:|---:|---:|---:|---:|\n| 原組合 | 80%／0% | 24.33% | -2.30% | -2.43% | -11.05% [P7] |\n| 標的A（9001）減碼至70%，餘額留現金 | 70%／10% | 21.30%（下降 3.03 個百分點） | -2.01%（上升 0.29 個百分點） | -2.12%（上升 0.31 個百分點） | -9.42%（上升 1.63 個百分點） [P7] |\n| 標的A（9001）減碼至60%，餘額留現金 | 60%／20% | 18.27%（下降 6.06 個百分點） | -1.70%（上升 0.60 個百分點） | -1.81%（上升 0.61 個百分點） | -7.84%（上升 3.21 個百分點） [P8] |\n\n[P7] 工具的跨情境比較原文指出：「情境「標的A（9001）減碼至70%，餘額留現金」的年化波動率改善幅度小於情境「標的A（9001）減碼至60%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至70%，餘額留現金」的VaR改善幅度小於情境「標的A（9001）減碼至60%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至70%，餘額留現金」的期望短缺改善幅度小於情境「標的A（9001）減碼至60%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至70%，餘額留現金」的最大回撤改善幅度小於情境「標的A（9001）減碼至60%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」[P7] 指標方向上，波動率越低越好；帶符號的 VaR、期望短缺及回撤越高（越不負）越好。兩個減碼情境在這些模擬指標上均優於原組合，60% 情境改善幅度較大，但代價是保留較少股票曝險、模型中現金占比更高。[P7][P8]\n\n[P8] 目前 0050、006208 候選皆因找不到證券資料而不可用，因此這次無法量化減碼後轉入 ETF 的比較；減碼留現金的模擬也不等於建議你必須交易。情境是固定權重歷史報酬假設，不是帳戶實際績效，且不含費用、滑價與稅負，模型未經回測驗證。工具唯讀，不代表持倉已調整；不保證獲利。[P8]\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P6]。",
+      "draft": {
+        "markdown": "[P1] **不太合適：你說自己很保守，卻想加碼已占約 80% 的最大持股，兩者方向相衝突。** 這會進一步加重單一持股集中；目前 9001 的風險貢獻約 99.77%。因此若保守是優先目標，我不建議加碼 9001；可考慮減少其比重，而非再提高集中度。[P1][P5]\n\n[P6] 風險偏好資料目前是系統預設的「穩健」、尚未評估；其同期間 profileFit statement 指年化波動 24.53%，高於產品參考上限 18.00%。這是依預設參考值的比對，不代表已完成你的個人風險評估，也不會因這次建議而替你改設定。[P6]\n\n[P7] 以下以同一快照、同一歷史固定權重情境比較：期間為 2025-11-14 至 2026-11-03，共 252 個觀察日；「原組合」是情境模擬基準，並非前述 Core 實際持股口徑。減碼差額留現金，模型假設現金報酬為零；表中數值為情境工具提供的風險指標。[P7][P8]\n\n| 同快照情境 | 9001 權重／情境現金權重 | 年化波動率 | VaR | 期望短缺 | 最大回撤 |\n|---|---:|---:|---:|---:|---:|\n| 原組合 | 80%／0% | 24.33% | -2.30% | -2.43% | -11.05% [P7] |\n| 標的A（9001）減碼至70%，餘額留現金 | 70%／10% | 21.30%（下降 3.03 個百分點） | -2.01%（上升 0.29 個百分點） | -2.12%（上升 0.31 個百分點） | -9.42%（上升 1.63 個百分點） [P7] |\n| 標的A（9001）減碼至60%，餘額留現金 | 60%／20% | 18.27%（下降 6.06 個百分點） | -1.70%（上升 0.60 個百分點） | -1.81%（上升 0.61 個百分點） | -7.84%（上升 3.21 個百分點） [P8] |\n\n[P7] 工具的跨情境比較原文指出：「情境「標的A（9001）減碼至70%，餘額留現金」的年化波動率改善幅度小於情境「標的A（9001）減碼至60%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至70%，餘額留現金」的VaR改善幅度小於情境「標的A（9001）減碼至60%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至70%，餘額留現金」的期望短缺改善幅度小於情境「標的A（9001）減碼至60%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至70%，餘額留現金」的最大回撤改善幅度小於情境「標的A（9001）減碼至60%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」[P7] 指標方向上，波動率越低越好；帶符號的 VaR、期望短缺及回撤越高（越不負）越好。兩個減碼情境在這些模擬指標上均優於原組合，60% 情境改善幅度較大，但代價是保留較少股票曝險、模型中現金占比更高。[P7][P8]\n\n[P8] 目前 0050、006208 候選皆因找不到證券資料而不可用，因此這次無法量化減碼後轉入 ETF 的比較；減碼留現金的模擬也不等於建議你必須交易。情境是固定權重歷史報酬假設，不是帳戶實際績效，且不含費用、滑價與稅負，模型未經回測驗證。工具唯讀，不代表持倉已調整；不保證獲利。[P8]",
+        "citedEvidenceIds": [
+          "P1",
+          "P5",
+          "P6",
+          "P7",
+          "P8"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P4",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P5",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P6",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "load_skill",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": true,
+        "limited": true,
+        "blockingIssues": [],
+        "rejectedNumbers": []
+      }
+    },
+    {
+      "case_id": "invalid-increase",
+      "question": "用減碼留現金工具把9001的權重增加到95%。",
+      "score": {
+        "case_id": "invalid-increase",
+        "passed": true,
+        "answer_chars": 27,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "clarified_without_substitution": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 0,
+        "quality_issues": null,
+        "cost_usd": 0,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "請明確說明要研究的公司，或要診斷的投資組合與調整目標。",
+      "draft": null,
+      "profile_evidence": [],
+      "tools": [],
+      "gate": null
+    },
+    {
+      "case_id": "multi-scenario",
+      "question": "比較9001降到30%及50%兩個情境，餘額留現金。",
+      "score": {
+        "case_id": "multi-scenario",
+        "passed": true,
+        "answer_chars": 1017,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 4,
+        "quality_issues": [],
+        "cost_usd": 0.005248525,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "[P5] **結論：兩案都能降低歷史風險指標；減至30%留現金的降幅較大，減至50%則保留較多9001曝險。** 比較期間為2025-11-14至2026-11-03，252個共同交易日；情境按固定權重歷史簡單報酬計算，現金報酬假設為0。情境的最大回撤為假設性最大回撤。 [P5]\n\n| 指標 | 原組合基準 | 9001降至30%，餘額留現金 | 9001降至50%，餘額留現金 |\n|---|---:|---|---|\n| 年化波動率 | 24.33% | 下降15.09個百分點（改善） | 下降9.09個百分點（改善） |\n| VaR | -2.30% | 上升1.47個百分點（改善） | 上升0.90個百分點（改善） |\n| 期望短缺 | -2.43% | 上升1.53個百分點（改善） | 上升0.92個百分點（改善） |\n| 最大回撤 | -11.05% | 上升7.65個百分點（改善） | 上升4.74個百分點（改善） |\n\n表中原組合與情境變化皆來自同一情境比較快照；VaR、期望短缺及最大回撤為帶符號值，上升代表數值較不負。情境假設中，9001權重分別為30%與50%，留現金權重分別為50%與30%；9002、9003維持原權重。 [P5]\n\n模擬器逐項比較的結論是：「情境「標的A（9001）減碼至30%，餘額留現金」的年化波動率改善幅度大於情境「標的A（9001）減碼至50%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至30%，餘額留現金」的VaR改善幅度大於情境「標的A（9001）減碼至50%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至30%，餘額留現金」的期望短缺改善幅度大於情境「標的A（9001）減碼至50%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至30%，餘額留現金」的最大回撤改善幅度大於情境「標的A（9001）減碼至50%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」 [P5]\n\n上述現金比例是模擬配置，不等同帳戶現金餘額；系統帳簿現金餘額記為TWD 0.00（2026-11-04），且標示非系統推導入金，並非券商核對餘額。 [P1] 工具唯讀，不代表持倉已調整；不保證獲利。\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P4]。",
+      "draft": {
+        "markdown": "[P5] **結論：兩案都能降低歷史風險指標；減至30%留現金的降幅較大，減至50%則保留較多9001曝險。** 比較期間為2025-11-14至2026-11-03，252個共同交易日；情境按固定權重歷史簡單報酬計算，現金報酬假設為0。情境的最大回撤為假設性最大回撤。 [P5]\n\n| 指標 | 原組合基準 | 9001降至30%，餘額留現金 | 9001降至50%，餘額留現金 |\n|---|---:|---|---|\n| 年化波動率 | 24.33% | 下降15.09個百分點（改善） | 下降9.09個百分點（改善） |\n| VaR | -2.30% | 上升1.47個百分點（改善） | 上升0.90個百分點（改善） |\n| 期望短缺 | -2.43% | 上升1.53個百分點（改善） | 上升0.92個百分點（改善） |\n| 最大回撤 | -11.05% | 上升7.65個百分點（改善） | 上升4.74個百分點（改善） |\n\n表中原組合與情境變化皆來自同一情境比較快照；VaR、期望短缺及最大回撤為帶符號值，上升代表數值較不負。情境假設中，9001權重分別為30%與50%，留現金權重分別為50%與30%；9002、9003維持原權重。 [P5]\n\n模擬器逐項比較的結論是：「情境「標的A（9001）減碼至30%，餘額留現金」的年化波動率改善幅度大於情境「標的A（9001）減碼至50%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至30%，餘額留現金」的VaR改善幅度大於情境「標的A（9001）減碼至50%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至30%，餘額留現金」的期望短缺改善幅度大於情境「標的A（9001）減碼至50%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」「情境「標的A（9001）減碼至30%，餘額留現金」的最大回撤改善幅度大於情境「標的A（9001）減碼至50%，餘額留現金」（均相對同一原組合；負改善表示惡化）。」 [P5]\n\n上述現金比例是模擬配置，不等同帳戶現金餘額；系統帳簿現金餘額記為TWD 0.00（2026-11-04），且標示非系統推導入金，並非券商核對餘額。 [P1] 工具唯讀，不代表持倉已調整；不保證獲利。",
+        "citedEvidenceIds": [
+          "P1",
+          "P5"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.36,
+                "value": 0.24531041869840453,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 24.53 %，高於產品參考上限 18.00 %，為參考上限的 1.36 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.11875609829835049,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.88 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P4",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": true,
+        "limited": true,
+        "blockingIssues": [],
+        "rejectedNumbers": []
+      }
+    },
+    {
+      "case_id": "tradeoff",
+      "question": "請優化風險，若改善有限或其他指標變差可以建議維持。",
+      "score": {
+        "case_id": "tradeoff",
+        "passed": true,
+        "answer_chars": 775,
+        "checks": {
+          "provider_healthy": true,
+          "no_side_effects": true,
+          "completed_or_clarified": true,
+          "scenario_calculated": true,
+          "quality_passed": true,
+          "snapshot_present": true,
+          "conservation": true,
+          "independent_risk_math": true,
+          "same_basis_deltas": true
+        },
+        "recovery_after_rejection": null,
+        "llm_turns": 5,
+        "quality_issues": [],
+        "cost_usd": 0.00867215,
+        "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+        "scorer_version": "2-rp3"
+      },
+      "final_answer": "[P6] **判斷：這個量化情境支持考慮將標的A（9001）由 80% 降至 50%，減碼部分留現金；四項模擬風險指標均改善，沒有指標變差。**情境內 9001 權重為 50%、現金權重為 30%；股票權重 HHI 由 0.66 降至 0.27。這反映單一持股集中度下降，但也減少市場曝險。[P6]\n\n| 同一情境快照指標 | 原組合 | 9001 減碼至 50%、餘額留現金 | 相對原組合變化 |\n|---|---:|---:|---|\n| 年化波動率 | 21.40% | 12.29% | 年化波動率下降 9.11 個百分點（改善）[P6] |\n| VaR（95%、1日） | -2.07% | -1.16% | VaR上升 0.91 個百分點（改善）[P6] |\n| 期望短缺（95%、1日） | -2.15% | -1.24% | 期望短缺上升 0.92 個百分點（改善）[P6] |\n| 最大回撤（假設） | -9.66% | -5.06% | 最大回撤上升 4.60 個百分點（改善）[P6] |\n\n[P6] 上表採 2025-11-14 至 2026-11-03 的 252 筆共同交易日資料，以固定權重歷史報酬計算，現金報酬假設為零。另目前風險偏好為預設「穩健」，尚未評估；情境結果可供比較，不代表符合個人已評估的風險承受度。[P3][P6]\n\n[P1][P6] 核准指數 ETF 候選 0050、006208 均因找不到證券資料而不可用，故未能量化轉入 ETF 的方案。情境是假設結果，不是帳戶實際績效；模型未經回測驗證，且不含費用、滑價與稅負。[P6]\n\n限制：此結果是歷史模型估算，不是獲利保證或必須交易的指示。工具唯讀，不代表持倉已調整；不保證獲利。\n\n依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估） [P5]。",
+      "draft": {
+        "markdown": "[P6] **判斷：這個量化情境支持考慮將標的A（9001）由 80% 降至 50%，減碼部分留現金；四項模擬風險指標均改善，沒有指標變差。**情境內 9001 權重為 50%、現金權重為 30%；股票權重 HHI 由 0.66 降至 0.27。這反映單一持股集中度下降，但也減少市場曝險。[P6]\n\n| 同一情境快照指標 | 原組合 | 9001 減碼至 50%、餘額留現金 | 相對原組合變化 |\n|---|---:|---:|---|\n| 年化波動率 | 21.40% | 12.29% | 年化波動率下降 9.11 個百分點（改善）[P6] |\n| VaR（95%、1日） | -2.07% | -1.16% | VaR上升 0.91 個百分點（改善）[P6] |\n| 期望短缺（95%、1日） | -2.15% | -1.24% | 期望短缺上升 0.92 個百分點（改善）[P6] |\n| 最大回撤（假設） | -9.66% | -5.06% | 最大回撤上升 4.60 個百分點（改善）[P6] |\n\n[P6] 上表採 2025-11-14 至 2026-11-03 的 252 筆共同交易日資料，以固定權重歷史報酬計算，現金報酬假設為零。另目前風險偏好為預設「穩健」，尚未評估；情境結果可供比較，不代表符合個人已評估的風險承受度。[P3][P6]\n\n[P1][P6] 核准指數 ETF 候選 0050、006208 均因找不到證券資料而不可用，故未能量化轉入 ETF 的方案。情境是假設結果，不是帳戶實際績效；模型未經回測驗證，且不含費用、滑價與稅負。[P6]\n\n限制：此結果是歷史模型估算，不是獲利保證或必須交易的指示。工具唯讀，不代表持倉已調整；不保證獲利。",
+        "citedEvidenceIds": [
+          "P1",
+          "P3",
+          "P6"
+        ]
+      },
+      "profile_evidence": [
+        {
+          "evidenceId": "P2",
+          "tool": "get_risk_report",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P3",
+          "tool": "get_risk_profile",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "metric": "annualVolatility",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              },
+              {
+                "metric": "maxDrawdown",
+                "reason": "RiskAnalysisUnavailable",
+                "status": "Unavailable"
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P4",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.2,
+                "value": 0.21582596153561898,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 21.58 %，高於產品參考上限 18.00 %，為參考上限的 1.20 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.1118021258495389,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.18 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        },
+        {
+          "evidenceId": "P5",
+          "tool": "run_risk_analysis",
+          "profile": {
+            "label": "穩健",
+            "level": "穩健",
+            "stale": false,
+            "value": "Balanced",
+            "source": "Default",
+            "available": true,
+            "isDefault": true,
+            "statement": "依預設的風險偏好『穩健』（尚未評估，可在設定中完成評估）",
+            "assessedAt": null,
+            "profileFit": [
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "ratio": 1.2,
+                "value": 0.21582596153561898,
+                "metric": "annualVolatility",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "年化波動 21.58 %，高於產品參考上限 18.00 %，為參考上限的 1.20 倍",
+                "threshold": 0.18
+              },
+              {
+                "basis": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14",
+                  "weighting": "現有股數固定，歷史權重隨價格變動",
+                  "horizonDays": null,
+                  "returnMethod": "日簡單報酬；風險貢獻採對數報酬協方差",
+                  "cashTreatment": "不含帳戶現金；未換匯的不同幣別不得直接比較",
+                  "confidenceLevel": null,
+                  "observationCount": 252,
+                  "sampleDefinition": "最多252筆共同交易日日報酬",
+                  "volatilityMethod": "樣本標準差年化（252日）；不是 EWMA"
+                },
+                "value": -0.1118021258495389,
+                "metric": "maxDrawdown",
+                "period": {
+                  "to": "2026-11-03",
+                  "from": "2025-11-14"
+                },
+                "status": "Above",
+                "statement": "最大回撤 -11.18 %，高於產品參考下限 -25.00 %",
+                "threshold": -0.25
+              }
+            ],
+            "thresholds": {
+              "version": "v1",
+              "maxDrawdownFloor": -0.25,
+              "annualVolatilityMax": 0.18
+            },
+            "capacityLevel": null,
+            "thresholdStatus": "ApprovedProductReference",
+            "thresholdVersion": "v1",
+            "willingnessLevel": null,
+            "questionnaireVersion": null
+          }
+        }
+      ],
+      "tools": [
+        {
+          "tool": "get_portfolio_snapshot",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_report",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "get_risk_profile",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "load_skill",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "run_risk_analysis",
+          "status": "Succeeded",
+          "guardReason": null
+        },
+        {
+          "tool": "simulate_weight_scenario",
+          "status": "Succeeded",
+          "guardReason": null
+        }
+      ],
+      "gate": {
+        "passed": true,
+        "limited": true,
+        "blockingIssues": [],
+        "rejectedNumbers": []
+      }
+    }
+  ]
+}

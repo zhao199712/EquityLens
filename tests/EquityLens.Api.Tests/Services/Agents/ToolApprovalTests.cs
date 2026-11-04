@@ -17,11 +17,14 @@ public sealed class ToolApprovalTests
 {
     private const string Publish = """{"action":"call_tools","toolCalls":[{"callId":"publish","tool":"test_publish_note","arguments":{"text":"review me"}}]}""";
 
-    [Fact]
-    public async Task SideEffect_PausesWithoutWake_ApproveExecutesOnce_DuplicateResumeIsHarmless()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SideEffect_PausesWithoutWake_ApproveExecutesOnce_DuplicateResumeIsHarmless(bool native)
     {
         await using var db = RefactorTestDbContext.Create();
         var run = await Seed(db); var tool = new PublishTool(); var chat = new Chat(Publish, "{\"action\":\"give_up\"}");
+        chat.SupportsNativeTools = native;
         var executor = Executor(db, chat, tool);
         await executor.ExecuteAsync(run.Id, run.UserId);
         Assert.Equal("WaitingForFeedback", run.Status);
@@ -68,11 +71,14 @@ public sealed class ToolApprovalTests
         Assert.Contains(reason, chat.Prompts.Last());
     }
 
-    [Fact]
-    public async Task Reject_RequiresComment_ThenReturnsReasonToAgent()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Reject_RequiresComment_ThenReturnsReasonToAgent(bool native)
     {
         await using var db = RefactorTestDbContext.Create();
         var run = await Seed(db); var tool = new PublishTool(); var chat = new Chat(Publish, "{\"action\":\"give_up\"}");
+        chat.SupportsNativeTools = native;
         var executor = Executor(db, chat, tool);
         await executor.ExecuteAsync(run.Id, run.UserId);
         var approval = await db.AgentApprovalRequests.SingleAsync();
@@ -86,12 +92,15 @@ public sealed class ToolApprovalTests
         Assert.Contains(JsonNode.Parse(chat.Prompts.Last())!["history"]!.AsArray(), x => x!.GetValue<string>().Contains("內容未核實"));
     }
 
-    [Fact]
-    public async Task CrashAfterExternalEffect_ReplaysSameIdempotencyKey_NotTheEffect()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CrashAfterExternalEffect_ReplaysSameIdempotencyKey_NotTheEffect(bool native)
     {
         await using var db = RefactorTestDbContext.Create();
         using var crash = new CancellationTokenSource();
         var run = await Seed(db); var tool = new PublishTool { Crash = crash }; var chat = new Chat(Publish, "{\"action\":\"give_up\"}");
+        chat.SupportsNativeTools = native;
         var executor = Executor(db, chat, tool);
         await executor.ExecuteAsync(run.Id, run.UserId);
         var approval = await db.AgentApprovalRequests.SingleAsync();
@@ -138,9 +147,28 @@ public sealed class ToolApprovalTests
     {
         private readonly Queue<string> _actions = new(actions);
         public List<string> Prompts { get; } = [];
+        public bool SupportsNativeTools { get; set; }
         public string Provider => "test"; public string Model => "test";
         public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default)
-        { Prompts.Add(request.UserPrompt); return Task.FromResult(new ChatCompletionResult(_actions.Dequeue(), Model, 10, 10)); }
+        {
+            Prompts.Add(request.UserPrompt);
+            var content = _actions.Dequeue(); var action = JsonNode.Parse(content)!;
+            JsonArray? output = null;
+            if (SupportsNativeTools)
+            {
+                Assert.NotNull(request.ToolProtocol);
+                output = action["toolCalls"] is JsonArray calls ? new JsonArray(calls.Select(x => (JsonNode)new JsonObject {
+                    ["type"] = "function_call", ["call_id"] = x!["callId"]!.DeepClone(), ["name"] = x["tool"]!.DeepClone(), ["arguments"] = x["arguments"]!.ToJsonString()
+                }).ToArray()) : [];
+                if (Prompts.Count > 1)
+                {
+                    Assert.Single(request.ToolProtocol.Exchanges);
+                    Assert.Single(request.ToolProtocol.Exchanges[0].Results);
+                    Assert.Equal("publish", request.ToolProtocol.Exchanges[0].Results[0]!["call_id"]!.GetValue<string>());
+                }
+            }
+            return Task.FromResult(new ChatCompletionResult(content, Model, 10, 10, output));
+        }
     }
     private sealed class PublishTool : IResearchLoopTools
     {
