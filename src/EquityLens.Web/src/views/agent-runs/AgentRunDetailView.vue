@@ -3,12 +3,12 @@ import AgentLoopRunSummary from "../../components/agents/AgentLoopRunSummary.vue
 import RiskMeasurementBasis from '../../components/agents/RiskMeasurementBasis.vue'
 import type { RiskMeasurementBasis as MeasurementBasis } from '../../services/risk'
 import { isRetiredWorkflow, legacyWorkflow, type LegacyRevisionOutput } from "../../services/legacyWorkflows"
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useAuthStore } from '../../stores/auth'
 import { useRoute, useRouter } from 'vue-router'
 import PortfolioScenarioComparison, { type ScenarioComparison, type HoldingRisk } from '../../components/agents/PortfolioScenarioComparison.vue'
 import ResearchAgentSummary from '../../components/agents/ResearchAgentSummary.vue'
 import AgentRunProgress from '../../components/agents/AgentRunProgress.vue'
-import CapabilityRequestStatus from '../../components/agents/CapabilityRequestStatus.vue'
 import {
   cancelAgentRun,
   decideAgentApproval,
@@ -79,27 +79,18 @@ interface PortfolioDiagnosisOutput {
   interpretation?: string | null
 }
 
-interface RoutingContext {
-  leadSkill: string
-  leadSkillDisplayName: string
-  objective: string
-  routingReason: string
-  confidence: string
-  routingModel: string
-  contextEnvelope: {
-    market: string
-    asset: string
-    depth: string
-    horizon?: string | null
-    currency?: string | null
-    language: string
-  }
-}
-
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.user?.role === 'Admin')
+const visibleTabs = computed(() => isAdmin.value
+  ? ['timeline', 'nodes', 'toolCalls', 'feedback', 'blackboard', 'workflow'] as const
+  : ['timeline', 'nodes', 'toolCalls', 'feedback'] as const)
 const actionLoading = ref(false)
 const activeTab = ref<'timeline' | 'nodes' | 'toolCalls' | 'feedback' | 'blackboard' | 'workflow'>('timeline')
+watch(isAdmin, (admin) => {
+  if (!admin && (activeTab.value === 'blackboard' || activeTab.value === 'workflow')) activeTab.value = 'timeline'
+})
 const debugExpanded = ref(false)
 const approvalComment = ref('')
 
@@ -250,33 +241,6 @@ const riskMetrics = computed((): PortfolioRiskMetrics | null => {
   return hasAny ? metrics : null
 })
 
-const routingContext = computed((): RoutingContext | null => {
-  if (!run.value) return null
-  return (run.value.blackboardJson.routingContext as unknown as RoutingContext) ?? null
-})
-
-const capabilityAssessment = computed(() => {
-  if (!run.value) return null
-  return (run.value.blackboardJson.capabilityRequestAssessment as {
-    decision: string
-    reason: string
-    evidenceGaps?: string[]
-    confidence: string
-    mode: string
-  } | null) ?? null
-})
-
-const capabilityRequests = computed(() => {
-  if (!run.value) return []
-  return (run.value.blackboardJson.capabilityRequests as Array<{
-    requestId: string
-    capabilityId: string
-    status: string
-    reason: string
-    reviewReason?: string | null
-  }>) ?? []
-})
-
 const nextActionLabel = computed(() => {
   const action = criticOutput.value?.recommendedNextAction
   if (!action) return null
@@ -367,21 +331,6 @@ const nextActionLabel = computed(() => {
             </div>
           </div>
 
-          <div v-if="routingContext" class="prestige-panel prestige-panel-pad routing-stage" data-testid="routing-stage">
-            <div>
-              <span class="prestige-label">STAGE 0 · 問題路由</span>
-              <h3>{{ routingContext.leadSkillDisplayName }}</h3>
-              <code>{{ routingContext.leadSkill }}</code>
-            </div>
-            <dl>
-              <div><dt>目標</dt><dd>{{ routingContext.objective }}</dd></div>
-              <div><dt>理由</dt><dd>{{ routingContext.routingReason }}</dd></div>
-              <div><dt>市場／資產</dt><dd>{{ routingContext.contextEnvelope.market }} / {{ routingContext.contextEnvelope.asset }}</dd></div>
-              <div><dt>深度／信心度</dt><dd>{{ routingContext.contextEnvelope.depth }} / {{ routingContext.confidence }}</dd></div>
-              <div><dt>模型</dt><dd>{{ routingContext.routingModel }}</dd></div>
-            </dl>
-          </div>
-
           <ResearchAgentSummary v-if="run.run.workflowType === 'ResearchAgent'" :detail="run" />
           <AgentRunProgress v-else
             :nodes="run.nodes"
@@ -418,11 +367,6 @@ const nextActionLabel = computed(() => {
             <div v-if="run.loopSummary.lastAction" class="summary-block"><div class="prestige-label stat-caption">最近決策</div><div class="body-text">{{ run.loopSummary.lastAction }}</div></div>
             <div v-if="run.loopSummary.stopReason" class="summary-block"><div class="prestige-label stat-caption">停止原因</div><div class="body-text prestige-mono">{{ run.loopSummary.stopReason }}</div></div>
           </div>
-
-          <CapabilityRequestStatus
-            :assessment="capabilityAssessment"
-            :requests="capabilityRequests"
-          />
 
           <!-- Waiting for output -->
           <div v-if="run.run.workflowType !== 'ResearchAgent' && !isTerminalStatus && !pendingApproval && !['WaitingForFeedback', 'WaitingForApproval'].includes(run.run.status)" class="prestige-empty waiting-block">
@@ -591,7 +535,7 @@ const nextActionLabel = computed(() => {
             <template v-if="debugExpanded">
               <div class="tab-bar">
                 <button
-                  v-for="tab in (['timeline', 'nodes', 'toolCalls', 'feedback', 'blackboard', 'workflow'] as const)"
+                  v-for="tab in visibleTabs"
                   :key="tab"
                   class="tab-btn"
                   :class="{ active: activeTab === tab }"
@@ -683,7 +627,7 @@ const nextActionLabel = computed(() => {
               </div>
 
               <!-- Blackboard -->
-              <div v-if="activeTab === 'blackboard'" class="tab-pad">
+              <div v-if="isAdmin && activeTab === 'blackboard'" class="tab-pad">
                 <h3 class="sub-title">Blackboard</h3>
                 <pre class="code-block prestige-mono">{{ prettyJson(run.blackboardJson) }}</pre>
                 <h3 class="sub-title sub-title-gap">Output</h3>
@@ -691,7 +635,7 @@ const nextActionLabel = computed(() => {
               </div>
 
               <!-- Workflow -->
-              <div v-if="activeTab === 'workflow'" class="tab-pad">
+              <div v-if="isAdmin && activeTab === 'workflow'" class="tab-pad">
                 <pre class="code-block prestige-mono">{{ prettyJson(run.workflowDefinitionJson) }}</pre>
               </div>
             </template>
@@ -1102,14 +1046,6 @@ const nextActionLabel = computed(() => {
   margin: 16px 20px;
 }
 
-.routing-stage {
-  display: grid;
-  grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr);
-  gap: 24px;
-  margin-top: 16px;
-  border-color: var(--gold-border);
-}
-
 .approval-panel,
 .approval-history {
   margin: 16px 0;
@@ -1123,20 +1059,4 @@ const nextActionLabel = computed(() => {
 .approval-history-row:last-child { border-bottom: 0; }
 .approval-history-row .prestige-mono { margin-top: 4px; color: var(--muted); font-size: 11px; }
 
-.routing-stage h3 {
-  margin: 8px 0 5px;
-  color: var(--ivory);
-  font-family: var(--serif);
-  font-size: 22px;
-}
-
-.routing-stage code { color: var(--gold); overflow-wrap: anywhere; }
-.routing-stage dl { display: grid; gap: 7px; margin: 0; }
-.routing-stage dl div { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; }
-.routing-stage dt { color: var(--muted); }.routing-stage dd { margin: 0; color: var(--ivory); }
-
-@media (max-width: 700px) {
-  .routing-stage { grid-template-columns: 1fr; }
-  .routing-stage dl div { grid-template-columns: 1fr; gap: 2px; }
-}
 </style>
