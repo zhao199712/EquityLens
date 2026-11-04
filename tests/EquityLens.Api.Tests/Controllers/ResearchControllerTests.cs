@@ -87,7 +87,7 @@ public sealed class ResearchControllerTests
 
         var accepted = Assert.IsType<AcceptedResult>(result.Result);
         var response = Assert.IsType<ResearchInvestigationCreatedResponse>(accepted.Value);
-        Assert.Equal(AgentWorkflowTypes.ResearchInvestigation, response.WorkflowType);
+        Assert.Equal(LegacyWorkflowReadModel.Research, response.WorkflowType);
         Assert.Equal(AgentRunStatuses.Pending, response.Status);
         Assert.True(agentRunService.WasCalled);
     }
@@ -147,13 +147,9 @@ public sealed class ResearchControllerTests
         {
             WasCalled = true;
             var researchRunId = Guid.NewGuid();
-            return Task.FromResult((new AgentRunSummaryResponse(Guid.NewGuid(), AgentWorkflowTypes.ResearchInvestigation, AgentTypes.Research, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0), researchRunId));
+            return Task.FromResult((new AgentRunSummaryResponse(Guid.NewGuid(), LegacyWorkflowReadModel.Research, AgentTypes.Research, AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0), researchRunId));
         }
         public Task<AgentRunSummaryResponse> CreateCriticReviewAsync(Guid userId, Guid researchRunId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<AgentRunSummaryResponse> CreateDraftRevisionAsync(Guid userId, Guid criticReviewRunId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<AgentRunSummaryResponse> CreateResearchQualityReviewAsync(Guid userId, Guid researchRunId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<AgentRunSummaryResponse> CreateEvidenceRemediationAsync(Guid userId, Guid criticReviewRunId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<AgentRunSummaryResponse> CreateEvidenceReanalysisAsync(Guid userId, Guid evidenceRemediationRunId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<SubmitAgentFeedbackResponse> SubmitFeedbackAsync(Guid runId, Guid userId, SubmitAgentFeedbackRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<AgentRunSummaryResponse>> ListChildrenAsync(Guid parentRunId, Guid userId, CancellationToken cancellationToken = default) => throw new NotImplementedException();

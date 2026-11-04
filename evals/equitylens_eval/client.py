@@ -30,6 +30,8 @@ class EquityLensClient:
                  poll_interval_s: float = 2.0, investigation_timeout_s: float = 900.0,
                  transport: httpx.BaseTransport | None = None,
                  sleep: Callable[[float], None] = time.sleep, engine: str | None = None) -> None:
+        if engine not in (None, "AgentLoop"):
+            raise ValueError("Only AgentLoop investigations are supported")
         headers = {"Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -38,7 +40,7 @@ class EquityLensClient:
         self._poll_interval_s = poll_interval_s
         self._investigation_timeout_s = investigation_timeout_s
         self._sleep = sleep
-        self._engine = engine
+        self._engine = engine or "AgentLoop"
 
     def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         """Send a request, waiting out HTTP 429 (the API's per-user LLM rate limit) a few times.
@@ -219,7 +221,23 @@ def parse_trajectory(detail: dict[str, Any]) -> dict[str, Any]:
             output = {}
         if isinstance(output, dict) and output.get("used") is True:
             legacy_web += 1
+    loaded_skills = []
+    for tool in tools:
+        if tool.get("toolName") != "load_skill" or tool.get("status") != "Succeeded":
+            continue
+        try:
+            result = tool.get("resultJson") or {}
+            if isinstance(result, str):
+                result = json.loads(result)
+            data = result.get("data") if isinstance(result, dict) else None
+            if isinstance(data, dict) and all(isinstance(data.get(k), str) for k in ("skillId", "version", "contentHash")):
+                entry = {k: data[k] for k in ("skillId", "version", "contentHash")}
+                if entry not in loaded_skills:
+                    loaded_skills.append(entry)
+        except (TypeError, ValueError):
+            continue
     return {
+        "loaded_skills": loaded_skills,
         "workflow_type": (detail.get("run") or {}).get("workflowType"),
         "node_types": [n.get("nodeType") for n in nodes],
         "planner_modes": modes,

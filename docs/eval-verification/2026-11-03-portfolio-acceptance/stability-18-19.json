@@ -1,0 +1,128 @@
+{
+  "frozen_code": "d57e5c3b3cb84dfc06cfeeb6ce05f7ba38156ac1",
+  "prompt_version": 16,
+  "same_metadata": true,
+  "observed_models": [
+    "deepseek-flash"
+  ],
+  "rounds": [
+    18,
+    19
+  ],
+  "scores": [
+    13,
+    14
+  ],
+  "attempts_per_round": 14,
+  "additional_authorized_usd": 0.3,
+  "additional_spent_upper_usd": 0.174888,
+  "additional_remaining_usd": 0.125112,
+  "cumulative_upper_usd": 1.3059045,
+  "pending_reserved_usd": 0,
+  "cases": [
+    {
+      "case_id": "unprompted",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": [],
+      "round_19_issues": []
+    },
+    {
+      "case_id": "lower-volatility",
+      "round_18": false,
+      "round_19": true,
+      "round_18_issues": [
+        "UntraceableNumbers"
+      ],
+      "round_19_issues": []
+    },
+    {
+      "case_id": "concentration",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": [],
+      "round_19_issues": []
+    },
+    {
+      "case_id": "cash",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": [],
+      "round_19_issues": []
+    },
+    {
+      "case_id": "transfer",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": [],
+      "round_19_issues": []
+    },
+    {
+      "case_id": "nonholding",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": null,
+      "round_19_issues": null
+    },
+    {
+      "case_id": "incomplete",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": null,
+      "round_19_issues": null
+    },
+    {
+      "case_id": "diversified",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": [],
+      "round_19_issues": []
+    },
+    {
+      "case_id": "short-history",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": [
+        "OptimizationDataUnavailable"
+      ],
+      "round_19_issues": [
+        "OptimizationDataUnavailable"
+      ]
+    },
+    {
+      "case_id": "guarantee",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": null,
+      "round_19_issues": null
+    },
+    {
+      "case_id": "preference",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": [],
+      "round_19_issues": []
+    },
+    {
+      "case_id": "invalid-increase",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": null,
+      "round_19_issues": null
+    },
+    {
+      "case_id": "multi-scenario",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": [],
+      "round_19_issues": []
+    },
+    {
+      "case_id": "tradeoff",
+      "round_18": true,
+      "round_19": true,
+      "round_18_issues": [],
+      "round_19_issues": []
+    }
+  ]
+}

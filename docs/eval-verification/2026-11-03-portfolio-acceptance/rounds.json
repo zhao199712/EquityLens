@@ -1,0 +1,317 @@
+[
+  {
+    "round": 1,
+    "original_directory": "portfolio-eval-20261103",
+    "strict_passed": 5,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "e34384249c42d38ad2cb5ae5b785cb9c68424f58312d2bd7d6fb2276df6e698b",
+    "raw_bytes": 8532008,
+    "benchmark_isolation_verified": false
+  },
+  {
+    "round": 2,
+    "original_directory": "portfolio-eval-20261103-v2",
+    "strict_passed": 6,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "c62a20254f1bb11ce3d15588fc3432ef6a38c7a26f0166a9057bbe1de52fc148",
+    "raw_bytes": 6897514,
+    "benchmark_isolation_verified": false
+  },
+  {
+    "round": 3,
+    "original_directory": "portfolio-eval-20261103-v3",
+    "strict_passed": 8,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "49dddcad312a0c43a646a795d36a676ee7b9100fc9bc77902caddb0571822e39",
+    "raw_bytes": 6893837,
+    "benchmark_isolation_verified": false
+  },
+  {
+    "round": 4,
+    "original_directory": "portfolio-eval-20261103-final",
+    "strict_passed": 7,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "0cd58c05ac57c5a7eed170f6dd0227ba3335bf563d88f9d65190e6ee290efdd5",
+    "raw_bytes": 6953624,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
+  },
+  {
+    "round": 5,
+    "original_directory": "portfolio-eval-20261103-display",
+    "strict_passed": 8,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "f28903de58d1c507635182dfb49f4b24d96104a840d2031a9d5797acef06bbf1",
+    "raw_bytes": 6923541,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
+  },
+  {
+    "round": 6,
+    "original_directory": "portfolio-eval-20261103-verified",
+    "strict_passed": null,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": false,
+    "reason": "Isolation setup: missing JWT audience; no AI calls",
+    "raw_sha256": "155a388384fb76a55922db103f918ca799ca4966c39e03c2f9cbabd6331c3ff5",
+    "raw_bytes": 768,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
+  },
+  {
+    "round": 7,
+    "original_directory": "portfolio-eval-20261103-release",
+    "strict_passed": null,
+    "attempted_cases": 5,
+    "not_run": 9,
+    "eligible_for_quality_comparison": false,
+    "reason": "Provider 503; not an answer-quality evaluation",
+    "raw_sha256": "60535c28a9d53244ddba2209d03023e86a3796061920126af5997787fd3653ac",
+    "raw_bytes": 27216,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
+  },
+  {
+    "round": 8,
+    "original_directory": "portfolio-eval-20261103-acceptance",
+    "strict_passed": null,
+    "attempted_cases": 1,
+    "not_run": 13,
+    "eligible_for_quality_comparison": false,
+    "reason": "Provider 503; not an answer-quality evaluation",
+    "raw_sha256": "2af20c8ce17ec312d411993979934cf68c9ced3ddf139053edfe2c4f7c480399",
+    "raw_bytes": 5458,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
+  },
+  {
+    "round": 9,
+    "original_directory": "portfolio-eval-20261103-main-recheck",
+    "strict_passed": 10,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "reason": null,
+    "raw_sha256": "96996cb986caf9424a6134f1bf7295ed98a1ed5fa80290092d3b074e79c874a9",
+    "raw_bytes": 7004999,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
+  },
+  {
+    "round": 10,
+    "original_directory": "portfolio-eval-20261103-quality-recheck",
+    "strict_passed": null,
+    "attempted_cases": 7,
+    "not_run": 7,
+    "eligible_for_quality_comparison": false,
+    "reason": "Stopped after repeated provider/client timeouts; seven saved cases, additional in-flight case interrupted; latest date repair not live-tested",
+    "raw_sha256": "4a55ea95eeff5bb52fccf99f28a9dce105e883e7cee5453ab44f4cc9fd03fba7",
+    "raw_bytes": 2196152,
+    "benchmark_isolation_verified": false,
+    "benchmark_claim_correction": "FinMind__BaseUrl did not bind MarketData:FinMind; external attribution benchmark remained active. Original metadata retained."
+  },
+  {
+    "round": 11,
+    "original_directory": "portfolio-eval-20261103-retry12",
+    "strict_passed": null,
+    "attempted_cases": 7,
+    "not_run": 7,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": false,
+    "reason": "Stopped after discovering incorrect FinMind configuration; external attribution benchmark active, including in earlier rounds. Not a full quality round.",
+    "raw_sha256": "596fde216ad95dd3e03355b24a56995656369220748cdaf3c03b162f7551818a",
+    "raw_bytes": 4145359
+  },
+  {
+    "round": 12,
+    "original_directory": "portfolio-eval-20261103-benchmark-verified",
+    "strict_passed": 9,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": null,
+    "raw_sha256": "775751598d84d6eccf8a28aebd95b0ea4d1855a7555d3f709381455ae8e502c7",
+    "raw_bytes": 8763829
+  },
+  {
+    "round": 13,
+    "original_directory": "portfolio-eval-20261103-five-fixes",
+    "strict_passed": 12,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": null,
+    "raw_sha256": "55c3a8c7b5c9005beee08a3b9bf0c9ad53463526b3ce79426c4a567d47175d5a",
+    "raw_bytes": 8799069
+  },
+  {
+    "round": 14,
+    "original_directory": "portfolio-eval-20261103-last-two",
+    "strict_passed": 2,
+    "attempted_cases": 2,
+    "not_run": 12,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": true,
+    "reason": "Targeted rerun of multi-scenario and tradeoff only; not a full 14-case result",
+    "raw_sha256": "52eb27c8ac7f5752aa0650e1d59a3c7e17df38e25d110c2c45e46597d9589d72",
+    "raw_bytes": 1670762
+  },
+  {
+    "round": 15,
+    "original_directory": "portfolio-eval-20261103-remaining-twelve-verified",
+    "strict_passed": 11,
+    "attempted_cases": 12,
+    "not_run": 2,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": true,
+    "reason": "Remaining twelve cases on clean merged main 6d805b9, prompt 14; multi-scenario and tradeoff were tested separately in round 14. Not a single full 14-case run.",
+    "raw_sha256": "06d3b33fa065008e9c41237145193edd31a673fc1a60a3d1c34271c6ffef3fc9",
+    "raw_bytes": 7120429,
+    "startup_attempt": {
+      "result": "CLI rejected --usage-ledger before any paid call because Python resolved an older installed package. Relaunched with explicit PYTHONPATH to current checkout.",
+      "upper_usd": 0
+    },
+    "checks": {
+      "provider_healthy": 12,
+      "no_side_effects": 12,
+      "scenario_calculated": 7,
+      "independent_risk_math": 7,
+      "conservation": 8,
+      "same_basis_deltas": 7
+    }
+  },
+  {
+    "round": 16,
+    "original_directory": "portfolio-eval-20261103-cash-evidence",
+    "strict_passed": 1,
+    "attempted_cases": 1,
+    "not_run": 13,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": true,
+    "reason": "Single cash case after accountCash evidence and prompt 15, clean code 99be9f3; other thirteen cases not rerun. Final currency-prefix guard extension is covered by offline tests, not another paid run.",
+    "raw_sha256": "e760cf7149d59a8d0029432b44a205c225f377b8cf5f72fc7700dbd73d8c42e7",
+    "raw_bytes": 811896
+  },
+  {
+    "round": 17,
+    "original_directory": "portfolio-eval-20261103-cash-fix-other-thirteen",
+    "strict_passed": 11,
+    "attempted_cases": 13,
+    "not_run": 1,
+    "eligible_for_quality_comparison": false,
+    "benchmark_isolation_verified": true,
+    "reason": "Remaining thirteen cases on clean 5c7bb24 prompt 15; cash was tested separately in round 16. Not a single full 14-case run.",
+    "raw_sha256": "a45061fb21e68ecfcea73b20c0586b2aa92db144024046d89b6e1d095e556abb",
+    "raw_bytes": 8034852,
+    "checks": {
+      "provider_healthy": 13,
+      "no_side_effects": 13,
+      "scenario_calculated": 8,
+      "independent_risk_math": 8,
+      "conservation": 9,
+      "same_basis_deltas": 8
+    }
+  },
+  {
+    "round": 18,
+    "original_directory": "portfolio-eval-20261103-stability-18",
+    "strict_passed": 13,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": "Full 14-case stability run on unchanged clean d57e5c3, prompt 16; no selective reruns.",
+    "raw_sha256": "29a415aba3c7662789914673c9685565f180cf90504b995deb6d9e320e3f1408",
+    "raw_bytes": 8843423,
+    "checks": {
+      "provider_healthy": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "no_side_effects": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "scenario_calculated": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "independent_risk_math": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "conservation": {
+        "passed": 10,
+        "evaluated": 10
+      },
+      "same_basis_deltas": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "quality_passed": {
+        "passed": 8,
+        "evaluated": 9
+      }
+    }
+  },
+  {
+    "round": 19,
+    "original_directory": "portfolio-eval-20261103-stability-19",
+    "strict_passed": 14,
+    "attempted_cases": 14,
+    "not_run": 0,
+    "eligible_for_quality_comparison": true,
+    "benchmark_isolation_verified": true,
+    "reason": "Full 14-case stability run on unchanged clean d57e5c3, prompt 16; no selective reruns.",
+    "raw_sha256": "ed213a314186e46983d75bd71e1010f4d17f3c67c77cd108c4e79c9456e062e4",
+    "raw_bytes": 8798990,
+    "checks": {
+      "provider_healthy": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "no_side_effects": {
+        "passed": 14,
+        "evaluated": 14
+      },
+      "scenario_calculated": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "independent_risk_math": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "conservation": {
+        "passed": 10,
+        "evaluated": 10
+      },
+      "same_basis_deltas": {
+        "passed": 9,
+        "evaluated": 9
+      },
+      "quality_passed": {
+        "passed": 9,
+        "evaluated": 9
+      }
+    }
+  }
+]

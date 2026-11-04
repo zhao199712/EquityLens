@@ -1,0 +1,51 @@
+{
+  "unprompted": {
+    "gate": {
+      "passed": false,
+      "limited": true,
+      "blockingIssues": [
+        "UntraceableNumbers"
+      ],
+      "rejectedNumbers": [
+        "10.00%",
+        "10.00%"
+      ]
+    },
+    "relevant_answer_paragraph": "組合甲為三檔持股、單一產業（Technology）的集中配置，分析期間為 2025-11-14 至 2026-11-03、252 個共同交易日 [P5]。期末權重為 9001 標的A 80.00%、9002 標的B 10.00%、9003 標的C 10.00%，集中度 HHI 0.66、最大單一權重 80.00% [P5]。",
+    "interpretation": "Weights 10% cited to Core risk tool P5 which does not contain those individual weights; snapshot P1 does.",
+    "cash_evidence": {
+      "asOf": "2026-11-03",
+      "basis": "RecordedLedger",
+      "reason": null,
+      "status": "Available",
+      "balance": 0.0,
+      "warning": "僅依系統記錄的入出金、股息、交易及費用計算，非券商核對餘額；系統推導入金不代表真實轉帳。持股權重不含此現金，情境假設也不可代替帳戶餘額。",
+      "currency": "TWD",
+      "includesSystemDerivedFunding": false
+    },
+    "quantitative_pattern_excerpt": null
+  },
+  "lower-volatility": {
+    "gate": {
+      "passed": false,
+      "limited": true,
+      "blockingIssues": [
+        "MixedRiskBasis"
+      ],
+      "rejectedNumbers": []
+    },
+    "relevant_answer_paragraph": "降低波動的主要代價，是把 30.00% 的權重轉為零報酬現金，可能犧牲 9001 的反彈參與 [P8]。改善波動與尾部指標，不代表所有風險面向都改善；且情境的固定權重口徑與診斷的歷史權重口徑不同，不宜直接互相比較 [P5][P8]。若不願承擔此機會成本，維持現況也是合理選擇。",
+    "interpretation": "Likely paragraph-scope false positive: lowering-volatility prose and 30% cash weight are classified as quantitativeChange; P5/P8 basis disclaimer occurs in same paragraph. Requires a focused regression before changing gate.",
+    "cash_evidence": {
+      "asOf": "2026-11-03",
+      "basis": "RecordedLedger",
+      "reason": null,
+      "status": "Available",
+      "balance": 0.0,
+      "warning": "僅依系統記錄的入出金、股息、交易及費用計算，非券商核對餘額；系統推導入金不代表真實轉帳。持股權重不含此現金，情境假設也不可代替帳戶餘額。",
+      "currency": "TWD",
+      "includesSystemDerivedFunding": false
+    },
+    "quantitative_pattern_excerpt": "降低波動的主要代價，是把 30"
+  }
+}

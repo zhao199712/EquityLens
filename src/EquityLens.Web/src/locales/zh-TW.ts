@@ -8,6 +8,9 @@ export default {
     research: '研究',
     settings: '設定',
     logout: '登出',
+    login: '登入',
+    register: '註冊',
+    menu: '選單',
   },
   auth: {
     login: {
@@ -582,6 +585,11 @@ export default {
       earningsPerShare: 'EARNINGS/SHARE',
       returnOnEquity: 'RETURN ON EQUITY',
     },
+  },
+  notFound: {
+    title: '找不到這個頁面',
+    description: '您要找的網址不存在，或已經移除。',
+    backHome: '回到首頁',
   },
   common: {
     status: {

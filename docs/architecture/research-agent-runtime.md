@@ -753,16 +753,22 @@ v4 取代 v1 作為預設的條件（全部成立）：
 
 ---
 
-## 13. Roadmap（本期之後）
+## 13. 三工作流重構現況
 
-1. A/B 達標後，`ResearchEngine` 預設改為 `AgentLoop`。
-2. `FeedbackRevision`：使用者回饋作為 Revise 模式的輸入，取代 planner 組 DAG。
-3. `PortfolioDiagnosis`：`PortfolioRiskMath` 接成 `Compute` 工具（數值只從 provenance-backed Blackboard 讀取）；保留 always-on 人工審批。（Python 風險引擎目前為 shadow 模式：`RiskPythonShadowQueue`、`RiskShadowComparisonService`，接入前需先確認轉正計畫。）
-4. 全部 workflow 遷移完成後，移除 `LlmAgentWorkflowPlanner`、`DynamicPlanValidator`、`GraphMaterializer`、`AgentDynamicPlanCoordinator` 的 trigger 邏輯與相關 capability 定義。
-5. 外框分支平行（executor 一次執行多個 ready 節點）需先將 Blackboard 改為分區寫入；視需求評估，非必要。
-6. 長期可評估以 durable execution 平台承接 Runtime 層（Dapr Workflow / Durable Task），保留 Loop、Guard、Ledger、OutputGate 作為差異化核心。
+本文件前段保留 v4 初期計畫的歷史背景。現行實作與驗收以 [收斂規格](remove-dynamic-dag.md)、[補充規格](remove-dynamic-dag-addendum.md) 及 [進度表](remove-dynamic-dag-progress.md) 為準。
 
----
+| 項目 | 初始基準 | 收斂後 |
+|---|---|---|
+| 工作流 | 9 | ResearchAgent、PortfolioDiagnosis、CriticReview，共 3 |
+| catalog node type | 54 | 13 |
+| Services/Agents 行數 | 11,674 | 7,712（含協定診斷、數字追溯修正與 Loop 子目錄） |
+| 編排 | 可動態擴增圖 | 固定 DAG，研究／投組共用節點內迴圈 |
+
+研究包含品質檢查及最多一次修訂；投組包含六個任務型工具與固定人工審批；Critic 僅評分，不改原答案。品質階段及工具結果先保存，恢復重用已完成結果。圖拓撲、條件邊、租約 fencing、狀態機與 outbox 保留。
+
+方法設定由角色內 load_skill 載入，保存版本與 hash；不再有 capability 或 supporting skill 清單。統一路由只決定角色和參數，明確入口與既有追問免分類，所有路徑仍檢查權限和能力邊界。
+
+舊圖唯讀；續跑操作回 409，worker 取得有效租約後安全終止。新 investigation 僅接受 AgentLoop；舊回答仍可離線 rescore。本次只交付重構分支，未合併 main 或部署。後續是否增加並行工具、其他研究方法或大型任務分解，須另案驗收。
 
 ## 14. 風險與取捨
 

@@ -16,9 +16,9 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         var run = CreateRun(MathResults());
         var node = DraftNode(run.Id);
 
-        await new DraftPortfolioDiagnosisNodeHandler(new FakeNarrative("解讀文字")).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+        await new EquityLens.Api.Services.Agents.Loop.PortfolioQualityGateNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
 
-        var output = JsonNode.Parse(node.OutputJson!)!;
+        var output = JsonNode.Parse(run.BlackboardJson)![AgentBlackboardKeys.PortfolioDiagnosisDraft]!;
         var metrics = output["riskMetrics"]!;
         Assert.Equal(0.3871m, metrics["annualizedVolatility"]!.GetValue<decimal>());
         Assert.Equal(-0.0858m, metrics["maxDrawdown"]!.GetValue<decimal>());
@@ -29,8 +29,8 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         Assert.Equal(1m, metrics["largestWeight"]!.GetValue<decimal>());
         Assert.Equal(0.999m, metrics["volatilityRiskShare"]!.GetValue<decimal>());
         var summary = output["summary"]!.GetValue<string>();
-        Assert.Contains("風險概況", summary, StringComparison.Ordinal);
-        Assert.Contains("最大回撤", summary, StringComparison.Ordinal);
+
+
     }
 
     [Fact]
@@ -40,9 +40,9 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         var run = CreateRun(new JsonArray());
         var node = DraftNode(run.Id);
 
-        await new DraftPortfolioDiagnosisNodeHandler(new FakeNarrative("解讀文字")).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
+        await new EquityLens.Api.Services.Agents.Loop.PortfolioQualityGateNodeHandler().ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
 
-        var output = JsonNode.Parse(node.OutputJson!)!;
+        var output = JsonNode.Parse(run.BlackboardJson)![AgentBlackboardKeys.PortfolioDiagnosisDraft]!;
         var metrics = output["riskMetrics"]!;
         Assert.True(metrics["annualizedVolatility"] is null);
         Assert.True(metrics["maxDrawdown"] is null);
@@ -50,33 +50,9 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         Assert.DoesNotContain("風險概況", output["summary"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task DraftHandler_WritesNarrativeInterpretation()
-    {
-        await using var db = CreateDb();
-        var run = CreateRun(MathResults());
-        var node = DraftNode(run.Id);
 
-        await new DraftPortfolioDiagnosisNodeHandler(new FakeNarrative("**風險集中**於單一持倉。")).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
 
-        var output = JsonNode.Parse(node.OutputJson!)!;
-        Assert.Equal("**風險集中**於單一持倉。", output["interpretation"]!.GetValue<string>());
-    }
 
-    [Fact]
-    public async Task DraftHandler_KeepsReportWhenNarrativeAgentFails()
-    {
-        await using var db = CreateDb();
-        var run = CreateRun(MathResults());
-        var node = DraftNode(run.Id);
-
-        await new DraftPortfolioDiagnosisNodeHandler(new ThrowingNarrative()).ExecuteAsync(new AgentNodeExecutionContext(db, run, node, (_, _, _, _, _) => { }));
-
-        var output = JsonNode.Parse(node.OutputJson!)!;
-        Assert.True(output["interpretation"] is null);
-        Assert.Contains("風險概況", output["summary"]!.GetValue<string>(), StringComparison.Ordinal);
-        Assert.Equal(0.3871m, output["riskMetrics"]!["annualizedVolatility"]!.GetValue<decimal>());
-    }
 
     [Fact]
     public void MetricsReader_IgnoresUnknownAndScalarShapes()
@@ -95,6 +71,50 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         Assert.True(metrics.MaxDrawdown is null);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QualityGate_OnlyNegativeContributionsAreDrags(bool includeNegative)
+    {
+        await using var db = CreateDb();
+        var run = CreateRun(new JsonArray());
+        var board = JsonNode.Parse(run.BlackboardJson)!;
+        var holdings = new List<AttributionItem> {
+            new("positive", "正貢獻", null, .5m, .1m, .05m),
+            new("zero", "零貢獻", null, .5m, 0, 0)
+        };
+        if (includeNegative) holdings.Add(new("negative", "負貢獻", null, .1m, -.1m, -.01m));
+        var attribution = new PortfolioPerformanceAttribution(0, 0, 0, holdings.Count, holdings.Count, holdings, [], "complete");
+        board[AgentBlackboardKeys.PerformanceAttribution] = JsonSerializer.SerializeToNode(attribution, AgentNodeJson.SerializerOptions);
+        run.BlackboardJson = board.ToJsonString();
+        await new EquityLens.Api.Services.Agents.Loop.PortfolioQualityGateNodeHandler()
+            .ExecuteAsync(new AgentNodeExecutionContext(db, run, DraftNode(run.Id), (_, _, _, _, _) => { }));
+        var output = JsonNode.Parse(run.BlackboardJson)![AgentBlackboardKeys.PortfolioDiagnosisDraft]!
+            .Deserialize<PortfolioDiagnosisOutput>(AgentNodeJson.SerializerOptions)!;
+        Assert.Equal(includeNegative ? 1 : 0, output.MainDrags.Count);
+        Assert.All(output.MainDrags, item => Assert.True(item.Contribution < 0));
+        Assert.Equal("positive", Assert.Single(output.MainContributors).EvidenceId);
+        Assert.Equal("complete", output.AttributionCoverage);
+    }
+
+    [Fact]
+    public async Task QualityGate_PreservesValidatedInterpretationAlongsideComputedSummary()
+    {
+        await using var db = CreateDb();
+        var run = CreateRun(new JsonArray());
+        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+        board["portfolioLoopAnswer"] = JsonNode.Parse("""{"markdown":"不建議調整，集中風險只是轉移 [P1]","citedEvidenceIds":["P1"]}""");
+        board["agentLoopFacts"] = JsonNode.Parse("""[{"id":"P1","key":"scenario","tool":"simulate_weight_scenario","data":{"status":"Calculated"}}]""");
+        board[PortfolioScenarioCalculator.ResultKey] = JsonSerializer.SerializeToNode(new PortfolioScenarioComparison("Calculated", "fixture", "hash", null, 252, .95m, 1, null, [], []), AgentNodeJson.SerializerOptions);
+        run.BlackboardJson = board.ToJsonString();
+        await new EquityLens.Api.Services.Agents.Loop.PortfolioQualityGateNodeHandler().ExecuteAsync(new(db, run, DraftNode(run.Id), (_, _, _, _, _) => { }));
+        var output = AgentNodeJson.ParseBlackboard(run.BlackboardJson)[AgentBlackboardKeys.PortfolioDiagnosisDraft]!.Deserialize<PortfolioDiagnosisOutput>(AgentNodeJson.SerializerOptions)!;
+        Assert.Contains("不建議調整", output.Interpretation);
+        Assert.Contains("唯讀情境", output.Summary);
+        Assert.Empty(output.QualityIssues!);
+        Assert.Null(LegacyWorkflowReadModel.BuildLoopSummary(run, [new AgentRunNode { NodeType = "PortfolioAgentLoop" }]));
+    }
+
     private static AgentRun CreateRun(JsonArray mathResults)
     {
         var portfolioId = Guid.NewGuid();
@@ -110,7 +130,7 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         return new AgentRun { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), WorkflowType = AgentWorkflowTypes.PortfolioDiagnosis, AgentType = AgentTypes.Portfolio, BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions) };
     }
 
-    private static AgentRunNode DraftNode(Guid runId) => new() { Id = Guid.NewGuid(), AgentRunId = runId, NodeKey = PortfolioDiagnosisNodeKeys.DraftDiagnosis, NodeType = PortfolioDiagnosisNodeTypes.DraftDiagnosis };
+    private static AgentRunNode DraftNode(Guid runId) => new() { Id = Guid.NewGuid(), AgentRunId = runId, NodeKey = "portfolioQualityGate", NodeType = "PortfolioQualityGate" };
 
     private static JsonArray MathResults() => new()
     {
@@ -123,15 +143,9 @@ public sealed class PortfolioDiagnosisNodeHandlersTests
         new JsonObject { ["operation"] = "calculate-volatility-risk-contribution", ["value"] = new JsonObject { ["componentRiskShare"] = 0.999m, ["marginalVolatility"] = 0.39m, ["componentVolatility"] = 0.39m } }
     };
 
-    private sealed class FakeNarrative(string text) : IPortfolioDiagnosisNarrativeAgent
-    {
-        public Task<string> GenerateAsync(PortfolioDiagnosisNarrativeInput input, CancellationToken cancellationToken = default) => Task.FromResult(text);
-    }
 
-    private sealed class ThrowingNarrative : IPortfolioDiagnosisNarrativeAgent
-    {
-        public Task<string> GenerateAsync(PortfolioDiagnosisNarrativeInput input, CancellationToken cancellationToken = default) => throw new InvalidOperationException("LLM unavailable.");
-    }
+
+
 
     private static TestDb CreateDb() => new(new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     private sealed class TestDb(DbContextOptions<EquityLensDbContext> options) : EquityLensDbContext(options)

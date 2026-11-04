@@ -6,6 +6,7 @@ using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Chat;
+using EquityLens.Api.Services.Ai;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Tests.Services.Chat;
@@ -110,7 +111,7 @@ public sealed class ConversationServiceTests
         db.AgentRuns.Add(new AgentRun
         {
             Id = runId, UserId = userId, ResearchRunId = researchId,
-            WorkflowType = AgentWorkflowTypes.ResearchInvestigation, AgentType = AgentTypes.Research,
+            WorkflowType = LegacyWorkflowReadModel.Research, AgentType = AgentTypes.Research,
             Status = AgentRunStatuses.Succeeded, OutputJson = """{"summary":"Critic 摘要"}"""
         });
         db.ChatMessages.Add(new ChatMessage
@@ -176,6 +177,52 @@ public sealed class ConversationServiceTests
         Assert.Equal("Succeeded", (await db.ConversationTurns.SingleAsync()).Status);
     }
 
+    [Fact]
+    public async Task UnifiedRoute_CreatesResearchWithOneModelCall()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid(); var session = new ChatSession { Id = Guid.NewGuid(), UserId = user };
+        db.ChatSessions.Add(session); db.Securities.Add(new Security { Id = Guid.NewGuid(), Ticker = "2330", Name = "台積電", IsActive = true }); await db.SaveChangesAsync();
+        var chat = new CountingChat(); var router = new InvestmentResearchRouter(chat); var runs = new FakeAgentRuns();
+        var service = new ConversationService(db, router, new AgentWorkflowQueryService(db, router, runs), runs, new AgentWorkflowCatalog());
+        var result = await service.ProcessAsync(user, session.Id, new("台積電營收如何", Guid.NewGuid()));
+        Assert.Equal(ConversationActions.RouteWorkflow, result.Action); Assert.Equal(1, chat.Calls);
+        Assert.Equal(AgentWorkflowTypes.ResearchAgent, runs.CreatedWorkflow);
+        Assert.Contains("2330", chat.Last!.UserPrompt); Assert.Contains("tickerCandidates", chat.Last.UserPrompt);
+    }
+
+    [Theory]
+    [InlineData("那毛利率呢", "RouteWorkflow")]
+    [InlineData("重置對話", "ResetContext")]
+    public async Task ExplicitFollowupAndReset_BypassModel(string message, string expected)
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid(); var parent = Guid.NewGuid();
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = user, ContextJson = new JsonObject { ["lastAgentRunId"] = parent }.ToJsonString() };
+        db.ChatSessions.Add(session); db.AgentRuns.Add(new AgentRun { Id = parent, UserId = user, WorkflowType = AgentWorkflowTypes.ResearchAgent, Status = AgentRunStatuses.Succeeded }); await db.SaveChangesAsync();
+        var chat = new CountingChat(); var workflows = new FakeWorkflowQueries();
+        var service = new ConversationService(db, new InvestmentResearchRouter(chat), workflows, new FakeAgentRuns(), new AgentWorkflowCatalog());
+        var result = await service.ProcessAsync(user, session.Id, new(message, Guid.NewGuid()));
+        Assert.Equal(expected, result.Action); Assert.Equal(0, chat.Calls);
+        if (expected == "RouteWorkflow") Assert.Equal(parent, workflows.ParentId);
+    }
+
+    [Fact]
+    public async Task IdempotentRequest_DoesNotLeakOtherUsersTurn()
+    {
+        await using var db = CreateDb(); var owner = Guid.NewGuid(); var session = new ChatSession { Id = Guid.NewGuid(), UserId = owner };
+        db.ChatSessions.Add(session); await db.SaveChangesAsync(); var request = new SendMessageRequest("你好", Guid.NewGuid());
+        var service = new ConversationService(db, Agent(ConversationActions.DirectResponse, "private", null, new()), new FakeWorkflowQueries(), new FakeAgentRuns(), new AgentWorkflowCatalog());
+        await service.ProcessAsync(owner, session.Id, request);
+        await Assert.ThrowsAsync<ConversationException>(() => service.ProcessAsync(Guid.NewGuid(), session.Id, request));
+    }
+
+    private sealed class CountingChat : IChatCompletionService
+    {
+        public int Calls; public ChatCompletionRequest? Last;
+        public string Provider => "test"; public string Model => "configured";
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default)
+        { Calls++; Last = request; return Task.FromResult(new ChatCompletionResult("""{"action":"route","workflow":"Research","params":{"ticker":"2330"},"confidence":"high","missing":[]}""", "test", 1, 1)); }
+    }
+
     private static IConversationAgent Agent(string action, string response, string? query, JsonObject patch) =>
         new FakeConversationAgent(new(action, response, query, action, "high", patch, string.Empty,
             "test", "test", 1, 1, 1));
@@ -208,7 +255,7 @@ public sealed class ConversationServiceTests
             Calls++; Question = request.Question; ParentId = request.ParentAgentRunId;
             if (failure is not null) throw failure;
             return Task.FromResult(new AgentWorkflowQueryCreatedResponse(runId ?? Guid.NewGuid(), Guid.NewGuid(),
-                AgentWorkflowTypes.ResearchInvestigation, AgentRunStatuses.Pending, "test", "test",
+                LegacyWorkflowReadModel.Research, AgentRunStatuses.Pending, "test", "test",
                 "research-investigation", "一般個股研究", "high", request.Question,
                 new("TW", "equity", "standard", null, null, "zh-TW"), [], []));
         }
@@ -216,12 +263,10 @@ public sealed class ConversationServiceTests
 
     private sealed class FakeAgentRuns : IAgentRunService
     {
-        public Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public string? CreatedWorkflow;
+        public Task<(AgentRunSummaryResponse AgentRun, Guid ResearchRunId)> CreateResearchInvestigationAsync(Guid userId, ResearchAskRequest request, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default)
+        { CreatedWorkflow = AgentWorkflowTypes.ResearchAgent; return Task.FromResult((new AgentRunSummaryResponse(Guid.NewGuid(), CreatedWorkflow, "Research", AgentRunStatuses.Pending, DateTime.UtcNow, null, null, null, 0, 0, 0), Guid.NewGuid())); }
         public Task<AgentRunSummaryResponse> CreateCriticReviewAsync(Guid userId, Guid researchRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<AgentRunSummaryResponse> CreateDraftRevisionAsync(Guid userId, Guid criticReviewRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<AgentRunSummaryResponse> CreateResearchQualityReviewAsync(Guid userId, Guid researchRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<AgentRunSummaryResponse> CreateEvidenceRemediationAsync(Guid userId, Guid criticReviewRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<AgentRunSummaryResponse> CreateEvidenceReanalysisAsync(Guid userId, Guid evidenceRemediationRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(Guid userId, Guid portfolioId, DateOnly? from, DateOnly? to, InvestmentResearchRoutingContext? routingContext = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<SubmitAgentFeedbackResponse> SubmitFeedbackAsync(Guid runId, Guid userId, SubmitAgentFeedbackRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AgentRunSummaryResponse>> ListChildrenAsync(Guid parentRunId, Guid userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();

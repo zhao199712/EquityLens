@@ -82,9 +82,8 @@ internal static partial class ResearchAgentOutput
     private static partial Regex EvidenceReference();
 }
 
-public sealed class ResearchOutputGateNodeHandler : IAgentNodeHandler
+public sealed class ResearchOutputCheck : IQualityCheckStage
 {
-    public string NodeType => ResearchAgentNodes.OutputGate;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
@@ -114,7 +113,8 @@ public sealed class ResearchOutputGateNodeHandler : IAgentNodeHandler
             if ((request.SourcePolicy == SourcePolicy.LocalOnly && !local) || (request.SourcePolicy == SourcePolicy.WebOnly && local)) issues.Add("SourcePolicyViolation");
         }
         if (answer != ResearchAgentLoop.Refusal && citations.Count == 0) issues.Add("MissingCitations");
-        var numberCheck = ResearchNumberTraceability.Check(answer, citations);
+        issues.AddRange(ResearchSourceRoleGate.Check(answer, request.Question, citations));
+        var numberCheck = ResearchNumberTraceability.Check(answer, citations, request.Question, request.Ticker);
         warnings.AddRange(numberCheck.Warnings);
         if (numberCheck.Blocking) issues.Add("UntraceableNumbers");
         if (Regex.IsMatch(answer, @"(?<!不)(?<!無法)(?<!不能)保證獲利")) issues.Add("GuaranteedProfitClaim");
@@ -123,9 +123,8 @@ public sealed class ResearchOutputGateNodeHandler : IAgentNodeHandler
 }
 public sealed record OutputGateResult(bool Passed, IReadOnlyList<string> BlockingIssues, IReadOnlyList<string> Warnings);
 
-public sealed class RouteResearchAgentQualityNodeHandler : IAgentNodeHandler
+public sealed class ResearchQualityDecision : IQualityCheckStage
 {
-    public string NodeType => ResearchAgentNodes.Route;
     public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
@@ -154,7 +153,10 @@ public sealed class FinalizeResearchAgentNodeHandler : IAgentNodeHandler
         board[AgentBlackboardKeys.Answer] = answer;
         if (board[AgentBlackboardKeys.RevisedAnswer] is not null) board[AgentBlackboardKeys.RevisedAnswer] = answer;
         board["researchAgentFinalStatus"] = policyAnswer is not null ? "Answered" : refusal ? (passed ? "InsufficientEvidence" : "CitationValidationFailed") : "Answered";
-        board[AgentBlackboardKeys.FinalOutput] = new JsonObject { ["answer"] = answer, ["status"] = board["researchAgentFinalStatus"]!.DeepClone(),
+        var rejectedNumbers = (board["outputGate"]?["warnings"] as JsonArray ?? []).Select(x => x?.GetValue<string>() ?? "")
+            .Where(x => x.StartsWith("CheckNumber: ", StringComparison.Ordinal)).Select(x => x[13..]).ToArray();
+        board[AgentBlackboardKeys.FinalOutput] = new JsonObject { ["errorCode"] = refusal ? "quality_gate_rejected" : null,
+            ["rejectedNumbers"] = JsonSerializer.SerializeToNode(rejectedNumbers, AgentNodeJson.SerializerOptions), ["answer"] = answer, ["status"] = board["researchAgentFinalStatus"]!.DeepClone(),
             ["policyResponse"] = policyAnswer is not null,
             ["criticReview"] = board[AgentBlackboardKeys.CriticReview]?.DeepClone(), ["outputGate"] = board["outputGate"]?.DeepClone() };
         if (refusal)
@@ -164,6 +166,9 @@ public sealed class FinalizeResearchAgentNodeHandler : IAgentNodeHandler
                 .Where(x => x.RunId == context.Run.ResearchRunId).ToListAsync(cancellationToken));
             var artifact = await context.DbContext.ResearchRuns.SingleAsync(x => x.Id == context.Run.ResearchRunId, cancellationToken);
             artifact.CitationCount = 0;
+            artifact.ErrorMessage = "quality_gate_rejected";
+            context.AddEvent(context.Run, context.Node, "QualityGateRejected", "品質檢查未接受模型答案，已改為拒答或系統風險說明。",
+                new { errorCode = "quality_gate_rejected", rejectedNumbers, blockingIssues = board["outputGate"]?["blockingIssues"]?.DeepClone() });
         }
         if (board[AgentBlackboardKeys.ResearchRun] is JsonObject research)
         {

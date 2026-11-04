@@ -16,11 +16,11 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
     private readonly IAgentRunGraphValidator _runGraphValidator;
     private readonly IAgentRunStateMachine _runStateMachine;
     private readonly IAgentNodeRunner _nodeRunner;
-    private readonly IAgentDynamicPlanCoordinator _dynamicPlans;
     private readonly ILogger<AgentRunExecutor> _logger;
     private readonly IAgentNodeStateMachine _nodeStateMachine;
     private readonly AgentWorkflowPolicyReader _policies;
     private readonly TimeProvider _clock;
+    private readonly WorkflowExecutionCompatibility? _compatibility;
     private readonly AgentRunLeaseHeartbeat? _heartbeat;
 
     public AgentRunExecutor(
@@ -29,24 +29,24 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         IAgentRunGraphValidator runGraphValidator,
         IAgentRunStateMachine runStateMachine,
         IAgentNodeRunner nodeRunner,
-        IAgentDynamicPlanCoordinator dynamicPlans,
         ILogger<AgentRunExecutor> logger,
         IAgentNodeStateMachine? nodeStateMachine = null,
         AgentWorkflowPolicyReader? policies = null,
         TimeProvider? clock = null,
-        AgentRunLeaseHeartbeat? heartbeat = null)
+        AgentRunLeaseHeartbeat? heartbeat = null,
+        WorkflowExecutionCompatibility? compatibility = null)
     {
         _dbContext = dbContext;
         _topology = topology;
         _runGraphValidator = runGraphValidator;
         _runStateMachine = runStateMachine;
         _nodeRunner = nodeRunner;
-        _dynamicPlans = dynamicPlans;
         _logger = logger;
         _nodeStateMachine = nodeStateMachine ?? new AgentNodeStateMachine();
         _policies = policies ?? new AgentWorkflowPolicyReader();
         _clock = clock ?? TimeProvider.System;
         _heartbeat = heartbeat;
+        _compatibility = compatibility;
     }
 
     public async Task<AgentRunExecutionOutcome> ExecuteAsync(Guid runId, Guid userId, CancellationToken cancellationToken = default)
@@ -58,7 +58,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             .Include(x => x.Approvals)
             .FirstAsync(x => x.Id == runId && x.UserId == userId, cancellationToken);
 
-        if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Failed or AgentRunStatuses.Cancelled or AgentRunStatuses.WaitingForFeedback or AgentRunStatuses.WaitingForApproval)
+        if (run.Status is AgentRunStatuses.Succeeded or AgentRunStatuses.Failed or AgentRunStatuses.Cancelled )
         {
             _logger.LogInformation(
                 "Skipping agent run {AgentRunId} because status is {Status}.",
@@ -66,6 +66,9 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 run.Status);
             return AgentRunExecutionOutcome.SkippedTerminalOrWaiting;
         }
+
+        if (run.Status is AgentRunStatuses.WaitingForFeedback or AgentRunStatuses.WaitingForApproval
+            && _compatibility?.IsRetired(run) != true) return AgentRunExecutionOutcome.SkippedTerminalOrWaiting;
 
         using var activity = EquityLensTelemetry.ActivitySource.StartActivity("agent.run.execute");
         activity?.SetTag("agent.run.id", run.Id);
@@ -83,7 +86,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             var leaseOwner = $"{Environment.MachineName}:{Guid.NewGuid():N}";
             if (run.LeaseExpiresAtUtc > _clock.GetUtcNow().UtcDateTime && !string.IsNullOrWhiteSpace(run.LeaseOwner)) return AgentRunExecutionOutcome.LeaseHeldByOther;
             run.LeaseOwner = leaseOwner; run.LeaseExpiresAtUtc = _clock.GetUtcNow().UtcDateTime.AddMinutes(5); run.OrchestrationVersion++; run.LeaseVersion++;
-            if (run.Status == AgentRunStatuses.Pending)
+            if (run.Status is AgentRunStatuses.Pending or AgentRunStatuses.WaitingForFeedback or AgentRunStatuses.WaitingForApproval)
             {
                 _runStateMachine.Transition(run, AgentRunStatuses.Running);
                 run.StartedAtUtc ??= _clock.GetUtcNow().UtcDateTime;
@@ -106,7 +109,7 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                         UPDATE agent_run SET lease_version = lease_version
                         WHERE id = {run.Id} AND lease_version = {previousVersion}
                           AND (lease_owner IS NULL OR lease_expires_at_utc IS NULL OR lease_expires_at_utc <= {now})
-                          AND status IN ('Pending', 'Running')
+                          AND status IN ('Pending', 'Running', 'WaitingForFeedback', 'WaitingForApproval')
                         """, cancellationToken);
                     if (matched != 1)
                     {
@@ -125,6 +128,18 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
             }
             _dbContext.AgentWriteFence = new AgentRunWriteFence(run.Id, leaseOwner, run.LeaseVersion, _clock);
             heartbeatTask = _heartbeat?.RunAsync(run.Id, leaseOwner, run.LeaseVersion, leaseLost, stopHeartbeat.Token) ?? Task.CompletedTask;
+            if (_compatibility?.IsRetired(run) == true)
+            {
+                _runStateMachine.Transition(run, AgentRunStatuses.Failed);
+                run.ErrorMessage = LegacyWorkflowRetiredException.Code;
+                run.CompletedAtUtc = _clock.GetUtcNow().UtcDateTime;
+                run.OutputJson = AgentNodeJson.Serialize(new { errorCode = LegacyWorkflowRetiredException.Code });
+                AddEvent(run, null, AgentEventTypes.RunFailed, "Historical workflow is read-only.", new { errorCode = LegacyWorkflowRetiredException.Code });
+                await UpdateResearchArtifactTerminalAsync(run, "Failed", cancellationToken);
+                run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return AgentRunExecutionOutcome.Executed;
+            }
             RecoverInterruptedNodes(run);
 
             const int maxBatchNodes = 6;
@@ -141,10 +156,9 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 run.OrchestrationVersion++;
                 if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped))
                 {
-                    var graphAppended = await _dynamicPlans.TryAdvanceAsync(run, AddEvent, cancellationToken);
-                    if (!graphAppended) CompleteRun(run);
+                    CompleteRun(run);
                     run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
-                    await SaveOrchestrationChangesAsync(graphAppended, cancellationToken);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
                     return AgentRunExecutionOutcome.Executed;
                 }
             }
@@ -157,27 +171,25 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
                 AddWakeOutbox(run, lastExecutedNode);
                 run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
                 AddEvent(run, lastExecutedNode, AgentEventTypes.SchedulerDecision, "Node batch yielded back to the queue.", new { executedNodes = run.Nodes.Count(x => x.Status == AgentNodeStatuses.Succeeded), maxBatchNodes, elapsedMs = batchTimer.ElapsedMilliseconds });
-                await SaveOrchestrationChangesAsync(false, cancellationToken);
+                await _dbContext.SaveChangesAsync(cancellationToken);
                 return AgentRunExecutionOutcome.Executed;
             }
 
-            var appended = false;
             if (run.Nodes.All(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped))
             {
-                appended = await _dynamicPlans.TryAdvanceAsync(run, AddEvent, cancellationToken);
-                if (!appended) CompleteRun(run);
+                CompleteRun(run);
             }
             else if (run.Nodes.Any(x => x.Status == AgentNodeStatuses.WaitingForFeedback))
             {
                 _runStateMachine.Transition(run, AgentRunStatuses.WaitingForFeedback);
                 AddEvent(run, null, AgentEventTypes.RunWaitingForFeedback, "Run paused waiting for human approval.", new { waitingNodes = run.Nodes.Count(x => x.Status == AgentNodeStatuses.WaitingForFeedback) });
                 run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
-                await SaveOrchestrationChangesAsync(false, cancellationToken);
+                await _dbContext.SaveChangesAsync(cancellationToken);
                 return AgentRunExecutionOutcome.Executed;
             }
             else throw new InvalidOperationException("Workflow has no ready node but is not complete.");
             run.LeaseOwner = null; run.LeaseExpiresAtUtc = null;
-            await SaveOrchestrationChangesAsync(appended, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (Exception exception) when (exception is AgentRunLeaseLostException or DbUpdateConcurrencyException || leaseLost.IsCancellationRequested)
         {
@@ -195,14 +207,6 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         {
             EquityLensTelemetry.MarkError(activity, exception);
             _logger.LogError(exception, "Agent run {AgentRunId} failed", runId);
-            if (run.WorkflowType is AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.PortfolioDiagnosis)
-            {
-                var reasonCode = exception is AgentLoopPlanValidationException
-                    ? AgentLoopStopReasons.PlanValidationFailed
-                    : AgentLoopStopReasons.RunFailed;
-                MarkLoopFailed(run, reasonCode, exception.Message);
-                AddEvent(run, null, AgentEventTypes.LoopStopped, $"{run.WorkflowType} loop failed: {reasonCode}.", new { reasonCode, error = exception.Message });
-            }
             if (run.Status != AgentRunStatuses.Failed)
             {
                 _runStateMachine.Transition(run, AgentRunStatuses.Failed);
@@ -326,35 +330,6 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
         AddEvent(run, null, AgentEventTypes.RunSucceeded, $"{run.WorkflowType} run succeeded.", null);
     }
 
-    private async Task SaveOrchestrationChangesAsync(bool graphAppended, CancellationToken cancellationToken)
-    {
-        if (!graphAppended)
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return;
-        }
-
-        // Appending a graph patch must not rewrite completed executions. Some providers
-        // mark the existing relationship members as modified when new nodes are added;
-        // keeping them unchanged also prevents an unrelated stale node row from rolling
-        // back the otherwise atomic planner/tool-call/graph-patch transaction.
-        _dbContext.ChangeTracker.DetectChanges();
-        foreach (var entry in _dbContext.ChangeTracker.Entries<AgentRunNode>()
-                     .Where(x => x.State == EntityState.Modified))
-        {
-            entry.OriginalValues.SetValues(entry.CurrentValues);
-            entry.State = EntityState.Unchanged;
-        }
-        _dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
-        try
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-        finally
-        {
-            _dbContext.ChangeTracker.AutoDetectChangesEnabled = true;
-        }
-    }
 
     private void AddWakeOutbox(AgentRun run, AgentRunNode cause)
     {
@@ -387,15 +362,4 @@ public sealed class AgentRunExecutor : IAgentRunExecutor
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, SerializerOptions);
 
-    private static void MarkLoopFailed(AgentRun run, string reasonCode, string message)
-    {
-        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
-        var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject ?? new JsonObject();
-        runtime["status"] = "Failed";
-        runtime["stopReason"] = reasonCode;
-        runtime["lastReasonCode"] = reasonCode;
-        runtime["failureMessage"] = message;
-        board[AgentBlackboardKeys.Runtime] = runtime;
-        run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
-    }
 }

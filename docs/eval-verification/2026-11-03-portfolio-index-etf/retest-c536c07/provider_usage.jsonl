@@ -1,0 +1,10 @@
+{"id": "0c307d6bbbde4f6395e2902e65a48795", "reserved_usd": 0.0029051999999999997}
+{"id": "0c307d6bbbde4f6395e2902e65a48795", "charged_upper_usd": 0.00034439999999999997, "status": 200, "usage": {"prompt_tokens": 756, "completion_tokens": 98, "total_tokens": 854, "prompt_tokens_details": {"cached_tokens": 512}, "prompt_cache_hit_tokens": 512, "prompt_cache_miss_tokens": 244}, "total_upper_usd": 0.00034439999999999997}
+{"id": "d4c41fcef4c94323b6f98c4a71923b23", "reserved_usd": 0.0071061}
+{"id": "d4c41fcef4c94323b6f98c4a71923b23", "charged_upper_usd": 0.0010413, "status": 200, "usage": {"prompt_tokens": 2991, "completion_tokens": 120, "total_tokens": 3111, "prompt_tokens_details": {"cached_tokens": 1408}, "prompt_cache_hit_tokens": 1408, "prompt_cache_miss_tokens": 1583}, "total_upper_usd": 0.0013857}
+{"id": "3f347de49dfb40d39c496974015ae95f", "reserved_usd": 0.0088674}
+{"id": "3f347de49dfb40d39c496974015ae95f", "charged_upper_usd": 0.0015401999999999998, "status": 200, "usage": {"prompt_tokens": 4598, "completion_tokens": 134, "total_tokens": 4732, "prompt_tokens_details": {"cached_tokens": 2688}, "prompt_cache_hit_tokens": 2688, "prompt_cache_miss_tokens": 1910}, "total_upper_usd": 0.0029258999999999995}
+{"id": "0a9aeb2c63f04700a5d87594db535026", "reserved_usd": 0.0130101}
+{"id": "0a9aeb2c63f04700a5d87594db535026", "charged_upper_usd": 0.0027302999999999997, "status": 200, "usage": {"prompt_tokens": 8361, "completion_tokens": 185, "total_tokens": 8546, "prompt_tokens_details": {"cached_tokens": 1792}, "prompt_cache_hit_tokens": 1792, "prompt_cache_miss_tokens": 6569}, "total_upper_usd": 0.005656199999999999}
+{"id": "b290f19114c943a7b7e16710a6ad3f4c", "reserved_usd": 0.015840299999999998}
+{"id": "b290f19114c943a7b7e16710a6ad3f4c", "charged_upper_usd": 0.005100599999999999, "status": 200, "usage": {"prompt_tokens": 11194, "completion_tokens": 1452, "total_tokens": 12646, "prompt_tokens_details": {"cached_tokens": 3072}, "prompt_cache_hit_tokens": 3072, "prompt_cache_miss_tokens": 8122}, "total_upper_usd": 0.010756799999999999}

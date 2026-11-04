@@ -29,7 +29,7 @@ public sealed record RiskBacktestEngineInput(
 
 /// <summary>與資產報酬矩陣同序的持倉識別與產業快照。</summary>
 public sealed record RiskAssetMetadata(
-    Guid SecurityId, string Ticker, string Exchange, string SecurityName, string Industry);
+    Guid SecurityId, string Ticker, string Exchange, string SecurityName, string Industry, string? RawIndustry = null);
 
 public sealed record RiskBacktestEngineResult(
     string Outcome,

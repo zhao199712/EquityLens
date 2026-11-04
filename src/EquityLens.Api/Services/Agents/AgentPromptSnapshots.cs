@@ -13,31 +13,12 @@ public static class AgentPromptUsageCatalog
 {
     public static readonly IReadOnlyList<PromptUsageDefinition> All =
     [
-        new("agent.router.investment-research", "Agent", "InvestmentResearchRouter", "投研問題路由", "投研 workflow 與 lead skill 路由。"),
-        new("agent.planner.dynamic-workflow", "Agent", "LlmAgentWorkflowPlanner", "動態工作流規劃", "規劃受限的動態 DAG。"),
-        new("agent.skill.conference-call-takeaways", "Skill", "conference-call-takeaways", "法說會重點", "法說會重點整理。"),
-        new("agent.capability.web-request", "Agent", "LlmWebCapabilityRequestAgent", "Web 能力請求", "判斷是否需要 Web 證據。"),
-        new("agent.critic.review", "Agent", "LlmCriticReviewAgent", "評論答案", "檢查答案和證據品質。"),
-        new("agent.revision.draft", "Agent", "LlmDraftRevisionAgent", "修訂答案", "依評論修訂答案。"),
-        new("agent.portfolio.narrative", "Agent", "LlmPortfolioDiagnosisNarrativeAgent", "投組診斷敘事", "依已驗證資料撰寫投組診斷。"),
-        new("agent.evidence.retrieval-plan", "Agent", "EvidenceRetrievalPlanAgent", "證據檢索規劃", "規劃補充證據檢索。"),
-        new("agent.evidence.claim-extraction", "Agent", "LlmEvidenceRemediationAgent", "Claim 擷取", "自答案擷取可驗證 claims。"),
-        new("agent.evidence.revision", "Agent", "LlmEvidenceRemediationAgent", "證據修訂", "以驗證證據修訂答案。"),
-        new("agent.evidence.assessor", "Agent", "LlmEvidenceAssessor", "證據評估", "評估 claim 與證據支持。"),
-        new("agent.evidence.reanalysis", "Agent", "LlmInvestmentReanalysisAgent", "重新分析", "依新證據重新分析結論。"),
-        new("agent.research.answer", "Workflow", AgentWorkflowTypes.ResearchInvestigation, "研究答案生成", "以已選研究證據生成帶引用答案。")
+        new("agent.router.investment-research", "Agent", "InvestmentResearchRouter", "角色路由", "研究／投組角色與參數。"),
+        new("agent.critic.review", "Agent", "LlmCriticReviewAgent", "評論答案", "檢查答案和證據品質。")
     ];
-
-    public static IReadOnlyList<PromptUsageDefinition> ForWorkflow(string workflowType) => workflowType switch
-    {
-        AgentWorkflowTypes.CriticReview => [Find("agent.critic.review")],
-        AgentWorkflowTypes.DraftRevision => [Find("agent.revision.draft")],
-        AgentWorkflowTypes.PortfolioDiagnosis => [Find("agent.portfolio.narrative")],
-        AgentWorkflowTypes.EvidenceRemediation => [Find("agent.evidence.retrieval-plan"), Find("agent.evidence.claim-extraction"), Find("agent.evidence.revision"), Find("agent.evidence.assessor")],
-        AgentWorkflowTypes.EvidenceReanalysis => [Find("agent.evidence.reanalysis"), Find("agent.critic.review"), Find("agent.evidence.revision")],
-        AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.FeedbackRevision => [Find("agent.planner.dynamic-workflow"), Find("agent.capability.web-request"), Find("agent.research.answer"), Find("agent.skill.conference-call-takeaways")],
-        _ => []
-    };
+    // Agent loop rendered prompts and loaded method hashes are persisted in turns/tool calls.
+    public static IReadOnlyList<PromptUsageDefinition> ForWorkflow(string workflowType) => workflowType is AgentWorkflowTypes.CriticReview or AgentWorkflowTypes.ResearchAgent
+        ? [Find("agent.critic.review")] : [];
     public static PromptUsageDefinition Find(string key) => All.Single(x => x.UsageKey == key);
 }
 

@@ -13,17 +13,17 @@ const delta = (n: number | null | undefined) => n == null ? '未提供' : `${n >
   <section class="scenario" aria-label="假設配置比較">
     <h3>假設配置比較（不修改持倉）</h3>
     <p v-if="comparison.snapshot">期間 {{ comparison.snapshot.from }} ～ {{ comparison.snapshot.to }} · {{ comparison.observationCount }} 筆共同日報酬 · 快照 {{ comparison.snapshot.capturedAtUtc }} · {{ comparison.snapshot.currency }}</p>
-    <p>固定權重歷史比較；差異僅相對本表原組合，與下方舊診斷口徑不同。現金報酬為零。VaR／ES：{{ comparison.horizonDays }} 天、{{ percent(comparison.confidenceLevel) }} 信賴水準。尚未回測驗證。</p>
+    <p>固定權重歷史比較；差異僅相對本表原組合，不能直接與固定持股數量的風險分析比較。現金報酬為零。VaR／ES：{{ comparison.horizonDays }} 天、{{ percent(comparison.confidenceLevel) }} 信賴水準。尚未回測驗證。</p>
     <p v-if="comparison.snapshot?.dates.length">實際價格期間 {{ comparison.snapshot.dates[0] }} ～ {{ comparison.snapshot.dates[comparison.snapshot.dates.length - 1] }}（最多 253 個共同價格日）</p>
     <p v-if="comparison.status === 'Unavailable'">無法完成情境比較，請確認下方限制。</p>
     <div v-if="columns.length" class="table-scroll"><table class="prestige-table">
       <thead><tr><th>指標</th><th v-for="column in columns" :key="column.name">{{ column.name }}</th></tr></thead>
       <tbody>
         <tr><th>狀態</th><td v-for="column in columns" :key="column.name">{{ column.status === 'Calculated' ? '已計算' : '資料不足：僅顯示配置' }}</td></tr>
-        <tr><th>股票權重</th><td v-for="column in columns" :key="column.name"><div v-for="(weight, ticker) in column.weights" :key="ticker">{{ ticker }}：{{ percent(weight) }}</div></td></tr>
+        <tr><th>證券權重</th><td v-for="column in columns" :key="column.name"><div v-for="(weight, ticker) in column.weights" :key="ticker">{{ ticker }}：{{ percent(weight) }}</div></td></tr>
         <tr><th>現金權重</th><td v-for="column in columns" :key="column.name">{{ percent(column.cashWeight) }}</td></tr>
-        <tr><th>股票 HHI（排除現金、不重配）</th><td v-for="column in columns" :key="column.name">{{ column.equityHhi.toFixed(4) }}</td></tr>
-        <tr><th>最大股票權重</th><td v-for="column in columns" :key="column.name">{{ percent(column.largestEquityWeight) }}</td></tr>
+        <tr><th>證券 HHI（排除現金、不重配）</th><td v-for="column in columns" :key="column.name">{{ column.equityHhi.toFixed(4) }}</td></tr>
+        <tr><th>最大證券權重</th><td v-for="column in columns" :key="column.name">{{ percent(column.largestEquityWeight) }}</td></tr>
         <tr><th>年化波動率</th><td v-for="column in columns" :key="column.name">{{ percent(column.metrics?.annualizedVolatility) }}</td></tr>
         <tr><th>歷史 VaR</th><td v-for="column in columns" :key="column.name">{{ percent(column.metrics?.historicalVaR) }}</td></tr>
         <tr><th>歷史 ES</th><td v-for="column in columns" :key="column.name">{{ percent(column.metrics?.expectedShortfall) }}</td></tr>

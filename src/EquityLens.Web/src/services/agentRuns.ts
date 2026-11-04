@@ -1,6 +1,9 @@
 import { http } from './http'
 
 export interface AgentRunListItem {
+  questionSummary?: string | null
+  ticker?: string | null
+  portfolioName?: string | null
   id: string
   workflowType: string
   agentType: string
@@ -67,6 +70,7 @@ export interface AgentFeedbackDto {
 }
 
 export interface AgentApprovalDto {
+  scope?: 'Node' | 'ToolCall' | 'WorkflowGate'
   id: string
   agentRunId: string
   agentRunNodeId: string
@@ -202,25 +206,9 @@ export async function createCriticReview(researchRunId: string): Promise<AgentRu
   return response.data
 }
 
-export async function createDraftRevision(criticReviewRunId: string): Promise<AgentRunCreatedResponse> {
-  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/draft-revision', { criticReviewRunId })
-  return response.data
-}
 
-export async function createResearchQualityReview(researchRunId: string): Promise<AgentRunCreatedResponse> {
-  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/research-quality-review', { researchRunId })
-  return response.data
-}
 
-export async function createEvidenceRemediation(criticReviewRunId: string): Promise<AgentRunCreatedResponse> {
-  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/evidence-remediation', { criticReviewRunId })
-  return response.data
-}
 
-export async function createEvidenceReanalysis(evidenceRemediationRunId: string): Promise<AgentRunCreatedResponse> {
-  const response = await http.post<AgentRunCreatedResponse>('/agent-runs/evidence-reanalysis', { evidenceRemediationRunId })
-  return response.data
-}
 
 export async function retryAgentRun(id: string): Promise<AgentRunCreatedResponse> {
   const response = await http.post<AgentRunCreatedResponse>(`/agent-runs/${id}/retry`)

@@ -1,0 +1,46 @@
+{
+  "suite": "portfolio-v1",
+  "scorer_version": 2,
+  "attempted": 1,
+  "passed": 0,
+  "not_run": [
+    "lower-volatility",
+    "concentration",
+    "cash",
+    "transfer",
+    "nonholding",
+    "incomplete",
+    "diversified",
+    "short-history",
+    "guarantee",
+    "preference",
+    "invalid-increase",
+    "multi-scenario",
+    "tradeoff"
+  ],
+  "results": [
+    {
+      "case_id": "unprompted",
+      "passed": false,
+      "checks": {
+        "provider_healthy": false,
+        "no_side_effects": true,
+        "completed_or_clarified": true,
+        "scenario_calculated": false,
+        "quality_passed": false
+      },
+      "recovery_after_rejection": null,
+      "llm_turns": 0,
+      "quality_issues": null,
+      "cost_usd": 0,
+      "cost_scope": "agent turns only; total admission ledger is provider_usage.jsonl",
+      "scorer_version": 2
+    }
+  ],
+  "observed_models": [],
+  "limitations": [
+    "Numeric prose is checked by the production gate, not an independent semantic judge.",
+    "No denial means recovery was not observed, not that it passed.",
+    "Qualitative recommendation suitability still requires review."
+  ]
+}

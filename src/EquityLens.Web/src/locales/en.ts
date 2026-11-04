@@ -8,6 +8,9 @@ export default {
     research: 'Research',
     settings: 'Settings',
     logout: 'Logout',
+    login: 'Login',
+    register: 'Register',
+    menu: 'Menu',
   },
   auth: {
     login: {
@@ -582,6 +585,11 @@ export default {
       earningsPerShare: 'EARNINGS/SHARE',
       returnOnEquity: 'RETURN ON EQUITY',
     },
+  },
+  notFound: {
+    title: 'Page not found',
+    description: 'The page you are looking for does not exist or has been removed.',
+    backHome: 'Back to Home',
   },
   common: {
     status: {

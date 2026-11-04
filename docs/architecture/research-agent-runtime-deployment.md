@@ -1,5 +1,7 @@
 # Research Agent Runtime 正式部署紀錄
 
+> 本文為歷史部署紀錄。目前已移除 DynamicDag，下方切換引擎的回退指令不再適用。新版手動部署／映像回復方式見[操作手冊](../operations/manual-deployment.md)。
+
 部署時間：2026-11-03 00:02 Asia/Taipei。使用者明確授權備份、合併 main、更新正式資料庫並啟用新引擎。
 
 ## 已完成

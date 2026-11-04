@@ -1,0 +1,73 @@
+{
+  "date": "2026-11-03",
+  "target_sha": "cdd54b129d594aa34af3a07bce3a980a27cc094a",
+  "isolated_docker_daemon": true,
+  "host_docker_socket_mounted": false,
+  "synthetic_data_only": true,
+  "production_containers_id_image_start_time_restart_count_unchanged": true,
+  "application_and_restored_database_counts": {
+    "columns": [
+      "users",
+      "portfolios",
+      "migrations"
+    ],
+    "values": {
+      "equitylens_drill": [
+        1,
+        1,
+        39
+      ],
+      "drill_restore": [
+        1,
+        1,
+        39
+      ]
+    }
+  },
+  "external_ai_calls": 0,
+  "deployed": {
+    "phase": "deployed",
+    "authenticated_portfolio_read": true,
+    "portfolio_count": 1,
+    "data_service_container_ids_unchanged": true,
+    "images": {
+      "api": "sha256:fc0ef769406a93e9fb906af39771c3d33e0229117e6431244c1febea9610c0dd",
+      "mathematics": "sha256:be3f03da86da17cfa9efa68afaa1693947c4101307eaa208f1ca05047393787c"
+    },
+    "release": "20261103T060632Z-4de6163b",
+    "backup_hash_valid": true,
+    "restore_into_separate_template0_database_passed": true,
+    "restored_backup_marker_rows": [
+      "1|before-deployment"
+    ],
+    "ci_url": "https://github.com/zhao199712/EquityLens/actions/runs/41583876729"
+  },
+  "rolled-back": {
+    "phase": "rolled-back",
+    "authenticated_portfolio_read": true,
+    "portfolio_count": 1,
+    "data_service_container_ids_unchanged": true,
+    "images": {
+      "/equitylens-prod-api": "sha256:86fbf4a150e319266b8c886649ee4fdb539a5220a048eb3226a53d01d6b690e2",
+      "/equitylens-prod-mathematics": "sha256:1306d8c8684baa3fb0c2fb7e376084b791a84317ea785eef30b989c97a532933"
+    },
+    "database_marker_rows": [
+      "1|before-deployment",
+      "2|written-after-deployment"
+    ],
+    "post_deployment_writes_preserved": true
+  },
+  "migration-guard": {
+    "migration_mismatch_rejected": true,
+    "app_container_ids_unchanged": true
+  },
+  "health-failure": {
+    "health_failure_exit_nonzero": true,
+    "failure_recorded": true,
+    "no_automatic_image_rollback": true,
+    "failed_release": "20261103T060909Z-f7adbb3e",
+    "manual_rollback_succeeded": true,
+    "cause": "intentional HTTP 404; curl exit 22"
+  },
+  "sandbox_container_and_anonymous_volume_removed": true
+}

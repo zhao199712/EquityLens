@@ -178,6 +178,14 @@ public sealed class PortfolioRiskController : ApiControllerBase
         return ToActionResult(result);
     }
 
+    /// <summary>保存目前查看的已完成計算，包含原始結果及品質狀態。</summary>
+    [HttpPost("reports/from-calculation/{runId:guid}")]
+    public async Task<ActionResult<PortfolioRiskReportSnapshotDetailResponse>> CreateCalculationReportSnapshot(
+        Guid portfolioId, Guid runId, [FromServices] IPortfolioRiskReportSnapshotService reports, CancellationToken cancellationToken = default)
+    {
+        return ToActionResult(await reports.CreateFromCalculationAsync(portfolioId, runId, _currentUser.UserId, cancellationToken));
+    }
+
     [HttpGet("reports")]
     public async Task<ActionResult<IReadOnlyList<PortfolioRiskReportSnapshotListItemResponse>>> GetPortfolioRiskReportSnapshots(Guid portfolioId, CancellationToken cancellationToken = default)
     {

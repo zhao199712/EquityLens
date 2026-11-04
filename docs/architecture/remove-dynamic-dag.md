@@ -38,19 +38,19 @@
 |---|---|---|
 | D1 | `ResearchInvestigation`（v1） | 刪除。`POST /api/research/investigations` 一律建立 `ResearchAgent`。`engine`：省略或 `AgentLoop` → v4；`DynamicDag` → `400`，訊息說明已停用。 |
 | D2 | `FeedbackRevision` | 併入 `ResearchAgent` 修訂模式。`POST /api/agent-runs/{id}/feedback` 的 API 契約與前端行為不變。 |
-| D3 | `PortfolioDiagnosis` | 改成 Agent 迴圈。風險數學、歸因、風險設定檔、**權重情境模擬**、重用既有 Risk Run 都包成工具。**數值資料只能由工具從 Blackboard / DB 讀取**；LLM 只能給有 schema 限制的設定參數（例如目標權重、轉入對象、期間）。**always-on 人工審批與核准／拒絕分支不變。** |
+| D3 | `PortfolioDiagnosis` | 改成 Agent 迴圈。風險數學、歸因、風險設定檔、**權重情境模擬**、重用既有 Risk Run 都包成工具。**投組工具以任務為單位，上限 8 個；37 個底層數學函式不得直接暴露給 LLM**，只由工具內部確定性組合執行。首批使用 `get_portfolio_snapshot`、`get_risk_report`、`run_risk_analysis`、`get_performance_attribution`、`simulate_weight_scenario`、`get_risk_profile` 六個工具；分析種類用 enum 限制，人工審批仍是固定節點。**數值資料只能由工具從 Blackboard / DB 讀取**；LLM 只能給有 schema 限制的設定參數（例如目標權重、轉入對象、期間）。**always-on 人工審批與核准／拒絕分支不變。** |
 | D4 | `ResearchQualityReview` | **刪除**（沒有任何 UI 呼叫；功能已被 ResearchAgent 涵蓋）。移除 endpoint 與前端未使用的 service 函式。 |
 | D5 | `DraftRevision`、`EvidenceRemediation`、`EvidenceReanalysis` | **刪除**（功能已被 ResearchAgent 的迴圈與修訂模式涵蓋）。移除 endpoint、前端呼叫與按鈕（`AgentRunDetailView.vue`、`AgentRunAdminDetail.vue` 等）。只被它們使用的節點、Agent、prompt、Blackboard key、測試一併移除。 |
 | D6 | `CriticReview` | 保留，改用 `qualityGate`（評分模式）。`POST /api/agent-runs/critic-review` 與 Admin 研究管理頁行為不變。 |
 | D7 | **舊資料**（D1、D2、D4、D5 以及舊版 PortfolioDiagnosis 已存在 DB 的 run） | **保留唯讀**：列表、詳情、時間軸、節點、事件、工具呼叫照常可讀（前端舊 run 詳情頁要能打開）。retry／繼續執行回 `409`，錯誤碼 `legacy_workflow_retired`。佇列撿到舊 workflow 的未完成 run：標記 `Failed` 並帶錯誤碼，**不可**當機或無限重試。不做資料遷移。 |
-| D8 | **Ask Agent（聊天路由）** | 必須繼續運作，路由目標改為上述 3 個工作流。`InvestmentResearchRouting` 可保留或改寫，但不得依賴已移除的 skill／capability 機制。 |
+| D8 | **Ask Agent（聊天路由）** | 必須繼續運作，路由目標改為上述 3 個工作流。`InvestmentResearchRouting` 可保留或改寫，但不得依賴已移除的 skill／capability 機制。聊天 Router 僅輸出 Research／Portfolio 工作流、4 種 playbook 之一與標的／投組／情境參數；CriticReview 保留 Admin 入口。解析或 schema 錯誤重試一次，再失敗回澄清並記錄遮罩 warning。 |
 
 ## 4. 要移除的機制（驗收以「沒有任何參照」為準）
 
 - `LlmAgentWorkflowPlanner`、`DeterministicDynamicWorkflowPlanner`、`PlannerInvocation`、動態規劃用途的 `IAgentWorkflowPlanner`
 - `DynamicPlanValidator`、`GraphMaterializer`、`DynamicPlanProposal` 等提案型別、`DynamicPlanningTriggers`
 - `AgentDynamicPlanCoordinator` 與 executor 中呼叫它的路徑；`orchestrationMode = "DynamicStateful"`；執行期改寫 `WorkflowDefinitionJson` 的邏輯
-- `NodeCapabilityRegistry` / `INodeCapabilityRegistry`；`WorkflowSkillCatalog` 只保留新流程實際用到的部分，否則移除
+- `NodeCapabilityRegistry` / `INodeCapabilityRegistry`；`WorkflowSkillCatalog` 移除；7 個 Supporting skill 刪除，4 個 Lead skill 改為 playbook（研究方法 prompt、工具範圍、預算、必要輸入），保留法說會專屬 prompt。playbook 不能放寬來源政策或全域預算
 - `AgentLoopController` 及其 loop policy（停止條件改由各 Agent 迴圈的預算／停止原因負責）
 - D1、D2、D4、D5 的工作流、provider、endpoint、只被它們使用的 handler／Agent／常數／Blackboard key／prompt／測試
 - Admin 中依賴 skill／capability 的 API 與前端頁面：移除，或改為列出**工具註冊表**（名稱、風險等級、可見條件）
@@ -147,4 +147,23 @@
 
 | 章節 | 原規格 | 實際做法 | 理由 |
 |---|---|---|---|
-| | | | |
+| D7 | 明列刪除的工作流及舊投組唯讀 | 舊 ResearchAgent／CriticReview 圖也依版本及節點辨識為唯讀 | 合併 QualityGate 會刪除其舊節點；不能繼續執行不再受支援的圖。 |
+| R1 分階段實作 | 先建立舊資料防護 | 防護先以目前註冊 provider 的版本／catalog 判定，替換 provider 版本或移除註冊時立即生效 | 避免中途提交讓仍在替換中的工作流全部失效；最終只註冊三個新版本。 |
+
+| R10 唯讀例外 | 廢棄名稱只允許集中 legacy 對應 | API `LegacyWorkflowReadModel.cs` 保留舊摘要與 artifact 歸屬；Web `services/legacyWorkflows.ts` 保留歷史結果型別／篩選名稱 | 保持舊 GET 與前端可讀，不參與建立、retry 或執行；搜尋除 migrations 僅命中這兩檔。 |
+
+### R32 原始 PDF 取得方式補充
+
+2026-11-03：Garage 正式 bucket 為空，資料庫指向的原始 PDF key 回 NoSuchKey。使用工作目錄既有 PDF 原檔作逐頁核實，未以 chunk／摘要替代。台積電檔案 hash 與 DB 一致；鴻海來源 DB 未存 hash，另記本機原檔 hash，無法證明與不存在的 Garage 物件相同。核實紀錄與限制見補充題報告。未修改正式資料或上傳檔案；原始檔儲存恢復列為發布前待辦。
+
+### R10 API 操作名稱的相容性界線
+
+`CreateResearchInvestigationAsync` 與前端同名函式、Created DTO 保留既有 investigation API 操作名稱，回應 JSON／HTTP 路徑不變；這些不是 workflow provider／node／catalog 註冊，實際只建立 ResearchAgent。廢棄工作流的字串值與停用引擎識別集中至 legacy 相容檔（明確拒絕舊引擎，不啟動它）；錯誤文字與 UI fixture 不再散布舊型別值。
+
+### 使用者授權整合前端分支（2026-11-03）
+
+使用者在本串要求把先前分支合併至目前分支，並明確選擇 `fix/frontend-public-ux`。因此本次將該分支的 App.vue 導覽列變更原樣整合（檔案 hash 與來源一致）；這是 §5.8 原先避免跨分支衝突限制的使用者授權整合，不額外重設導覽列。`jev` 不在本次範圍；不 merge main、不部署。
+
+### 使用者授權整合 main（2026-11-03）
+
+使用者最新指示為「main 開一個分支，然後合併、測試，沒有問題再合併到 main」。因此從最新 `origin/main`（`a73886d`）建立 `integrate/three-workflows-main-20261103`，整合 `refactor/three-workflows`（`d0610a9`），通過驗證後將同一提交合併回 main 並推送。這項明確授權取代本輪原先僅交付功能分支的限制；不部署、不修改正式資料、不恢復排程。

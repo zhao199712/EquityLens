@@ -1,0 +1,7 @@
+{
+  "eligible_for_quality_comparison": false,
+  "benchmark_isolation_verified": true,
+  "reason": "Targeted rerun of multi-scenario and tradeoff only; not a full 14-case result",
+  "raw_sha256": "52eb27c8ac7f5752aa0650e1d59a3c7e17df38e25d110c2c45e46597d9589d72",
+  "raw_bytes": 1670762
+}

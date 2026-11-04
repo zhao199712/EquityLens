@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using EquityLens.Api.Data.Entities;
+using EquityLens.Api.Services.Agents;
 using EquityLens.Api.Services.Ai;
 using EquityLens.Api.Services.Chat;
 
@@ -11,9 +12,9 @@ public sealed class ConversationAgentTests
     public async Task DecideAsync_UsesStrictStructuredOutputWithoutTools()
     {
         var chat = new FakeChat("""
-            {"action":"DirectResponse","response":"你好！","standaloneQuery":null,"reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":"使用者打招呼"}
+            {"action":"direct_reply","workflow":null,"params":{},"missing":[],"confidence":"high","response":"你好！"}
             """);
-        var agent = new LlmConversationAgent(chat);
+        var agent = new InvestmentResearchRouter(chat);
 
         var decision = await agent.DecideAsync(new("你好", new JsonObject(), [], []));
 
@@ -29,9 +30,9 @@ public sealed class ConversationAgentTests
     public async Task DecideAsync_RepairsUnknownFields()
     {
         var chat = new SequenceChat(
-            """{"action":"DirectResponse","response":"x","reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":"","tool":"webSearch"}""",
-            """{"action":"DirectResponse","response":"你好","standaloneQuery":null,"reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":""}""");
-        var agent = new LlmConversationAgent(chat);
+            """{"action":"direct_reply","workflow":null,"params":{},"missing":[],"confidence":"high","response":"x","tool":"webSearch"}""",
+            """{"action":"direct_reply","workflow":null,"params":{},"missing":[],"confidence":"high","response":"你好"}""");
+        var agent = new InvestmentResearchRouter(chat);
 
         var decision = await agent.DecideAsync(new("你好", new JsonObject(), [], []));
 
@@ -43,10 +44,10 @@ public sealed class ConversationAgentTests
     public async Task DecideAsync_RepairsSimplifiedChinese()
     {
         var chat = new SequenceChat(
-            """{"action":"DirectResponse","response":"请问有什么可以帮你？","standaloneQuery":null,"reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":""}""",
-            """{"action":"DirectResponse","response":"請問有什麼可以幫你？","standaloneQuery":null,"reasonCode":"Greeting","confidence":"high","contextPatch":{},"summary":""}""");
+            """{"action":"direct_reply","workflow":null,"params":{},"missing":[],"confidence":"high","response":"请问有什么可以帮你？"}""",
+            """{"action":"direct_reply","workflow":null,"params":{},"missing":[],"confidence":"high","response":"請問有什麼可以幫你？"}""");
 
-        var decision = await new LlmConversationAgent(chat).DecideAsync(new("你好", new JsonObject(), [], []));
+        var decision = await new InvestmentResearchRouter(chat).DecideAsync(new("你好", new JsonObject(), [], []));
 
         Assert.Equal("請問有什麼可以幫你？", decision.Response);
         Assert.Equal(2, chat.CallCount);
@@ -56,9 +57,9 @@ public sealed class ConversationAgentTests
     public async Task DecideAsync_IncludesAvailablePortfoliosInPrompt()
     {
         var chat = new FakeChat("""
-            {"action":"RouteWorkflow","response":"幫你診斷投組。","standaloneQuery":"診斷投資組合「˙777」最近一年的風險","reasonCode":"portfolio_diagnosis","confidence":"high","contextPatch":{},"summary":""}
+            {"action":"route","workflow":"Portfolio","params":{},"missing":[],"confidence":"high","response":"幫你診斷投組。"}
             """);
-        var agent = new LlmConversationAgent(chat);
+        var agent = new InvestmentResearchRouter(chat);
         var portfolios = new[] { new ConversationPortfolioOption(Guid.NewGuid(), "˙777") };
 
         var decision = await agent.DecideAsync(new("我的投資組合最近一年的風險如何？", new JsonObject(), [], portfolios));
@@ -67,6 +68,50 @@ public sealed class ConversationAgentTests
         Assert.Contains("availablePortfolios", chat.LastRequest?.UserPrompt);
         Assert.Contains("777", chat.LastRequest?.UserPrompt);
         Assert.Contains("禁止再追問持股明細", chat.LastRequest?.SystemPrompt);
+    }
+
+    [Theory]
+    [InlineData("clarify", "AskClarification")]
+    [InlineData("reject", "RejectUnsafe")]
+    public async Task NonExecutionActions_DoNotProduceRoute(string action, string expected)
+    {
+        var decision = await new InvestmentResearchRouter(new FakeChat($$$"""{"action":"{{{action}}}","params":{},"missing":[],"confidence":"high","response":"請確認"}""")).DecideAsync(new("訊息", new(), [], []));
+        Assert.Equal(expected, decision.Action); Assert.Null(decision.Route);
+    }
+
+    [Fact]
+    public async Task NoPortfolio_CannotSelectPortfolio()
+    {
+        var decision = await new InvestmentResearchRouter(new FakeChat("""{"action":"route","workflow":"Portfolio","params":{},"missing":[],"confidence":"high"}""")).DecideAsync(new("我的配置", new(), [], []));
+        Assert.Equal(ConversationActions.AskClarification, decision.Action); Assert.Null(decision.Route);
+    }
+
+    [Fact]
+    public async Task ForeignPortfolio_RejectedAndLoggedWithoutMessageContent()
+    {
+        var logger = new CapturingLogger(); var foreign = Guid.NewGuid();
+        var decision = await new InvestmentResearchRouter(new FakeChat($$$"""{"action":"route","workflow":"Portfolio","params":{"portfolioId":"{{{foreign}}}"},"missing":[],"confidence":"high"}"""), logger)
+            .DecideAsync(new("private message", new(), [], [new(Guid.NewGuid(), "owned")]));
+        Assert.Equal(ConversationActions.RejectUnsafe, decision.Action);
+        Assert.Contains(logger.Messages, x => x.Contains("unauthorized_portfolio")); Assert.DoesNotContain(logger.Messages, x => x.Contains("private message") || x.Contains(foreign.ToString()));
+    }
+
+    [Fact]
+    public async Task InvalidTwice_ClarifiesAndLogsOnlySanitizedStructure()
+    {
+        var chat = new SequenceChat("""{"action":"route","params":{"ticker":"private email@example.test"},"private-secret":"sensitive"}""");
+        var logger = new CapturingLogger();
+        var decision = await new InvestmentResearchRouter(chat, logger).DecideAsync(new("private input", new(), [], []));
+        Assert.Equal(2, chat.CallCount); Assert.Equal(ConversationActions.AskClarification, decision.Action);
+        Assert.Equal(2, logger.Messages.Count); Assert.All(logger.Messages, x => { Assert.Contains("schema", x); Assert.DoesNotContain("email@", x); Assert.DoesNotContain("private", x); Assert.DoesNotContain("sensitive", x); });
+    }
+
+    private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger<InvestmentResearchRouter>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel level) => true;
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel level, Microsoft.Extensions.Logging.EventId id, TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
     }
 
     private sealed class FakeChat(string content) : IChatCompletionService

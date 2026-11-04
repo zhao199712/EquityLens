@@ -18,7 +18,8 @@ public interface IAgentApprovalService
 public sealed class AgentApprovalService(
     EquityLensDbContext db,
     IAgentRunStateMachine runStateMachine,
-    IAgentNodeStateMachine nodeStateMachine) : IAgentApprovalService
+    IAgentNodeStateMachine nodeStateMachine,
+    WorkflowExecutionCompatibility? compatibility = null) : IAgentApprovalService
 {
     public Task<AgentApprovalResponse?> ApproveAsync(Guid runId, Guid approvalId, Guid actorUserId, bool isAdmin, DecideAgentApprovalRequest request, CancellationToken cancellationToken = default) =>
         DecideAsync(runId, approvalId, actorUserId, isAdmin, request, approve: true, cancellationToken);
@@ -47,6 +48,8 @@ public sealed class AgentApprovalService(
             .SingleOrDefaultAsync(x => x.Id == approvalId && x.AgentRunId == runId, cancellationToken);
         if (approval is null || (!isAdmin && approval.Run.UserId != actorUserId)) return null;
 
+        compatibility?.EnsureExecutable(approval.Run);
+
         if (approval.Status != AgentApprovalStatuses.Pending)
         {
             if (approval.ClientRequestId == request.RequestId) return Map(approval);
@@ -56,8 +59,9 @@ public sealed class AgentApprovalService(
         var run = approval.Run;
         var node = approval.Node;
         var toolApproval = approval.Scope == "ToolCall";
-        var waitingRun = toolApproval ? AgentRunStatuses.WaitingForFeedback : AgentRunStatuses.WaitingForApproval;
-        var waitingNode = toolApproval ? AgentNodeStatuses.WaitingForFeedback : AgentNodeStatuses.WaitingForApproval;
+        var workflowGate = approval.Scope == "WorkflowGate";
+        var waitingRun = (toolApproval || workflowGate) ? AgentRunStatuses.WaitingForFeedback : AgentRunStatuses.WaitingForApproval;
+        var waitingNode = (toolApproval || workflowGate) ? AgentNodeStatuses.WaitingForFeedback : AgentNodeStatuses.WaitingForApproval;
         if (run.Status != waitingRun || node.Status != waitingNode)
             throw new AgentApprovalException("approval_state_conflict", "Agent run is no longer waiting for this approval.");
 
@@ -68,7 +72,15 @@ public sealed class AgentApprovalService(
         approval.ClientRequestId = request.RequestId;
         approval.DecisionComment = comment;
 
-        if (approve || toolApproval)
+        if (workflowGate)
+        {
+            var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
+            board[AgentBlackboardKeys.ApprovalDecision] = JsonSerializer.SerializeToNode(new {
+                decision = approve ? HumanApprovalDecisions.Approved : HumanApprovalDecisions.Rejected,
+                comment, reviewerId = actorUserId.ToString(), decidedAtUtc = now.ToString("O") }, AgentNodeJson.SerializerOptions);
+            run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        }
+        if (approve || toolApproval || workflowGate)
         {
             nodeStateMachine.Transition(node, AgentNodeStatuses.Pending);
             runStateMachine.Transition(run, AgentRunStatuses.Running);
@@ -94,14 +106,14 @@ public sealed class AgentApprovalService(
                 var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
                 var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject ?? new JsonObject();
                 runtime["status"] = "Cancelled";
-                runtime["stopReason"] = AgentLoopStopReasons.HumanRejected;
-                runtime["lastReasonCode"] = AgentLoopStopReasons.HumanRejected;
+                runtime["stopReason"] = "HumanRejected";
+                runtime["lastReasonCode"] = "HumanRejected";
                 board[AgentBlackboardKeys.Runtime] = runtime;
                 run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
             }
             run.LeaseOwner = null;
             run.LeaseExpiresAtUtc = null;
-            if ((run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) && run.ResearchRunId is Guid researchRunId)
+            if ((run.WorkflowType == AgentWorkflowTypes.ResearchAgent) && run.ResearchRunId is Guid researchRunId)
             {
                 var researchRun = await db.ResearchRuns.SingleOrDefaultAsync(x => x.Id == researchRunId, cancellationToken);
                 if (researchRun is not null) researchRun.Status = "Cancelled";

@@ -102,7 +102,8 @@ public sealed class PortfolioRiskDataPreparerTests
         Assert.NotNull(input.Assets);
         Assert.Equal(new[] { SecondSecurity, FirstSecurity }, input.Assets.Select(asset => asset.SecurityId));
         Assert.Equal(new[] { "B", "A" }, input.Assets.Select(asset => asset.Ticker));
-        Assert.Equal(new[] { "金融", "半導體" }, input.Assets.Select(asset => asset.Industry));
+        Assert.Equal(new[] { "金融保險業", "電子工業" }, input.Assets.Select(asset => asset.Industry));
+        Assert.Equal(new[] { "金融", "半導體" }, input.Assets.Select(asset => asset.RawIndustry));
 
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var json = JsonSerializer.Serialize(input, options);
@@ -113,8 +114,10 @@ public sealed class PortfolioRiskDataPreparerTests
         Assert.Equal(input.AssetReturns[0], restored.AssetReturns[0]);
         db.Securities.Single(x => x.Id == FirstSecurity).Industry = "已變更";
         await db.SaveChangesAsync();
-        Assert.Equal("半導體", input.Assets[1].Industry);
-        Assert.Equal("半導體", restored.Assets[1].Industry);
+        Assert.Equal("電子工業", input.Assets[1].Industry);
+        Assert.Equal("半導體", input.Assets[1].RawIndustry);
+        Assert.Equal("電子工業", restored.Assets[1].Industry);
+        Assert.Equal("半導體", restored.Assets[1].RawIndustry);
 
         var legacy = JsonNode.Parse(json)!;
         legacy.AsObject().Remove("assets");

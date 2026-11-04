@@ -24,6 +24,7 @@ public sealed class AgentRunService : IAgentRunService
     private readonly IAgentWorkflowCatalog _catalog;
     private readonly IAgentPromptSnapshotService? _promptSnapshots;
     private readonly ResearchAgentLoopOptions _loopOptions;
+    private readonly WorkflowExecutionCompatibility? _compatibility;
 
     public AgentRunService(
         EquityLensDbContext dbContext,
@@ -35,7 +36,8 @@ public sealed class AgentRunService : IAgentRunService
         PortfolioDiagnosisWorkflowDefinitionProvider? portfolioDiagnosisProvider = null,
         IAgentWorkflowCatalog? catalog = null,
         IAgentPromptSnapshotService? promptSnapshots = null,
-        IOptions<ResearchAgentLoopOptions>? loopOptions = null)
+        IOptions<ResearchAgentLoopOptions>? loopOptions = null,
+        WorkflowExecutionCompatibility? compatibility = null)
     {
         _dbContext = dbContext;
         _workflowProviders = CreateWorkflowProviderRegistry(workflowProviders);
@@ -47,6 +49,7 @@ public sealed class AgentRunService : IAgentRunService
         _catalog = catalog ?? new AgentWorkflowCatalog();
         _promptSnapshots = promptSnapshots;
         _loopOptions = loopOptions?.Value ?? new();
+        _compatibility = compatibility;
     }
 
     public async Task<AgentRunSummaryResponse> CreateCriticReviewAsync(
@@ -73,9 +76,9 @@ public sealed class AgentRunService : IAgentRunService
         InvestmentResearchRoutingContext? routingContext = null,
         CancellationToken cancellationToken = default)
     {
-        var engine = request.Engine ?? _loopOptions.DefaultEngine;
-        if (engine is not ("DynamicDag" or "AgentLoop")) throw new ArgumentException("Unknown research engine.", nameof(request));
-        var workflowType = engine == "AgentLoop" ? AgentWorkflowTypes.ResearchAgent : AgentWorkflowTypes.ResearchInvestigation;
+        if (request.Engine == LegacyWorkflowReadModel.RetiredResearchEngine) throw new ArgumentException("舊引擎已停用，請使用 AgentLoop。", nameof(request));
+        if (request.Engine is not (null or "AgentLoop")) throw new ArgumentException("Unknown research engine.", nameof(request));
+        var workflowType = AgentWorkflowTypes.ResearchAgent;
         if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(workflowType, cancellationToken);
         var researchRun = new ResearchRun
         {
@@ -87,83 +90,14 @@ public sealed class AgentRunService : IAgentRunService
         var run = GetWorkflowProvider(workflowType) switch
         {
             ResearchAgentWorkflowDefinitionProvider loop => loop.CreateRun(userId, researchRun.Id, request, routingContext),
-            ResearchInvestigationWorkflowDefinitionProvider dag => dag.CreateRun(userId, researchRun.Id, request, routingContext),
             _ => throw new InvalidOperationException("Research workflow provider is not registered.")
         };
         await SnapshotExecutionPoliciesAsync(run, cancellationToken);
         _dbContext.ResearchRuns.Add(researchRun); _dbContext.AgentRuns.Add(run);
-        AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchInvestigation run created.", new { researchRunId = researchRun.Id });
+        AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchAgent run created.", new { researchRunId = researchRun.Id });
         AddRoutingEvent(run, routingContext);
         await _dbContext.SaveChangesAsync(cancellationToken); await EnqueueAsync(run, userId, cancellationToken);
         return (MapSummary(run), researchRun.Id);
-    }
-
-    public async Task<AgentRunSummaryResponse> CreateDraftRevisionAsync(
-        Guid userId,
-        Guid criticReviewRunId,
-        CancellationToken cancellationToken = default)
-    {
-        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.DraftRevision, cancellationToken);
-        var provider = GetWorkflowProvider(AgentWorkflowTypes.DraftRevision);
-        var run = provider.CreateRun(userId, criticReviewRunId);
-        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
-        _dbContext.AgentRuns.Add(run);
-        AddEvent(run, null, AgentEventTypes.RunCreated, "DraftRevision run created.", new { criticReviewRunId });
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await EnqueueAsync(run, userId, cancellationToken);
-        return MapSummary(run);
-    }
-
-    public async Task<AgentRunSummaryResponse> CreateResearchQualityReviewAsync(
-        Guid userId,
-        Guid researchRunId,
-        CancellationToken cancellationToken = default)
-    {
-        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.ResearchQualityReview, cancellationToken);
-        var provider = GetWorkflowProvider(AgentWorkflowTypes.ResearchQualityReview);
-        var run = provider.CreateRun(userId, researchRunId);
-        run.ResearchRunId = researchRunId;
-        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
-        _dbContext.AgentRuns.Add(run);
-        AddEvent(run, null, AgentEventTypes.RunCreated, "ResearchQualityReview run created.", new { researchRunId });
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await EnqueueAsync(run, userId, cancellationToken);
-        return MapSummary(run);
-    }
-
-    public async Task<AgentRunSummaryResponse> CreateEvidenceRemediationAsync(
-        Guid userId,
-        Guid criticReviewRunId,
-        CancellationToken cancellationToken = default)
-    {
-        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.EvidenceRemediation, cancellationToken);
-        var provider = GetWorkflowProvider(AgentWorkflowTypes.EvidenceRemediation);
-        var run = provider.CreateRun(userId, criticReviewRunId);
-        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
-        _dbContext.AgentRuns.Add(run);
-        AddEvent(run, null, AgentEventTypes.RunCreated, "EvidenceRemediation run created.", new { criticReviewRunId });
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await EnqueueAsync(run, userId, cancellationToken);
-        return MapSummary(run);
-    }
-
-    public async Task<AgentRunSummaryResponse> CreateEvidenceReanalysisAsync(
-        Guid userId,
-        Guid evidenceRemediationRunId,
-        CancellationToken cancellationToken = default)
-    {
-        if (_workflowAdminService is not null) await _workflowAdminService.EnsureEnabledAsync(AgentWorkflowTypes.EvidenceReanalysis, cancellationToken);
-        await EvidenceReanalysisSourceValidator.ValidateAsync(_dbContext, userId, evidenceRemediationRunId, cancellationToken);
-        var provider = GetWorkflowProvider(AgentWorkflowTypes.EvidenceReanalysis);
-        var run = provider.CreateRun(userId, evidenceRemediationRunId);
-        await SnapshotExecutionPoliciesAsync(run, cancellationToken);
-        _dbContext.AgentRuns.Add(run);
-        AddEvent(run, null, AgentEventTypes.RunCreated, "EvidenceReanalysis run created.", new { evidenceRemediationRunId });
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await EnqueueAsync(run, userId, cancellationToken);
-        return MapSummary(run);
     }
 
     public async Task<AgentRunSummaryResponse> CreatePortfolioDiagnosisAsync(
@@ -209,6 +143,7 @@ public sealed class AgentRunService : IAgentRunService
 
         var source = await _dbContext.AgentRuns.SingleOrDefaultAsync(x => x.Id == runId && x.UserId == userId, cancellationToken)
             ?? throw new AgentFeedbackException("agent_run_not_found", "Agent run not found.");
+        _compatibility?.EnsureExecutable(source);
         var existing = await _dbContext.AgentFeedback.AsNoTracking().SingleOrDefaultAsync(
             x => x.AgentRunId == runId && x.ClientRequestId == request.RequestId, cancellationToken);
         if (existing is not null)
@@ -235,7 +170,7 @@ public sealed class AgentRunService : IAgentRunService
         ResearchRun? childResearch = null;
         if (type == AgentFeedbackTypes.NeedsCorrection)
         {
-            if (source.WorkflowType is not (AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.FeedbackRevision) || source.ResearchRunId is null)
+            if (source.WorkflowType != AgentWorkflowTypes.ResearchAgent || source.ResearchRunId is null)
                 throw new AgentFeedbackException("feedback_revision_unsupported", "NeedsCorrection currently supports completed research runs only.");
             var parentResearch = await _dbContext.ResearchRuns.AsNoTracking().SingleAsync(x => x.Id == source.ResearchRunId, cancellationToken);
             childResearch = new ResearchRun
@@ -246,15 +181,15 @@ public sealed class AgentRunService : IAgentRunService
                 SourcePolicy = parentResearch.SourcePolicy, DocumentType = parentResearch.DocumentType,
                 TopK = parentResearch.TopK, Temperature = parentResearch.Temperature, CreatedAtUtc = DateTime.UtcNow
             };
-            var provider = GetWorkflowProvider(AgentWorkflowTypes.FeedbackRevision);
-            childRun = provider.CreateRun(userId, source.Id);
+            var provider = (ResearchAgentWorkflowDefinitionProvider)GetWorkflowProvider(AgentWorkflowTypes.ResearchAgent);
+            childRun = provider.CreateRevisionRun(userId, childResearch.Id, source, parentResearch, feedback.Id, comment!);
             childRun.ResearchRunId = childResearch.Id;
             childRun.ParentAgentRunId = source.Id;
             feedback.FollowUpAgentRunId = childRun.Id;
             await SnapshotExecutionPoliciesAsync(childRun, cancellationToken);
             _dbContext.ResearchRuns.Add(childResearch);
             _dbContext.AgentRuns.Add(childRun);
-            AddEvent(childRun, null, AgentEventTypes.RunCreated, "FeedbackRevision child run created.", new { parentAgentRunId = source.Id, parentResearchRunId = parentResearch.Id, feedbackId = feedback.Id });
+            AddEvent(childRun, null, AgentEventTypes.RunCreated, "Research revision child run created.", new { parentAgentRunId = source.Id, parentResearchRunId = parentResearch.Id, feedbackId = feedback.Id });
             AddEvent(source, null, AgentEventTypes.FollowUpRunCreated, "Feedback child run created.", new { feedbackId = feedback.Id, childAgentRunId = childRun.Id, childResearchRunId = childResearch.Id });
         }
 
@@ -298,10 +233,14 @@ public sealed class AgentRunService : IAgentRunService
 
         if (researchRunId.HasValue) runs = runs.Where(x => x.ResearchRunId == researchRunId.Value).ToList();
 
-        return runs
-            .Take(Math.Clamp(limit, 1, 100))
-            .Select(x => MapSummary(x))
-            .ToList();
+        var selected = runs.Take(Math.Clamp(limit, 1, 100)).ToList();
+        var portfolioIds = selected.Select(ReadPortfolioId).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray();
+        var portfolios = await _dbContext.Portfolios.AsNoTracking().Where(p => portfolioIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.OwnerUserId, p.Name }).ToListAsync(cancellationToken);
+        return selected.Select(run => MapSummary(run) with {
+            PortfolioName = portfolios.FirstOrDefault(p => p.Id == ReadPortfolioId(run) && p.OwnerUserId == run.UserId)?.Name
+                ?? MapSummary(run).PortfolioName
+        }).ToList();
     }
 
     public async Task<AgentRunDetailResponse?> GetByIdAsync(
@@ -381,86 +320,8 @@ public sealed class AgentRunService : IAgentRunService
         return new AgentRunDetailResponse(
             MapSummary(run), nodes, events, toolCalls, feedback,
             run.BlackboardJson, run.OutputJson, run.WorkflowDefinitionJson,
-            approvals, promptSnapshots, BuildLoopSummary(run, nodeEntities), llmTurns);
+            approvals, promptSnapshots, LegacyWorkflowReadModel.BuildLoopSummary(run, nodeEntities), llmTurns);
     }
-
-    private static AgentLoopSummaryResponse? BuildLoopSummary(AgentRun run, IReadOnlyList<AgentRunNode> nodes)
-    {
-        if (run.WorkflowType is not (AgentWorkflowTypes.ResearchQualityReview or AgentWorkflowTypes.PortfolioDiagnosis)) return null;
-        var board = AgentNodeJson.ParseBlackboard(run.BlackboardJson);
-        var runtime = board[AgentBlackboardKeys.Runtime] as JsonObject;
-        if (run.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
-        {
-            var quality = board[AgentBlackboardKeys.PortfolioDiagnosisQuality]
-                ?.Deserialize<PortfolioDiagnosisQualityResult>(AgentNodeJson.SerializerOptions);
-            var gaps = quality?.Gaps.Select(x => x.Code).Distinct(StringComparer.Ordinal).ToList()
-                ?? (runtime?["gapCodes"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? string.Empty)
-                    .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).ToList()
-                ?? [];
-            var completed = quality?.CompletedCapabilities.Distinct(StringComparer.Ordinal).ToList()
-                ?? (runtime?["completedCapabilities"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? string.Empty)
-                    .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).ToList()
-                ?? [];
-            var riskEvidence = board[AgentBlackboardKeys.PortfolioRiskEvidence]
-                ?.Deserialize<PortfolioRiskEvidenceSnapshot>(AgentNodeJson.SerializerOptions);
-            return new(
-                LoopStatus(run, runtime),
-                runtime?["iteration"]?.GetValue<int>() ?? quality?.Iteration ?? 0,
-                runtime?["maxIterations"]?.GetValue<int>() ?? PortfolioDiagnosisWorkflow.MaxAnalysisIterations,
-                runtime?["lastAction"]?.GetValue<string>(),
-                runtime?["stopReason"]?.GetValue<string>(),
-                nodes.Count(x => !string.IsNullOrWhiteSpace(x.TemplateNodeKey)),
-                runtime?["maxDynamicNodes"]?.GetValue<int>() ?? PortfolioDiagnosisWorkflow.MaxDynamicNodes,
-                0,
-                0,
-                completed.Count,
-                gaps,
-                AgentWorkflowTypes.PortfolioDiagnosis,
-                quality?.Status ?? runtime?["qualityStatus"]?.GetValue<string>(),
-                gaps,
-                completed,
-                riskEvidence?.Source,
-                riskEvidence?.CacheStatus,
-                riskEvidence?.ReusedCapabilities,
-                riskEvidence?.CalculatedCapabilities,
-                riskEvidence?.SourceRiskRunIds,
-                riskEvidence?.RejectedRuns.Select(x => x.Code).Distinct(StringComparer.Ordinal).ToList(),
-                riskEvidence?.QualityStatus,
-                riskEvidence?.QualityEvaluationId,
-                riskEvidence?.QualityBacktestRunId,
-                riskEvidence?.QualityWarnings);
-        }
-        var unresolved = (board[AgentBlackboardKeys.UnresolvedClaims] as JsonArray)?.Select((x, index) => x switch
-        {
-            JsonValue value when value.TryGetValue<string>(out var claimId) && !string.IsNullOrWhiteSpace(claimId) => claimId,
-            JsonObject claim => claim["claimId"]?.GetValue<string>() ?? claim["id"]?.GetValue<string>() ?? $"claim:{index}",
-            _ => $"claim:{index}"
-        })
-            .Distinct(StringComparer.Ordinal).ToList() ?? [];
-        var evidenceCount = (board[AgentBlackboardKeys.RetrievedEvidence] as JsonArray)?.Select(x =>
-            x?["documentChunkId"]?.ToJsonString() ?? x?["url"]?.GetValue<string>() ?? x?.ToJsonString())
-            .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).Count() ?? 0;
-        return new(
-            LoopStatus(run, runtime),
-            runtime?["iteration"]?.GetValue<int>() ?? 0,
-            runtime?["maxIterations"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxRetrievalIterations,
-            runtime?["lastAction"]?.GetValue<string>(),
-            runtime?["stopReason"]?.GetValue<string>(),
-            nodes.Count(x => !string.IsNullOrWhiteSpace(x.TemplateNodeKey)),
-            runtime?["maxDynamicNodes"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxDynamicNodes,
-            nodes.Count(x => x.NodeType == EvidenceRemediationNodeTypes.RetrieveWebEvidence && x.Status == AgentNodeStatuses.Succeeded),
-            runtime?["maxWebRetrievals"]?.GetValue<int>() ?? ResearchQualityReviewWorkflow.MaxWebRetrievals,
-            evidenceCount,
-            unresolved,
-            AgentWorkflowTypes.ResearchQualityReview);
-    }
-
-    private static string LoopStatus(AgentRun run, JsonObject? runtime) => run.Status switch
-    {
-        AgentRunStatuses.Failed => "Failed",
-        AgentRunStatuses.Cancelled => "Cancelled",
-        _ => runtime?["status"]?.GetValue<string>() ?? "NotStarted"
-    };
 
     public async Task<AgentRunSummaryResponse?> RetryAsync(
         Guid id,
@@ -473,6 +334,7 @@ public sealed class AgentRunService : IAgentRunService
                 .ThenInclude(x => x.Node)
             .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
         if (run is null) return null;
+        _compatibility?.EnsureExecutable(run);
         if (run.Status != AgentRunStatuses.Failed) return MapSummary(run);
 
         _runStateMachine.ResetForRetry(run);
@@ -480,13 +342,14 @@ public sealed class AgentRunService : IAgentRunService
         run.ErrorMessage = null;
         run.OutputJson = null;
         var provider = GetWorkflowProvider(run.WorkflowType);
-        if (run.WorkflowType is AgentWorkflowTypes.ResearchInvestigation or AgentWorkflowTypes.ResearchAgent)
+        if (run.WorkflowType == AgentWorkflowTypes.ResearchAgent)
         {
-            var investigationProvider = new ResearchInvestigationWorkflowDefinitionProvider();
-            var input = ResearchInvestigationWorkflowDefinitionProvider.ParseInput(run.InputJson);
+            var investigationProvider = new ResearchAgentWorkflowDefinitionProvider();
+            var input = ResearchInputReader.ParseInput(run.InputJson);
             var researchRunId = run.ResearchRunId
-                ?? throw new InvalidOperationException("ResearchInvestigation run is missing its ResearchRun link.");
-            run.BlackboardJson = investigationProvider.CreateInitialBlackboardJson(researchRunId, input.Request, input.RoutingContext);
+                ?? throw new InvalidOperationException("Research run is missing its ResearchRun link.");
+            run.BlackboardJson = JsonNode.Parse(run.InputJson)?["revisionSeed"]?.ToJsonString(SerializerOptions)
+                ?? investigationProvider.CreateInitialBlackboardJson(researchRunId, input.Request, input.RoutingContext);
             var researchRun = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == researchRunId, cancellationToken);
             researchRun.Status = "Pending";
             researchRun.ErrorMessage = null;
@@ -500,13 +363,7 @@ public sealed class AgentRunService : IAgentRunService
         else
         {
             run.BlackboardJson = provider.CreateInitialBlackboardJson(GetSourceRunId(run.InputJson));
-            if (run.WorkflowType == AgentWorkflowTypes.FeedbackRevision && run.ResearchRunId is Guid feedbackResearchRunId)
-            {
-                var researchRun = await _dbContext.ResearchRuns.SingleAsync(x => x.Id == feedbackResearchRunId, cancellationToken);
-                researchRun.Status = "Pending";
-                researchRun.Answer = string.Empty;
-                researchRun.ErrorMessage = null;
-            }
+
         }
         run.StartedAtUtc = null;
         run.CompletedAtUtc = null;
@@ -597,6 +454,7 @@ public sealed class AgentRunService : IAgentRunService
             .Include(x => x.Nodes)
             .FirstOrDefaultAsync(x => x.Id == runId && x.UserId == userId, cancellationToken)
             ?? throw new AgentApprovalException("agent_run_not_found", "Agent run not found.");
+        _compatibility?.EnsureExecutable(run);
         if (run.Status != AgentRunStatuses.WaitingForFeedback)
             throw new AgentApprovalException("agent_run_not_waiting", "Only a run waiting for approval can receive a decision.");
         var gateNode = run.Nodes.FirstOrDefault(x => x.Status == AgentNodeStatuses.WaitingForFeedback)
@@ -761,7 +619,29 @@ public sealed class AgentRunService : IAgentRunService
         run.TotalInputTokens,
         run.TotalOutputTokens,
         run.TotalEstimatedCostUsd,
-        run.ParentAgentRunId);
+        run.ParentAgentRunId,
+        SummaryText(run, "question"), SummaryText(run, "ticker"), SummaryText(run, "portfolioName"));
+
+    private static JsonObject SummaryJson(string json)
+    {
+        try { return JsonNode.Parse(json) as JsonObject ?? new(); }
+        catch (JsonException) { return new(); }
+    }
+    private static string? SummaryValue(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+    private static Guid? ReadPortfolioId(AgentRun run) =>
+        Guid.TryParse(SummaryValue(SummaryJson(run.InputJson)["portfolioId"]), out var id) ? id : null;
+    private static string? SummaryText(AgentRun run, string key)
+    {
+        var input = SummaryJson(run.InputJson); var board = SummaryJson(run.BlackboardJson);
+        var request = input["request"] as JsonObject ?? input;
+        var context = board[AgentBlackboardKeys.PortfolioContext] as JsonObject;
+        var routing = input["routingContext"] as JsonObject ?? board[AgentBlackboardKeys.RoutingContext] as JsonObject;
+        var text = key == "portfolioName" ? SummaryValue(context?["name"])
+            : SummaryValue(request[key]) ?? SummaryValue(board[key]) ?? (key == "question" ? SummaryValue(routing?["objective"]) : null);
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        text = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return text.Length <= 160 ? text : text[..160] + "…";
+    }
 
     private static AgentFeedbackResponse MapFeedback(AgentFeedback feedback) => new(
         feedback.Id, feedback.AgentRunNodeId, feedback.FeedbackType, feedback.Status, feedback.Prompt,

@@ -1,4 +1,5 @@
 using EquityLens.Api.Contracts.Filings;
+using EquityLens.Api.Services.UploadedFiles;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Repositories.Securities;
@@ -27,6 +28,7 @@ public sealed class FinancialFilingsController : ControllerBase
     private readonly IObjectStorageService _objectStorage;
     private readonly ICurrentUserContext _currentUser;
     private readonly EquityLensDbContext _dbContext;
+    private readonly ILogger<FinancialFilingsController> _logger;
 
     /// <summary>
     /// 初始化財報檔案控制器。
@@ -38,7 +40,8 @@ public sealed class FinancialFilingsController : ControllerBase
         ISecurityRepository securityRepository,
         IObjectStorageService objectStorage,
         ICurrentUserContext currentUser,
-        EquityLensDbContext dbContext)
+        EquityLensDbContext dbContext,
+        ILogger<FinancialFilingsController>? logger = null)
     {
         _filingService = filingService;
         _crawler = crawler;
@@ -47,12 +50,13 @@ public sealed class FinancialFilingsController : ControllerBase
         _objectStorage = objectStorage;
         _currentUser = currentUser;
         _dbContext = dbContext;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<FinancialFilingsController>.Instance;
     }
 
     /// <summary>
     /// 上傳上市公司財報檔案，並建立 metadata 記錄。
     /// </summary>
-    /// <param name="file">財報檔案（PDF、XLSX 等）。</param>
+    /// <param name="file">財報檔案（PDF）。</param>
     /// <param name="securityId">關聯股票識別碼。</param>
     /// <param name="fiscalYear">財報所屬年度。</param>
     /// <param name="fiscalQuarter">財報所屬季度（年報不傳或留空）。</param>
@@ -66,6 +70,8 @@ public sealed class FinancialFilingsController : ControllerBase
     /// <param name="cancellationToken">取消權杖。</param>
     /// <returns>成功時返回 201 Created 與財報記錄回應資料。</returns>
     [HttpPost]
+    [RequestSizeLimit(PdfUploadPolicy.MaxRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = PdfUploadPolicy.MaxFileBytes)]
     public async Task<ActionResult<FinancialFilingResponse>> UploadFiling(
         IFormFile file,
         [FromForm] Guid securityId,
@@ -95,12 +101,19 @@ public sealed class FinancialFilingsController : ControllerBase
             return BadRequest(new { error = "invalid_fiscal_year", message = "請輸入有效的財報年度。" });
         }
 
-        var response = await _filingService.UploadAsync(
-            file, securityId, fiscalYear, fiscalQuarter, filingType,
-            periodEndDate, publishedAt, language, currency, source, sourceUrl,
-            cancellationToken);
+        try
+        {
+            var response = await _filingService.UploadAsync(
+                file, securityId, fiscalYear, fiscalQuarter, filingType,
+                periodEndDate, publishedAt, language, currency, source, sourceUrl,
+                cancellationToken);
 
-        return CreatedAtAction(nameof(GetFiling), new { id = response.Id }, response);
+            return CreatedAtAction(nameof(GetFiling), new { id = response.Id }, response);
+        }
+        catch (BadHttpRequestException exception)
+        {
+            return StatusCode(exception.StatusCode, new { error = "invalid_upload", message = exception.Message });
+        }
     }
 
     /// <summary>
@@ -239,19 +252,21 @@ public sealed class FinancialFilingsController : ControllerBase
                                 successCount++;
                             else
                                 failedFiles.Add(new CrawlFilingsResponse.FailedItem(
-                                    stockCode, year, result.ErrorMessage ?? "解析失敗"));
+                                    stockCode, year, "財報解析失敗，請稍後再試。"));
                         }
                         catch (Exception ex)
                         {
+                            _logger.LogError(ex, "Filing processing failed for {StockCode} {Year}", stockCode, year);
                             failedFiles.Add(new CrawlFilingsResponse.FailedItem(
-                                stockCode, year, ex.Message));
+                                stockCode, year, "財報處理失敗，請稍後再試。"));
                         }
                     }
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, "Filing lookup failed for {StockCode} {Year}", stockCode, year);
                     failedFiles.Add(new CrawlFilingsResponse.FailedItem(
-                        stockCode, year, $"查詢失敗: {ex.Message}"));
+                        stockCode, year, "財報查詢失敗，請稍後再試。"));
                 }
             }
         }

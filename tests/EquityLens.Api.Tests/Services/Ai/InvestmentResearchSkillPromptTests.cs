@@ -28,7 +28,7 @@ public sealed class InvestmentResearchSkillPromptTests
                 "conference-call-takeaways",
                 "conference-call-takeaways",
                 1,
-                InvestmentResearchSkillPrompts.ConferenceCallTakeaways));
+                new EquityLens.Api.Services.Agents.Loop.AgentMethodCatalog(Path.Combine(AppContext.BaseDirectory, "AgentSkills")).ForRole("Research").Single(x => x.Id == "conference-call-takeaways").Content));
 
         Assert.NotNull(chat.Request);
         Assert.Contains("Only answer using information from the provided documents.", chat.Request.SystemPrompt);

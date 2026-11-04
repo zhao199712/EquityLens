@@ -1,0 +1,32 @@
+{
+  "checks": {
+    "same_fixture": true,
+    "same_question": true,
+    "scorer_pass": true,
+    "prompt_version_20": true,
+    "etf_and_cash_same_reduction": true,
+    "destination_0050": true,
+    "no_side_effects": true,
+    "quality_passed": true,
+    "budget_settled": true,
+    "within_etf_authorization": true
+  },
+  "manual_review": {
+    "scope": "Targeted human review of the saved response, not an automated semantic score or stability proof.",
+    "delta_wording_passed": true,
+    "no_action_quantitative_claim_removed": true,
+    "var_es_direction_passed": true,
+    "evidence": [
+      "年化波動率下降 5.76 個百分點",
+      "VaR、期望短缺與最大回撤為帶符號報酬，上升代表較不負、方向較佳",
+      "目前尚未取得您可承受的風險門檻，因此無法判定現況或任一情境是否落在可承受範圍內",
+      "確認上述偏好後，才能判斷哪個方向較符合您的需求"
+    ],
+    "limitations": [
+      "One stochastic run only; original fourteen cases not rerun.",
+      "No rejected tool calls; recovery not observed.",
+      "Synthetic holdings and ETF prices, not production portfolio performance."
+    ]
+  },
+  "raw_sha256": "b1225440365e751897a0e542a8e627464816350a8f64ca4a75b465599cf4e294"
+}

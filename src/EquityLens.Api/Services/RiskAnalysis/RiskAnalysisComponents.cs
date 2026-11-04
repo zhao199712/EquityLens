@@ -66,6 +66,8 @@ public interface IPortfolioRiskScenarioService
 
 public interface IPortfolioRiskReportSnapshotService
 {
+    Task<Result<PortfolioRiskReportSnapshotDetailResponse>> CreateFromCalculationAsync(Guid portfolioId, Guid runId, Guid providerUserId, CancellationToken cancellationToken);
+
     Task<Result<PortfolioRiskReportSnapshotDetailResponse>> CreatePortfolioRiskReportSnapshotAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken);
 
     Task<Result<IReadOnlyList<PortfolioRiskReportSnapshotListItemResponse>>> GetPortfolioRiskReportSnapshotsAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken);

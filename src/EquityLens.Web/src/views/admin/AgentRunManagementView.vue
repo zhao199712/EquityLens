@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { workflowReadFilters } from "../../services/legacyWorkflows"
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -224,8 +225,7 @@ watch(() => route.params.id, () => {
         />
         <select v-model="filterWorkflow" class="prestige-input admin-select">
           <option value="">全部 Workflow</option>
-          <option value="CriticReview">CriticReview</option>
-          <option value="DraftRevision">DraftRevision</option>
+          <option v-for="type in workflowReadFilters" :key="type" :value="type">{{ type }}</option>
         </select>
         <select v-model="filterStatus" class="prestige-input admin-select">
           <option value="">全部狀態</option>

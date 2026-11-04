@@ -17,6 +17,70 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  risk-integration:
+    name: Risk cross-language and service integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: paradedb/paradedb:0.24.1-pg18
+        env:
+          POSTGRES_DB: equitylens_ci
+          POSTGRES_USER: equitylens_ci
+          POSTGRES_PASSWORD: ci_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U equitylens_ci -d equitylens_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      RISK_TEST_POSTGRES: Host=localhost;Port=5432;Database=equitylens_ci;Username=equitylens_ci;Password=ci_only_password
+      RISK_TEST_REDIS: localhost:6379
+      RISK_TEST_REDIS_URL: redis://localhost:6379/0
+      RISK_TEST_ARTIFACTS: ${{ github.workspace }}/test-results/risk-integration/evidence
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: src/EquityLens.Mathematics/pyproject.toml
+      - name: Install production Python engine and worker
+        run: pip install -e src/EquityLens.Mathematics
+      - name: Run contracts and real risk pipeline
+        run: >-
+          dotnet test tests/EquityLens.Risk.IntegrationTests/EquityLens.Risk.IntegrationTests.csproj
+          --configuration Release
+          --logger "trx;LogFileName=risk-integration.trx"
+          --results-directory test-results/risk-integration
+      - name: Require both suites with zero skipped tests
+        if: always()
+        run: >-
+          python3 scripts/ci/check_backend_trx.py test-results/risk-integration/risk-integration.trx
+          --required-class RiskContractTests --required-class RiskPipelineTests
+      - name: Upload cross-language payloads, worker logs and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: risk-integration-results
+          path: test-results/risk-integration/
+          if-no-files-found: warn
+          retention-days: 14
+
   mathematics:
     name: Mathematics tests
     runs-on: ubuntu-latest
@@ -61,6 +125,22 @@ jobs:
     name: Backend build and test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: paradedb/paradedb:0.24.1-pg18
+        env:
+          POSTGRES_DB: equitylens_ci
+          POSTGRES_USER: equitylens_ci
+          POSTGRES_PASSWORD: ci_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U equitylens_ci -d equitylens_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      EQUITYLENS_TEST_POSTGRES_CONNECTION_STRING: Host=localhost;Port=5432;Database=equitylens_ci;Username=equitylens_ci;Password=ci_only_password
 
     defaults:
       run:
@@ -78,6 +158,11 @@ jobs:
           cache-dependency-path: |
             src/EquityLens.Api/EquityLens.Api.csproj
             tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
+
+      - name: Test manual deployment guards (no production access)
+        run: |
+          bash -n scripts/deploy/deploy.sh
+          python3 -m unittest discover -s scripts/deploy -v
 
       - name: Restore backend
         run: >
@@ -119,6 +204,41 @@ jobs:
         with:
           name: backend-test-results
           path: test-results/backend
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Require executed PostgreSQL integration tests
+        if: always()
+        run: |
+          python3 -m unittest discover -s scripts/ci -v
+          python3 scripts/ci/check_backend_trx.py test-results/backend/backend-tests.trx
+
+  browser:
+    name: Browser smoke (mock API, production build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/EquityLens.Web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: src/EquityLens.Web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke tests without external APIs
+        run: npm run test:e2e:ci
+      - name: Upload browser traces and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-smoke-results
+          path: |
+            src/EquityLens.Web/playwright-report/
+            src/EquityLens.Web/test-results/
           if-no-files-found: warn
           retention-days: 14
 

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Chat;
 using EquityLens.Api.Data;
@@ -43,6 +44,8 @@ public sealed class ConversationService(
         if (content.Length > 2000) throw new ConversationException("message_too_long", "訊息不可超過 2000 個字元。");
         if (request.RequestId == Guid.Empty) throw new ConversationException("request_id_required", "requestId 不可為空。");
 
+        if (!await db.ChatSessions.AnyAsync(x => x.Id == sessionId && x.UserId == userId, cancellationToken))
+            throw new ConversationException("session_not_found", "找不到對話。");
         var existing = await db.ConversationTurns.AsNoTracking()
             .FirstOrDefaultAsync(x => x.ChatSessionId == sessionId && x.RequestId == request.RequestId, cancellationToken);
         if (existing is not null)
@@ -87,7 +90,11 @@ public sealed class ConversationService(
                 .OrderBy(x => x.Name)
                 .Select(x => new ConversationPortfolioOption(x.Id, x.Name))
                 .ToListAsync(cancellationToken);
-            var decision = await agent.DecideAsync(new(content, context, history, portfolios), cancellationToken);
+            var entry = await EntryDecisionAsync(userId, content, context, cancellationToken);
+            var inputContext = context.DeepClone().AsObject();
+            var securities = await db.Securities.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.Ticker, x.Name }).ToListAsync(cancellationToken);
+            inputContext["tickerCandidates"] = JsonSerializer.SerializeToNode(securities.Where(x => content.Contains(x.Ticker, StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrWhiteSpace(x.Name) && content.Contains(x.Name, StringComparison.OrdinalIgnoreCase))).Take(10), Json);
+            var decision = entry ?? await agent.DecideAsync(new(content, inputContext, history, portfolios), cancellationToken);
             turn.Action = decision.Action;
             turn.ReasonCode = decision.ReasonCode;
             turn.StandaloneQuery = decision.StandaloneQuery;
@@ -98,11 +105,14 @@ public sealed class ConversationService(
 
             AgentWorkflowQueryCreatedResponse? created = null;
             string? routingFailure = null;
+            var routingRejected = false;
             try
             {
                 if (decision.Action == ConversationActions.RouteWorkflow)
                 {
-                    created = await workflowQueries.CreateAsync(userId, new(decision.StandaloneQuery!), cancellationToken);
+                    created = decision.Route is { } route
+                        ? await workflowQueries.CreateFromDecisionAsync(userId, new(decision.StandaloneQuery!, route.RoutingContext.ParentAgentRunId), route, cancellationToken)
+                        : await workflowQueries.CreateAsync(userId, new(decision.StandaloneQuery!), cancellationToken);
                     turn.AgentRunId = created.AgentRunId;
                     turn.ResearchRunId = created.ResearchRunId;
                 }
@@ -133,12 +143,13 @@ public sealed class ConversationService(
             }
             catch (AgentWorkflowQueryException exception)
             {
+                routingRejected = exception.Code is "portfolio_forbidden" or "routing_rejected";
                 routingFailure = exception.Code == "portfolio_required"
                     ? $"{exception.Message}請先到「投資組合」頁面建立投資組合後再詢問。"
                     : exception.Message;
             }
 
-            var action = routingFailure is null ? decision.Action : ConversationActions.AskClarification;
+            var action = routingFailure is null ? decision.Action : routingRejected ? ConversationActions.RejectUnsafe : ConversationActions.AskClarification;
             var response = routingFailure ?? decision.Response;
             turn.Action = action;
 
@@ -193,15 +204,36 @@ public sealed class ConversationService(
         var run = await db.AgentRuns.AsNoTracking().Include(x => x.Nodes).Include(x => x.ResearchRun)
             .FirstOrDefaultAsync(x => x.Id == agentRunId && x.UserId == userId, cancellationToken);
         if (run is null) return null;
+        var waiting = run.Status is AgentRunStatuses.WaitingForFeedback or AgentRunStatuses.WaitingForApproval;
         var current = run.Nodes.Where(x => x.Status == AgentNodeStatuses.Running).OrderBy(x => x.StartedAtUtc).FirstOrDefault()
             ?? run.Nodes.Where(x => x.Status == AgentNodeStatuses.Pending).OrderBy(x => x.NodeKey).FirstOrDefault();
-        var currentContract = current is null ? null : workflowCatalog.GetNode(current.NodeType).Contract;
+        var currentContract = current is null ? null : workflowCatalog.Nodes.SingleOrDefault(x => x.NodeType == current.NodeType)?.Contract;
         var finalAnswer = !string.IsNullOrWhiteSpace(run.ResearchRun?.Answer)
             ? run.ResearchRun.Answer
             : ExtractFinalAnswer(run.OutputJson);
-        return new(run.Id, run.ResearchRunId, run.WorkflowType, run.Status, currentContract?.Stage, currentContract?.DisplayName,
+        var issues = AgentNodeJson.ParseBlackboard(run.BlackboardJson)["portfolioQualityGate"]?["blockingIssues"]?.Deserialize<List<string>>(AgentNodeJson.SerializerOptions);
+        return new(run.Id, run.ResearchRunId, run.WorkflowType, run.Status, waiting ? "Approval" : currentContract?.Stage, waiting ? "等待人工審閱" : currentContract?.DisplayName,
             run.Nodes.Count(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped),
-            run.Nodes.Count, finalAnswer, run.ErrorMessage);
+            run.Nodes.Count, finalAnswer, run.ErrorMessage, issues);
+    }
+
+    private async Task<ConversationAgentDecision?> EntryDecisionAsync(Guid userId, string content, JsonObject context, CancellationToken ct)
+    {
+        static ConversationAgentDecision Local(string action, string text, string? query = null, InvestmentResearchRouteDecision? route = null) =>
+            new(action, text, query, "entry", "high", new(), "", "", "", 0, 0, 0, route);
+        if (Regex.IsMatch(content, @"^(?:請)?(?:忘記前面|重新開始|重置對話|reset)(?:[。！\s]|$)", RegexOptions.IgnoreCase))
+            return Local(ConversationActions.ResetContext, "已重置對話，請輸入新的問題。");
+        var parentId = ReadGuid(context, "lastAgentRunId");
+        if (parentId is null) return null;
+        var parent = await db.AgentRuns.AsNoTracking().SingleOrDefaultAsync(x => x.Id == parentId && x.UserId == userId, ct);
+        if (parent is null) return null;
+        if (Regex.IsMatch(content, @"(?:上一|剛剛|前一|你的|答案).*(?:錯|遺漏|補充|修正)|^(?:請)?修正"))
+            return Local(ConversationActions.RevisePreviousRun, "會依你的回饋修訂上一份分析。", content);
+        if (!Regex.IsMatch(content, @"^(?:那|接著|再|繼續|改成|改為|換成|補充|上一|剛剛)")) return null;
+        if (parent.WorkflowType is not (AgentWorkflowTypes.ResearchAgent or AgentWorkflowTypes.PortfolioDiagnosis)) return null;
+        var route = InvestmentResearchRouter.Fixed(parent.WorkflowType, content);
+        route = route with { RoutingContext = route.RoutingContext with { ParentAgentRunId = parent.Id } };
+        return Local(ConversationActions.RouteWorkflow, "沿用上一份分析的角色繼續處理。", content, route);
     }
 
     private static JsonObject MergeContext(JsonObject current, JsonObject patch)
@@ -222,7 +254,9 @@ public sealed class ConversationService(
         try
         {
             var node = JsonNode.Parse(outputJson);
-            return Find(node, ["finalAnswer", "answer", "revisedAnswer", "summary"]);
+            var summary = Find(node, ["finalAnswer", "answer", "revisedAnswer", "summary"]);
+            var interpretation = node?["interpretation"]?.GetValue<string>();
+            return string.IsNullOrWhiteSpace(interpretation) || interpretation == summary ? summary : summary + "\n\n" + interpretation;
         }
         catch (JsonException) { return null; }
     }

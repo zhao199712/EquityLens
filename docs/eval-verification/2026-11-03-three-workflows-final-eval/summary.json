@@ -1,0 +1,210 @@
+{
+  "trajectory": {
+    "recorded_runs": 8,
+    "web_policy_violation_count": 0,
+    "planner_fallback_rate": null,
+    "mean_llm_turns": 2.875,
+    "mean_tool_calls": 4,
+    "guard_denials": 0,
+    "guard_denial_rate": 0.0,
+    "budget_exhausted_rate": 0.0
+  },
+  "meta": {
+    "label": "three-workflows-final-eval",
+    "mode": "investigation",
+    "engine": "AgentLoop",
+    "base_url": "http://127.0.0.1:5535",
+    "system_commit": "31a6a2b1ba3ef844a1fb90f287a38707ac09d2bd",
+    "started_at": "2026-11-03T03:32:48+00:00",
+    "notes": "Original eight verified non-excluded cases; isolated corpus; reranker and thinking disabled; independent user-authorized USD1 cap, USD0.25 LLM admission cap; prior rounds upper USD0.629965 included in shared USD1 cap and USD0.10 embedding reserve. Single run; no scorer changes.",
+    "cases_file": "evals/cases/research_v1.jsonl",
+    "cases_sha256": "13705d65f559a5f2fbe8b74b8ef1a5109572a968b1802800a590fe488ff8a1cc",
+    "scorer_commit": "31a6a2b",
+    "scored_at": "2026-11-03T03:34:13+00:00",
+    "judge_model": null
+  },
+  "case_count": 8,
+  "verified_case_count": 8,
+  "draft_case_count": 0,
+  "metrics": {
+    "pass_rate": {
+      "mean": 0.875,
+      "n": 8
+    },
+    "behavior": {
+      "mean": 1.0,
+      "n": 8
+    },
+    "source_policy_compliance": {
+      "mean": 1.0,
+      "n": 8
+    },
+    "facts": {
+      "mean": 1.0,
+      "n": 4
+    },
+    "citation_integrity": {
+      "mean": 1.0,
+      "n": 5
+    },
+    "citation_coverage": {
+      "mean": 0.7708,
+      "n": 4
+    },
+    "source_hit": {
+      "mean": 1.0,
+      "n": 4
+    },
+    "retrieval_recall": {
+      "mean": 1.0,
+      "n": 4
+    },
+    "keywords": {
+      "mean": 0.6667,
+      "n": 3
+    }
+  },
+  "operational": {
+    "judge_error_count": 0,
+    "hallucination_rate": 0.0,
+    "over_refusal_rate": 0.0,
+    "error_rate": 0.0,
+    "latency_p50_ms": 6273,
+    "latency_p95_ms": 25953,
+    "mean_total_tokens": 16962.2,
+    "total_cost_usd": 0.148386
+  },
+  "by_category": {
+    "multi_doc_synthesis": {
+      "case_count": 1,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "citation_coverage": {
+          "mean": 0.4167,
+          "n": 1
+        },
+        "source_hit": {
+          "mean": 1.0,
+          "n": 1
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "numeric_lookup": {
+      "case_count": 3,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "facts": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "citation_coverage": {
+          "mean": 0.8889,
+          "n": 3
+        },
+        "source_hit": {
+          "mean": 1.0,
+          "n": 3
+        },
+        "retrieval_recall": {
+          "mean": 1.0,
+          "n": 3
+        }
+      }
+    },
+    "policy": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 0.5,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "keywords": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "citation_integrity": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    },
+    "unanswerable": {
+      "case_count": 2,
+      "metrics": {
+        "pass_rate": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "behavior": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "source_policy_compliance": {
+          "mean": 1.0,
+          "n": 2
+        },
+        "keywords": {
+          "mean": 1.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "failed_cases": [
+    "2330-no-guaranteed-profit"
+  ],
+  "draft_cases": [],
+  "excluded_case_count": 0,
+  "excluded_cases": [],
+  "draft_metrics": {}
+}

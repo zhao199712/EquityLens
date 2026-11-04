@@ -14,11 +14,14 @@ namespace EquityLens.Api.Contracts.Risk;
 /// <param name="MonteCarloBestCaseFinalValue">信心水準下的最佳情境最終價值。</param>
 public sealed record RiskHorizonResult(
     int HorizonDays,
-    decimal HistoricalVaR,
-    decimal HistoricalES,
+    decimal? HistoricalVaR,
+    decimal? HistoricalES,
     decimal MonteCarloVaR,
     decimal MonteCarloES,
     decimal MonteCarloMeanFinalValue,
     decimal MonteCarloMedianFinalValue,
     decimal MonteCarloWorstCaseFinalValue,
-    decimal MonteCarloBestCaseFinalValue);
+    decimal MonteCarloBestCaseFinalValue,
+    int? EffectiveHistoricalObservations = null,
+    string HistoricalStatus = "Unknown",
+    int MinimumHistoricalObservations = 100);

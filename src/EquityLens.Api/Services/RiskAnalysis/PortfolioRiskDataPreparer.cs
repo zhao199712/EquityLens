@@ -305,10 +305,9 @@ public sealed class PortfolioRiskDataPreparer(
             assetIds.Select(id =>
             {
                 var holding = holdings.Single(h => h.SecurityId == id);
-                var industry = string.IsNullOrWhiteSpace(holding.Industry)
-                    ? string.IsNullOrWhiteSpace(holding.Sector) ? "未分類" : holding.Sector
-                    : holding.Industry;
-                return new RiskAssetMetadata(id, holding.Ticker, holding.Exchange, holding.SecurityName, industry);
+                var industry = IndustryClassification.Normalize(holding.Industry, holding.Sector);
+                return new RiskAssetMetadata(id, holding.Ticker, holding.Exchange, holding.SecurityName, industry,
+                    IndustryClassification.Raw(holding.Industry, holding.Sector));
             }).ToArray()));
     }
 

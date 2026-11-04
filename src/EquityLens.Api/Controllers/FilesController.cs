@@ -31,6 +31,8 @@ public sealed class FilesController : ControllerBase
     /// <param name="cancellationToken">取消權杖。</param>
     /// <returns>成功時返回 200 OK 與檔案回應資料。</returns>
     [HttpPost]
+    [RequestSizeLimit(PdfUploadPolicy.MaxRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = PdfUploadPolicy.MaxFileBytes)]
     public async Task<ActionResult<UploadedFileResponse>> UploadFile(
         IFormFile file,
         CancellationToken cancellationToken)
@@ -40,8 +42,15 @@ public sealed class FilesController : ControllerBase
             return BadRequest(new { error = "file_required", message = "請選擇要上傳的檔案。" });
         }
 
-        var response = await _uploadedFileService.UploadAsync(file, cancellationToken);
-        return Ok(response);
+        try
+        {
+            var response = await _uploadedFileService.UploadAsync(file, cancellationToken);
+            return Ok(response);
+        }
+        catch (BadHttpRequestException exception)
+        {
+            return StatusCode(exception.StatusCode, new { error = "invalid_upload", message = exception.Message });
+        }
     }
 
     /// <summary>
