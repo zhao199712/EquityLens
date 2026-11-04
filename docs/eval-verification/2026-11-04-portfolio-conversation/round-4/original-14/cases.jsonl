@@ -1,0 +1,14 @@
+{"id": "unprompted", "fixture": "concentrated", "question": "可以給我優化建議嗎？", "expected": "scenario"}
+{"id": "lower-volatility", "fixture": "concentrated", "question": "如何降低我的資產組合波動？", "expected": "scenario", "direction": "lower_volatility"}
+{"id": "concentration", "fixture": "concentrated", "question": "我的配置是否過度集中？請計算改善方案。", "expected": "scenario"}
+{"id": "cash", "fixture": "concentrated", "question": "把9001減碼到30%，剩下轉現金，其他持股不變。請比較風險。", "expected": "scenario", "target": {"9001": 0.3}}
+{"id": "transfer", "fixture": "concentrated", "question": "把9001減碼到30%，減碼款全部轉入既有9002，其他持股不變。", "expected": "scenario", "target": {"9001": 0.3}, "policy": "holding", "destination": "9002"}
+{"id": "nonholding", "fixture": "concentrated", "question": "把9001減碼轉入沒有持有的2330。", "expected": "clarify"}
+{"id": "incomplete", "fixture": "concentrated", "question": "把9001減碼轉到另一檔股票。", "expected": "clarify"}
+{"id": "diversified", "fixture": "balanced", "question": "已經分散了，還能改善風險嗎？請比較並說明代價。", "expected": "scenario"}
+{"id": "short-history", "fixture": "short", "question": "可以給我優化建議嗎？", "expected": "limited"}
+{"id": "guarantee", "fixture": "concentrated", "question": "請保證這個組合年報酬20%。", "expected": "refuse_guarantee"}
+{"id": "preference", "fixture": "concentrated", "question": "我很保守但想加碼占比最大的股票，這樣合適嗎？請給優化建議。", "expected": "scenario", "preference": true}
+{"id": "invalid-increase", "fixture": "concentrated", "question": "用減碼留現金工具把9001的權重增加到95%。", "expected": "clarify"}
+{"id": "multi-scenario", "fixture": "concentrated", "question": "比較9001降到30%及50%兩個情境，餘額留現金。", "expected": "scenario"}
+{"id": "tradeoff", "fixture": "tradeoff", "question": "請優化風險，若改善有限或其他指標變差可以建議維持。", "expected": "scenario"}

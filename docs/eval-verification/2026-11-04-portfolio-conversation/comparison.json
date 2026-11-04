@@ -1,0 +1,85 @@
+{
+  "total_authorized_usd": 0.5,
+  "total_charged_upper_usd": 0.4396101,
+  "baseline_count": 14,
+  "statistics": [
+    {
+      "round": 1,
+      "suite": "original-14",
+      "final_answer_mean_chars": 533.3571428571429,
+      "raw_responses_sha256": "337077313f2995bcf1b90cb816391691964a622c1eecbf414e686e624e615dc6",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r1/original-14/responses.jsonl",
+      "baseline_mean_chars": 963.7142857142857,
+      "paired_baseline_mean_chars": 963.7142857142857
+    },
+    {
+      "round": 1,
+      "suite": "volatility",
+      "final_answer_mean_chars": 42,
+      "raw_responses_sha256": "ce9563703118f5abb5d3b283f95584135b2886a30e4f064a30c96cef4a1f5963",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r1/volatility/responses.jsonl"
+    },
+    {
+      "round": 2,
+      "suite": "original-14",
+      "final_answer_mean_chars": 423.14285714285717,
+      "raw_responses_sha256": "a0278c9fa55e9335b16f461eaf5677135e7dd56da0e854e42713554bd31e2df4",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r2/original-14/responses.jsonl",
+      "baseline_mean_chars": 963.7142857142857,
+      "paired_baseline_mean_chars": 963.7142857142857
+    },
+    {
+      "round": 2,
+      "suite": "volatility",
+      "final_answer_mean_chars": 268,
+      "raw_responses_sha256": "829ee2f9fa68312e82b567562c5db92affb0f0f19fe323e4342332a414381054",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r2/volatility/responses.jsonl"
+    },
+    {
+      "round": 3,
+      "suite": "original-14",
+      "final_answer_mean_chars": 550.7142857142857,
+      "raw_responses_sha256": "40528725137ee7d981a768e592391a59c8c6dda986bf514a5f330f3c4cd3dc24",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r3/original-14/responses.jsonl",
+      "baseline_mean_chars": 963.7142857142857,
+      "paired_baseline_mean_chars": 963.7142857142857
+    },
+    {
+      "round": 3,
+      "suite": "volatility",
+      "final_answer_mean_chars": 461,
+      "raw_responses_sha256": "fa78acea6213417f23078abe0ad0e227f1da997a1bd89baf75bd6e475b651655",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r3/volatility/responses.jsonl"
+    },
+    {
+      "round": 4,
+      "suite": "original-14",
+      "final_answer_mean_chars": 525.7142857142857,
+      "raw_responses_sha256": "aba971c04d422f8306e1dd307105ab68d1f5cc3e54a4fff88af9007d79880cd4",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r4/original-14/responses.jsonl",
+      "baseline_mean_chars": 963.7142857142857,
+      "paired_baseline_mean_chars": 963.7142857142857
+    },
+    {
+      "round": 4,
+      "suite": "volatility",
+      "final_answer_mean_chars": 263,
+      "raw_responses_sha256": "479af13e95921c6993aa4c09f939d702cecaa17df3d646285b10438c9c468ce8",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r4/volatility/responses.jsonl"
+    },
+    {
+      "round": 5,
+      "suite": "volatility",
+      "final_answer_mean_chars": 64,
+      "raw_responses_sha256": "96a2032dcb224958092db35b029d4a36f8e302ea2629af42708169791949cf81",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r5/volatility/responses.jsonl"
+    },
+    {
+      "round": 6,
+      "suite": "volatility",
+      "final_answer_mean_chars": 423,
+      "raw_responses_sha256": "04809c224bc9b9ba4f970a0589cfc56c37bbe30a3e1942fed8b0135aff9a01e3",
+      "local_raw_path": "/tmp/equitylens-etf-retest/exports/qa/portfolio-conversation-20261104-r6/volatility/responses.jsonl"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "authorized_usd": 0.5,
+  "upper_usd": 0.0059702999999999996,
+  "pending_reserved_usd": 0,
+  "database": "equitylens_conversation_r5_eval",
+  "redis_db": 14
+}
