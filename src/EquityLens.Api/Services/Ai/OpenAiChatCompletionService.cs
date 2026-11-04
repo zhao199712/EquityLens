@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Services.Ai;
@@ -21,6 +22,8 @@ public sealed class OpenAiChatCompletionService : IChatCompletionService
         if (!new[] { "none", "low", "medium", "high", "xhigh", "max" }.Contains(this.options.ReasoningEffort))
             throw new InvalidOperationException("Unsupported OpenAI reasoning effort.");
     }
+    public bool SupportsNativeTools => true;
+    public int EstimateInputBytes(ChatCompletionRequest request) => Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(Payload(request))) + 1024;
     public string Provider => "openai";
     public string Model => options.Model;
 
@@ -29,17 +32,7 @@ public sealed class OpenAiChatCompletionService : IChatCompletionService
         var key = string.IsNullOrWhiteSpace(options.ApiKey) ? Environment.GetEnvironmentVariable("OPENAI_API_KEY") : options.ApiKey;
         if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("OpenAI API key is not configured.");
         if (request.MaxTokens <= 0) throw new ArgumentOutOfRangeException(nameof(request.MaxTokens));
-        var payload = new Dictionary<string, object?>
-        {
-            ["model"] = options.Model,
-            ["input"] = new[] { new { role = "developer", content = request.SystemPrompt }, new { role = "user", content = request.UserPrompt } },
-            ["reasoning"] = new { effort = options.ReasoningEffort },
-            ["max_output_tokens"] = request.MaxTokens,
-            ["store"] = false
-        };
-        // 不傳供應商專用 thinking 或不通用的 temperature；現有 JSON 工具協定維持不變。
-        if (request.ResponseFormat == ChatResponseFormat.JsonObject)
-            payload["text"] = new { format = new { type = "json_object" } };
+        var payload = Payload(request);
         using var message = new HttpRequestMessage(HttpMethod.Post, "responses");
         message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         message.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
@@ -56,6 +49,14 @@ public sealed class OpenAiChatCompletionService : IChatCompletionService
         logger?.LogInformation("LLM usage prompt_tokens={PromptTokens} completion_tokens={CompletionTokens}", inputTokens, outputTokens);
         if (!root.TryGetProperty("status", out var status) || status.GetString() != "completed")
             throw new InvalidOperationException("OpenAI API response did not complete; partial output cannot be used.");
+        if (request.ToolProtocol is { } protocol)
+        {
+            var outputItems = root.TryGetProperty("output", out var nativeOutput) && nativeOutput.ValueKind == JsonValueKind.Array
+                ? JsonNode.Parse(nativeOutput.GetRawText())!.AsArray() : new JsonArray();
+            return new(OpenAiFunctionProtocol.Decision(outputItems, protocol),
+                root.TryGetProperty("model", out var nativeModel) ? nativeModel.GetString() ?? options.Model : options.Model,
+                inputTokens, outputTokens, outputItems);
+        }
         var text = new StringBuilder();
         if (root.TryGetProperty("output", out var items) && items.ValueKind == JsonValueKind.Array)
             foreach (var item in items.EnumerateArray())
@@ -75,4 +76,33 @@ public sealed class OpenAiChatCompletionService : IChatCompletionService
         if (string.IsNullOrWhiteSpace(text.ToString())) throw new InvalidOperationException("OpenAI API response missing text.");
         return new(text.ToString(), root.TryGetProperty("model", out var model) ? model.GetString() ?? options.Model : options.Model, inputTokens, outputTokens);
     }
+    private Dictionary<string, object?> Payload(ChatCompletionRequest request)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["model"] = options.Model,
+            ["input"] = new[] { new { role = "developer", content = request.SystemPrompt }, new { role = "user", content = request.UserPrompt } },
+            ["reasoning"] = new { effort = options.ReasoningEffort },
+            ["max_output_tokens"] = request.MaxTokens,
+            ["store"] = false
+        };
+        if (request.ToolProtocol is null && request.ResponseFormat == ChatResponseFormat.JsonObject)
+            payload["text"] = new { format = new { type = "json_object" } };
+        if (request.ToolProtocol is { } protocol)
+        {
+            var input = new JsonArray(new JsonObject { ["role"] = "developer", ["content"] = request.SystemPrompt });
+            foreach (var exchange in protocol.Exchanges)
+            {
+                foreach (var item in exchange.Output) input.Add(item?.DeepClone());
+                foreach (var item in exchange.Results) input.Add(item?.DeepClone());
+            }
+            input.Add(new JsonObject { ["role"] = "user", ["content"] = request.UserPrompt });
+            payload["input"] = input;
+            payload["tools"] = OpenAiFunctionProtocol.Definitions(protocol);
+            payload["tool_choice"] = "required";
+            payload["include"] = new[] { "reasoning.encrypted_content" };
+        }
+        return payload;
+    }
+
 }

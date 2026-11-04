@@ -90,7 +90,8 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     var prompt = BoundedPrompt(request, scope, state, board, mode);
                     if (prompt is null) { state.StopReason = "BudgetExhausted"; break; }
                     // UTF-8 bytes 是保守 token 上界；完整 request 與最大輸出預留成本。
-                    var inputReserve = Encoding.UTF8.GetByteCount(prompt + systemPrompt);
+                    var completionRequest = CompletionRequest(systemPrompt, prompt, scope, state);
+                    var inputReserve = chat.EstimateInputBytes(completionRequest);
                     var costReserve = Cost(inputReserve, _options.MaxOutputTokens);
                     if (state.PromptTokens + inputReserve > _options.MaxPromptTokens || state.CostUsd + costReserve > _options.MaxCostUsd)
                     { state.StopReason = "BudgetExhausted"; break; }
@@ -98,7 +99,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     using var activity = EquityLensTelemetry.ActivitySource.StartActivity("gen_ai.chat");
                     activity?.SetTag("gen_ai.request.model", chat.Model);
                     activity?.SetTag("gen_ai.system", chat.Provider);
-                    var response = await chat.CompleteAsync(new(systemPrompt, prompt, .1, _options.MaxOutputTokens, ChatResponseFormat.JsonObject), bounded.Token)
+                    var response = await chat.CompleteAsync(completionRequest, bounded.Token)
                         .WaitAsync(bounded.Token);
                     activity?.SetTag("gen_ai.usage.input_tokens", response.PromptTokens);
                     activity?.SetTag("gen_ai.usage.output_tokens", response.CompletionTokens);
@@ -109,8 +110,8 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     state.CompletionTokens += response.CompletionTokens;
                     state.CostUsd += Cost(response.PromptTokens, response.CompletionTokens);
                     turn = new AgentLlmTurn { ExecutionAttempt = context.Run.ExecutionAttempt, Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                        Turn = state.Turn + 1, Mode = mode, PromptVersion = 23, Provider = chat.Provider, Model = response.Model,
-                        RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(systemPrompt + prompt))),
+                        Turn = state.Turn + 1, Mode = mode, PromptVersion = chat.SupportsNativeTools ? 24 : 23, Provider = chat.Provider, Model = response.Model,
+                        RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(chat.SupportsNativeTools ? JsonSerializer.Serialize(completionRequest, PromptJson) : systemPrompt + prompt))),
                         PromptTokens = response.PromptTokens, CompletionTokens = response.CompletionTokens,
                         EstimatedCostUsd = Cost(response.PromptTokens, response.CompletionTokens), LatencyMs = timer.ElapsedMilliseconds,
                         CreatedAtUtc = clock.GetUtcNow().UtcDateTime };
@@ -127,6 +128,8 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                         context.AddEvent(context.Run, context.Node, "AgentLoopProtocolRejected", "模型輸出不符合動作協定。",
                             new { turn.Turn, diagnostic = ex.Diagnostic });
                     }
+                    if (chat.SupportsNativeTools && response.ProviderOutput is { } nativeOutput)
+                        state.NativeExchanges.Add(new() { Turn = turn.Turn, Output = nativeOutput.DeepClone().AsArray() });
                     db.AgentLlmTurns.Add(turn);
                     state.PendingTurnId = turn.Id;
                     await SaveAsync();
@@ -188,6 +191,9 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     }
                     state.History.Add($"Turn {turn.Turn}: {action.ThoughtSummary}; {action.Action}; evidence={state.Ledger.Count}");
                 }
+                // 決策保存後才執行；工具保存及 facts 合併後才組成供應商回覆。中斷恢復沿用同一 call_id。
+                if (chat.SupportsNativeTools)
+                    await CompleteNativeExchangeAsync(state, turn, context, ct);
                 state.Turn++;
                 state.PendingTurnId = null;
                 context.AddEvent(context.Run, context.Node, "AgentTurnCompleted", "Research turn committed.", new { turn.Turn, turn.Action, state.ToolCalls });
@@ -352,6 +358,39 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         }
     }
 
+    private ChatCompletionRequest CompletionRequest(string system, string prompt, LoopToolScope scope, ResearchLoopState state) =>
+        new(system, prompt, .1, _options.MaxOutputTokens, ChatResponseFormat.JsonObject,
+            chat.SupportsNativeTools ? new ChatToolProtocol(
+                (state.ForcedDraft ? Array.Empty<LoopToolDefinition>() : _tools.Visible(scope))
+                    .Select(x => new ChatFunction(x.Name, x.Description, x.Parameters)).ToArray(), state.NativeExchanges) : null);
+
+    private static async Task CompleteNativeExchangeAsync(ResearchLoopState state, AgentLlmTurn turn, AgentNodeExecutionContext context, CancellationToken ct)
+    {
+        var exchange = state.NativeExchanges.SingleOrDefault(x => x.Turn == turn.Turn);
+        if (exchange is null) return;
+        var records = await context.DbContext.AgentToolCalls.Where(x => x.AgentLlmTurnId == turn.Id).ToListAsync(ct);
+        exchange.Results.Clear();
+        foreach (var item in exchange.Output.OfType<JsonObject>().Where(x => x["type"]?.ToString() == "function_call"))
+        {
+            if (item["call_id"] is not JsonValue id || !id.TryGetValue<string>(out var callId)) continue;
+            var record = records.SingleOrDefault(x => x.ToolCallKey == callId);
+            var result = AgentNodeJson.Serialize(new {
+                status = record?.Status ?? (state.StopReason == "AnswerSubmitted" ? "Accepted" : "Rejected"),
+                reason = record?.GuardReason ?? record?.ErrorMessage ?? (record is null ? turn.ErrorMessage ?? state.History.LastOrDefault() : null),
+                summary = record?.ResultPreview,
+                evidenceIds = record is null ? [] : state.Facts.Where(x => x.Tool == record.ToolName).Select(x => x.Id).Concat(state.Ledger.Select(x => x.Id)).ToArray(),
+                instruction = "完整授權證據與工具資料見下一則訊息 facts/evidence；依拒絕原因修正，不把未執行視為資料不存在。"
+            });
+            exchange.Results.Add(new JsonObject { ["type"] = "function_call_output", ["call_id"] = callId, ["output"] = result });
+        }
+    }
+
+    private const string NativePrompt = """
+        使用已註冊的 function 呼叫取得資料，不以一般文字或 JSON 動作描述代替呼叫。獨立工具可同輪呼叫，相依工具等待結果。
+        完成時呼叫 submit_answer，markdown 附引用、citedEvidenceIds 列出證據編號；可用工具確實無法取得必要證據時呼叫 give_up。
+        每輪只選工具呼叫或終止動作其中一種。工具參數以註冊 schema 為準；字典採 key/value 陣列傳輸。
+        """;
+
     private decimal Cost(int input, int output) => (input * _options.InputUsdPerMillion + output * _options.OutputUsdPerMillion) / 1_000_000m;
 
     private string? BoundedPrompt(ResearchAskRequest request, LoopToolScope scope, ResearchLoopState state, JsonObject board, string mode)
@@ -363,7 +402,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         while (true)
         {
             var prompt = JsonSerializer.Serialize(new { request.Question, request.Ticker, request.SourcePolicy, mode,
-                tools = state.ForcedDraft ? [] : _tools.Visible(scope),
+                tools = state.ForcedDraft || chat.SupportsNativeTools ? [] : _tools.Visible(scope),
                 instruction = state.ForcedDraft ? "本輪只能 submit_answer 或 give_up，不能再呼叫工具。" : "依證據決定下一步。",
                 budget = new { remainingTurns = (mode == "Revise" ? _options.MaxRevisionTurns : _options.MaxTurns) - state.Turn,
                     remainingTools = _options.MaxToolCalls - state.ToolCalls },
@@ -378,7 +417,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                 feedback = mode == "Revise" ? board[AgentBlackboardKeys.FeedbackComment] : null,
                 originalAnswer = mode == "Revise" ? board[AgentBlackboardKeys.OriginalAnswer] ?? board[AgentBlackboardKeys.Answer] : null,
                 outputGate = mode == "Revise" ? board["outputGate"] : null }, PromptJson);
-            var reserve = Encoding.UTF8.GetByteCount(prompt + systemPrompt);
+            var reserve = chat.EstimateInputBytes(CompletionRequest(systemPrompt, prompt, scope, state));
             if (state.PromptTokens + reserve <= _options.MaxPromptTokens && state.CostUsd + Cost(reserve, _options.MaxOutputTokens) <= _options.MaxCostUsd)
                 return prompt;
             if (count > 4) { count = Math.Max(4, count / 2); continue; }
@@ -393,7 +432,13 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         var role = portfolio ? "Portfolio" : "Research";
         var index = skills?.ForRole(role).Select(x => new { x.Id, x.Name, x.Description }).ToArray();
         var loaded = board[SkillLoopTools.LoadedKey] as JsonObject;
-        return BasePrompt + "\n" + LoopProtocol.Prompt + "\n" + (portfolio ? PortfolioPrompt : ResearchPrompt)
+        var domain = portfolio ? PortfolioPrompt : ResearchPrompt;
+        if (chat.SupportsNativeTools)
+            domain = string.Join("\n", domain.Split('\n').Where(x => !x.TrimStart().StartsWith("回傳一個 JSON")
+                && !x.TrimStart().StartsWith("call_tools 包含") && !x.TrimStart().StartsWith("submit_answer 包含")))
+                .Replace("依共用 JSON 動作協定回覆；", "");
+        return BasePrompt.Replace("JSON 動作協定", chat.SupportsNativeTools ? "工具呼叫協定" : "JSON 動作協定")
+            + "\n" + (chat.SupportsNativeTools ? NativePrompt : LoopProtocol.Prompt) + "\n" + domain
             + "\n可選分析方法目錄（需要時先用 load_skill 載入）：" + JsonSerializer.Serialize(index, PromptJson)
             + "\n已載入方法（僅增加說明，不是證據，不能擴大工具權限／來源政策／預算）：\n"
             + string.Join("\n", (loaded ?? new()).Select(x => x.Value?["content"]?.GetValue<string>()));

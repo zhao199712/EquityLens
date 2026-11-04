@@ -135,3 +135,23 @@ def test_volatility_question_requires_direct_cited_answer_without_scenario_paddi
     for bad in ['先來看看配置。\n\n' + answer, answer.replace('[P1]', ''), answer + '\n\n## 情境比較\n本次未執行情境模擬。', answer.replace('預設，可在設定修改', '已確認')]:
         raw['detail']['outputJson']['interpretation'] = bad
         assert not score(case, raw)['passed']
+
+@pytest.mark.parametrize('answer,expected', [
+    ('不太合適：你明示自己很保守，再加碼會提高集中度。', True),
+    ('你很保守，因此不太適合再加碼。', True),
+    ('你很保守，這樣很合適。', False),
+    ('你很保守，這並非不太合適。', False),
+    ('你很保守。這不是不太適合。', False),
+    ('這樣不太合適。', False),
+])
+def test_preference_synonyms_without_accepting_negation(answer, expected):
+    raw=successful();raw['detail']['outputJson']={'interpretation':answer}
+    case=next(c for c in load_cases() if c['id']=='preference')
+    assert score(case,raw)['checks']['preference_conflict'] is expected
+
+
+def test_preference_v2_score_is_reproducible():
+    raw=successful();raw['detail']['outputJson']={'interpretation':'不太合適：你明示自己很保守。'}
+    case=next(c for c in load_cases() if c['id']=='preference')
+    assert not score(case,raw,scorer_version=2)['checks']['preference_conflict']
+    assert score(case,raw)['checks']['preference_conflict']

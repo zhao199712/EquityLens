@@ -639,6 +639,91 @@ public sealed class ResearchAgentLoopTests
         finally { Directory.Delete(directory, true); }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NativeGuardResultsAndSuccessfulCallsSurviveRestart(bool portfolio)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var tools = new FakeTools();
+        var denied = Search.Replace("search_local", "search_web");
+        var first = new NativeChat(denied, Search);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => new AgentLoopEngine(first, tools,
+            Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio).RunAsync(context, portfolio ? "Portfolio" : "Research", default));
+        Assert.Contains("ToolNotVisible", first.Requests[1].ToolProtocol!.Exchanges[0].Results.ToJsonString());
+        var saved = JsonSerializer.Deserialize<ResearchLoopState>((await db.AgentLoopCheckpoints.SingleAsync()).StateJson, AgentNodeJson.SerializerOptions)!;
+        Assert.Equal(2, saved.NativeExchanges.Count);
+        Assert.Equal("Succeeded", JsonNode.Parse(saved.NativeExchanges[1].Results[0]!["output"]!.GetValue<string>())!["status"]!.GetValue<string>());
+        var resumed = new NativeChat("""{"action":"give_up","thoughtSummary":"測試結束"}""");
+        await new AgentLoopEngine(resumed, tools, Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System, portfolio)
+            .RunAsync(context, portfolio ? "Portfolio" : "Research", default);
+        Assert.Equal(1, tools.Calls);
+        Assert.Equal(2, resumed.Requests[0].ToolProtocol!.Exchanges.Count);
+        Assert.Contains("E1", resumed.Requests[0].ToolProtocol!.Exchanges[1].Results.ToJsonString());
+        Assert.DoesNotContain("example_tool", resumed.Requests[0].SystemPrompt);
+        Assert.Contains(await db.AgentToolCalls.ToListAsync(), x => x.Status == "Denied");
+    }
+
+    [Fact]
+    public async Task NativePendingTurnReusesCommittedToolResultAndPreservesCallId()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var context = await Context(db);
+        var turn = new AgentLlmTurn { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            Turn = 1, PromptVersion = 24, Action = "call_tools", ActionJson = Search };
+        db.Add(turn);
+        db.Add(new AgentLoopCheckpoint { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            StateJson = AgentNodeJson.Serialize(new ResearchLoopState { PendingTurnId = turn.Id, ToolCalls = 1, StartedAtUtc = DateTime.UtcNow,
+                NativeExchanges = [new() { Turn = 1, Output = NativeChat.Output(Search) }] }) });
+        db.Add(new AgentToolCall { Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
+            AgentLlmTurnId = turn.Id, ToolCallKey = "c1", ToolName = "search_local", Status = "Succeeded",
+            ResultJson = AgentNodeJson.Serialize(new LoopToolResult([Evidence()], "persisted")) });
+        await db.SaveChangesAsync();
+        var tools = new FakeTools(); var chat = new NativeChat(Submit);
+        var result = await new AgentLoopEngine(chat, tools, Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System).RunAsync(context, "Research", default);
+        Assert.Equal(0, tools.Calls);
+        Assert.Equal("AnswerSubmitted", result.StopReason);
+        Assert.Equal("c1", chat.Requests[0].ToolProtocol!.Exchanges[0].Results[0]!["call_id"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task NativeSchemaAndHistoryCostIsReservedBeforeProviderCall()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var chat = new NativeChat(Submit) { ReserveBytes = 1000000 };
+        var result = await new AgentLoopEngine(chat, new FakeTools(), Options.Create(new ResearchAgentLoopOptions()), TimeProvider.System)
+            .RunAsync(await Context(db), "Research", default);
+        Assert.Equal("BudgetExhausted", result.StopReason);
+        Assert.Empty(chat.Requests);
+    }
+
+    private sealed class NativeChat(params string[] responses) : IChatCompletionService
+    {
+        public bool SupportsNativeTools => true;
+        public string Provider => "openai";
+        public string Model => "fixture-native";
+        public int ReserveBytes;
+        public int EstimateInputBytes(ChatCompletionRequest request) => ReserveBytes > 0 ? ReserveBytes : System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(request));
+        private readonly Queue<string> pending = new(responses);
+        public List<ChatCompletionRequest> Requests { get; } = [];
+        public Task<ChatCompletionResult> CompleteAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(JsonSerializer.Deserialize<ChatCompletionRequest>(JsonSerializer.Serialize(request))!);
+            if (pending.Count == 0) throw new OperationCanceledException();
+            var content = pending.Dequeue();
+            return Task.FromResult(new ChatCompletionResult(content, Model, 10, 10, Output(content)));
+        }
+        public static JsonArray Output(string content)
+        {
+            var action = JsonNode.Parse(content)!;
+            if (action["action"]!.GetValue<string>() != "call_tools") return [];
+            return new JsonArray(action["toolCalls"]!.AsArray().Select(x => (JsonNode)new JsonObject {
+                ["type"] = "function_call", ["call_id"] = x!["callId"]!.DeepClone(), ["name"] = x["tool"]!.DeepClone(), ["arguments"] = x["arguments"]!.ToJsonString()
+            }).ToArray());
+        }
+    }
+
     private static ResearchAgentLoop Loop(FakeChat chat, FakeTools tools, ResearchAgentLoopOptions? options = null) =>
         new(chat, tools, Options.Create(options ?? new ResearchAgentLoopOptions()), TimeProvider.System);
 

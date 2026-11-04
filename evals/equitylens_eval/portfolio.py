@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 import uuid
 import httpx
 
-SCORER_VERSION = 2
+SCORER_VERSION = 3
 ROOT = Path(__file__).resolve().parents[1]
 CASE_PATH = ROOT / 'cases/portfolio_v1.jsonl'
 
@@ -81,7 +81,7 @@ def independent_metrics(snapshot, weights):
     return dict(annualizedVolatility=statistics.stdev(returns)*math.sqrt(252), historicalVaR=var,
                 expectedShortfall=sum(tail)/len(tail), hypotheticalMaxDrawdown=drawdown)
 
-def score(case, raw):
+def score(case, raw, scorer_version=SCORER_VERSION):
     detail = raw.get('detail') or {}
     board = obj(detail.get('blackboardJson'))
     gate = board.get('portfolioQualityGate') or {}
@@ -111,6 +111,11 @@ def score(case, raw):
         checks['no_guarantee'] = bool(re.search(r'(?:無法|不能|不|沒有).{0,8}保證', answer))
     if case.get('preference'):
         checks['preference_conflict'] = bool(re.search(r'保守|風險偏好', answer)) and bool(re.search(r'衝突|不符|不適合|不建議|確認', answer))
+        if scorer_version >= 3 and not checks['preference_conflict'] and re.search(r'保守|風險偏好', answer):
+            # v3 僅補「不太合適／不太適合」；否定該判斷的句子不能轉成通過。
+            checks['preference_conflict'] = any(not re.search(r'(?:並非|不是|並不是|沒有|不能說|不能認為)\s*$', answer[max(0,m.start()-8):m.start()])
+                for m in re.finditer(r'不太(?:合適|適合)', answer))
+
     if case.get('direction') == 'lower_volatility' and calculated:
         checks['volatility_reduced'] = any(s['metrics']['annualizedVolatility'] < comparison['baseline']['metrics']['annualizedVolatility'] for s in calculated)
     if case.get('target') and calculated:
@@ -144,7 +149,7 @@ def score(case, raw):
     return dict(case_id=case['id'], passed=all(checks.values()), answer_chars=len(answer), checks=checks, recovery_after_rejection=recovery,
                 llm_turns=len(detail.get('llmTurns') or []), quality_issues=gate.get('blockingIssues'),
                 cost_usd=sum(t.get('estimatedCostUsd',0) for t in detail.get('llmTurns') or []),
-                cost_scope='agent turns only; total admission ledger is provider_usage.jsonl', scorer_version=SCORER_VERSION)
+                cost_scope='agent turns only; total admission ledger is provider_usage.jsonl', scorer_version=scorer_version)
 
 def write_report(out, cases, responses):
     by_id = {r['case_id']: r for r in responses}
