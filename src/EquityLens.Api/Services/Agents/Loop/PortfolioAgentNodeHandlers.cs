@@ -50,15 +50,9 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         var interpretation = issues.Count == 0 ? answer?.Markdown
             : comparison?.Status == "Calculated" && issues.All(i => i is "UntraceableNumbers" or "MixedRiskBasis" or "ScenarioComparisonDirectionMismatch" or "UnverifiedScenarioComparison")
                 ? VerifiedParagraphs(answer, facts) : null;
-        // 降級仍揭露已保存的偏好事實；不改寫品質判定，也不從模型草稿推測偏好。
-        if (issues.Count > 0 && facts.LastOrDefault(f => f.Tool == "get_risk_profile"
-                && f.Data["available"]?.ToString() == "true") is { } profile
-            && profile.Data["statement"]?.ToString() is { Length: > 0 } statement)
-        {
-            summary += $"\n\n{statement} [{profile.Id}]。";
-            if (interpretation is not null && !interpretation.Contains(statement, StringComparison.Ordinal))
-                interpretation += $"\n\n{statement} [{profile.Id}]。";
-        }
+        // 偏好是已保存的工具事實，正常與降級報告皆揭露；不依賴模型記得重述。
+        summary = WithRiskPreference(summary, facts)!;
+        interpretation = WithRiskPreference(interpretation, facts);
         var output = new PortfolioDiagnosisOutput(summary, attribution?.PortfolioReturn, attribution?.BenchmarkReturn, attribution?.ActiveReturn,
             attribution?.Holdings.Where(x => x.Contribution < 0).OrderBy(x => x.Contribution).Take(3).ToArray() ?? [],
             attribution?.Holdings.Where(x => x.Contribution > 0).OrderByDescending(x => x.Contribution).Take(3).ToArray() ?? [], [],
@@ -73,6 +67,16 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         context.Node.OutputJson = board["portfolioQualityGate"]!.ToJsonString();
         context.AddEvent(context.Run, context.Node, "PortfolioQualityGateEvaluated", issues.Count == 0 ? "Passed" : "Limited", new { issues });
         return Task.CompletedTask;
+    }
+
+    internal static string? WithRiskPreference(string? text, IReadOnlyList<LoopDataFact> facts)
+    {
+        if (text is not null && facts.LastOrDefault(f => f.Tool == "get_risk_profile"
+                && f.Data["available"]?.ToString() == "true") is { } profile
+            && profile.Data["statement"]?.ToString() is { Length: > 0 } statement
+            && !text.Contains(statement, StringComparison.Ordinal))
+            return text + $"\n\n{statement} [{profile.Id}]。";
+        return text;
     }
 
     internal static bool RequiresScenario(JsonObject board) => Regex.IsMatch(
