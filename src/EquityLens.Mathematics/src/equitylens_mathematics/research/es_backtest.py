@@ -351,6 +351,71 @@ def du_escanciano_mc(
     }
 
 
+def exchangeable_cumulative_pits(forecasts: ForecastSet) -> np.ndarray:
+    """Per day, PIT values a new return can take when it is exchangeable with the bank.
+
+    Row t holds 0, c_1/S, ..., c_n/S where c_k counts samples at or below the
+    k-th distinct scenario. Under a correct finite-bank FHS model a new return
+    falls into each of the n + 1 gaps around the n scenarios with equal
+    probability, whatever the true distribution, so these values are equally
+    likely PITs. Days with fewer distinct values are padded by repeating the
+    last entry, which is only drawn with the padded probability mass removed.
+    """
+    rows = []
+    for row in forecasts.samples:
+        _, counts = np.unique(row, return_counts=True)
+        rows.append(np.concatenate(([0.0], np.cumsum(counts) / row.size)))
+    width = max(len(row) for row in rows)
+    table = np.full((len(rows), width), np.nan)
+    for index, row in enumerate(rows):
+        table[index, :len(row)] = row
+    return table
+
+
+def du_escanciano_exchangeable(
+    forecasts: ForecastSet,
+    confidence: float,
+    repetitions: int = 10_000,
+    label: str = "",
+    lags: tuple[int, ...] = (1, 5),
+) -> dict:
+    """U_ES / C_ES with a distribution-free null that accounts for the finite bank.
+
+    The model-own null in `du_escanciano_mc` treats the resampled bank as the
+    true distribution and rejects correct finite-bank models; here the new
+    return's rank among the n scenarios is uniform on n + 1 positions.
+    """
+    tail = 1.0 - confidence
+    table = exchangeable_cumulative_pits(forecasts)
+    sizes = np.sum(np.isfinite(table), axis=1)
+    observed_mean, observed_conditional = _du_escanciano_stats(forecasts.pit(), tail, lags)
+    rng = np.random.default_rng(seed_for(f"du-escanciano-exchangeable:{label}:{confidence}"))
+    rows = np.arange(table.shape[0])
+    means: list[np.ndarray] = []
+    conditional: dict[int, list[np.ndarray]] = {lag: [] for lag in lags}
+    for start in range(0, repetitions, 250):
+        count = min(250, repetitions - start)
+        positions = np.floor(rng.random((count, rows.size)) * sizes).astype(int)
+        pit = table[rows[None, :], positions]
+        mean, stats = _du_escanciano_stats(pit, tail, lags)
+        means.append(mean)
+        for lag in lags:
+            conditional[lag].append(stats[lag])
+    null_means = np.concatenate(means)
+    return {
+        "mean_h": float(observed_mean),
+        "null_mean_h": float(null_means.mean()),
+        "u_es_p_right": _right_p(null_means, float(observed_mean)),
+        "c_es": {
+            str(lag): {
+                "statistic": float(observed_conditional[lag]),
+                "p": _right_p(np.concatenate(conditional[lag]), float(observed_conditional[lag])),
+            }
+            for lag in lags
+        },
+    }
+
+
 def tail_ratio(forecasts: ForecastSet, confidence: float) -> float | None:
     var, es = forecasts.var_es(confidence)
     breach = forecasts.actual < var
@@ -360,8 +425,11 @@ def tail_ratio(forecasts: ForecastSet, confidence: float) -> float | None:
 
 
 def evaluate(forecasts: ForecastSet, levels=DEFAULT_LEVELS, repetitions: int = 10_000, label: str = "") -> dict:
-    """All tests use Monte Carlo nulls from the model's own daily distributions;
-    the asymptotic Du-Escanciano block is reported for reference only."""
+    """Monte Carlo nulls from the model's own daily distributions condition on the
+    finite resampled bank being the true distribution; for FHS this rejects
+    correct models (Z1, Z2 and model-own U_ES are oversized at long T). Use
+    `du_escanciano_exchangeable` for frequency/clustering evidence; the
+    asymptotic Du-Escanciano block is reported for reference only."""
     pit = forecasts.pit()
     ranks = right_ranks(forecasts)
     return {
@@ -369,6 +437,7 @@ def evaluate(forecasts: ForecastSet, levels=DEFAULT_LEVELS, repetitions: int = 1
             "acerbi_szekely": acerbi_szekely(forecasts, level, repetitions, label),
             "mcneil_frey": mcneil_frey(forecasts, level, repetitions, label),
             "du_escanciano": du_escanciano_mc(forecasts, level, repetitions, label, ranks),
+            "du_escanciano_exchangeable": du_escanciano_exchangeable(forecasts, level, repetitions, label),
             "du_escanciano_asymptotic": du_escanciano(pit, level),
             "tail_ratio": tail_ratio(forecasts, level),
         }

@@ -33,6 +33,7 @@ from .es_backtest import (
     DEFAULT_LEVELS,
     ForecastSet,
     collect_forecasts_multi,
+    du_escanciano_exchangeable,
     du_escanciano_mc,
     load_history_export,
     seed_for,
@@ -189,6 +190,11 @@ def run_variant(variant: str, history: Path, name: str, repetitions: int) -> dic
             de = du_escanciano_mc(fc, confidence, repetitions, f"attr:{variant}:{label}")
             level["c_es"] = {lag: value["p"] for lag, value in de["c_es"].items()}
             if variant == "base":
+                exchangeable = du_escanciano_exchangeable(fc, confidence, repetitions, f"attr:{label}")
+                level["exchangeable"] = {
+                    "u_es_p": exchangeable["u_es_p_right"],
+                    "c_es": {lag: value["p"] for lag, value in exchangeable["c_es"].items()},
+                }
                 level["unbiased_var"] = coverage(fc.actual, unbiased_var(fc, confidence), confidence, 1.0 - confidence)
             entry["levels"][str(confidence)] = level
         if variant == "base":
