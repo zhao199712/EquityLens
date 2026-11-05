@@ -59,7 +59,7 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--base-url',default='http://127.0.0.1:55440')
     p.add_argument('--state',type=Path,default=Path('/tmp/equitylens-seed-runtime'))
-    p.add_argument('--data',type=Path,default=Path('/tmp/equitylens-seed-v2'))
+    p.add_argument('--data',type=Path,default=Path('/tmp/equitylens-seed-v3'))
     p.add_argument('--container',default='equitylens-seed-postgres')
     p.add_argument('--database',default='equitylens_cloud_seed')
     a=p.parse_args(); smoke(a.base_url,a.state,a.data,a.container,a.database)

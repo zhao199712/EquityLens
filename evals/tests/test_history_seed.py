@@ -18,3 +18,18 @@ def test_snapshot_weights_are_normalized_per_universe():
     assert abs(sum(weights(selection,['a','b']))-1)<1e-12
     assert weights(selection,['a'])==[1]
     assert weights(selection,['a','b'],equal=True)==[.5,.5]
+
+
+def test_history_loader_filters_old_seed_before_calendar(monkeypatch):
+    import sys
+    import types
+    from equitylens_eval.history_seed import load_history
+    bundle={'selection':{'policy':'top10-history-v2','eval':{}},'tables':{
+        'security':[{'id':'s','ticker':'2330'}],
+        'market_price':[{'security_id':'s','price_time':d+'T00:00:00Z','adjusted_close':v} for d,v in [('2003-12-31',50),('2004-01-02',100),('2004-01-05',101)]]},
+        'historyAudit':{'2330':{'largeReturns':[{'date':'2003-12-31'}]}}}
+    monkeypatch.setitem(sys.modules,'seed',types.SimpleNamespace(load_bundle=lambda _: (bundle,{})))
+    _,_,series,calendar=load_history('ignored')
+    assert calendar==['2004-01-02','2004-01-05']
+    assert '2003-12-31' not in series['2330']
+    assert return_rows(series,calendar,['2330'])[0]['previousDate']=='2004-01-02'

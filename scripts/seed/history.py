@@ -40,6 +40,30 @@ def number(row, key):
         return None
 
 
+# Reviewed correction applies only to this immutable provider snapshot. A future
+# download must be reconciled again, never silently divide an already fixed feed.
+ETF_SNAPSHOT_SHA = '1c4b3f70cf6df22c6fb9cbb32b9eeda85feb71fc4572ebed6c82e83aec4d62e0'
+
+
+def correct_0050(rows, source_sha):
+    if source_sha != ETF_SNAPSHOT_SHA:
+        raise ValueError('0050 source changed: reconcile split basis before applying correction')
+    corrected = copy.deepcopy(rows)
+    count = 0
+    for row in corrected:
+        if row['date'] < '2014-01-01':
+            for key in ('Open', 'High', 'Low', 'Close', 'Adj Close'):
+                value = number(row, key)
+                if value is not None:
+                    row[key] = value / 4
+            count += 1
+    return corrected, dict(id='0050-split-basis-2025-4for1', through='2013-12-31',
+        priceMultiplier=0.25, sourceRows=count, sourceSha256=source_sha,
+        eventDate='2025-06-18',
+        explanation='Before 2014 provider omitted the later 4-for-1 adjustment; 2014 onward already adjusted. Volume unchanged.',
+        source='https://wwwc.twse.com.tw/zh/ETFortune/announcement?company=A00005&date=20250617&fund=0050&seq=1&type=other')
+
+
 def clean_history(code, rows, entity_start=None):
     good, excluded, anomalies = [], [], []
     seen = set()
@@ -88,6 +112,10 @@ def build(base, snapshots, output, selection_path):
         path = snapshots / (symbol.replace('^', '') + '.csv')
         with path.open() as f:
             rows = list(csv.DictReader(f))
+        correction = None
+        source_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        if code == '0050':
+            rows, correction = correct_0050(rows, source_sha)
         good, excluded, anomalies = clean_history(code, rows, selection['entityStarts'].get(code))
         if any(r['date'] >= source['endExclusive'] for r in good):
             raise ValueError('Source contains prices outside frozen end date')
@@ -111,7 +139,7 @@ def build(base, snapshots, output, selection_path):
         audit[code] = dict(providerFirst=rows[0]['date'], providerLast=rows[-1]['date'],
             sourceSha256=hashlib.sha256(path.read_bytes()).hexdigest(), acceptedFirst=good[0]['date'],
             acceptedLast=good[-1]['date'], acceptedRows=len(good), excluded=excluded,
-            largeReturns=anomalies, corporateActionAudit='not independently reconciled')
+            largeReturns=anomalies, reviewedCorrection=correction, corporateActionAudit='0050 split basis corrected; other events not independently reconciled')
     as_of = min(a['acceptedLast'] for a in audit.values())
     bundle.update(asOf=as_of, historySource=source, historyAudit=audit)
     bundle['excludedPrices'] = [{'ticker':c, **r} for c,a in audit.items() for r in a['excluded'] if r['reason']!='before_current_entity_listing']
@@ -120,7 +148,7 @@ def build(base, snapshots, output, selection_path):
     # Keep the separately named total-return index. ^TWII is never inserted into it.
     report = validate(bundle)
     output.mkdir(parents=True, exist_ok=True)
-    name = 'equitylens-seed-v2.json.gz'
+    name = 'equitylens-seed-v3.json.gz'
     payload = gzip.compress(json.dumps(bundle, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode(), mtime=0)
     (output / name).write_bytes(payload)
     manifest = dict(formatVersion=1, asset=name, sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload),

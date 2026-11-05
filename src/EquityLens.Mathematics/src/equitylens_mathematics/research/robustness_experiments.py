@@ -45,6 +45,8 @@ def read_returns(path: Path) -> tuple[list[date], np.ndarray]:
     rows = json.loads(path.read_text())
     by_date: dict[str, dict[str, float]] = defaultdict(dict)
     for row in rows:
+        if row["date"] < "2004-01-01":
+            continue
         by_date[row["date"]][row["ticker"]] = float(row["close"]) if row["close"] is not None else float("nan")
     keys = sorted(by_date)
     prices = np.full((len(keys), len(TICKERS)), np.nan)
