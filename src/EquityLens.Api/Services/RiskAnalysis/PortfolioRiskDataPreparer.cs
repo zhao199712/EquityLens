@@ -144,31 +144,14 @@ public sealed class PortfolioRiskDataPreparer(
                 $"available records range from {priceCountsBySecurity.Values.Min()} to {priceCountsBySecurity.Values.Max()}.");
         }
 
-        // 日期對齊：只保留所有資產共同的交易日
-        List<DateOnly> commonDates;
-        Dictionary<Guid, IReadOnlyList<decimal>> dateToPrice;
+        // 日期對齊：交易日聯集，停牌／缺價日沿用前一有效價格
+        IReadOnlyList<DateOnly> commonDates;
+        IReadOnlyDictionary<Guid, IReadOnlyList<decimal>> dateToPrice;
         using (EquityLensTelemetry.StartRiskStage(Activity.Current, "returns.align"))
         {
-            var dateSets = pricesBySecurity.Values
-                .Select(p => p.Select(x => DateOnly.FromDateTime(x.PriceTime)).ToHashSet())
-                .ToList();
-
-            commonDates = dateSets.Skip(1)
-                .Aggregate(dateSets[0], (intersection, set) =>
-                {
-                    intersection.IntersectWith(set);
-                    return intersection;
-                })
-                .OrderBy(d => d)
-                .ToList();
-
-            dateToPrice = pricesBySecurity.ToDictionary(
-                kvp => kvp.Key,
-                kvp => (IReadOnlyList<decimal>)kvp.Value
-                    .Where(p => commonDates.Contains(DateOnly.FromDateTime(p.PriceTime)))
-                    .OrderBy(p => p.PriceTime)
-                    .Select(p => p.AdjustedClose ?? p.Close)
-                    .ToList());
+            var alignment = RiskPriceAlignment.Align(pricesBySecurity, p => p.AdjustedClose ?? p.Close);
+            commonDates = alignment.Dates;
+            dateToPrice = alignment.Prices;
         }
 
         if (commonDates.Count < MinPriceCount)
@@ -250,29 +233,22 @@ public sealed class PortfolioRiskDataPreparer(
         var pricesById = new Dictionary<Guid, IReadOnlyList<Contracts.MarketPrices.MarketPriceResponse>>();
         foreach (var id in weights.Keys)
             pricesById[id] = await marketPriceRepository.GetBySecurityAsync(id, from, to, cancellationToken);
-        var dateSets = pricesById.Values.Select(ps => ps.Select(p => DateOnly.FromDateTime(p.PriceTime)).ToHashSet()).ToList();
-        var commonDates = dateSets.Skip(1).Aggregate(dateSets[0], (set, next) => { set.IntersectWith(next); return set; }).OrderBy(d => d).ToList();
+        var alignment = RiskPriceAlignment.Align(pricesById, p => p.AdjustedClose);
+        var commonDates = alignment.Dates;
         if (commonDates.Count < lookbackDays + minimumObservations)
             return Result<RiskBacktestEngineInput>.Failure("risk.insufficient_prices", $"At least {lookbackDays + minimumObservations} common trading days are required for backtesting (got {commonDates.Count}).");
-
-        var alignedRows = pricesById.ToDictionary(
-            pair => pair.Key,
-            pair => pair.Value
-                .Where(p => commonDates.Contains(DateOnly.FromDateTime(p.PriceTime)))
-                .OrderBy(p => p.PriceTime)
-                .ToList());
-        if (alignedRows.Values.Any(rows => rows.Any(p => p.AdjustedClose is null)))
+        if (alignment.HasUnavailablePrice)
             return Result<RiskBacktestEngineInput>.Failure(
                 "risk.incomplete_adjusted_close",
                 "Complete adjusted-close coverage is required; raw close is never used as a silent substitute.");
-        var aligned = alignedRows.ToDictionary(
-            pair => pair.Key,
-            pair => pair.Value.Select(p => p.AdjustedClose!.Value).ToList());
+        var aligned = alignment.Prices;
         if (aligned.Values.Any(ps => ps.Any(p => p <= 0))) return Result<RiskBacktestEngineInput>.Failure("risk.non_positive_price", "Historical prices contain non-positive values.");
 
+        // 實際投組報酬須與模型分配同口徑：資產簡單報酬加權（Σ w·(P_t/P_{t-1} − 1)），
+        // 不可用加權對數報酬，否則大跌日會產生假超損。
         var returns = new List<decimal>(commonDates.Count - 1);
         for (var index = 1; index < commonDates.Count; index++)
-            returns.Add(aligned.Sum(pair => weights[pair.Key] * (decimal)Math.Log((double)(pair.Value[index] / pair.Value[index - 1]))));
+            returns.Add(aligned.Sum(pair => weights[pair.Key] * (pair.Value[index] / pair.Value[index - 1] - 1m)));
 
         var assetIds = aligned.Keys.OrderBy(id => id).ToArray();
         var weightList = assetIds.Select(id => weights[id]).ToArray();
@@ -346,23 +322,14 @@ public sealed class PortfolioRiskDataPreparer(
         if (pricesBySecurity.Values.Any(series => series.Count < MinPriceCount))
             return Result<PortfolioMonteCarloPreparedData>.Success(Unavailable($"所有持倉至少需要 {MinPriceCount} 筆價格資料，才能建立共同日報酬。"));
 
-        var commonDates = pricesBySecurity.Values
-            .Select(series => series.Select(price => DateOnly.FromDateTime(price.PriceTime)).ToHashSet())
-            .Aggregate((left, right) => { left.IntersectWith(right); return left; })
-            .OrderBy(date => date)
-            .ToList();
-        var dataAsOf = commonDates.LastOrDefault();
+        var alignment = RiskPriceAlignment.Align(pricesBySecurity, price => price.AdjustedClose ?? price.Close);
+        var commonDates = alignment.Dates;
+        var dataAsOf = commonDates.Count > 0 ? commonDates[^1] : default;
         if (commonDates.Count < MinPriceCount)
             return Result<PortfolioMonteCarloPreparedData>.Success(Unavailable(
                 $"可用的共同日價格只有 {commonDates.Count} 筆，至少需要 {MinPriceCount} 筆。", dataAsOf, commonDates.Count));
 
-        var alignedPrices = pricesBySecurity.ToDictionary(
-            pair => pair.Key,
-            pair => (IReadOnlyList<decimal>)pair.Value
-                .Where(price => commonDates.Contains(DateOnly.FromDateTime(price.PriceTime)))
-                .OrderBy(price => price.PriceTime)
-                .Select(price => price.AdjustedClose ?? price.Close)
-                .ToList());
+        var alignedPrices = alignment.Prices;
         if (alignedPrices.Values.Any(series => series.Any(price => price <= 0)))
             return Result<PortfolioMonteCarloPreparedData>.Failure("risk.non_positive_price", "Historical prices contain non-positive values.");
 

@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 import hashlib
+import math
 from pathlib import Path
 
 import numpy as np
@@ -30,7 +31,7 @@ def fixture_input() -> RiskBacktestInput:
     dates = [date(2025, 1, 1) + timedelta(days=index) for index in range(observations)]
     first = [0.001 * ((index % 7) - 3) for index in range(observations)]
     second = [0.0008 * (((index + 2) % 9) - 4) for index in range(observations)]
-    portfolio = [0.6 * x + 0.4 * y for x, y in zip(first, second)]
+    portfolio = [0.6 * math.expm1(x) + 0.4 * math.expm1(y) for x, y in zip(first, second)]
     return RiskBacktestInput.model_validate(
         {
             "portfolioId": "00000000-0000-0000-0000-000000000001",
@@ -116,3 +117,21 @@ def test_shared_cross_language_fixture_is_accepted() -> None:
 
     assert result["outcome"] == "Success"
     assert result["value"]["observationCount"] == 2
+
+
+def test_input_rejects_weighted_log_portfolio_returns() -> None:
+    data = fixture_input().model_dump(by_alias=True, mode="json")
+    first, second = data["assetReturns"]
+    data["portfolioReturns"] = [0.6 * x + 0.4 * y for x, y in zip(first, second)]
+    with pytest.raises(ValueError, match="weighted simple returns"):
+        RiskBacktestInput.model_validate(data)
+
+
+def test_current_risk_reports_log_returns_and_simple_return_drawdown() -> None:
+    input_data = fixture_input()
+    value = calculate_current_risk(input_data, "c" * 64, "risk")["value"]
+    simple = np.asarray(input_data.portfolio_returns)
+    np.testing.assert_allclose(value["dailyLogReturns"], np.log1p(simple))
+    wealth = np.concatenate(([1.0], np.cumprod(1.0 + simple)))
+    peak = np.maximum.accumulate(wealth)
+    assert value["maxDrawdown"] == pytest.approx(float(np.min((wealth - peak) / peak)))

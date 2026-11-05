@@ -122,9 +122,22 @@ public sealed class RiskPipelineTests
                 Assert.Equal(hash, fields["inputHash"]);
                 Assert.Equal(hash, completed.InputHash);
                 var input = JsonSerializer.Deserialize<RiskBacktestEngineInput>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-                Assert.Equal(358, input.ReturnDates.Count); // 360 price dates minus one missing date and the initial return.
-                Assert.DoesNotContain(from.AddDays(42), input.ReturnDates);
-                Assert.All(input.AssetReturns, row => Assert.Equal(358, row.Count));
+                // 2317 has no price on day 42: the session is kept and its price carried forward
+                // (zero return), so 360 price dates yield 359 returns instead of merging two days.
+                Assert.Equal(359, input.ReturnDates.Count);
+                var suspended = input.ReturnDates.ToList().IndexOf(from.AddDays(42));
+                Assert.Equal(41, suspended);
+                Assert.All(input.AssetReturns, row => Assert.Equal(359, row.Count));
+                Assert.Equal(0m, input.AssetReturns[1][suspended]);
+                Assert.NotEqual(0m, input.AssetReturns[0][suspended]);
+                for (var day = 0; day < input.PortfolioReturns.Count; day++)
+                {
+                    // Cross-language contract enforced by the Python input validator.
+                    var expected = input.Weights
+                        .Select((weight, asset) => (double)weight * (Math.Exp((double)input.AssetReturns[asset][day]) - 1d))
+                        .Sum();
+                    Assert.InRange((double)input.PortfolioReturns[day] - expected, -1e-12, 1e-12);
+                }
                 Assert.Equal(1m, input.Weights.Sum(), 10);
                 Assert.Equal(new[] { "2330", "2317" }, input.Assets!.Select(a => a.Ticker));
                 Assert.All(input.Assets!, asset => Assert.False(string.IsNullOrWhiteSpace(asset.SecurityName)));
@@ -133,7 +146,7 @@ public sealed class RiskPipelineTests
                 Assert.Equal(2, conditional.GetProperty("holdings").GetArrayLength());
                 foreach (var item in conditional.GetProperty("holdings").EnumerateArray())
                     Assert.Equal(input.LookbackDays, item.GetProperty("dataPointCount").GetInt32()); // Conditional fit uses the last 252 returns.
-                Assert.Equal(358, completed.Result.Value.GetProperty("dailyLogReturns").GetArrayLength());
+                Assert.Equal(359, completed.Result.Value.GetProperty("dailyLogReturns").GetArrayLength());
 
                 var result = Assert.Single(await queue.StreamRangeAsync(options.Value.ResultsStreamKey));
                 var resultFields = result.Values.ToDictionary(v => v.Name.ToString(), v => v.Value.ToString());

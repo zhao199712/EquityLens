@@ -321,7 +321,7 @@ def calculate_current_risk(
         historical_annualized_volatility = float(
             np.std(portfolio_returns, ddof=1) * math.sqrt(252)
         )
-        wealth = np.concatenate(([1.0], np.exp(np.cumsum(portfolio_returns))))
+        wealth = np.concatenate(([1.0], np.cumprod(1.0 + portfolio_returns)))
         peak = np.maximum.accumulate(wealth)
         max_drawdown = float(np.min((wealth - peak) / peak))
     else:
@@ -411,7 +411,8 @@ def calculate_current_risk(
             "horizons": horizons,
             "confidenceCurve": confidence_curve,
             "historical": historical_one_day,
-            "dailyLogReturns": portfolio_returns.tolist(),
+            # Inputs are simple portfolio returns; the field keeps its log-return contract.
+            "dailyLogReturns": np.log1p(portfolio_returns).tolist(),
             "bands": bands,
             "summary": summary,
             "samplePaths": paths.sample_paths.tolist() if operation == "monte-carlo" else [],

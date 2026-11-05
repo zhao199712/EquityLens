@@ -1,0 +1,113 @@
+{
+ "variant": "lookback504",
+ "lookback": 504,
+ "refit_interval": 21,
+ "portfolios": {
+  "snapshot": {
+   "observations": 5123,
+   "from": "2005-12-08",
+   "to": "2026-11-04",
+   "refit_failures_kept_previous": [],
+   "levels": {
+    "0.95": {
+     "production_var": {
+      "breaches": 274,
+      "rate": 0.053484286550849115,
+      "nominal_rate": 0.050000000000000044,
+      "kupiec_p": 0.2576182598001935,
+      "christoffersen_p": 0.004298152405630168,
+      "order_statistic_rate": 0.0509880198019802,
+      "p_vs_order_statistic": 0.43290436697996826
+     },
+     "c_es": {
+      "1": 0.02048975512243878,
+      "5": 0.0004997501249375312
+     }
+    },
+    "0.975": {
+     "production_var": {
+      "breaches": 143,
+      "rate": 0.027913332032012492,
+      "nominal_rate": 0.025000000000000022,
+      "kupiec_p": 0.18969039336000915,
+      "christoffersen_p": 0.33426054917187664,
+      "order_statistic_rate": 0.026037227722772276,
+      "p_vs_order_statistic": 0.4211257284804646
+     },
+     "c_es": {
+      "1": 0.013493253373313344,
+      "5": 0.0034982508745627187
+     }
+    },
+    "0.99": {
+     "production_var": {
+      "breaches": 62,
+      "rate": 0.012102283818075347,
+      "nominal_rate": 0.010000000000000009,
+      "kupiec_p": 0.1432016653758134,
+      "christoffersen_p": 0.04595760645992336,
+      "order_statistic_rate": 0.011055841584158415,
+      "p_vs_order_statistic": 0.5078862859683616
+     },
+     "c_es": {
+      "1": 0.06446776611694154,
+      "5": 0.18440779610194902
+     }
+    }
+   }
+  },
+  "equal": {
+   "observations": 5123,
+   "from": "2005-12-08",
+   "to": "2026-11-04",
+   "refit_failures_kept_previous": [],
+   "levels": {
+    "0.95": {
+     "production_var": {
+      "breaches": 279,
+      "rate": 0.054460277181339056,
+      "nominal_rate": 0.050000000000000044,
+      "kupiec_p": 0.14848436777411433,
+      "christoffersen_p": 0.0003215991713922797,
+      "order_statistic_rate": 0.0509880198019802,
+      "p_vs_order_statistic": 0.272950164379241
+     },
+     "c_es": {
+      "1": 0.0009995002498750624,
+      "5": 0.0004997501249375312
+     }
+    },
+    "0.975": {
+     "production_var": {
+      "breaches": 149,
+      "rate": 0.02908452078860043,
+      "nominal_rate": 0.025000000000000022,
+      "kupiec_p": 0.06785318826468738,
+      "christoffersen_p": 0.10260394809621597,
+      "order_statistic_rate": 0.026037227722772276,
+      "p_vs_order_statistic": 0.18813645262535114
+     },
+     "c_es": {
+      "1": 0.017491254372813594,
+      "5": 0.0014992503748125937
+     }
+    },
+    "0.99": {
+     "production_var": {
+      "breaches": 61,
+      "rate": 0.011907085691977357,
+      "nominal_rate": 0.010000000000000009,
+      "kupiec_p": 0.1829177284052666,
+      "christoffersen_p": 0.0419632932157025,
+      "order_statistic_rate": 0.011055841584158415,
+      "p_vs_order_statistic": 0.5948541058413886
+     },
+     "c_es": {
+      "1": 0.005997001499250375,
+      "5": 0.0559720139930035
+     }
+    }
+   }
+  }
+ }
+}

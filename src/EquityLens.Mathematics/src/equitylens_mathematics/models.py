@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -13,6 +14,12 @@ class RiskAsset(BaseModel):
     exchange: str
     security_name: str = Field(alias="securityName")
     industry: str
+
+
+# Cross-language contract: portfolio returns are simple returns of the weighted
+# holdings, sum_i w_i * (exp(r_i) - 1), the same basis as the simulated
+# portfolio distributions. Weighted log returns are rejected.
+PORTFOLIO_RETURN_TOLERANCE = 1e-8
 
 
 class RiskBacktestInput(BaseModel):
@@ -60,4 +67,13 @@ class RiskBacktestInput(BaseModel):
             raise ValueError("return history must exceed the lookback window")
         if any(weight < 0 for weight in self.weights) or sum(self.weights) <= 0:
             raise ValueError("weights must be non-negative and have a positive sum")
+        for index, actual in enumerate(self.portfolio_returns):
+            expected = sum(
+                weight * math.expm1(row[index])
+                for weight, row in zip(self.weights, self.asset_returns)
+            )
+            if abs(actual - expected) > PORTFOLIO_RETURN_TOLERANCE:
+                raise ValueError(
+                    "portfolio returns must be weighted simple returns of the asset log returns"
+                )
         return self
