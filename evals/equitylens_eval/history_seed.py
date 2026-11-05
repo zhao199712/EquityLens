@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 
 REPO = Path(__file__).resolve().parents[2]
+DATA_START = '2004-01-01'
 
 
 def load_history(directory):
@@ -26,6 +27,8 @@ def load_history(directory):
     for code, audit in bundle['historyAudit'].items():
         for item in audit['largeReturns']:
             series[code][item['date']] = None
+    data_start = max(DATA_START, bundle['selection']['eval'].get('dataStart', DATA_START))
+    series = {c:{d:v for d,v in values.items() if d >= data_start} for c,values in series.items()}
     calendar = sorted(set().union(*(set(s) for s in series.values())))
     return bundle, manifest, series, calendar
 
@@ -89,10 +92,10 @@ def export(directory, output):
             payload = [{'date':d,'ticker':c,'close':series[c].get(d)} for d in calendar for c in codes]
             (output/(name+'-prices.json')).write_text(json.dumps(payload,allow_nan=False))
             (output/(name+'-universe.json')).write_text(json.dumps(dict(tickers=codes,
-                weights=weights(selection,codes),seedSha256=manifest['sha256'],confidences=config['confidences'])))
-    metadata = dict(seedSha256=manifest['sha256'],asOf=bundle['asOf'],coverage=coverage,
+                weights=weights(selection,codes),seedSha256=manifest['sha256'],confidences=config['confidences'],dataStart=max(DATA_START,config.get('dataStart',DATA_START)))))
+    metadata = dict(dataStart=max(DATA_START,config.get('dataStart',DATA_START)),warmupPolicy='252 valid returns after dataStart',seedSha256=manifest['sha256'],asOf=bundle['asOf'],coverage=coverage,
         weightPercentSum=sum(r['weightPercent'] for r in selection['constituents']),
-        quarantinedReturns={c:a['largeReturns'] for c,a in bundle['historyAudit'].items() if a['largeReturns']},
+        quarantinedReturns={c:[r for r in a['largeReturns'] if r['date'] >= DATA_START] for c,a in bundle['historyAudit'].items() if any(r['date'] >= DATA_START for r in a['largeReturns'])},
         limitations=['Current selection and fixed snapshot weights have survivorship/look-ahead bias.',
             'long9 excludes 3711; it is not the same portfolio as top10.',
             '0050 is dividend-adjusted; TWII is a price index, not total return.',

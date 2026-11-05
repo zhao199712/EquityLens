@@ -255,7 +255,7 @@ def validate(bundle):
 def load_bundle(directory):
     path = Path(directory)
     manifest = json.loads((path / 'manifest.json').read_text())
-    if manifest['asset'] not in ('equitylens-seed-v1.json.gz', 'equitylens-seed-v2.json.gz'):
+    if manifest['asset'] not in ('equitylens-seed-v1.json.gz', 'equitylens-seed-v2.json.gz', 'equitylens-seed-v3.json.gz'):
         raise ValueError('Unexpected asset name')
     data = (path / manifest['asset']).read_bytes()
     if len(data) != manifest['bytes'] or hashlib.sha256(data).hexdigest() != manifest['sha256']:

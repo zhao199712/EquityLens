@@ -27,3 +27,12 @@ def test_dynamic_fixtures_are_normalized(monkeypatch):
     assert weights.shape==(205,10)
     assert np.allclose(weights.sum(axis=1),1)
     assert np.all(weights>=0)
+
+
+def test_pre_2004_prices_cannot_enter_garch_warmup(tmp_path,monkeypatch):
+    monkeypatch.setattr(r,'TICKERS',['2330'])
+    p=tmp_path/'prices.json'
+    p.write_text(json.dumps([{'date':d,'ticker':'2330','close':v} for d,v in [('2003-12-31',1),('2004-01-02',100),('2004-01-05',101)]]))
+    dates,returns=r.read_returns(p)
+    assert [str(d) for d in dates]==['2004-01-05']
+    assert np.allclose(returns,[[np.log(1.01)]])

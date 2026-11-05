@@ -29,3 +29,22 @@ class HistoryTests(unittest.TestCase):
     def test_duplicate_day_rejected(self):
         with self.assertRaisesRegex(ValueError,'Duplicate'):
             clean_history('2330',[price('2020-01-02'),price('2020-01-02')])
+
+class SplitCorrectionTests(unittest.TestCase):
+    def test_only_missing_period_is_divided(self):
+        from history import correct_0050, ETF_SNAPSHOT_SHA
+        source=[price('2013-12-31',58.7,37.186119079589844),price('2014-01-02',14.637499809265137,9.272775650024414),price('2025-06-18',47,47)]
+        corrected,audit=correct_0050(source,ETF_SNAPSHOT_SHA)
+        self.assertEqual(source[0]['Close'],58.7)
+        self.assertAlmostEqual(corrected[0]['Close'],14.675)
+        self.assertEqual(corrected[1],source[1])
+        self.assertEqual(corrected[2],source[2])
+        self.assertEqual(audit['sourceRows'],1)
+        good,_,flags=clean_history('0050',corrected[:2])
+        self.assertEqual(flags,[])
+        self.assertAlmostEqual(good[1]['adjusted_close']/good[0]['adjusted_close']-1,-.00255515987804,places=7)
+
+    def test_new_source_cannot_be_silently_readjusted(self):
+        from history import correct_0050
+        with self.assertRaisesRegex(ValueError,'source changed'):
+            correct_0050([price('2013-12-31')],'unreviewed')
