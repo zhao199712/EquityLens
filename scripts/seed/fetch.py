@@ -43,7 +43,7 @@ def fetch(lock_path, output):
     directory = Path(output)
     directory.mkdir(parents=True, exist_ok=True)
     for name, expected in lock['assets'].items():
-        if name not in ('equitylens-seed-v1.json.gz', 'manifest.json'):
+        if name not in ('equitylens-seed-v1.json.gz', 'equitylens-seed-v2.json.gz', 'manifest.json'):
             raise ValueError('Unexpected asset path')
         data = get(f"repos/{repository}/releases/assets/{assets[name]['id']}", binary=True)
         if hashlib.sha256(data).hexdigest() != expected['sha256'] or len(data) != expected['bytes']:

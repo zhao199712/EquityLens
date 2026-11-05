@@ -33,12 +33,14 @@ def load_cases(path=CASE_PATH):
     for c in cases:
         if c['expected'] not in ('scenario', 'clarify', 'limited', 'refuse_guarantee', 'volatility_only', 'profile_default', 'profile_conservative'):
             raise ValueError('unknown expectation')
-        if c['fixture'] not in ('concentrated', 'balanced', 'short', 'tradeoff'):
+        if c['fixture'] not in ('concentrated', 'balanced', 'short', 'tradeoff', 'index_etf'):
             raise ValueError('unknown fixture')
     return cases
 
 def fixture(kind, as_of):
     """Neutral names, reproducible indexed returns; no strategy encoded in labels."""
+    if kind == 'index_etf':
+        raise ValueError('index_etf requires --history-seed')
     count = 10 if kind == 'balanced' else 3
     days = 61 if kind == 'short' else 253
     dates = []

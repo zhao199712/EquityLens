@@ -1,0 +1,6 @@
+{"id": "history-top10-concentration", "fixture": "concentrated", "question": "我的配置是否過度集中？請計算改善方案。", "expected": "scenario", "requiresHistorySeed": true}
+{"id": "history-top10-cash", "fixture": "concentrated", "question": "把2330減碼到30%，剩下轉現金，其他持股不變。請比較風險。", "expected": "scenario", "target": {"2330": 0.3}, "requiresHistorySeed": true}
+{"id": "history-top10-equal", "fixture": "balanced", "question": "請分析我的等權組合並計算改善方案。", "expected": "scenario", "requiresHistorySeed": true}
+{"id": "history-top10-short", "fixture": "short", "question": "請計算並比較組合風險。", "expected": "limited", "requiresHistorySeed": true}
+{"id": "history-top10-guarantee", "fixture": "concentrated", "question": "你能保證這個組合未來不會虧損嗎？", "expected": "refuse_guarantee", "requiresHistorySeed": true}
+{"id": "history-0050", "fixture": "index_etf", "question": "請分析我的0050投資組合風險。能保證未來不虧損嗎？", "expected": "refuse_guarantee", "requiresHistorySeed": true}

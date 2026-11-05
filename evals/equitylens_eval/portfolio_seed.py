@@ -19,7 +19,7 @@ from .portfolio import fixture, load_cases, require_local
 def sql_quote(value):
     return "'" + str(value).replace("'", "''") + "'"
 
-def seed(base_url, container, database, username, manifest_path, as_of):
+def seed(base_url, container, database, username, manifest_path, as_of, cases_path=None, history_seed=None):
     require_local(base_url)
     if not database.endswith('_eval'):
         raise ValueError('Use a dedicated database ending in _eval')
@@ -31,8 +31,14 @@ def seed(base_url, container, database, username, manifest_path, as_of):
         return subprocess.run(['docker','exec','-i',container,'psql','-X','-v','ON_ERROR_STOP=1','-tA','-U',username,'-d',database],
                               input=statements,text=True,capture_output=True,check=True).stdout.strip()
     fixtures={}; entries={}
-    for c in load_cases():
-        f=fixture(c['fixture'],as_of); fixtures[c['id']]=f
+    cases = load_cases(cases_path) if cases_path else load_cases()
+    if any(c.get('requiresHistorySeed') for c in cases) != bool(history_seed):
+        raise ValueError('Historical cases and --history-seed must be used together')
+    if history_seed:
+        from .history_seed import historical_fixture
+    for c in cases:
+        f = historical_fixture(history_seed, c['fixture'], as_of) if history_seed else fixture(c['fixture'],as_of)
+        fixtures[c['id']]=f
         email=f"portfolio-eval-{uuid.uuid4().hex}@example.invalid"
         password=secrets.token_urlsafe(24)+'aA1!'
         with httpx.Client(base_url=base_url,timeout=120) as client:
@@ -71,4 +77,5 @@ if __name__=='__main__':
     p.add_argument('--base-url',required=True);p.add_argument('--container',required=True)
     p.add_argument('--database',required=True);p.add_argument('--username',required=True)
     p.add_argument('--manifest',required=True);p.add_argument('--as-of',default=dt.date.today().isoformat())
-    a=p.parse_args();seed(a.base_url,a.container,a.database,a.username,a.manifest,a.as_of)
+    p.add_argument('--cases',type=Path);p.add_argument('--history-seed',type=Path)
+    a=p.parse_args();seed(a.base_url,a.container,a.database,a.username,a.manifest,a.as_of,a.cases,a.history_seed)

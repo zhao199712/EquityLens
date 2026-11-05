@@ -66,6 +66,12 @@ def json_sql(value):
 
 def read_selection(path):
     selection = json.loads(Path(path).read_text())
+    if selection.get('policy') == 'top10-history-v2':
+        expected = {'2330', '2454', '2317', '2308', '3711', '1303', '2383', '2881', '2891', '2303'}
+        codes = [r['code'] for r in selection['constituents']]
+        if len(codes) != 10 or set(codes) != expected or set(selection['selected']) != expected | {'0050', '^TWII'}:
+            raise ValueError('Invalid top10 history selection')
+        return selection
     codes = [r['code'] for r in selection['constituents']]
     if len(codes) != 50 or len(set(codes)) != 50 or any(not re.fullmatch(r'\d{4}', c) for c in codes):
         raise ValueError('Expected 50 distinct official constituent codes')
@@ -169,7 +175,7 @@ def validate(bundle):
             raise ValueError(f'Duplicate keys in {table}')
         ids[table] = set(keys)
     codes = {r['ticker'] for r in t['security']}
-    if codes != set(bundle['selection']['selected']) or len(codes) != 50 or '6446' in codes:
+    if codes != set(bundle['selection']['selected']) or len(codes) != (12 if bundle['selection'].get('policy') == 'top10-history-v2' else 50) or '6446' in codes:
         raise ValueError('Security selection mismatch')
     if any(r['exchange'] != 'TWSE' or r['currency'] != 'TWD' for r in t['security']):
         raise ValueError('Only TWSE/TWD instruments are allowed')
@@ -227,6 +233,13 @@ def validate(bundle):
         embedded.append(r['document_chunk_id'])
     if len(embedded) != len(set(embedded)) or set(embedded) != ids['document_chunk'] or not embedded:
         raise ValueError('Embeddings must cover every chunk exactly once')
+    if bundle['selection'].get('policy') == 'top10-history-v2':
+        if set(bundle.get('historyAudit', {})) != codes:
+            raise ValueError('Missing per-instrument history audit')
+        listing = bundle['selection'].get('entityStarts', {})
+        for security in t['security']:
+            if security['ticker'] in listing and min(dates[security['id']]) < listing[security['ticker']]:
+                raise ValueError('Predecessor prices are not current-entity history')
     ticker = {r['id']: r['ticker'] for r in t['security']}
     return {'counts': {k: len(v) for k, v in t.items()}, 'commonPriceDates': len(common),
             'commonFrom': common[0], 'asOf': common[-1],
@@ -242,7 +255,7 @@ def validate(bundle):
 def load_bundle(directory):
     path = Path(directory)
     manifest = json.loads((path / 'manifest.json').read_text())
-    if manifest['asset'] != 'equitylens-seed-v1.json.gz':
+    if manifest['asset'] not in ('equitylens-seed-v1.json.gz', 'equitylens-seed-v2.json.gz'):
         raise ValueError('Unexpected asset name')
     data = (path / manifest['asset']).read_bytes()
     if len(data) != manifest['bytes'] or hashlib.sha256(data).hexdigest() != manifest['sha256']:
@@ -274,7 +287,7 @@ def demo_rows(bundle, passwords):
     for r in bundle['tables']['market_price']:
         prices.setdefault(r['security_id'], {})[r['price_time'][:10]] = r['close']
     definitions = [('etf', 1, '0050 ETF 示範', ['0050']),
-                   ('diversified', 1, '台股分散示範', ['2330', '2317', '2454', '2881', '2412', '1216']),
+                   ('diversified', 1, '台股分散示範', [r['code'] for r in bundle['selection']['constituents']] if bundle['selection'].get('policy') == 'top10-history-v2' else ['2330', '2317', '2454', '2881', '2412', '1216']),
                    ('concentrated', 1, '台積電與鴻海集中示範', ['2330', '2317']),
                    ('empty', 1, '空投組', []), ('owner-check', 2, '第二位使用者的投組', ['0050'])]
     for key, owner, name, tickers in definitions:
