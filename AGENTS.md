@@ -36,6 +36,7 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 - Backend tests use xUnit, EF InMemory, and hand-written fakes; no Moq/NSubstitute dependency is present.
 - Existing `NU1510 System.Text.Encoding.CodePages` warning is non-blocking.
 - PR CI runs real ParadeDB integration tests and fails if TRX results are missing or skipped. Browser smoke uses isolated fixed API responses; it does not validate live AI quality or full-stack HTTP behavior. Setup and scope: `docs/testing/pr-validation.md`.
+- Throwaway ParadeDB and Redis for integration tests (cloud or local dev containers): `scripts/dev/test-services.sh up`, then `eval "$(scripts/dev/test-services.sh env)"` to set the backend and risk integration variables, and `down` to remove them. It starts `dockerd` if needed and pulls through `mirror.gcr.io` because anonymous Docker Hub pulls from shared cloud IPs often return 429. Run the risk suite with the Mathematics venv first on `PATH`. Never point these variables at production.
 - Risk contracts and the real DB → C# → Redis → Python → DB chain run separately in `tests/EquityLens.Risk.IntegrationTests`. Install the Mathematics Python package and set `RISK_TEST_POSTGRES`, `RISK_TEST_REDIS`, and `RISK_TEST_REDIS_URL` to isolated services; missing dependencies fail rather than skip. The suite starts its own Python worker and C# result worker; do not point it at production services. See `docs/testing/pr-validation.md` for commands.
 
 ## Infra And Env

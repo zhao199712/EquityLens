@@ -9,11 +9,11 @@ from urllib.parse import urlparse
 from seed import load_bundle, psql, target_guard, uid
 
 
-def smoke(base, state, data):
+def smoke(base, state, data, container="equitylens-seed-postgres", database="equitylens_cloud_seed"):
     parsed = urlparse(base)
     if parsed.scheme != 'http' or parsed.hostname not in ('localhost', '127.0.0.1'):
         raise ValueError('Smoke accepts a local seed API only')
-    target_guard('equitylens-seed-postgres', 'equitylens_cloud_seed')
+    target_guard(container, database)
     bundle, _ = load_bundle(data)
     credentials = json.loads((state/'credentials.json').read_text())
     def request(path, token=None, body=None, status=200):
@@ -47,7 +47,7 @@ def smoke(base, state, data):
     assert risk['portfolioId']==pid
     file_id=bundle['tables']['uploaded_file'][0]['id']
     request(f'/api/files/{file_id}/download-url',tokens[0],status=404)
-    hits=psql('equitylens-seed-postgres','equitylens_cloud_seed',"SELECT count(*) FROM search_document_chunks(query_text=>'營收',ticker_filter=>'2330',top_k=>5,mode=>'bm25'); SELECT count(*) FROM search_document_chunks(query_embedding=>(SELECT embedding FROM document_embedding LIMIT 1),top_k=>5,mode=>'vector');")
+    hits=psql(container,database,"SELECT count(*) FROM search_document_chunks(query_text=>'營收',ticker_filter=>'2330',top_k=>5,mode=>'bm25'); SELECT count(*) FROM search_document_chunks(query_embedding=>(SELECT embedding FROM document_embedding LIMIT 1),top_k=>5,mode=>'vector');")
     counts=[int(x) for x in hits.splitlines()]
     assert len(counts)==2 and all(x>0 for x in counts)
     print(json.dumps({'loginAccounts':2,'portfolios':len(first)+len(second),'crossOwner':'404',
@@ -59,5 +59,7 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--base-url',default='http://127.0.0.1:55440')
     p.add_argument('--state',type=Path,default=Path('/tmp/equitylens-seed-runtime'))
-    p.add_argument('--data',type=Path,default=Path('/tmp/equitylens-seed-v1'))
-    a=p.parse_args(); smoke(a.base_url,a.state,a.data)
+    p.add_argument('--data',type=Path,default=Path('/tmp/equitylens-seed-v2'))
+    p.add_argument('--container',default='equitylens-seed-postgres')
+    p.add_argument('--database',default='equitylens_cloud_seed')
+    a=p.parse_args(); smoke(a.base_url,a.state,a.data,a.container,a.database)

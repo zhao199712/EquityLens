@@ -82,3 +82,6 @@ src/EquityLens.Web/test-results/
 # Local AI coding tool state
 .opencode-sessions/
 .omo/
+
+# Python editable-install metadata
+*.egg-info/

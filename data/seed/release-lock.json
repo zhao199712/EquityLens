@@ -1,16 +1,16 @@
 {
   "formatVersion": 1,
   "repository": "zhao199712/EquityLens-SeedData",
-  "tag": "seed-v1-20261105",
-  "asOf": "2026-11-02",
+  "tag": "seed-v2-20261105",
+  "asOf": "2026-11-04",
   "assets": {
-    "equitylens-seed-v1.json.gz": {
-      "bytes": 11938187,
-      "sha256": "9cc8ebd8e4e06c6215441981ad2c5d3e77f6f86409d01cdefbb065f70265e44b"
+    "equitylens-seed-v2.json.gz": {
+      "bytes": 10457894,
+      "sha256": "cf68c3cb83a1bc17512350200e1bfae6663c2aa098a20ca8414805a99446dd6c"
     },
     "manifest.json": {
-      "bytes": 9841,
-      "sha256": "15b3f6aa8d05325319549e90ca17fbabe5d1b4972c5c9b88e0128f8a6a184475"
+      "bytes": 35356,
+      "sha256": "17021ff96329274b1b1ecda901c0ec912e411b5a107c5e3f93731031a342a407"
     }
   }
 }

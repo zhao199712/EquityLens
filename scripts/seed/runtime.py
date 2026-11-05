@@ -82,7 +82,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['setup', 'api'])
     parser.add_argument('--state', type=Path, default=Path('/tmp/equitylens-seed-runtime'))
-    parser.add_argument('--data', type=Path, default=Path('/tmp/equitylens-seed-v1'))
+    parser.add_argument('--data', type=Path, default=Path('/tmp/equitylens-seed-v2'))
     parser.add_argument('--skip-web', action='store_true')
     args = parser.parse_args()
     if args.command == 'setup':
