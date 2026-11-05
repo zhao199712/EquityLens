@@ -376,34 +376,74 @@ def load_seed_panel(bundle: Path, excluded: set[str]) -> tuple[list[str], list[s
     return names, dates[1:], np.diff(np.log(prices), axis=1)
 
 
+def load_history_export(directory: Path, name: str) -> tuple[list[str], list[str], np.ndarray, np.ndarray]:
+    """Read `evals/equitylens_eval/history_seed.py` exports for one portfolio.
+
+    Rows only exist for adjacent sessions where every asset has an accepted
+    price; missing or quarantined prices drop both adjacent returns rather than
+    being filled, so no row spans more than one session.
+    """
+    rows = json.loads((directory / f"{name}-returns.json").read_text())
+    universe = json.loads((directory / f"{name}-universe.json").read_text())
+    simple = np.array([row["returns"] for row in rows], dtype=np.float64).T
+    if np.any(simple <= -1.0) or not np.all(np.isfinite(simple)):
+        raise ValueError(f"{name} export contains invalid simple returns")
+    weights = np.asarray(universe["weights"], dtype=np.float64)
+    return list(universe["tickers"]), [row["date"] for row in rows], np.log1p(simple), weights
+
+
+def add_portfolio_arguments(parser: argparse.ArgumentParser) -> None:
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--seed-bundle", type=Path, help="v1 seed bundle (json.gz), 0050 constituents")
+    source.add_argument("--history-export", type=Path, help="history_seed.py export directory (v2)")
+    parser.add_argument("--constituents", type=Path, help="constituent weights for --seed-bundle")
+    parser.add_argument("--portfolios", default="long9,top10", help="history export portfolios")
+    parser.add_argument("--exclude", default="0050,7769", help="tickers excluded from --seed-bundle")
+
+
+def portfolio_sets(args: argparse.Namespace) -> dict[str, tuple[list[str], list[str], np.ndarray, np.ndarray]]:
+    """Label -> (tickers, return dates, asset log returns, weights)."""
+    if args.seed_bundle is not None:
+        if args.constituents is None:
+            raise SystemExit("--constituents is required with --seed-bundle")
+        names, dates, returns = load_seed_panel(args.seed_bundle, set(args.exclude.split(",")))
+        published = {item["code"]: item["weights"] for item in json.loads(args.constituents.read_text())["constituents"]}
+        cap = np.array([published.get(name, 0.0) for name in names])
+        return {
+            "equal": (names, dates, returns, np.full(len(names), 1 / len(names))),
+            "cap": (names, dates, returns, cap / cap.sum()),
+        }
+    result = {}
+    for name in args.portfolios.split(","):
+        tickers, dates, returns, weights = load_history_export(args.history_export, name)
+        result[f"{name}-snapshot"] = (tickers, dates, returns, weights)
+        result[f"{name}-equal"] = (tickers, dates, returns, np.full(len(tickers), 1 / len(tickers)))
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--seed-bundle", type=Path, required=True)
-    parser.add_argument("--constituents", type=Path, required=True)
+    add_portfolio_arguments(parser)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--lookback", type=int, default=252)
     parser.add_argument("--simulations", type=int, default=10_000)
     parser.add_argument("--repetitions", type=int, default=10_000)
-    parser.add_argument("--exclude", default="0050,7769")
     args = parser.parse_args()
 
-    names, dates, returns = load_seed_panel(args.seed_bundle, set(args.exclude.split(",")))
-    published = {item["code"]: item["weights"] for item in json.loads(args.constituents.read_text())["constituents"]}
-    cap = np.array([published.get(name, 0.0) for name in names])
-    portfolios = {"equal": np.full(len(names), 1 / len(names)), "cap": cap / cap.sum()}
     args.output.mkdir(parents=True, exist_ok=True)
     summary = {
         "model": "VT-GARCH-t + Joint-Vector FHS (production replay)",
-        "assets": names, "lookback": args.lookback, "simulations": args.simulations,
+        "lookback": args.lookback, "simulations": args.simulations,
         "repetitions": args.repetitions, "refit_interval": REFIT_INTERVAL,
         "levels": list(DEFAULT_LEVELS), "portfolios": {},
     }
-    for label, weights in portfolios.items():
+    for label, (names, dates, returns, weights) in portfolio_sets(args).items():
         forecasts = collect_forecasts(
             returns, weights, dates, args.lookback, args.simulations, f"es-backtest:{label}"
         )
         result = evaluate(forecasts, DEFAULT_LEVELS, args.repetitions, label)
         summary["portfolios"][label] = {
+            "assets": names, "weights": weights.tolist(),
             "hhi": float(np.sum(weights**2)), "observations": int(forecasts.actual.size),
             "from": forecasts.dates[0], "to": forecasts.dates[-1], "tests": result,
         }
@@ -416,7 +456,7 @@ def main() -> None:
                 cells += [f"{var[t]:.8f}", f"{es[t]:.8f}"]
             lines.append(",".join(cells))
         (args.output / f"daily_{label}.csv").write_text("\n".join(lines) + "\n")
-        print(label, json.dumps(result), flush=True)
+        print(label, "done", flush=True)
     (args.output / "es_backtest_summary.json").write_text(
         json.dumps(summary, indent=1, ensure_ascii=False) + "\n"
     )

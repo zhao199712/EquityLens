@@ -134,3 +134,16 @@ def test_carry_forward_alignment_matches_production_policy():
     assert dates == ["d1", "d2", "d3", "d4"]
     np.testing.assert_array_equal(prices[1], [5.0, 5.0, 6.0, 6.5])
     assert filled == {"A": 0, "B": 1}
+
+
+def test_history_export_loader_returns_log_returns_and_snapshot_weights(tmp_path):
+    import json
+    from equitylens_mathematics.research.es_backtest import load_history_export
+    rows = [{"date": "2024-01-03", "previousDate": "2024-01-02", "returns": [0.1, -0.05]},
+            {"date": "2024-01-05", "previousDate": "2024-01-04", "returns": [0.0, 0.02]}]
+    (tmp_path / "p-returns.json").write_text(json.dumps(rows))
+    (tmp_path / "p-universe.json").write_text(json.dumps({"tickers": ["A", "B"], "weights": [0.7, 0.3]}))
+    tickers, dates, returns, weights = load_history_export(tmp_path, "p")
+    assert tickers == ["A", "B"] and dates == ["2024-01-03", "2024-01-05"]
+    np.testing.assert_allclose(np.expm1(returns), [[0.1, 0.0], [-0.05, 0.02]])
+    np.testing.assert_allclose(weights, [0.7, 0.3])

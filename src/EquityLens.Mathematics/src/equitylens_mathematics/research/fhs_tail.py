@@ -33,7 +33,7 @@ from scipy.stats import genpareto
 
 from ..garch import GarchFitError, VtGarchFit
 from .additional_validation import christoffersen, fz0_loss, kupiec, paired_test, qloss
-from .es_backtest import DEFAULT_LEVELS, collect_forecasts, evaluate, load_seed_panel
+from .es_backtest import DEFAULT_LEVELS, add_portfolio_arguments, collect_forecasts, evaluate, portfolio_sets
 
 XI_MAX = 0.5
 MIN_TAIL_POINTS = 5
@@ -134,21 +134,16 @@ def compare(base, challenger, confidence: float, label: str) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--seed-bundle", type=Path, required=True)
-    parser.add_argument("--constituents", type=Path, required=True)
+    add_portfolio_arguments(parser)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--tail-probs", default="0.10,0.05")
     parser.add_argument("--repetitions", type=int, default=10_000)
     args = parser.parse_args()
 
-    names, dates, returns = load_seed_panel(args.seed_bundle, {"0050", "7769"})
-    published = {item["code"]: item["weights"] for item in json.loads(args.constituents.read_text())["constituents"]}
-    cap = np.array([published.get(name, 0.0) for name in names])
-    portfolios = {"equal": np.full(len(names), 1 / len(names)), "cap": cap / cap.sum()}
     tail_probs = [float(item) for item in args.tail_probs.split(",")]
     summary: dict = {"primary_tail_prob": tail_probs[0], "xi_max": XI_MAX, "portfolios": {}}
     args.output.mkdir(parents=True, exist_ok=True)
-    for label, weights in portfolios.items():
+    for label, (_, dates, returns, weights) in portfolio_sets(args).items():
         common = dict(asset_returns=returns, weights=weights, dates=dates, lookback_days=252,
                       simulations=10_000, input_hash=f"es-backtest:{label}")
         base = collect_forecasts(**common)
