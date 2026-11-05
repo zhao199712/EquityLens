@@ -45,7 +45,7 @@ def read_returns(path: Path) -> tuple[list[date], np.ndarray]:
     rows = json.loads(path.read_text())
     by_date: dict[str, dict[str, float]] = defaultdict(dict)
     for row in rows:
-        by_date[row["date"]][row["ticker"]] = float(row["close"])
+        by_date[row["date"]][row["ticker"]] = float(row["close"]) if row["close"] is not None else float("nan")
     keys = sorted(by_date)
     prices = np.full((len(keys), len(TICKERS)), np.nan)
     for i, key in enumerate(keys):
@@ -141,6 +141,10 @@ def ewma_distribution(matrix: np.ndarray, weights: np.ndarray, seed: int) -> np.
 
 
 def cap_weights(weights: np.ndarray, cap: float) -> np.ndarray:
+    if cap * len(weights) < 1 - 1e-12:
+        raise ValueError("Infeasible weight cap")
+    if abs(cap * len(weights) - 1) < 1e-12:
+        return np.full(len(weights), 1 / len(weights))
     result = weights.copy()
     while np.any(result > cap + 1e-15):
         over = result > cap
@@ -155,11 +159,11 @@ def fixtures(returns: np.ndarray) -> tuple[list[str], np.ndarray]:
     inverse = 1 / np.std(returns, axis=1, ddof=1)
     inverse /= inverse.sum()
     rng = np.random.default_rng(20260726)
-    random = rng.dirichlet(np.ones(20), size=200)
-    names = ["market", "equal", "cap20", "cap10", "inverse_vol"] + [
+    random = rng.dirichlet(np.ones(len(TICKERS)), size=200)
+    names = ["market", "equal", "cap20", f"cap{100 * max(.10, 1 / len(TICKERS)):g}", "inverse_vol"] + [
         f"dirichlet_{i:03d}" for i in range(1, 201)
     ]
-    return names, np.vstack((MARKET, EQUAL, cap_weights(MARKET, .20), cap_weights(MARKET, .10), inverse, random))
+    return names, np.vstack((MARKET, EQUAL, cap_weights(MARKET, .20), cap_weights(MARKET, max(.10, 1 / len(TICKERS))), inverse, random))
 
 
 def rolling_win(loss_g: np.ndarray, loss_m: np.ndarray) -> float:
@@ -189,7 +193,7 @@ def run_sensitivity(dates: list[date], returns: np.ndarray) -> list[dict]:
             for offset, index in enumerate(range(lookback, returns.shape[1])):
                 if offset % refit == 0:
                     columns, forecasts, params = [], [], []
-                    for asset in range(20):
+                    for asset in range(len(TICKERS)):
                         window = returns[asset, index - lookback:index] * 100
                         with warnings.catch_warnings(record=True) as caught:
                             warnings.simplefilter("always")
@@ -230,7 +234,7 @@ def run_sensitivity(dates: list[date], returns: np.ndarray) -> list[dict]:
             h = history
             persistence = np.asarray([p["persistence"] for p in h])
             parameter_jumps = []
-            for asset in range(20):
+            for asset in range(len(TICKERS)):
                 sequence = [p for p in h if p["asset"] == asset]
                 for left, right in zip(sequence[:-1], sequence[1:]):
                     parameter_jumps.append(
@@ -293,7 +297,7 @@ def run_concentration(dates: list[date], returns: np.ndarray) -> tuple[list[dict
     for offset, index in enumerate(range(lookback, returns.shape[1])):
         if offset % refit == 0:
             columns, forecasts, params = [], [], []
-            for asset in range(20):
+            for asset in range(len(TICKERS)):
                 p, z, forecast, _ = fit_vt(returns[asset, index - lookback:index] * 100)
                 params.append(p); columns.append(z); forecasts.append(forecast)
             residual, next_var = np.column_stack(columns), np.asarray(forecasts)
@@ -369,11 +373,26 @@ def concentration_regressions(rows: list[dict]) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--universe", type=Path, help="Seed eval universe JSON; omitted preserves historical Phase-5 defaults")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--task", choices=("sensitivity", "concentration", "all"), default="all")
     args = parser.parse_args()
+    if args.universe:
+        global TICKERS, MARKET, EQUAL, CONFIDENCES
+        config = json.loads(args.universe.read_text())
+        TICKERS = config['tickers']
+        MARKET = np.asarray(config['weights'], dtype=float)
+        if len(TICKERS) != len(MARKET) or len(set(TICKERS)) != len(TICKERS) or not np.all(np.isfinite(MARKET)) or np.any(MARKET < 0) or not np.isclose(MARKET.sum(), 1):
+            raise ValueError('Invalid universe weights')
+        EQUAL = np.full(len(TICKERS), 1 / len(TICKERS))
+        CONFIDENCES = tuple(config.get('confidences', CONFIDENCES))
     args.output.mkdir(parents=True, exist_ok=True)
+    if args.universe:
+        (args.output / 'run_configuration.json').write_text(json.dumps({
+            **config, 'inputSha256': hashlib.sha256(args.input.read_bytes()).hexdigest(),
+            'task': args.task, 'priceBasis': 'adjusted prices; null boundaries excluded',
+        }, indent=2) + '\n')
     dates, returns = read_returns(args.input)
     if args.task in ("sensitivity", "all"):
         write_csv(args.output / "refit_lookback_sensitivity.csv", run_sensitivity(dates, returns))
