@@ -159,10 +159,11 @@ jobs:
             src/EquityLens.Api/EquityLens.Api.csproj
             tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
 
-      - name: Test manual deployment guards (no production access)
+      - name: Test deployment and seed guards (no production access)
         run: |
           bash -n scripts/deploy/deploy.sh
           python3 -m unittest discover -s scripts/deploy -v
+          python3 -m unittest discover -s scripts/seed -v
 
       - name: Restore backend
         run: >

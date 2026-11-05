@@ -13,6 +13,7 @@ public sealed class FinMindPortfolioBenchmarkService(HttpClient http, IOptions<F
     {
         var lookupFrom = from.AddDays(-7);
         var cached = await db.TaiwanTotalReturnIndices.Where(x => x.TradingDate >= lookupFrom && x.TradingDate <= to).ToDictionaryAsync(x => x.TradingDate, x => x.Value, cancellationToken);
+        if (options.Value.CachedOnly) return cached;
         var query = new Dictionary<string, string?> { ["dataset"] = "TaiwanStockTotalReturnIndex", ["data_id"] = "TAIEX", ["start_date"] = lookupFrom.ToString("yyyy-MM-dd"), ["end_date"] = to.ToString("yyyy-MM-dd") };
         if (!string.IsNullOrWhiteSpace(options.Value.Token)) query["token"] = options.Value.Token;
         using var response = await http.GetAsync(QueryHelpers.AddQueryString("/api/v4/data", query), cancellationToken);
