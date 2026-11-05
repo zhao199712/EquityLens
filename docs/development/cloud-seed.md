@@ -1,6 +1,6 @@
 # Codex Cloud 開發資料
 
-這套資料用於隔離開發，非正式部署、非歷史指數研究資料。程式與匯入工具在本 repo；資料包預定存放於私有 `zhao199712/EquityLens-SeedData` 的固定 Release；發布完成後才能執行下載步驟。版本與 SHA-256 由 `data/seed/release-lock.json` 鎖定，下載不跟隨 latest。
+這套資料用於隔離開發，非正式部署、非歷史指數研究資料。程式與匯入工具在本 repo；資料包已發布於私有 [EquityLens-SeedData／seed-v1-20261105](https://github.com/zhao199712/EquityLens-SeedData/releases/tag/seed-v1-20261105)。版本與 SHA-256 由 `data/seed/release-lock.json` 鎖定，下載不跟隨 latest。
 
 ## 資料範圍
 
@@ -75,3 +75,5 @@ Importer 只接受命名為 `equitylens-seed-*`、有 `equitylens.seed=true` lab
 ## 本次驗證紀錄
 
 2026-11-05：Python seed guards 13/13；相關後端測試 22/22、無 skip。完整 Compose → EF migrations → seed import → npm ci 已執行。相同版本重跑未新增資料或更換密碼。API smoke：2 位普通使用者、5 個投組、跨 owner 404、155 個歷史估值點、離線基準可用、C# 風險計算成功、缺 PDF 404、BM25 3 筆／向量檢索 5 筆，付費 AI 呼叫 0。這是在本機 Docker 隔離環境的驗證，尚不代表使用者帳戶中的 Codex Cloud 執行環境已配置完成。
+
+私有 Release 已完成上傳及實際下載驗證：資料包與 manifest 的大小、SHA-256 均與 Git 中 lock 相符，下載後資料關聯、共同交易日及 embedding 完整率驗證通過。
