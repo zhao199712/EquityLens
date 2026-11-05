@@ -1,0 +1,34 @@
+{
+  "correction": "0050-split-basis-2025-4for1",
+  "sourceSnapshotSha256": "1c4b3f70cf6df22c6fb9cbb32b9eeda85feb71fc4572ebed6c82e83aec4d62e0",
+  "finmindResponseSha256": "30a57088ecf4256e81a4c362224d4e13bf53625e18e2fa85ae632d7475aefec8",
+  "referenceDataset": "TaiwanStockPrice",
+  "referenceTicker": "0050",
+  "referenceStart": "2009-01-01",
+  "referenceEnd": "2025-07-01",
+  "comparisons": [
+    {
+      "from": "2009-01-01",
+      "to": "2013-12-31",
+      "pairedRows": 1235,
+      "medianYahooToRaw": 1,
+      "mismatches": 22
+    },
+    {
+      "from": "2014-01-01",
+      "to": "2025-06-10",
+      "pairedRows": 2778,
+      "medianYahooToRaw": 0.25,
+      "mismatches": 3
+    },
+    {
+      "from": "2025-06-18",
+      "to": "2025-07-01",
+      "pairedRows": 10,
+      "medianYahooToRaw": 1,
+      "mismatches": 0
+    }
+  ],
+  "correctionScope": "Divide pre-2014 Yahoo OHLC and Adj Close by four. Do not change 2014 onward. Volume unchanged. Do not apply to any unreviewed source hash.",
+  "remainingLimitations": "25 price mismatches remain uncorrected; this is a split-basis correction, not full historical certification."
+}

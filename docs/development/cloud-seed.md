@@ -1,15 +1,15 @@
 # Codex Cloud 開發資料
 
-這套資料用於隔離開發，非正式部署、非歷史指數研究資料。程式與匯入工具在本 repo；資料包已發布於私有 [EquityLens-SeedData／seed-v2-20261105](https://github.com/zhao199712/EquityLens-SeedData/releases/tag/seed-v2-20261105)。版本與 SHA-256 由 `data/seed/release-lock.json` 鎖定，下載不跟隨 latest。
+這套資料用於隔離開發，非正式部署、非歷史指數研究資料。程式與匯入工具在本 repo；資料包已發布於私有 [EquityLens-SeedData／seed-v3-20261105](https://github.com/zhao199712/EquityLens-SeedData/releases/tag/seed-v3-20261105)。版本與 SHA-256 由 `data/seed/release-lock.json` 鎖定，下載不跟隨 latest。
 
-## 資料範圍（v2）
+## 資料範圍（v3）
 
 - 使用者指定十檔：2330、2454、2317、2308、3711、1303、2383、2881、2891、2303，另加 0050 與加權價格指數 `^TWII`。持股權重合計 78.02%，來源為使用者提供、快照日期未指定，並非歷史各期權重。
 - Yahoo 最長可得歷史，截止 **2026-11-04**，12 個標的、73,953 筆日線。逐檔起點與下載 SHA-256 在 manifest；3711 僅採 2018-04-30 掛牌後資料，較早的供應商延伸序列不冒充現公司歷史。
 - Yahoo `Close` 已調整分割，不能當成交易所未還原價格；`Adj Close` 為供應商調整價。這版完整替換行情，不與 v1 的不同價格口徑直接拼接。`^TWII` 使用 Close，代表不含息的價格指數。
 - 保留 v1 的台積電／鴻海財報、857 個 chunks／1536 維 embedding、689 筆另外命名的加權總報酬指數（截止 2026-11-02）；不以 `^TWII` 取代總報酬指數。
 - 無 PDF、匯率、正式帳號、持倉、金鑰或對話。仍建立兩位示範使用者及五個合成投組；分散投組改用這十檔。
-- **資料品質限制**：還原因子尚未逐事件官方核對。7 個超過 ±25% 的報酬跳點保存在 `historyAudit.largeReturns`，包含 0050 的 2014-01-02。歷史 eval 將該日價格視為不可用，兩側報酬均不計，不補值或自動修復。Seed 保存供應商原價供稽核；其他直接使用 DB 的長期風險功能不會自動套用 eval 的隔離規則。這是開發／診斷資料，不可把排除後結果當成已認證的尾部檢定結論。
+- **資料品質限制**：v3 補正固定來源快照中 0050 在 2014 年前漏做的一拆四價格因子；原始檔不變，修正紀錄在 `historyAudit.reviewedCorrection`。其餘 6 個超過 ±25% 的跳點均早於 2004 年，歷史 eval（含暖機）不使用這些年份。還原因子仍未逐事件官方核對，0050 與 FinMind 另有 25 筆價差尚未修復。歷史 eval 將該日價格視為不可用，兩側報酬均不計，不補值或自動修復。Seed 保存供應商原價供稽核；其他直接使用 DB 的長期風險功能不會自動套用 eval 的隔離規則。這是開發／診斷資料，不可把排除後結果當成已認證的尾部檢定結論。
 
 新版歷史回補與兩類 eval 操作見 [歷史 seed eval](../testing/history-seed-eval.md)。
 
@@ -24,7 +24,7 @@ Linux、Python 3、.NET 10 SDK、Node.js/npm，以及**可運作的 Docker daemo
 從 repository 根目錄執行：
 
 ```bash
-python3 scripts/seed/fetch.py --output /tmp/equitylens-seed-v2
+python3 scripts/seed/fetch.py --output /tmp/equitylens-seed-v3
 python3 scripts/seed/runtime.py setup
 ```
 
@@ -51,7 +51,7 @@ VITE_API_BASE_URL=http://127.0.0.1:55440/api npm run dev
 
 ```bash
 python3 -m unittest discover -s scripts/seed -v
-python3 scripts/seed/seed.py validate --directory /tmp/equitylens-seed-v2
+python3 scripts/seed/seed.py validate --directory /tmp/equitylens-seed-v3
 # API 啟動後
 python3 scripts/seed/smoke.py
 ```

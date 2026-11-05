@@ -118,6 +118,9 @@
     "benchmarks": [
       "0050",
       "^TWII"
-    ]
-  }
+    ],
+    "dataStart": "2004-01-01",
+    "warmupPolicy": "252 valid returns drawn only from data on or after dataStart"
+  },
+  "revision": 3
 }
