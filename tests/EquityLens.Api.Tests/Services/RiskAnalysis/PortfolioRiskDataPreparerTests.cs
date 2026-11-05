@@ -98,7 +98,8 @@ public sealed class PortfolioRiskDataPreparerTests
         Assert.Equal(From.AddDays(1), input.ReturnDates[0]);
         var expectedSecondReturn = (decimal)Math.Log((double)(200.6m / 200.5m));
         Assert.Equal(expectedSecondReturn, input.AssetReturns[0][0]);
-        Assert.Equal(input.AssetReturns[0][0] * input.Weights[0] + input.AssetReturns[1][0] * input.Weights[1], input.PortfolioReturns[0]);
+        var expectedPortfolio = input.Weights[0] * (200.6m / 200.5m - 1m) + input.Weights[1] * (100.7m / 100.5m - 1m);
+        Assert.Equal(expectedPortfolio, input.PortfolioReturns[0]);
         Assert.NotNull(input.Assets);
         Assert.Equal(new[] { SecondSecurity, FirstSecurity }, input.Assets.Select(asset => asset.SecurityId));
         Assert.Equal(new[] { "B", "A" }, input.Assets.Select(asset => asset.Ticker));
@@ -122,6 +123,53 @@ public sealed class PortfolioRiskDataPreparerTests
         var legacy = JsonNode.Parse(json)!;
         legacy.AsObject().Remove("assets");
         Assert.Null(JsonSerializer.Deserialize<RiskBacktestEngineInput>(legacy.ToJsonString(), options)!.Assets);
+    }
+
+    [Fact]
+    public async Task Backtest_PortfolioReturnsSatisfyCrossLanguageSimpleReturnContract()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var portfolio = await SeedAsync(db, 360);
+        var input = (await CreatePreparer(db).PreparePortfolioRiskBacktestInputAsync(
+            portfolio.Id, From, From.AddDays(360), portfolio.OwnerUserId, default)).Value!;
+
+        // Python RiskBacktestInput rejects payloads violating Σ w·(exp(r) − 1) beyond 1e-8.
+        for (var day = 0; day < input.PortfolioReturns.Count; day++)
+        {
+            var expected = input.Weights
+                .Select((weight, asset) => (double)weight * (Math.Exp((double)input.AssetReturns[asset][day]) - 1d))
+                .Sum();
+            Assert.InRange((double)input.PortfolioReturns[day] - expected, -1e-12, 1e-12);
+        }
+    }
+
+    [Fact]
+    public async Task AllPreparationModes_CarrySuspendedDayForwardInsteadOfMergingReturns()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var portfolio = await SeedAsync(db, 360);
+        var suspended = From.AddDays(5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        db.MarketPrices.Remove(db.MarketPrices.Single(x => x.SecurityId == SecondSecurity && x.PriceTime == suspended));
+        await db.SaveChangesAsync();
+        var preparer = CreatePreparer(db);
+
+        var formal = (await preparer.PreparePortfolioRiskAsync(portfolio.Id, From, From.AddDays(360), 1, .95m, 1000,
+            portfolio.OwnerUserId, default)).Value!;
+        var backtest = (await preparer.PreparePortfolioRiskBacktestInputAsync(
+            portfolio.Id, From, From.AddDays(360), portfolio.OwnerUserId, default)).Value!;
+        var monteCarlo = (await preparer.PrepareMonteCarloAsync(portfolio.Id, portfolio.OwnerUserId, default)).Value!;
+
+        Assert.Equal(360, formal.CommonDates.Count);
+        Assert.Contains(From.AddDays(5), formal.CommonDates);
+        Assert.Equal(formal.AlignedPrices[SecondSecurity][4], formal.AlignedPrices[SecondSecurity][5]);
+        Assert.Equal(360, monteCarlo.CommonTradingDays);
+        Assert.Equal(359, backtest.ReturnDates.Count);
+        var second = Array.IndexOf(backtest.Assets!.Select(a => a.SecurityId).ToArray(), SecondSecurity);
+        var first = 1 - second;
+        // Day 5 is a zero-return carry-forward; the resumption day reflects the full two-day move.
+        Assert.Equal(0m, backtest.AssetReturns[second][4]);
+        Assert.Equal((decimal)Math.Log((double)(201.1m / 200.9m)), backtest.AssetReturns[second][5]);
+        Assert.NotEqual(0m, backtest.AssetReturns[first][4]);
     }
 
     [Fact]
