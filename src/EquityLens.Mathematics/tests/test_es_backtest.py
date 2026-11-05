@@ -7,8 +7,10 @@ from equitylens_mathematics.models import RiskBacktestInput
 from equitylens_mathematics.research.es_backtest import (
     ForecastSet,
     acerbi_szekely,
+    align_carry_forward,
     collect_forecasts,
     du_escanciano,
+    du_escanciano_mc,
     mcneil_frey,
     z1_statistic,
     z2_statistic,
@@ -89,3 +91,46 @@ def test_du_escanciano_conditional_detects_clustered_violations():
     pit = np.full(500, 0.5)
     pit[200:215] = 0.001
     assert du_escanciano(pit, 0.95)["c_es"]["1"]["p"] < 0.01
+
+
+def _discrete(days: int = 300, atoms: int = 50, draws: int = 400, seed: int = 0) -> ForecastSet:
+    """Calibrated forecasts with production-like discreteness: few distinct scenarios per day."""
+    rng = np.random.default_rng(seed)
+    scenarios = rng.standard_t(4, size=(days, atoms)) * 0.01 * rng.uniform(0.6, 1.6, size=(days, 1))
+    samples = np.sort(scenarios[np.arange(days)[:, None], rng.integers(0, atoms, size=(days, draws))], axis=1)
+    actual = samples[np.arange(days), rng.integers(0, draws, size=days)]
+    return ForecastSet(actual, samples.astype(np.float32), [str(i) for i in range(days)])
+
+
+def test_monte_carlo_calibrated_tests_have_nominal_size_on_discrete_fhs():
+    rejections = {"z1": 0, "z2": 0, "mcneil_frey": 0, "u_es": 0, "c_es_1": 0, "c_es_5": 0}
+    replications = 40
+    for seed in range(replications):
+        forecasts = _discrete(seed=500 + seed)
+        forecasts = ForecastSet(forecasts.actual.astype(np.float32).astype(np.float64), forecasts.samples, forecasts.dates)
+        az = acerbi_szekely(forecasts, 0.95, 200, f"size{seed}")
+        mf = mcneil_frey(forecasts, 0.95, 200, f"size{seed}")
+        de = du_escanciano_mc(forecasts, 0.95, 200, f"size{seed}")
+        for key, p in (("z1", az["z1_p_left"]), ("z2", az["z2_p_left"]), ("mcneil_frey", mf["p_left"]),
+                       ("u_es", de["u_es_p_right"]), ("c_es_1", de["c_es"]["1"]["p"]), ("c_es_5", de["c_es"]["5"]["p"])):
+            rejections[key] += p is not None and p < 0.05
+    rates = {key: value / replications for key, value in rejections.items()}
+    # Nominal 5%; 40 replications give a binomial standard error of ~3.4 points.
+    assert all(rate <= 0.15 for rate in rates.values()), rates
+
+
+def test_mcneil_frey_null_is_not_centred_at_zero_on_discrete_fhs():
+    result = mcneil_frey(_discrete(seed=3), 0.99, 300, "centre")
+    assert result["null_mean"] < -0.05
+
+
+def test_carry_forward_alignment_matches_production_policy():
+    series = {
+        "A": {"d1": 10.0, "d2": 11.0, "d3": 12.0, "d4": 13.0},
+        "B": {"d0": 5.0, "d1": 5.0, "d3": 6.0, "d4": 6.5, "d5": 7.0},
+    }
+    names, dates, prices, filled = align_carry_forward(series)
+    assert names == ["A", "B"]
+    assert dates == ["d1", "d2", "d3", "d4"]
+    np.testing.assert_array_equal(prices[1], [5.0, 5.0, 6.0, 6.5])
+    assert filled == {"A": 0, "B": 1}

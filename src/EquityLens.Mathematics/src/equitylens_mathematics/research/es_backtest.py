@@ -9,13 +9,18 @@ day's full one-day predictive distribution, which the ES tests below require:
   realised return from each day's own predictive distribution, so the null is
   exact for the discrete FHS distribution rather than relying on tabulated
   critical values.
-* McNeil-Frey (2000) exceedance residual test with an i.i.d. bootstrap.
+* McNeil-Frey (2000) exceedance residuals, with a Monte Carlo null from the
+  model's own distributions (the discrete FHS boundary makes a zero-mean null
+  invalid).
 * Du-Escanciano (2017) unconditional (U_ES) and conditional (C_ES) tests on
-  cumulative violations built from probability integral transforms.
+  cumulative violations built from probability integral transforms, also with
+  Monte Carlo nulls; asymptotic chi-square p-values are reported for reference
+  only because they are oversized at this sample size.
 
 Sign convention follows production: returns, VaR and ES are left-tail values,
-so VaR and ES are negative and a breach is `actual < VaR`. Every test is
-oriented so that a small left-tail p-value means risk is under-estimated.
+so VaR and ES are negative and a breach is `actual < VaR`. Every one-sided
+p-value is oriented so that a small value means risk is under-estimated
+(left tail for Z1/Z2/McNeil-Frey, right tail for U_ES/C_ES).
 Parameter-estimation uncertainty is not corrected (Du and Escanciano note this
 mainly affects the conditional test); results are evidence, not a regulatory
 traffic-light verdict.
@@ -170,48 +175,136 @@ def acerbi_szekely(
     }
 
 
+def right_ranks(forecasts: ForecastSet) -> np.ndarray:
+    """For each day and sample position, the count of samples <= that sample (PIT numerator)."""
+    return np.vstack([np.searchsorted(row, row, side="right") for row in forecasts.samples]).astype(np.int32)
+
+
+def _null_draws(forecasts: ForecastSet, repetitions: int, label: str, chunk: int = 250):
+    """Yield realised-return draws from each day's own predictive distribution, with sample positions."""
+    rng = np.random.default_rng(seed_for(label))
+    count, width = forecasts.samples.shape
+    rows = np.arange(count)
+    for start in range(0, repetitions, chunk):
+        picks = rng.integers(0, width, size=(min(chunk, repetitions - start), count))
+        yield forecasts.samples[rows[None, :], picks].astype(np.float64), picks
+
+
+def _left_p(null: np.ndarray, observed: float) -> float | None:
+    valid = null[np.isfinite(null)]
+    if not math.isfinite(observed) or valid.size == 0:
+        return None
+    return float((1 + np.sum(valid <= observed)) / (valid.size + 1))
+
+
+def _right_p(null: np.ndarray, observed: float) -> float | None:
+    valid = null[np.isfinite(null)]
+    if not math.isfinite(observed) or valid.size == 0:
+        return None
+    return float((1 + np.sum(valid >= observed)) / (valid.size + 1))
+
+
+def _mcneil_frey_stat(values: np.ndarray, var: np.ndarray, es: np.ndarray, sigma: np.ndarray) -> np.ndarray:
+    breach = values < var
+    residual = np.where(breach, (values - es) / sigma, 0.0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return residual.sum(axis=-1) / breach.sum(axis=-1)
+
+
 def mcneil_frey(
     forecasts: ForecastSet, confidence: float, repetitions: int = 10_000, label: str = ""
 ) -> dict:
-    """Exceedance residuals (X - ES) / sigma on breach days; H0 mean zero."""
+    """Mean exceedance residual (X - ES) / sigma on breach days.
+
+    The discrete FHS distribution with a nearest-rank VaR does not give the
+    residual a zero mean under a correct model, so the null is simulated from
+    each day's own predictive distribution instead of bootstrapping around 0.
+    """
     var, es = forecasts.var_es(confidence)
     sigma = forecasts.samples.astype(np.float64).std(axis=1, ddof=1)
-    breach = forecasts.actual < var
-    residuals = (forecasts.actual[breach] - es[breach]) / sigma[breach]
-    if residuals.size < 2:
-        return {"n": int(residuals.size), "mean_residual": None, "p_left": None}
-    observed = residuals.mean()
-    centred = residuals - observed
-    rng = np.random.default_rng(seed_for(f"mcneil-frey:{label}:{confidence}"))
-    boot = centred[rng.integers(0, centred.size, size=(repetitions, centred.size))].mean(axis=1)
+    observed = float(_mcneil_frey_stat(forecasts.actual, var, es, sigma))
+    null = np.concatenate([
+        _mcneil_frey_stat(draws, var, es, sigma)
+        for draws, _ in _null_draws(forecasts, repetitions, f"mcneil-frey:{label}:{confidence}")
+    ])
+    finite = null[np.isfinite(null)]
     return {
-        "n": int(residuals.size),
-        "mean_residual": float(observed),
-        "p_left": float((1 + np.sum(boot <= observed)) / (repetitions + 1)),
+        "n": int(np.sum(forecasts.actual < var)),
+        "mean_residual": observed if math.isfinite(observed) else None,
+        "null_mean": float(finite.mean()) if finite.size else None,
+        "p_left": _left_p(null, observed),
     }
 
 
-def du_escanciano(pit: np.ndarray, confidence: float, lags: tuple[int, ...] = (1, 5)) -> dict:
-    """Unconditional (U_ES) and conditional (C_ES) cumulative-violation tests."""
-    tail = 1.0 - confidence
+def _du_escanciano_stats(pit: np.ndarray, tail: float, lags: tuple[int, ...]) -> tuple[np.ndarray, dict]:
     hits = np.where(pit <= tail, (tail - pit) / tail, 0.0)
-    count = hits.size
-    mean = float(hits.mean())
-    z = math.sqrt(count) * (mean - tail / 2) / math.sqrt(tail * (1 / 3 - tail / 4))
     centred = hits - tail / 2
-    denominator = float(np.sum(centred**2))
+    denominator = np.sum(centred**2, axis=-1)
+    count = hits.shape[-1]
     conditional = {}
     for lag_count in lags:
-        rho = [float(np.sum(centred[j:] * centred[:-j]) / denominator) for j in range(1, lag_count + 1)]
-        statistic = count * float(np.sum(np.square(rho)))
-        conditional[str(lag_count)] = {"statistic": statistic, "p": float(chi2.sf(statistic, lag_count))}
+        total = np.zeros(hits.shape[:-1])
+        for lag in range(1, lag_count + 1):
+            with np.errstate(invalid="ignore", divide="ignore"):
+                rho = np.sum(centred[..., lag:] * centred[..., :-lag], axis=-1) / denominator
+            total = total + rho**2
+        conditional[lag_count] = count * total
+    return hits.mean(axis=-1), conditional
+
+
+def du_escanciano(pit: np.ndarray, confidence: float, lags: tuple[int, ...] = (1, 5)) -> dict:
+    """Asymptotic U_ES / C_ES (reference only; oversized at T~1,500 for 99% and lag 5)."""
+    tail = 1.0 - confidence
+    mean, conditional = _du_escanciano_stats(np.asarray(pit, dtype=np.float64), tail, lags)
+    count = len(pit)
+    z = math.sqrt(count) * (float(mean) - tail / 2) / math.sqrt(tail * (1 / 3 - tail / 4))
     return {
-        "mean_h": mean,
+        "mean_h": float(mean),
         "expected_h": tail / 2,
         "u_es_z": z,
         "u_es_p_two_sided": float(2 * norm.sf(abs(z))),
         "u_es_p_left": float(norm.sf(z)),
-        "c_es": conditional,
+        "c_es": {
+            str(lag): {"statistic": float(value), "p": float(chi2.sf(float(value), lag))}
+            for lag, value in conditional.items()
+        },
+    }
+
+
+def du_escanciano_mc(
+    forecasts: ForecastSet,
+    confidence: float,
+    repetitions: int = 10_000,
+    label: str = "",
+    ranks: np.ndarray | None = None,
+    lags: tuple[int, ...] = (1, 5),
+) -> dict:
+    """U_ES / C_ES with nulls from PITs of draws from each day's own distribution."""
+    tail = 1.0 - confidence
+    ranks = right_ranks(forecasts) if ranks is None else ranks
+    width = forecasts.samples.shape[1]
+    rows = np.arange(forecasts.samples.shape[0])
+    observed_mean, observed_conditional = _du_escanciano_stats(forecasts.pit(), tail, lags)
+    null_mean: list[np.ndarray] = []
+    null_conditional: dict[int, list[np.ndarray]] = {lag: [] for lag in lags}
+    for _, picks in _null_draws(forecasts, repetitions, f"du-escanciano:{label}:{confidence}"):
+        pit = ranks[rows[None, :], picks] / width
+        mean, conditional = _du_escanciano_stats(pit, tail, lags)
+        null_mean.append(mean)
+        for lag in lags:
+            null_conditional[lag].append(conditional[lag])
+    means = np.concatenate(null_mean)
+    return {
+        "mean_h": float(observed_mean),
+        "null_mean_h": float(means.mean()),
+        "u_es_p_right": _right_p(means, float(observed_mean)),
+        "c_es": {
+            str(lag): {
+                "statistic": float(observed_conditional[lag]),
+                "p": _right_p(np.concatenate(null_conditional[lag]), float(observed_conditional[lag])),
+            }
+            for lag in lags
+        },
     }
 
 
@@ -224,12 +317,16 @@ def tail_ratio(forecasts: ForecastSet, confidence: float) -> float | None:
 
 
 def evaluate(forecasts: ForecastSet, levels=DEFAULT_LEVELS, repetitions: int = 10_000, label: str = "") -> dict:
+    """All tests use Monte Carlo nulls from the model's own daily distributions;
+    the asymptotic Du-Escanciano block is reported for reference only."""
     pit = forecasts.pit()
+    ranks = right_ranks(forecasts)
     return {
         str(level): {
             "acerbi_szekely": acerbi_szekely(forecasts, level, repetitions, label),
             "mcneil_frey": mcneil_frey(forecasts, level, repetitions, label),
-            "du_escanciano": du_escanciano(pit, level),
+            "du_escanciano": du_escanciano_mc(forecasts, level, repetitions, label, ranks),
+            "du_escanciano_asymptotic": du_escanciano(pit, level),
             "tail_ratio": tail_ratio(forecasts, level),
         }
         for level in levels
@@ -239,8 +336,31 @@ def evaluate(forecasts: ForecastSet, levels=DEFAULT_LEVELS, repetitions: int = 1
 # --------------------------------------------------------------------------- seed runner
 
 
+def align_carry_forward(series: dict[str, dict[str, float]]) -> tuple[list[str], list[str], np.ndarray, dict[str, int]]:
+    """Mirror C# RiskPriceAlignment: union of dates inside the common coverage
+    window, carrying the previous valid price over suspended/missing days."""
+    names = sorted(series)
+    start = max(min(series[name]) for name in names)
+    end = min(max(series[name]) for name in names)
+    dates = sorted({day for name in names for day in series[name] if start <= day <= end})
+    prices = np.empty((len(names), len(dates)))
+    filled: dict[str, int] = {}
+    for row, name in enumerate(names):
+        previous = None
+        count = 0
+        for column, day in enumerate(dates):
+            value = series[name].get(day)
+            if value is None:
+                value = previous
+                count += 1
+            prices[row, column] = value
+            previous = value
+        filled[name] = count
+    return names, dates, prices, filled
+
+
 def load_seed_panel(bundle: Path, excluded: set[str]) -> tuple[list[str], list[str], np.ndarray]:
-    """Adjusted-close log returns over common dates from a seed bundle (json.gz)."""
+    """Adjusted-close log returns from a seed bundle (json.gz), aligned like production."""
     with gzip.open(bundle, "rt", encoding="utf-8") as handle:
         tables = json.load(handle)["tables"]
     tickers = {row["id"]: row["ticker"] for row in tables["security"]}
@@ -252,10 +372,8 @@ def load_seed_panel(bundle: Path, excluded: set[str]) -> tuple[list[str], list[s
         value = row.get("adjusted_close")
         if value is not None and value > 0:
             series.setdefault(ticker, {})[row["price_time"][:10]] = float(value)
-    names = sorted(series)
-    common = sorted(set.intersection(*(set(series[name]) for name in names)))
-    prices = np.array([[series[name][day] for day in common] for name in names])
-    return names, common[1:], np.diff(np.log(prices), axis=1)
+    names, dates, prices, _ = align_carry_forward(series)
+    return names, dates[1:], np.diff(np.log(prices), axis=1)
 
 
 def main() -> None:
