@@ -147,3 +147,28 @@ def test_history_export_loader_returns_log_returns_and_snapshot_weights(tmp_path
     assert tickers == ["A", "B"] and dates == ["2024-01-03", "2024-01-05"]
     np.testing.assert_allclose(np.expm1(returns), [[0.1, 0.0], [-0.05, 0.02]])
     np.testing.assert_allclose(weights, [0.7, 0.3])
+
+
+def test_refit_failure_keeps_previous_fit_only_when_requested(monkeypatch):
+    import pytest
+    from equitylens_mathematics.garch import GarchFitError
+    from equitylens_mathematics.research import es_backtest
+    returns = _returns(days=100)
+    dates = [str(i) for i in range(100)]
+    real = es_backtest.fit_vt_garch
+    calls = []
+
+    def flaky(matrix):
+        calls.append(1)
+        if len(calls) == 2:
+            raise GarchFitError("variance-targeted optimization failed")
+        return real(matrix)
+
+    monkeypatch.setattr(es_backtest, "fit_vt_garch", flaky)
+    forecasts = es_backtest.collect_forecasts(returns, np.full(3, 1 / 3), dates, 40, 200, "f",
+                                              keep_previous_on_fit_failure=True)
+    assert forecasts.fit_failures == [dates[40 + 21]]
+    assert forecasts.actual.size == 60
+    calls.clear()
+    with pytest.raises(GarchFitError):
+        es_backtest.collect_forecasts(returns, np.full(3, 1 / 3), dates, 40, 200, "f")

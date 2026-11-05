@@ -33,7 +33,7 @@ import gzip
 import hashlib
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -41,7 +41,7 @@ import numpy as np
 from scipy.stats import chi2, norm
 
 from ..engine import expected_shortfall, historical_var
-from ..garch import VtGarchFit, deterministic_seed, fit_vt_garch, one_day_distribution
+from ..garch import GarchFitError, VtGarchFit, deterministic_seed, fit_vt_garch, one_day_distribution
 
 REFIT_INTERVAL = 21
 DEFAULT_LEVELS = (0.95, 0.975, 0.99)
@@ -58,6 +58,7 @@ class ForecastSet:
     actual: np.ndarray  # (T,)
     samples: np.ndarray  # (T, S) sorted predictive draws, float32
     dates: list[str]
+    fit_failures: list[str] = field(default_factory=list)  # refit dates that kept the previous fit
 
     def var_es(self, confidence: float) -> tuple[np.ndarray, np.ndarray]:
         var = np.array([historical_var(row.astype(np.float64), confidence) for row in self.samples])
@@ -81,12 +82,16 @@ def collect_forecasts(
     simulations: int,
     input_hash: str,
     distribution: Callable[[VtGarchFit, np.ndarray, int, int], np.ndarray] = one_day_distribution,
+    keep_previous_on_fit_failure: bool = False,
 ) -> ForecastSet:
     """Replay `engine.calculate_backtest` and keep every predictive distribution.
 
     Fit cadence, daily variance/residual filtering and seed derivation mirror the
     production loop exactly; `tests/test_es_backtest.py` asserts VaR/ES parity.
     `distribution` lets research challengers replace only the one-day sampler.
+    Production fails the whole run when a refit fails (and falls back to the C#
+    engine); `keep_previous_on_fit_failure` instead keeps filtering with the
+    previous parameters and records the date, so long histories stay comparable.
     """
     matrix_all = np.asarray(asset_returns, dtype=np.float64)
     weights = np.asarray(weights, dtype=np.float64)
@@ -94,10 +99,16 @@ def collect_forecasts(
     actual: list[float] = []
     samples: list[np.ndarray] = []
     out_dates: list[str] = []
+    failures: list[str] = []
     active_fit: VtGarchFit | None = None
     for offset, index in enumerate(range(lookback_days, matrix_all.shape[1])):
         if active_fit is None or offset % REFIT_INTERVAL == 0:
-            active_fit = fit_vt_garch(matrix_all[:, index - lookback_days:index])
+            try:
+                active_fit = fit_vt_garch(matrix_all[:, index - lookback_days:index])
+            except GarchFitError:
+                if active_fit is None or not keep_previous_on_fit_failure:
+                    raise
+                failures.append(dates[index])
         draws = distribution(
             active_fit, weights, simulations,
             deterministic_seed(input_hash, "backtest", offset),
@@ -115,7 +126,7 @@ def collect_forecasts(
             for asset, item in enumerate(parameters)
         ])
         active_fit = VtGarchFit(parameters, residuals, next_variances, active_fit.warning_count)
-    return ForecastSet(np.asarray(actual), np.vstack(samples), out_dates)
+    return ForecastSet(np.asarray(actual), np.vstack(samples), out_dates, failures)
 
 
 # --------------------------------------------------------------------------- tests
@@ -439,13 +450,15 @@ def main() -> None:
     }
     for label, (names, dates, returns, weights) in portfolio_sets(args).items():
         forecasts = collect_forecasts(
-            returns, weights, dates, args.lookback, args.simulations, f"es-backtest:{label}"
+            returns, weights, dates, args.lookback, args.simulations, f"es-backtest:{label}",
+            keep_previous_on_fit_failure=True,
         )
         result = evaluate(forecasts, DEFAULT_LEVELS, args.repetitions, label)
         summary["portfolios"][label] = {
             "assets": names, "weights": weights.tolist(),
             "hhi": float(np.sum(weights**2)), "observations": int(forecasts.actual.size),
-            "from": forecasts.dates[0], "to": forecasts.dates[-1], "tests": result,
+            "from": forecasts.dates[0], "to": forecasts.dates[-1],
+            "refit_failures_kept_previous": forecasts.fit_failures, "tests": result,
         }
         pit = forecasts.pit()
         lines = ["date,actual,pit," + ",".join(f"var{lv},es{lv}" for lv in DEFAULT_LEVELS)]

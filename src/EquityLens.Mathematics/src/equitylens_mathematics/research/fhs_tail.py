@@ -145,9 +145,10 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=True)
     for label, (_, dates, returns, weights) in portfolio_sets(args).items():
         common = dict(asset_returns=returns, weights=weights, dates=dates, lookback_days=252,
-                      simulations=10_000, input_hash=f"es-backtest:{label}")
+                      simulations=10_000, input_hash=f"es-backtest:{label}",
+                      keep_previous_on_fit_failure=True)
         base = collect_forecasts(**common)
-        entry = {"production": {
+        entry = {"refit_failures_kept_previous": base.fit_failures, "production": {
             "es_tests": evaluate(base, DEFAULT_LEVELS, args.repetitions, f"{label}:production"),
             "var_tests": {str(lv): var_tests(base, lv) for lv in DEFAULT_LEVELS},
         }}
