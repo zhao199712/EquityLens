@@ -30,6 +30,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 from scipy.stats import chi2, norm
@@ -74,11 +75,13 @@ def collect_forecasts(
     lookback_days: int,
     simulations: int,
     input_hash: str,
+    distribution: Callable[[VtGarchFit, np.ndarray, int, int], np.ndarray] = one_day_distribution,
 ) -> ForecastSet:
     """Replay `engine.calculate_backtest` and keep every predictive distribution.
 
     Fit cadence, daily variance/residual filtering and seed derivation mirror the
     production loop exactly; `tests/test_es_backtest.py` asserts VaR/ES parity.
+    `distribution` lets research challengers replace only the one-day sampler.
     """
     matrix_all = np.asarray(asset_returns, dtype=np.float64)
     weights = np.asarray(weights, dtype=np.float64)
@@ -90,11 +93,11 @@ def collect_forecasts(
     for offset, index in enumerate(range(lookback_days, matrix_all.shape[1])):
         if active_fit is None or offset % REFIT_INTERVAL == 0:
             active_fit = fit_vt_garch(matrix_all[:, index - lookback_days:index])
-        distribution = one_day_distribution(
+        draws = distribution(
             active_fit, weights, simulations,
             deterministic_seed(input_hash, "backtest", offset),
         )
-        samples.append(np.sort(distribution).astype(np.float32))
+        samples.append(np.sort(draws).astype(np.float32))
         actual.append(float(portfolio[index]))
         out_dates.append(dates[index])
         current = matrix_all[:, index] * 100.0
