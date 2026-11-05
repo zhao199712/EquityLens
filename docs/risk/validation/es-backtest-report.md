@@ -5,6 +5,12 @@
 程式：`src/EquityLens.Mathematics/src/equitylens_mathematics/research/es_backtest.py`
 輸出：`docs/risk/validation/es-backtest/`（summary JSON 與逐日 VaR/ES/PIT）
 
+> **2026-11-05 更正（見 `var-attribution-report.md`）：** 本報告以 Z1、Z2 與「模型自身虛無分配」的 U_ES
+> 得出的 ES 低估結論撤回。這些虛無分配把 252 個重抽情境當成真實分配，忽略情境庫是有限樣本；
+> 在完全正確的有限情境 FHS 模擬中（T=5,375、97.5%），誤拒率為 U_ES 100%、Z2 88%、Z1 50%。
+> VaR 違約率略高於名目值，主要是最近秩分位數的有限樣本偏誤（正確模型下 252 情境的違約率為
+> 5.19%／2.70%／1.20%）。違約集中（Christoffersen、C_ES）的結論維持。
+
 ## 0. 修訂說明
 
 初版結論在獨立審查後發現量尺問題，已修正並重跑。以下初版說法**撤回**：
