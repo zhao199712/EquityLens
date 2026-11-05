@@ -93,28 +93,57 @@ def collect_forecasts(
     engine); `keep_previous_on_fit_failure` instead keeps filtering with the
     previous parameters and records the date, so long histories stay comparable.
     """
+    return collect_forecasts_multi(
+        asset_returns, {"": (weights, input_hash)}, dates, lookback_days, simulations,
+        distribution, keep_previous_on_fit_failure,
+    )[""]
+
+
+def collect_forecasts_multi(
+    asset_returns: np.ndarray,
+    portfolios: dict[str, tuple[np.ndarray, str]],
+    dates: list[str],
+    lookback_days: int,
+    simulations: int,
+    distribution: Callable[[VtGarchFit, np.ndarray, int, int], np.ndarray] = one_day_distribution,
+    keep_previous_on_fit_failure: bool = False,
+    refit_interval: int = REFIT_INTERVAL,
+) -> dict[str, ForecastSet]:
+    """`collect_forecasts` for several weight vectors sharing one sequence of fits.
+
+    `portfolios` maps label -> (weights, input_hash); each label keeps its own
+    seed derivation, so results equal separate `collect_forecasts` calls.
+    `refit_interval` exists for research attribution; production uses 21.
+    """
     matrix_all = np.asarray(asset_returns, dtype=np.float64)
-    weights = np.asarray(weights, dtype=np.float64)
-    portfolio = np.exp(matrix_all).T @ weights - weights.sum()
-    actual: list[float] = []
-    samples: list[np.ndarray] = []
+    prepared = {
+        label: (np.asarray(weights, dtype=np.float64), input_hash)
+        for label, (weights, input_hash) in portfolios.items()
+    }
+    portfolio_returns = {
+        label: np.exp(matrix_all).T @ weights - weights.sum()
+        for label, (weights, _) in prepared.items()
+    }
+    actual: dict[str, list[float]] = {label: [] for label in prepared}
+    samples: dict[str, list[np.ndarray]] = {label: [] for label in prepared}
     out_dates: list[str] = []
     failures: list[str] = []
     active_fit: VtGarchFit | None = None
     for offset, index in enumerate(range(lookback_days, matrix_all.shape[1])):
-        if active_fit is None or offset % REFIT_INTERVAL == 0:
+        if active_fit is None or offset % refit_interval == 0:
             try:
                 active_fit = fit_vt_garch(matrix_all[:, index - lookback_days:index])
             except GarchFitError:
                 if active_fit is None or not keep_previous_on_fit_failure:
                     raise
                 failures.append(dates[index])
-        draws = distribution(
-            active_fit, weights, simulations,
-            deterministic_seed(input_hash, "backtest", offset),
-        )
-        samples.append(np.sort(draws).astype(np.float32))
-        actual.append(float(portfolio[index]))
+        for label, (weights, input_hash) in prepared.items():
+            draws = distribution(
+                active_fit, weights, simulations,
+                deterministic_seed(input_hash, "backtest", offset),
+            )
+            samples[label].append(np.sort(draws).astype(np.float32))
+            actual[label].append(float(portfolio_returns[label][index]))
         out_dates.append(dates[index])
         current = matrix_all[:, index] * 100.0
         parameters = active_fit.parameters
@@ -126,7 +155,10 @@ def collect_forecasts(
             for asset, item in enumerate(parameters)
         ])
         active_fit = VtGarchFit(parameters, residuals, next_variances, active_fit.warning_count)
-    return ForecastSet(np.asarray(actual), np.vstack(samples), out_dates, failures)
+    return {
+        label: ForecastSet(np.asarray(actual[label]), np.vstack(samples[label]), list(out_dates), list(failures))
+        for label in prepared
+    }
 
 
 # --------------------------------------------------------------------------- tests
