@@ -173,6 +173,33 @@ public sealed class PortfolioRiskDataPreparerTests
     }
 
     [Fact]
+    public async Task AllPreparationModes_CarryForwardWhenAnAssetLacksAPriceOnTheCommonStartDate()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var portfolio = await SeedAsync(db, 360);
+        // SecondSecurity starts on day 5; FirstSecurity has history before that but no row on day 5.
+        var day = (int offset) => From.AddDays(offset).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        db.MarketPrices.RemoveRange(db.MarketPrices.Where(x => x.SecurityId == SecondSecurity && x.PriceTime < day(5)));
+        db.MarketPrices.Remove(db.MarketPrices.Single(x => x.SecurityId == FirstSecurity && x.PriceTime == day(5)));
+        await db.SaveChangesAsync();
+        var preparer = CreatePreparer(db);
+
+        var formal = (await preparer.PreparePortfolioRiskAsync(portfolio.Id, From, From.AddDays(360), 1, .95m, 1000,
+            portfolio.OwnerUserId, default)).Value!;
+        var backtest = await preparer.PreparePortfolioRiskBacktestInputAsync(
+            portfolio.Id, From, From.AddDays(360), portfolio.OwnerUserId, default);
+        var monteCarlo = (await preparer.PrepareMonteCarloAsync(portfolio.Id, portfolio.OwnerUserId, default)).Value!;
+
+        Assert.Equal(From.AddDays(5), formal.CommonDates[0]);
+        Assert.Equal(355, formal.CommonDates.Count);
+        // Day 5 carries FirstSecurity's day-4 adjusted close (100.5 + 4 * 0.2).
+        Assert.Equal(101.3m, formal.AlignedPrices[FirstSecurity][0]);
+        Assert.True(backtest.IsSuccess);
+        Assert.Equal(354, backtest.Value!.ReturnDates.Count);
+        Assert.Equal(355, monteCarlo.CommonTradingDays);
+    }
+
+    [Fact]
     public async Task Backtest_BlankClassificationUsesUnclassified()
     {
         await using var db = RefactorTestDbContext.Create();

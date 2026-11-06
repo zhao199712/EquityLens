@@ -458,7 +458,9 @@ def align_carry_forward(series: dict[str, dict[str, float]]) -> tuple[list[str],
     prices = np.empty((len(names), len(dates)))
     filled: dict[str, int] = {}
     for row, name in enumerate(names):
-        previous = None
+        earlier = [day for day in series[name] if day < start]
+        # An asset may have history before `start` but no row on `start` itself.
+        previous = series[name][max(earlier)] if earlier else None
         count = 0
         for column, day in enumerate(dates):
             value = series[name].get(day)

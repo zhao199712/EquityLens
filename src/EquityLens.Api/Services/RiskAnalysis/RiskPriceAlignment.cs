@@ -4,7 +4,8 @@ namespace EquityLens.Api.Services.RiskAnalysis;
 
 /// <summary>
 /// 多資產日價格對齊。停牌或個別缺價日沿用前一有效價格（該日報酬為 0，復牌日反映完整變動），
-/// 不以共同日期交集刪除交易日，避免把多個交易日的變動壓成單一「日報酬」。
+/// 不以共同日期交集刪除交易日。交易日取持股價格日期的聯集，因此所有持股皆無價格的日期
+/// 不會出現，該日前後仍會形成一筆跨日報酬；沿用前值的天數目前不設上限。
 /// </summary>
 internal static class RiskPriceAlignment
 {
@@ -49,7 +50,11 @@ internal static class RiskPriceAlignment
         {
             var values = new List<decimal>(dates.Count);
             var fillCount = 0;
-            decimal? previous = null;
+            // 資產可能在共同起始日前已有價格、但起始日當天缺價；以起始日前最後一個有效價格作為前值。
+            decimal? previous = series
+                .Where(pair => pair.Key < start)
+                .Select(pair => selector(pair.Value))
+                .LastOrDefault(value => value is not null);
             foreach (var date in dates)
             {
                 if (series.TryGetValue(date, out var row))
@@ -63,11 +68,16 @@ internal static class RiskPriceAlignment
                     previous = value;
                     values.Add(value.Value);
                 }
+                else if (previous is not null)
+                {
+                    fillCount++;
+                    values.Add(previous.Value);
+                }
                 else
                 {
-                    // start 為所有資產首個價格日之最大者，因此此處必有前值。
-                    fillCount++;
-                    values.Add(previous!.Value);
+                    // 起始日前沒有任何可用價格（例如皆為 null）：視為不可用，由呼叫端拒絕。
+                    hasUnavailable = true;
+                    values.Add(0m);
                 }
             }
             aligned[securityId] = values;

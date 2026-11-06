@@ -172,3 +172,14 @@ def test_refit_failure_keeps_previous_fit_only_when_requested(monkeypatch):
     calls.clear()
     with pytest.raises(GarchFitError):
         es_backtest.collect_forecasts(returns, np.full(3, 1 / 3), dates, 40, 200, "f")
+
+
+def test_carry_forward_alignment_seeds_from_history_before_the_common_start():
+    series = {
+        "A": {"d2": 10.0, "d4": 11.0, "d5": 12.0},
+        "B": {"d3": 5.0, "d4": 6.0, "d5": 7.0},
+    }
+    names, dates, prices, filled = align_carry_forward(series)
+    assert dates == ["d3", "d4", "d5"]
+    np.testing.assert_array_equal(prices[0], [10.0, 11.0, 12.0])
+    assert filled == {"A": 1, "B": 0}
