@@ -50,6 +50,17 @@ internal static class RiskPriceAlignment
             var values = new List<decimal>(dates.Count);
             var fillCount = 0;
             decimal? previous = null;
+            if (!series.ContainsKey(start))
+            {
+                // 共同起日可能落在此資產缺價的日期；只用起日前最近一筆資料初始化，不向未來取價。
+                var seed = series.Last(pair => pair.Key < start).Value;
+                previous = selector(seed);
+                if (previous is null)
+                {
+                    hasUnavailable = true;
+                    previous = 0m;
+                }
+            }
             foreach (var date in dates)
             {
                 if (series.TryGetValue(date, out var row))
@@ -65,7 +76,7 @@ internal static class RiskPriceAlignment
                 }
                 else
                 {
-                    // start 為所有資產首個價格日之最大者，因此此處必有前值。
+                    // 前值來自起日前的種子價格，或區間內已處理的價格。
                     fillCount++;
                     values.Add(previous!.Value);
                 }
