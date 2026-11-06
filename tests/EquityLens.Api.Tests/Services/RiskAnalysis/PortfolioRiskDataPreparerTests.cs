@@ -173,6 +173,103 @@ public sealed class PortfolioRiskDataPreparerTests
     }
 
     [Fact]
+    public async Task AllPreparationModes_SeedLeadingGapFromLatestPriceBeforeCommonStart()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var portfolio = await SeedLeadingGapAsync(db);
+        var preparer = CreatePreparer(db);
+
+        var formal = await preparer.PreparePortfolioRiskAsync(portfolio.Id, From, From.AddDays(360), 1, .95m, 1000,
+            portfolio.OwnerUserId, default);
+        var backtest = await new RiskBacktestInputProvider(preparer).PreparePortfolioRiskBacktestInputAsync(
+            portfolio.Id, From, From.AddDays(360), portfolio.OwnerUserId, default);
+        var monteCarlo = await preparer.PrepareMonteCarloAsync(portfolio.Id, portfolio.OwnerUserId, default);
+
+        Assert.True(formal.IsSuccess, formal.ErrorMessage);
+        Assert.True(backtest.IsSuccess, backtest.ErrorMessage);
+        Assert.True(monteCarlo.IsSuccess, monteCarlo.ErrorMessage);
+        var data = formal.Value!;
+        var input = backtest.Value!;
+        var simulation = monteCarlo.Value!;
+        Assert.NotNull(simulation.Data);
+        Assert.Equal(357, data.CommonDates.Count);
+        Assert.Equal(From.AddDays(3), data.CommonDates[0]);
+        Assert.Equal(From.AddDays(359), data.CommonDates[^1]);
+        Assert.Equal(new[] { 100.9m, 100.9m, 101.5m }, data.AlignedPrices[FirstSecurity].Take(3));
+        Assert.Equal(data.AlignedPrices[FirstSecurity], simulation.Data.AlignedPrices[FirstSecurity]);
+        Assert.Equal(data.AlignedPrices[SecondSecurity], simulation.Data.AlignedPrices[SecondSecurity]);
+        Assert.Equal(357, simulation.CommonTradingDays);
+        Assert.Equal(From.AddDays(359), simulation.DataAsOf);
+        Assert.Equal(356, input.ReturnDates.Count);
+        Assert.Equal(data.CommonDates.Skip(1), input.ReturnDates);
+        var first = Array.IndexOf(input.Assets!.Select(asset => asset.SecurityId).ToArray(), FirstSecurity);
+        Assert.Equal(0m, input.AssetReturns[first][0]);
+        Assert.Equal((decimal)Math.Log((double)(101.5m / 100.9m)), input.AssetReturns[first][1]);
+        Assert.Equal(data.Weights[SecondSecurity] * (decimal)Math.Log((double)(200.9m / 200.8m)),
+            data.PortfolioReturns[0]);
+        Assert.Equal(data.Weights[SecondSecurity] * (200.9m / 200.8m - 1m), input.PortfolioReturns[0]);
+    }
+
+    [Fact]
+    public async Task LeadingGap_MissingAdjustedSeedPreservesEachPreparationPricePolicy()
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var portfolio = await SeedLeadingGapAsync(db);
+        db.MarketPrices.Single(x => x.SecurityId == FirstSecurity &&
+            x.PriceTime == From.AddDays(2).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)).AdjustedClose = null;
+        await db.SaveChangesAsync();
+        var preparer = CreatePreparer(db);
+
+        var formal = await preparer.PreparePortfolioRiskAsync(portfolio.Id, From, From.AddDays(360), 1, .95m, 1000,
+            portfolio.OwnerUserId, default);
+        var backtest = await preparer.PreparePortfolioRiskBacktestInputAsync(
+            portfolio.Id, From, From.AddDays(360), portfolio.OwnerUserId, default);
+        var monteCarlo = await preparer.PrepareMonteCarloAsync(portfolio.Id, portfolio.OwnerUserId, default);
+
+        Assert.True(formal.IsSuccess, formal.ErrorMessage);
+        Assert.Equal(100.4m, formal.Value!.AlignedPrices[FirstSecurity][0]);
+        Assert.Equal("risk.incomplete_adjusted_close", backtest.ErrorCode);
+        Assert.True(monteCarlo.IsSuccess, monteCarlo.ErrorMessage);
+        Assert.NotNull(monteCarlo.Value!.Data);
+        Assert.Equal(100.4m, monteCarlo.Value.Data.AlignedPrices[FirstSecurity][0]);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task LeadingGap_NonPositiveSeedIsRejectedByEveryPreparationMode(int seedPrice)
+    {
+        await using var db = RefactorTestDbContext.Create();
+        var portfolio = await SeedLeadingGapAsync(db);
+        db.MarketPrices.Single(x => x.SecurityId == FirstSecurity &&
+            x.PriceTime == From.AddDays(2).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)).AdjustedClose = seedPrice;
+        await db.SaveChangesAsync();
+        var preparer = CreatePreparer(db);
+
+        var formal = await preparer.PreparePortfolioRiskAsync(portfolio.Id, From, From.AddDays(360), 1, .95m, 1000,
+            portfolio.OwnerUserId, default);
+        var backtest = await preparer.PreparePortfolioRiskBacktestInputAsync(
+            portfolio.Id, From, From.AddDays(360), portfolio.OwnerUserId, default);
+        var monteCarlo = await preparer.PrepareMonteCarloAsync(portfolio.Id, portfolio.OwnerUserId, default);
+
+        Assert.Equal("risk.non_positive_price", formal.ErrorCode);
+        Assert.Equal("risk.non_positive_price", backtest.ErrorCode);
+        Assert.Equal("risk.non_positive_price", monteCarlo.ErrorCode);
+    }
+
+    private static async Task<Portfolio> SeedLeadingGapAsync(EquityLensDbContext db)
+    {
+        var portfolio = await SeedAsync(db, 360);
+        var start = From.AddDays(3).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var resume = From.AddDays(5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        db.MarketPrices.RemoveRange(db.MarketPrices.Where(x =>
+            (x.SecurityId == SecondSecurity && x.PriceTime < start) ||
+            (x.SecurityId == FirstSecurity && x.PriceTime >= start && x.PriceTime < resume)));
+        await db.SaveChangesAsync();
+        return portfolio;
+    }
+
+    [Fact]
     public async Task Backtest_BlankClassificationUsesUnclassified()
     {
         await using var db = RefactorTestDbContext.Create();
