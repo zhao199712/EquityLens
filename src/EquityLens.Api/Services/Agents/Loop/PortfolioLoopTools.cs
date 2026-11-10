@@ -6,6 +6,8 @@ using EquityLens.Api.Data;
 using EquityLens.Api.Services.CurrentUser;
 using EquityLens.Api.Data.Entities;
 using EquityLens.Api.Services.PortfolioValuations;
+using EquityLens.Api.Services.RiskAnalysis;
+using EquityLens.Api.Contracts.Risk;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Services.Agents.Loop;
@@ -16,7 +18,7 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
     internal const string ProfileResultsKey = "riskProfileMathResults";
     public const string SnapshotKey = "portfolioScenarioSnapshot";
     private static readonly string[] Analyses = ["Core", "TailRisk", "RiskContribution"];
-    private static readonly string[] Names = ["get_portfolio_snapshot", "get_risk_report", "run_risk_analysis", "get_performance_attribution", "simulate_weight_scenario", "get_risk_profile"];
+    private static readonly string[] Names = ["get_portfolio_snapshot", "get_risk_report", "run_risk_analysis", "get_performance_attribution", "simulate_weight_scenario", "get_risk_profile", "run_stress_test"];
 
     public IReadOnlyList<LoopToolDefinition> Visible(LoopToolScope scope) => Names.Select(name => new LoopToolDefinition(name,
         name switch
@@ -24,8 +26,9 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             "get_portfolio_snapshot" => "取得授權投組持倉、成本、權重、價格、損益與 accountCash 帳簿現金。只有 accountCash.status=Available 才可引用 balance；Unavailable 是未知而非零，持股權重不包含帳戶現金。indexEtfCandidates 列出核准指數 ETF 的 Ready／Unavailable 與原因，未持有候選不算目前持倉。",
             "get_risk_report" => "重用同期間且輸入相符的已存風險結果；沒有時明確回 cache miss。",
             "run_risk_analysis" => "以快照補算 Core、TailRisk 或 RiskContribution；不可輸入數值資料。",
-            "get_performance_attribution" => "取得持股與產業的正負績效貢獻。",
+            "get_performance_attribution" => "取得持股與產業的正負績效貢獻，以及同期間投組 TWR（portfolioReturn）、臺灣加權股價報酬指數（含息，benchmarkReturn）與超額報酬（activeReturn）；基準為 null 時表示不可用，不可自行估算。",
             "simulate_weight_scenario" => "比較一至三個減碼情境；targetWeights 僅列減碼來源、使用 0 到 1 的最終權重且不得高於目前權重。cash 留現金不指定 transferToTicker；holding 必須指定另一檔既有持股 transferToTicker，不把轉入股放在 targetWeights。index_etf 可轉入 snapshot 中 Ready 的 0050／006208，不必已持有；不能指定其他新標的。未指定情境的優化問題比較留現金與一個可用 ETF；不改變持倉。",
+            "run_stress_test" => "以目前持倉權重回放 COVID-19 急跌、2022 升息熊市、2024 科技股修正、資料期間最差 20 日，並套用台海供應鏈中斷與 AI 泡沫修正兩個假設衝擊；回傳各情境總衝擊與虧損最大持股。status 非 ready 時 totalImpact 為 null，代表無法計算而非零損失。假設情境不是發生機率預測；不改變持倉。",
             _ => "讀取本人偏好、來源、時效及明示預設；只引用 statement 與 profileFit 的同期間參考比較，不自行推測或計算。"
         }, Schema(name))).ToArray();
 
@@ -164,7 +167,17 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             {
                 var attribution = await new PortfolioAttributionReader(serviceScope.ServiceProvider.GetRequiredService<IPortfolioValuationService>()).ReadAsync(context, ct);
                 patch[AgentBlackboardKeys.PerformanceAttribution] = JsonSerializer.SerializeToNode(attribution, AgentNodeJson.SerializerOptions);
-                data = Object(new { attribution = patch[AgentBlackboardKeys.PerformanceAttribution], diagnosis });
+                data = Object(new { attribution = patch[AgentBlackboardKeys.PerformanceAttribution],
+                    benchmark = new { name = "臺灣加權股價報酬指數", includesDividends = true, returnBasis = "TimeWeightedReturn" }, diagnosis });
+                break;
+            }
+            case "run_stress_test":
+            {
+                var stress = await serviceScope.ServiceProvider.GetRequiredService<IPortfolioStressTestService>()
+                    .GetPortfolioStressTestAsync(diagnosis.PortfolioId, scope.UserId, ct);
+                if (!stress.IsSuccess || stress.Value is null)
+                    return new([], "壓力測試無法計算。", Data: Object(new { status = "Unavailable", reason = stress.ErrorCode, diagnosis }));
+                data = StressEvidence(stress.Value, diagnosis);
                 break;
             }
             case "simulate_weight_scenario":
@@ -176,7 +189,8 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                 data = ScenarioEvidence(comparison);
                 break;
             }
-            default:
+            case "get_risk_profile":
+            {
                 var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == scope.UserId && x.IsActive, ct);
                 if (user is null) return new([], "User unavailable", "user_not_found");
                 var savedProfile = await db.UserRiskProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == scope.UserId, ct);
@@ -185,6 +199,9 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
                     inputs: board[AgentBlackboardKeys.MathInputs]?.Deserialize<PortfolioRiskMathInputs>(AgentNodeJson.SerializerOptions));
                 patch["userRiskPreference"] = data.DeepClone();
                 break;
+            }
+            default:
+                return new([], "Tool denied", "ToolNotVisible");
         }
         // 將偏好比較附在產生數字的同一份結果，避免先取偏好時尚未計算的時序問題。
         if (call.Tool is "run_risk_analysis" or "get_risk_report")
@@ -271,6 +288,25 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
             }
         return data;
     }
+
+    /// <summary>精簡情境證據；不可計算的情境不輸出 0，避免被引用為零損失。</summary>
+    internal static JsonObject StressEvidence(PortfolioStressTestResponse response, PortfolioDiagnosisContext diagnosis) => Object(new
+    {
+        status = "Calculated",
+        diagnosis,
+        dataAsOfDate = response.DataAsOfDate,
+        weightBasis = "CurrentHoldingMarketValueExcludingAccountCash",
+        priceBasis = "Close",
+        scenarios = response.Scenarios.Select(s => new
+        {
+            s.Id, s.Name, s.Type, s.Status, s.Methodology, s.From, s.To,
+            totalImpact = s.Status == "ready" ? s.TotalImpact : (decimal?)null,
+            worstHoldings = s.Status == "ready"
+                ? s.Holdings.OrderBy(h => h.Contribution).Take(3).Select(h => new { h.Ticker, h.SecurityName, h.Weight, h.Shock, h.Contribution }).ToArray()
+                : [],
+            worstIndustry = s.Status == "ready" ? s.Industries.OrderBy(i => i.Contribution).Select(i => new { i.Industry, i.Weight, i.Contribution }).FirstOrDefault() : null
+        })
+    });
 
     private static JsonObject Object(object value) => JsonSerializer.SerializeToNode(value, AgentNodeJson.SerializerOptions)!.AsObject();
 }

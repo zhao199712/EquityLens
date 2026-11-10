@@ -37,7 +37,6 @@ async function fillSuggestion(id: string) {
 const examples = [
   { label: '投組風險範例', question: '我的投資組合最近一年的波動、最大回撤與集中風險如何？' },
   { label: '公司研究範例', question: '台積電最近一季的營運表現與主要風險是什麼？' },
-  { label: '法說會要點範例', question: '聯發科法說會相較上季的指引與管理層語氣改變了什麼？' },
 ]
 
 onMounted(async () => {
@@ -130,7 +129,7 @@ function formatTime(updatedAtUtc: string) {
       <div ref="messageList" class="prestige-panel message-list">
         <div v-if="!chat.messages.length && !chat.isStreaming" class="welcome">
           <strong>可以直接打招呼，也可以延續追問。</strong>
-          <span>例如先問「分析聯發科下一季指引」，再追問「那台積電呢？」</span>
+          <span>例如先問「鴻海最近一季的營運表現如何？」，再追問「那台積電呢？」</span>
           <div class="examples">
             <button
               v-for="example in examples"

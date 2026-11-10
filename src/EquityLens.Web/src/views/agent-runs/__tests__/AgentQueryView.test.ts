@@ -174,7 +174,8 @@ describe('AgentQueryView', () => {
   it('sends an example question directly from the welcome state', async () => {
     const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
     const examples = wrapper.findAll('.example-btn')
-    expect(examples.length).toBe(3)
+    expect(examples.length).toBe(2)
+    expect(wrapper.text()).not.toContain('聯發科')
     await examples[1].trigger('click')
     expect(chat.sendMessage).toHaveBeenCalledWith('台積電最近一季的營運表現與主要風險是什麼？')
   })

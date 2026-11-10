@@ -4,6 +4,8 @@ using EquityLens.Api.Contracts.Agents;
 using EquityLens.Api.Contracts.Research;
 using EquityLens.Api.Common;
 using EquityLens.Api.Contracts.Portfolios;
+using EquityLens.Api.Contracts.Risk;
+using EquityLens.Api.Services.RiskAnalysis;
 using EquityLens.Api.Services.PortfolioValuations;
 using EquityLens.Api.Data;
 using EquityLens.Api.Data.Entities;
@@ -109,7 +111,7 @@ public sealed class PortfolioLoopToolsTests
         using var services = new ServiceCollection().BuildServiceProvider();
         var tools = new PortfolioLoopTools(services.GetRequiredService<IServiceScopeFactory>());
         var scope = new LoopToolScope(Guid.NewGuid(), new("", "診斷投組"), [], false);
-        Assert.Equal(6, tools.Visible(scope).Count);
+        Assert.Equal(7, tools.Visible(scope).Count);
         foreach (var operation in PortfolioRiskMathCapabilities.All)
         {
             Assert.DoesNotContain(tools.Visible(scope), x => x.Name == operation.Id);
@@ -125,6 +127,7 @@ public sealed class PortfolioLoopToolsTests
     [InlineData("get_performance_attribution", "holdings")]
     [InlineData("simulate_weight_scenario", "covariance")]
     [InlineData("get_risk_profile", "riskTolerance")]
+    [InlineData("run_stress_test", "shock")]
     public void AllToolsRejectCallerSuppliedData(string name, string key)
     {
         using var services = new ServiceCollection().BuildServiceProvider();
@@ -186,7 +189,12 @@ public sealed class PortfolioLoopToolsTests
         if (name == "get_portfolio_snapshot") { Assert.NotNull(result.BlackboardPatch[PortfolioLoopTools.SnapshotKey]); Assert.Equal("台積電", Assert.Single(result.Data["holdings"]!.AsArray())!["securityName"]!.GetValue<string>()); }
         if (name == "get_risk_report") { Assert.Equal("Hit", result.Data["evidence"]!["cacheStatus"]!.GetValue<string>()); Assert.Equal(.2m, result.Data["metrics"]!["annualizedVolatility"]!.GetValue<decimal>()); }
         if (name == "run_risk_analysis") Assert.Equal(4, result.Data["results"]!.AsArray().Count);
-        if (name == "get_performance_attribution") Assert.Equal("complete", result.Data["attribution"]!["coverageStatus"]!.GetValue<string>());
+        if (name == "get_performance_attribution")
+        {
+            Assert.Equal("complete", result.Data["attribution"]!["coverageStatus"]!.GetValue<string>());
+            Assert.Equal(.08m, result.Data["attribution"]!["benchmarkReturn"]!.GetValue<decimal>());
+            Assert.True(result.Data["benchmark"]!["includesDividends"]!.GetValue<bool>());
+        }
         if (name == "get_risk_profile") {
             Assert.True(result.Data["available"]!.GetValue<bool>());
             Assert.True(result.Data["isDefault"]!.GetValue<bool>());
@@ -223,6 +231,65 @@ public sealed class PortfolioLoopToolsTests
             => Task.FromResult<(PortfolioRiskEvidenceSnapshot, IReadOnlyList<JsonObject>)>((new([Guid.NewGuid()], "PersistedRiskRun", "Hit", context.To, "hash", "fixture", null,
                 ["calculate-annualized-volatility"], [], [], false), [new() { ["operation"] = "calculate-annualized-volatility", ["value"] = .2m }]));
     }
+    [Fact]
+    public async Task StressToolUsesOwnedService_AndNeverReportsUncomputedScenariosAsZero()
+    {
+        var options = new DbContextOptionsBuilder<EquityLensDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        var stress = new StressService();
+        using var services = new ServiceCollection().AddScoped<EquityLensDbContext>(_ => new RefactorTestDbContext(options))
+            .AddSingleton<IPortfolioStressTestService>(stress).BuildServiceProvider();
+        var owner = Guid.NewGuid(); var id = Guid.NewGuid();
+        await using (var db = new RefactorTestDbContext(options))
+        { db.Portfolios.Add(new() { Id = id, OwnerUserId = owner, Name = "test" }); await db.SaveChangesAsync(); }
+        var board = new JsonObject { [AgentBlackboardKeys.PortfolioContext] = JsonSerializer.SerializeToNode(
+            new PortfolioDiagnosisContext(id, "test", "TWD", new(2025, 1, 1), new(2026, 1, 1), 4), AgentNodeJson.SerializerOptions) };
+        var scope = new LoopToolScope(owner, new("", "股災會跌多少"), [], false, DomainContext: board);
+        var tools = new PortfolioLoopTools(services.GetRequiredService<IServiceScopeFactory>());
+        var call = new LoopToolCall("s", "run_stress_test", new());
+
+        var result = await tools.InvokeAsync(scope, call, default);
+
+        Assert.Null(result.Error);
+        Assert.Equal((id, owner), Assert.Single(stress.Calls));
+        Assert.Equal(id.ToString(), result.Data!["diagnosis"]!["portfolioId"]!.ToString());
+        var scenarios = result.Data["scenarios"]!.AsArray();
+        Assert.Equal(-.2m, scenarios[0]!["totalImpact"]!.GetValue<decimal>());
+        Assert.Equal(new[] { "A", "B", "C" }, scenarios[0]!["worstHoldings"]!.AsArray().Select(h => h!["ticker"]!.ToString()));
+        Assert.Equal("半導體", scenarios[0]!["worstIndustry"]!["industry"]!.ToString());
+        Assert.Null(scenarios[1]!["totalImpact"]);
+        Assert.Empty(scenarios[1]!["worstHoldings"]!.AsArray());
+        Assert.DoesNotContain("basePrice", result.Data.ToJsonString(), StringComparison.OrdinalIgnoreCase);
+
+        stress.Fail = true;
+        var unavailable = await tools.InvokeAsync(scope, call, default);
+        Assert.Null(unavailable.Error);
+        Assert.Equal("Unavailable", unavailable.Data!["status"]!.ToString());
+        Assert.Equal("portfolio.no_holdings", unavailable.Data["reason"]!.ToString());
+
+        var denied = await tools.InvokeAsync(scope with { UserId = Guid.NewGuid() }, call, default);
+        Assert.Equal("portfolio_not_found", denied.Error);
+        Assert.Equal(2, stress.Calls.Count);
+    }
+
+    private sealed class StressService : IPortfolioStressTestService
+    {
+        public List<(Guid Portfolio, Guid User)> Calls { get; } = [];
+        public bool Fail { get; set; }
+        public Task<Result<PortfolioStressTestResponse>> GetPortfolioStressTestAsync(Guid portfolioId, Guid providerUserId, CancellationToken cancellationToken)
+        {
+            Calls.Add((portfolioId, providerUserId));
+            if (Fail) return Task.FromResult(Result<PortfolioStressTestResponse>.Failure("portfolio.no_holdings", "Portfolio has no holdings."));
+            PortfolioStressHoldingResponse H(string ticker, decimal contribution) => new(ticker, ticker, "半導體", .25m, 100, 80, contribution / .25m, contribution);
+            return Task.FromResult(Result<PortfolioStressTestResponse>.Success(new(portfolioId, new(2026, 1, 1), [
+                new("covid", "COVID-19 市場急跌", "historical", "ready", "回放", new(2020, 2, 19), new(2020, 3, 23), -.2m,
+                    [H("D", -.01m), H("B", -.06m), H("A", -.08m), H("C", -.05m)], [new("半導體", 1m, -.2m, -.2m)]),
+                new("rates_2022", "2022 升息熊市", "historical", "insufficient_prices", "共同價格不足", new(2022, 1, 3), new(2022, 10, 14), 0, [], [])
+            ])));
+        }
+        public Task<Result<PortfolioStressTestResponse>> GetPortfolioStressTestWithWeightsAsync(Guid portfolioId, Guid providerUserId, IReadOnlyDictionary<Guid, decimal> targetWeights, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+    }
+
     private sealed class Valuations : IPortfolioValuationService
     {
         public Task<Result<PortfolioValuationResponse>> GetValuationAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();

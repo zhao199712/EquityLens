@@ -106,7 +106,7 @@ CriticReview（Admin 用，只評分不修改）：loadResearchRun → qualityGa
 | 角色 | 工具（全部唯讀） |
 |---|---|
 | 研究 | `search_local`（本地財報與法說會，Hybrid 檢索＋rerank）、`search_web`（受來源政策限制）、`get_document_page` |
-| 投組 | `get_portfolio_snapshot`、`get_risk_report`（優先重用已計算的 Risk Run）、`run_risk_analysis`、`get_performance_attribution`、`simulate_weight_scenario`（減碼轉現金或轉入核准的指數 ETF，例如 0050、006208）、`get_risk_profile` |
+| 投組 | `get_portfolio_snapshot`、`get_risk_report`（優先重用已計算的 Risk Run）、`run_risk_analysis`、`get_performance_attribution`、`simulate_weight_scenario`（減碼轉現金或轉入核准的指數 ETF，例如 0050、006208）、`get_risk_profile`、`run_stress_test`（歷史回放與假設衝擊） |
 
 - **工具以任務為單位**：數十個底層風險數學函式只在工具內部使用，不直接開放給 LLM；**LLM 不能傳入價格、報酬或權重等數值資料**，數字一律由工具從資料庫讀取。
 - **Skill 由 Agent 自行載入**：prompt 只列出 skill 目錄，Agent 需要時呼叫 `load_skill` 載入完整方法（目前有法說會要點、市場事件、投組降波動優化）。Skill 只能增加說明，不能擴大工具權限；每次載入都記錄 id、版本與內容雜湊。

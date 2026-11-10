@@ -60,6 +60,11 @@ public sealed class ConversationSuggestedActionProvider(EquityLensDbContext db, 
         ConversationSuggestedActionDto Action(string id, string label, string prompt, string labelEn, string promptEn) =>
             new(id, label, prefix + prompt, labelEn, prefixEn + promptEn);
 
+        var facts = board["agentLoopFacts"] as JsonArray ?? [];
+        bool UsedTool(string tool) => facts.OfType<JsonObject>().Any(f => f["tool"]?.GetValue<string>() == tool);
+        var profileAction = Action("portfolio-profile-fit", "符合我的風險偏好嗎？", "目前的風險水準是否符合我的風險偏好？請引用偏好來源並說明差距。",
+            "Does this fit my risk preference?", "does the current risk level fit my risk preference? Cite the preference source and explain any gap.");
+
         IReadOnlyList<ConversationSuggestedActionDto> actions;
         if (board[PortfolioScenarioCalculator.ResultKey] is JsonNode comparisonNode)
         {
@@ -72,7 +77,10 @@ public sealed class ConversationSuggestedActionProvider(EquityLensDbContext db, 
                 Action("scenario-remaining-risks", "調整後還有哪些風險？", "請根據已完成的情境比較，說明調整後仍存在的風險與限制。",
                     "What risks remain after the adjustment?", "explain the remaining risks and limitations using the completed scenario comparison."),
                 Action("scenario-metrics", "這些指標代表什麼？", "請解釋已完成情境比較中的波動率、VaR、ES 與最大回撤，以及各指標的適用限制。",
-                    "What do these metrics mean?", "explain volatility, VaR, ES and maximum drawdown in the completed scenario comparison, including their limitations.")
+                    "What do these metrics mean?", "explain volatility, VaR, ES and maximum drawdown in the completed scenario comparison, including their limitations."),
+                .. UsedTool("get_risk_profile") ? Array.Empty<ConversationSuggestedActionDto>() : [Action("scenario-profile-fit", "哪個方案較符合我的風險偏好？",
+                    "請根據已完成的情境比較與我的風險偏好，說明各方案與偏好的差距。",
+                    "Which option better fits my risk preference?", "compare each option in the completed scenario comparison with my risk preference and explain the gaps.")]
             ];
         }
         else
@@ -86,16 +94,19 @@ public sealed class ConversationSuggestedActionProvider(EquityLensDbContext db, 
             }
             AddResults(board[AgentBlackboardKeys.MathResults]);
             var hasContributions = false;
-            if (board["agentLoopFacts"] is JsonArray facts)
-                foreach (var fact in facts.OfType<JsonObject>())
-                {
-                    if (fact["tool"]?.GetValue<string>() is not ("run_risk_analysis" or "get_risk_report")) continue;
-                    AddResults(fact["data"]?["results"]);
-                    hasContributions |= fact["data"]?["metrics"]?["contributions"] is JsonArray { Count: > 0 };
-                }
+            var hasTailRisk = false;
+            foreach (var fact in facts.OfType<JsonObject>())
+            {
+                if (fact["tool"]?.GetValue<string>() is not ("run_risk_analysis" or "get_risk_report")) continue;
+                AddResults(fact["data"]?["results"]);
+                var reported = fact["data"]?["metrics"];
+                hasContributions |= reported?["contributions"] is JsonArray { Count: > 0 };
+                hasTailRisk |= reported?["historicalVaR"] is JsonValue || reported?["expectedShortfall"] is JsonValue;
+            }
             var metrics = PortfolioRiskMetricsReader.FromMathResults(results);
             if (metrics.AnnualizedVolatility is null && metrics.PortfolioVolatility is null) return [];
             hasContributions |= metrics.Contributions is { Count: > 0 };
+            hasTailRisk |= metrics.HistoricalVaR is not null || metrics.ExpectedShortfall is not null;
             var selected = new List<ConversationSuggestedActionDto>
             {
                 Action("portfolio-reduce-volatility", "如何降低波動率？", "如何降低波動率？請依可用資料比較可行方向並說明取捨。",
@@ -104,6 +115,19 @@ public sealed class ConversationSuggestedActionProvider(EquityLensDbContext db, 
             if (!hasContributions)
                 selected.Add(Action("portfolio-risk-contributors", "哪些持股貢獻最多風險？", "哪些持股對風險的貢獻最大？請根據資料分析並說明原因。",
                     "Which holdings contribute the most risk?", "which holdings contribute the most risk? Analyze the data and explain the reasons."));
+            if (!UsedTool("run_stress_test"))
+                selected.Add(Action("portfolio-stress-test", "遇到股災會跌多少？", "如果遇到股災、升息熊市或科技股修正等壓力情境，可能會跌多少？請依壓力測試說明主要虧損來源，並區分歷史回放與假設情境。",
+                    "How much could a market crash cost?", "how much could the portfolio fall in stress scenarios such as a market crash, a rate-hike bear market or a tech correction? Explain the main loss sources and separate historical replays from hypothetical shocks."));
+            if (!UsedTool("get_performance_attribution"))
+                selected.Add(Action("portfolio-benchmark", "跟大盤比表現如何？", "同期間的報酬跟台股加權含息報酬指數相比如何？請說明超額報酬與主要原因。",
+                    "How did it do versus the market?", "how did the return compare with the TAIEX total return index over the same period? Explain the excess return and main drivers."));
+            if (!hasTailRisk)
+                selected.Add(Action("portfolio-tail-risk", "極端情況下可能虧多少？", "在極端市況下可能虧損多少？請以 95% VaR 與 ES 說明，並註明計算期間與限制。",
+                    "How much could I lose in extreme markets?", "how much could be lost in extreme markets? Explain with 95% VaR and ES, including the calculation period and limitations."));
+            if (!UsedTool("get_performance_attribution"))
+                selected.Add(Action("portfolio-attribution", "哪些持股拖累或貢獻報酬？", "哪些持股與產業對報酬的正負貢獻最大？請根據績效歸因說明。",
+                    "Which holdings drove or dragged returns?", "which holdings and sectors contributed most positively and negatively to returns? Explain using performance attribution."));
+            if (!UsedTool("get_risk_profile")) selected.Add(profileAction);
             actions = selected;
         }
         // 同名或文字歧義時，不提供無法由既有選擇器唯一辨識的提問。

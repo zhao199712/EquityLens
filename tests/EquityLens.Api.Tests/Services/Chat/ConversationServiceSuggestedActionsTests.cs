@@ -65,7 +65,7 @@ public sealed partial class ConversationServiceTests
         var service = SuggestionService(db);
         var count = await db.AgentRuns.CountAsync();
         var card = await service.GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
-        Assert.Equal(new[] { "portfolio-reduce-volatility", "portfolio-risk-contributors" }, card!.SuggestedActions!.Select(x => x.Id));
+        Assert.Equal(new[] { "portfolio-reduce-volatility", "portfolio-risk-contributors", "portfolio-stress-test" }, card!.SuggestedActions!.Select(x => x.Id));
         Assert.All(card.SuggestedActions!, action => {
             Assert.Contains(seed.Portfolio.Name, action.Prompt); Assert.Contains(seed.Portfolio.Name, action.PromptEn!);
             Assert.DoesNotContain("ETF", action.Prompt); Assert.DoesNotContain("0050", action.Prompt);
@@ -94,7 +94,47 @@ public sealed partial class ConversationServiceTests
         });
         await db.SaveChangesAsync();
         var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
-        Assert.Equal("portfolio-reduce-volatility", Assert.Single(card!.SuggestedActions!).Id);
+        Assert.Equal(new[] { "portfolio-reduce-volatility", "portfolio-stress-test", "portfolio-benchmark" }, card!.SuggestedActions!.Select(x => x.Id));
+    }
+
+    [Fact]
+    public async Task SuggestedActions_CoveredStressBenchmarkTailRiskAndProfileAreNotRecommendedAgain()
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        ChangeBoard(seed.Run, board => {
+            ((JsonArray)board["mathResults"]!).Add(JsonNode.Parse("""{"operation":"calculate-historical-var","value":0.03}"""));
+            board["agentLoopFacts"] = new JsonArray(
+                new JsonObject { ["tool"] = "get_performance_attribution", ["data"] = new JsonObject() },
+                new JsonObject { ["tool"] = "run_stress_test", ["data"] = new JsonObject() },
+                new JsonObject { ["tool"] = "get_risk_profile", ["data"] = new JsonObject() });
+        });
+        await db.SaveChangesAsync();
+        var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
+        Assert.Equal(new[] { "portfolio-reduce-volatility", "portfolio-risk-contributors" }, card!.SuggestedActions!.Select(x => x.Id));
+    }
+
+    [Fact]
+    public async Task SuggestedActions_LaterTopicsFillFreedSlotsInPriorityOrder()
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        ChangeBoard(seed.Run, board => board["agentLoopFacts"] = new JsonArray(
+            new JsonObject { ["tool"] = "run_stress_test", ["data"] = new JsonObject() },
+            new JsonObject { ["tool"] = "get_performance_attribution", ["data"] = new JsonObject() }));
+        await db.SaveChangesAsync();
+        var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
+        Assert.Equal(new[] { "portfolio-reduce-volatility", "portfolio-risk-contributors", "portfolio-tail-risk" }, card!.SuggestedActions!.Select(x => x.Id));
+        Assert.All(card.SuggestedActions!, action => Assert.DoesNotMatch(@"20\d{2}", action.Prompt));
+    }
+
+    [Fact]
+    public async Task SuggestedActions_TailRiskFromSavedReportMetricsIsNotRecommendedAgain()
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        ChangeBoard(seed.Run, board => board["agentLoopFacts"] = new JsonArray(new JsonObject {
+            ["tool"] = "get_risk_report", ["data"] = new JsonObject { ["metrics"] = new JsonObject { ["expectedShortfall"] = 0.05 } } }));
+        await db.SaveChangesAsync();
+        var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
+        Assert.DoesNotContain(card!.SuggestedActions!, x => x.Id == "portfolio-tail-risk");
     }
 
     [Fact]
@@ -102,6 +142,20 @@ public sealed partial class ConversationServiceTests
     {
         await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
         ChangeBoard(seed.Run, board => board[PortfolioScenarioCalculator.ResultKey] = Comparison(seed.Portfolio.Id));
+        await db.SaveChangesAsync();
+        var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
+        Assert.Equal(new[] { "scenario-remaining-risks", "scenario-metrics", "scenario-profile-fit" }, card!.SuggestedActions!.Select(x => x.Id));
+        Assert.All(card.SuggestedActions!, action => Assert.Contains(seed.Portfolio.Name, action.Prompt));
+    }
+
+    [Fact]
+    public async Task SuggestedActions_ScenarioOmitsProfileFitWhenProfileWasAlreadyUsed()
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        ChangeBoard(seed.Run, board => {
+            board[PortfolioScenarioCalculator.ResultKey] = Comparison(seed.Portfolio.Id);
+            board["agentLoopFacts"] = new JsonArray(new JsonObject { ["tool"] = "get_risk_profile", ["data"] = new JsonObject() });
+        });
         await db.SaveChangesAsync();
         var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
         Assert.Equal(new[] { "scenario-remaining-risks", "scenario-metrics" }, card!.SuggestedActions!.Select(x => x.Id));
