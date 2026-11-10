@@ -126,6 +126,69 @@ public sealed partial class ConversationServiceTests
         Assert.All(card.SuggestedActions!, action => Assert.DoesNotMatch(@"20\d{2}", action.Prompt));
     }
 
+    [Theory]
+    [InlineData("Calculated", new[] { "portfolio-risk-contributors", "portfolio-benchmark", "portfolio-tail-risk" })]
+    [InlineData("Unavailable", new string[0])]
+    public async Task SuggestedActions_StressOnlyAnswerWithoutVolatility_SuggestsOnlyWhenStressWasCalculated(string status, string[] expected)
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        ChangeBoard(seed.Run, board => {
+            board["mathResults"] = new JsonArray();
+            board["agentLoopFacts"] = new JsonArray(new JsonObject { ["tool"] = "run_stress_test", ["data"] = new JsonObject { ["status"] = status } });
+        });
+        await db.SaveChangesAsync();
+        var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
+        Assert.Equal(expected, card!.SuggestedActions!.Select(x => x.Id));
+    }
+
+    [Theory]
+    [InlineData(null, false, true)]
+    [InlineData("complete", false, true)]
+    [InlineData("partial", false, false)]
+    [InlineData(null, true, false)]
+    public async Task SuggestedActions_StressAnswerThroughRealGate_RequiresValidAnswerAndAvailableCoverage(
+        string? attributionCoverage, bool invalidAnswer, bool expectedSuggestions)
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        ChangeBoard(seed.Run, board => {
+            board["mathResults"] = new JsonArray();
+            board["portfolioLoopAnswer"] = JsonSerializer.SerializeToNode(
+                new LoopAnswer(invalidAnswer ? "壓力情境虧 99% [P1]。" : "壓力情境虧 25% [P1]。", ["P1"]), SuggestionJson);
+            board["agentLoopFacts"] = JsonSerializer.SerializeToNode(new[] {
+                new LoopDataFact("P1", "stress", "run_stress_test", new JsonObject { ["status"] = "Calculated", ["totalImpact"] = -0.25m }) }, SuggestionJson);
+            if (attributionCoverage is not null)
+                board[AgentBlackboardKeys.PerformanceAttribution] = JsonSerializer.SerializeToNode(
+                    new PortfolioPerformanceAttribution(0, 0, 0, 2, 2, [], [], attributionCoverage), SuggestionJson);
+        });
+        await new PortfolioQualityGateNodeHandler().ExecuteAsync(new(db, seed.Run, new AgentRunNode(), (_, _, _, _, _) => { }));
+        var board = JsonNode.Parse(seed.Run.BlackboardJson)!;
+        seed.Run.OutputJson = board[AgentBlackboardKeys.PortfolioDiagnosisDraft]!.ToJsonString();
+        Assert.Equal(expectedSuggestions, !board["portfolioQualityGate"]!["limited"]!.GetValue<bool>());
+        await db.SaveChangesAsync();
+        var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
+        if (expectedSuggestions)
+            Assert.Equal(new[] { "portfolio-risk-contributors", "portfolio-benchmark", "portfolio-tail-risk" }, card!.SuggestedActions!.Select(x => x.Id));
+        else Assert.Empty(card!.SuggestedActions!);
+    }
+
+    [Theory]
+    [InlineData("math")]
+    [InlineData("report")]
+    public async Task SuggestedActions_TailRiskOnlyAnswer_OffersOtherTopicsWithoutVolatility(string location)
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        ChangeBoard(seed.Run, board => {
+            board["mathResults"] = location == "math"
+                ? JsonNode.Parse("""[{"operation":"calculate-historical-var","value":-0.027},{"operation":"calculate-expected-shortfall","value":-0.037}]""")
+                : new JsonArray();
+            if (location == "report")
+                board["agentLoopFacts"] = JsonNode.Parse("""[{"tool":"get_risk_report","data":{"metrics":{"historicalVaR":-0.027,"expectedShortfall":-0.037}}}]""");
+        });
+        await db.SaveChangesAsync();
+        var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
+        Assert.Equal(new[] { "portfolio-risk-contributors", "portfolio-stress-test", "portfolio-benchmark" }, card!.SuggestedActions!.Select(x => x.Id));
+    }
+
     [Fact]
     public async Task SuggestedActions_TailRiskFromSavedReportMetricsIsNotRecommendedAgain()
     {
@@ -227,10 +290,14 @@ public sealed partial class ConversationServiceTests
         if (condition == "foreign-research") research.UserId = Guid.NewGuid();
         if (condition == "ambiguous-ticker") db.Securities.Add(new Security { Id = Guid.NewGuid(), Ticker = "2330", Exchange = "other" });
         await db.SaveChangesAsync();
+        var chat = new SuggestionChat("""{"ids":["research-evidence","research-operating-risks"]}""");
+        var provider = new ConversationSuggestedActionProvider(db, SuggestionCompatibility(), new(chat));
+        await provider.PrepareAsync(new(db, seed.Run, seed.Run.Nodes.Last(), (_, _, _, _, _) => {}), research.Answer!);
+        Assert.Equal(condition == "valid" ? 1 : 0, chat.Calls);
         var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
         if (condition != "valid") Assert.Empty(card!.SuggestedActions!);
         else {
-            Assert.Equal(2, card!.SuggestedActions!.Count);
+            Assert.Equal(new[] { "research-evidence", "research-operating-risks" }, card!.SuggestedActions!.Select(a => a.Id));
             Assert.All(card.SuggestedActions!, a => { Assert.Contains("2330", a.Prompt); Assert.Contains("2330", a.PromptEn!); });
         }
     }

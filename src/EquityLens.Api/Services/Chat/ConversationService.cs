@@ -27,7 +27,7 @@ public interface IConversationService
     Task<ConversationRunCardDto?> GetRunCardAsync(Guid userId, Guid sessionId, Guid agentRunId, CancellationToken cancellationToken = default);
 }
 
-public sealed class ConversationService(
+public sealed partial class ConversationService(
     EquityLensDbContext db,
     IConversationAgent agent,
     IAgentWorkflowQueryService workflowQueries,
@@ -85,7 +85,8 @@ public sealed class ConversationService(
         try
         {
             var context = JsonNode.Parse(session.ContextJson) as JsonObject ?? new JsonObject();
-            var history = session.Messages.OrderBy(x => x.SequenceNumber).ToList();
+            var resetAfter = context["resetAfterSequence"]?.GetValue<int>() ?? -1;
+            var history = session.Messages.Where(x => (x.SequenceNumber ?? -1) > resetAfter).OrderBy(x => x.SequenceNumber).ToList();
             var portfolios = await db.Portfolios.AsNoTracking()
                 .Where(x => x.OwnerUserId == userId && x.IsActive)
                 .OrderBy(x => x.Name)
@@ -102,20 +103,33 @@ public sealed class ConversationService(
             if (named.Length == 1) context["activePortfolioId"] = named[0].ToString();
             else if (named.Length > 1) context.Remove("activePortfolioId");
             var activePortfolioId = ReadGuid(context, "activePortfolioId");
-            var selectionOnly = named.Length == 1 && (choice.Success || portfolios.Any(p => p.Id == named[0] && (content == p.Name || content == p.Id.ToString())));
+            var selectionOnly = named.Length == 1 && (choice.Success || portfolios.Any(p => p.Id == named[0] && IsSelectionOnly(content, p)));
+            var pendingQuestion = context["pendingTask"]?["question"]?.GetValue<string>();
+            var question = selectionOnly && !string.IsNullOrWhiteSpace(pendingQuestion)
+                ? PendingQuestion(pendingQuestion, content) : content;
             var inventory = Regex.IsMatch(content, @"^(?:請問)?我(?:有幾個|有哪些|的)投資組合[？?。\s]*$");
             var entry = inventory
                 ? LocalDecision(ConversationActions.DirectResponse, portfolios.Count == 0 ? "目前沒有投資組合，請先到「投資組合」頁面建立。" : PortfolioOptionsText(portfolios))
-                : selectionOnly
+                : selectionOnly && string.IsNullOrWhiteSpace(pendingQuestion)
                     ? LocalDecision(ConversationActions.DirectResponse, $"目前投組：{portfolios.Single(p => p.Id == activePortfolioId).Name}。請告訴我要分析的問題。")
                     : named.Length > 0 && activePortfolioId != priorActive ? null : await EntryDecisionAsync(userId, content, context, cancellationToken);
             if (inventory || selectionOnly || named.Length > 0 && activePortfolioId != priorActive)
-            { context.Remove("lastAgentRunId"); context.Remove("lastResearchRunId"); }
+            { context.Remove("lastAgentRunId"); if (activePortfolioId != priorActive) context.Remove("lastTask"); }
             if (inventory) context["portfolioOptions"] = JsonSerializer.SerializeToNode(portfolios.Select(p => p.Id), Json);
             var inputContext = context.DeepClone().AsObject();
-            var securities = await db.Securities.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.Ticker, x.Name }).ToListAsync(cancellationToken);
-            inputContext["tickerCandidates"] = JsonSerializer.SerializeToNode(securities.Where(x => content.Contains(x.Ticker, StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrWhiteSpace(x.Name) && content.Contains(x.Name, StringComparison.OrdinalIgnoreCase))).Take(10), Json);
-            var decision = entry ?? await agent.DecideAsync(new(content, inputContext, history, portfolios), cancellationToken);
+            await EnrichContextAsync(userId, activePortfolioId, question, inputContext, cancellationToken);
+            var decision = entry ?? await agent.DecideAsync(new(question, inputContext, history, portfolios), cancellationToken);
+            if (decision.Action == ConversationActions.RouteWorkflow && decision.Route is { } classified)
+            {
+                // 對話先分類；上一個 run 只提供同角色背景，不替目前問題選角色。
+                var parent = await OwnedCompletedRunAsync(userId, ReadGuid(context, "lastAgentRunId"), cancellationToken);
+                var parentId = parent?.WorkflowType == classified.WorkflowType ? parent.Id : (Guid?)null;
+                decision = decision with { Route = classified with { RoutingContext = classified.RoutingContext with {
+                    ParentAgentRunId = parentId,
+                    ResearchContextRunId = classified.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis
+                        ? ReadGuid(inputContext, "researchContextRunId") : null
+                } } };
+            }
             turn.Action = decision.Action;
             turn.ReasonCode = decision.ReasonCode;
             turn.StandaloneQuery = decision.StandaloneQuery;
@@ -182,8 +196,24 @@ public sealed class ConversationService(
                 : MergeContext(context, decision.ContextPatch);
             if (!string.IsNullOrWhiteSpace(decision.Summary)) nextContext["summary"] = decision.Summary;
             if (turn.AgentRunId is { } agentRunId) nextContext["lastAgentRunId"] = agentRunId.ToString();
-            if (turn.ResearchRunId is { } researchRunId) nextContext["lastResearchRunId"] = researchRunId.ToString();
-            else if (turn.AgentRunId is not null) nextContext.Remove("lastResearchRunId");
+            if (turn.ResearchRunId is { } researchRunId)
+            {
+                nextContext["lastResearchRunId"] = researchRunId.ToString();
+                nextContext["lastResearchAgentRunId"] = turn.AgentRunId?.ToString();
+            }
+            if (action == ConversationActions.ResetContext)
+                nextContext["resetAfterSequence"] = nextSequence + 1;
+            else if (action == ConversationActions.AskClarification)
+                nextContext["pendingTask"] = new JsonObject { ["question"] = decision.StandaloneQuery ?? question,
+                    ["missing"] = decision.ContextPatch["pendingTask"]?["missing"]?.DeepClone(),
+                    ["parameters"] = decision.ContextPatch["pendingTask"]?["parameters"]?.DeepClone() };
+            else if (turn.AgentRunId is not null)
+            {
+                nextContext.Remove("pendingTask");
+                nextContext["lastTask"] = new JsonObject { ["question"] = decision.StandaloneQuery ?? question,
+                    ["workflow"] = decision.Route?.WorkflowType,
+                    ["scenarios"] = JsonSerializer.SerializeToNode(decision.Route?.RoutingContext.Scenarios, Json) };
+            }
 
             session.ContextVersion++;
             session.ContextJson = nextContext.ToJsonString(Json);
@@ -254,11 +284,7 @@ public sealed class ConversationService(
         if (parent is null) return null;
         if (Regex.IsMatch(content, @"(?:上一|剛剛|前一|你的|答案).*(?:錯|遺漏|補充|修正)|^(?:請)?修正"))
             return Local(ConversationActions.RevisePreviousRun, "會依你的回饋修訂上一份分析。", content);
-        if (!Regex.IsMatch(content, @"^(?:那|接著|再|繼續|改成|改為|換成|補充|上一|剛剛)")) return null;
-        if (parent.WorkflowType is not (AgentWorkflowTypes.ResearchAgent or AgentWorkflowTypes.PortfolioDiagnosis)) return null;
-        var route = InvestmentResearchRouter.Fixed(parent.WorkflowType, content);
-        route = route with { RoutingContext = route.RoutingContext with { ParentAgentRunId = parent.Id } };
-        return Local(ConversationActions.RouteWorkflow, "沿用上一份分析的角色繼續處理。", content, route);
+        return null;
     }
 
     private static ConversationAgentDecision LocalDecision(string action, string response) =>
@@ -271,7 +297,7 @@ public sealed class ConversationService(
     {
         var result = current.DeepClone() as JsonObject ?? new JsonObject();
         foreach (var item in patch)
-            if (item.Key is not ("lastAgentRunId" or "lastResearchRunId" or "activePortfolioId" or "portfolioOptions"))
+            if (item.Key is not ("lastAgentRunId" or "lastResearchRunId" or "activePortfolioId" or "portfolioOptions" or "pendingTask" or "lastTask" or "lastResearchAgentRunId" or "resetAfterSequence" or "researchContextRunId"))
                 result[item.Key] = item.Value?.DeepClone();
         return result;
     }

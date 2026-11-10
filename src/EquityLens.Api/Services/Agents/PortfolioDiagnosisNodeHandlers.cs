@@ -1,3 +1,4 @@
+using EquityLens.Api.Services.Chat;
 using EquityLens.Api.Domain.Calculations;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -112,6 +113,8 @@ public sealed class LoadPortfolioDiagnosisContextNodeHandler : IAgentNodeHandler
         var output = new PortfolioDiagnosisContext(portfolio.Id, portfolio.Name, portfolio.BaseCurrency, from, to, portfolio.Holdings.Count);
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.PortfolioContext, output);
+        var researchId = board[AgentBlackboardKeys.RoutingContext]?["researchContextRunId"]?.Deserialize<Guid?>(AgentNodeJson.SerializerOptions);
+        board[Loop.PortfolioResearchContext.Key] = await Loop.PortfolioResearchContext.LoadAsync(context.DbContext, context.Run.UserId, researchId, cancellationToken);
         context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
         context.Node.InputJson = AgentNodeJson.Serialize(new { portfolioId, from, to });
         context.Node.OutputJson = AgentNodeJson.Serialize(output);
@@ -154,12 +157,19 @@ internal sealed class PortfolioAttributionReader
     }
 }
 
-public sealed class FinalizePortfolioDiagnosisNodeHandler : IAgentNodeHandler
+public sealed class FinalizePortfolioDiagnosisNodeHandler(ConversationSuggestedActionProvider? suggestions = null) : IAgentNodeHandler
 {
     public string NodeType => PortfolioDiagnosisNodeTypes.FinalizeDiagnosis;
-    public Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
+    public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson); var output = PortfolioDiagnosisBlackboard.Required<PortfolioDiagnosisOutput>(board, AgentBlackboardKeys.PortfolioDiagnosisDraft);
-        context.Node.InputJson = AgentNodeJson.Serialize(new { evidenceStatus = output.EvidenceStatus, priorityCount = output.RecommendedAnalyses.Count }); context.Node.OutputJson = AgentNodeJson.Serialize(output); PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.FinalOutput, output); context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions); context.Run.OutputJson = context.Node.OutputJson; context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Final portfolio diagnosis written.", new { output.EvidenceStatus }); return Task.CompletedTask;
+        var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
+        var output = PortfolioDiagnosisBlackboard.Required<PortfolioDiagnosisOutput>(board, AgentBlackboardKeys.PortfolioDiagnosisDraft);
+        context.Node.InputJson = AgentNodeJson.Serialize(new { evidenceStatus = output.EvidenceStatus, priorityCount = output.RecommendedAnalyses.Count });
+        context.Node.OutputJson = AgentNodeJson.Serialize(output);
+        PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.FinalOutput, output);
+        context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
+        context.Run.OutputJson = context.Node.OutputJson;
+        context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Final portfolio diagnosis written.", new { output.EvidenceStatus });
+        if (suggestions is not null) await suggestions.PrepareAsync(context, output.Interpretation ?? output.Summary, cancellationToken);
     }
 }

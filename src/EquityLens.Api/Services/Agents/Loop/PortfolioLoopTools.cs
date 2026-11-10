@@ -290,23 +290,27 @@ public sealed class PortfolioLoopTools(IServiceScopeFactory scopes) : IAgentLoop
     }
 
     /// <summary>精簡情境證據；不可計算的情境不輸出 0，避免被引用為零損失。</summary>
-    internal static JsonObject StressEvidence(PortfolioStressTestResponse response, PortfolioDiagnosisContext diagnosis) => Object(new
+    // 情境數多時原始 decimal 位數很長，摘錄會截掉尾端的假設情境；保留六位小數已足夠追溯百分比。
+    internal static JsonObject StressEvidence(PortfolioStressTestResponse response, PortfolioDiagnosisContext diagnosis)
     {
-        status = "Calculated",
-        diagnosis,
-        dataAsOfDate = response.DataAsOfDate,
-        weightBasis = "CurrentHoldingMarketValueExcludingAccountCash",
-        priceBasis = "Close",
-        scenarios = response.Scenarios.Select(s => new
+        static decimal R(decimal value) => decimal.Round(value, 6, MidpointRounding.AwayFromZero);
+        return Object(new
         {
-            s.Id, s.Name, s.Type, s.Status, s.Methodology, s.From, s.To,
-            totalImpact = s.Status == "ready" ? s.TotalImpact : (decimal?)null,
-            worstHoldings = s.Status == "ready"
-                ? s.Holdings.OrderBy(h => h.Contribution).Take(3).Select(h => new { h.Ticker, h.SecurityName, h.Weight, h.Shock, h.Contribution }).ToArray()
-                : [],
-            worstIndustry = s.Status == "ready" ? s.Industries.OrderBy(i => i.Contribution).Select(i => new { i.Industry, i.Weight, i.Contribution }).FirstOrDefault() : null
-        })
-    });
+            status = "Calculated",
+            diagnosis,
+            dataAsOfDate = response.DataAsOfDate,
+            weightBasis = "CurrentHoldingMarketValueExcludingAccountCash",
+            scenarios = response.Scenarios.Select(s => new
+            {
+                s.Id, s.Name, s.Type, s.Status, s.Methodology, s.From, s.To,
+                totalImpact = s.Status == "ready" ? R(s.TotalImpact) : (decimal?)null,
+                worstHoldings = s.Status == "ready"
+                    ? s.Holdings.OrderBy(h => h.Contribution).Take(3).Select(h => new { h.Ticker, h.SecurityName, weight = R(h.Weight), shock = R(h.Shock), contribution = R(h.Contribution) }).ToArray()
+                    : [],
+                worstIndustry = s.Status == "ready" ? s.Industries.OrderBy(i => i.Contribution).Select(i => new { i.Industry, weight = R(i.Weight), contribution = R(i.Contribution) }).FirstOrDefault() : null
+            })
+        });
+    }
 
     private static JsonObject Object(object value) => JsonSerializer.SerializeToNode(value, AgentNodeJson.SerializerOptions)!.AsObject();
 }

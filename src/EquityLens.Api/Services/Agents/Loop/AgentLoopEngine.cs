@@ -34,6 +34,8 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
             : JsonSerializer.Deserialize<ResearchLoopState>(checkpoint.StateJson, AgentNodeJson.SerializerOptions)!;
         if (checkpoint is null)
         {
+            if (portfolio && board[PortfolioResearchContext.Key] is JsonObject research)
+                state.Facts.Add(new("P1", "research-context", "prior_research", research.DeepClone().AsObject()));
             // 修訂模式帶入已取得證據，避免重新搜尋同一批文件。
             if (mode == "Revise" && board["researchAgentLedger"] is { } prior)
                 {
@@ -90,6 +92,14 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     var prompt = BoundedPrompt(request, scope, state, board, mode);
                     if (prompt is null) { state.StopReason = "BudgetExhausted"; break; }
                     // UTF-8 bytes 是保守 token 上界；完整 request 與最大輸出預留成本。
+                    if (!portfolio)
+                    {
+                        var window = JsonNode.Parse(prompt)!;
+                        context.AddEvent(context.Run, context.Node, "ResearchEvidenceWindow", "模型可見證據視窗", new {
+                            turn = state.Turn + 1, window = window["evidenceWindow"],
+                            items = window["evidence"]!.AsArray().Select(x => new { id = x!["id"]!.GetValue<string>(),
+                                characters = x["content"]!.GetValue<string>().Length }) });
+                    }
                     var completionRequest = CompletionRequest(systemPrompt, prompt, scope, state);
                     var inputReserve = chat.EstimateInputBytes(completionRequest);
                     var costReserve = Cost(inputReserve, _options.MaxOutputTokens);
@@ -110,7 +120,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     state.CompletionTokens += response.CompletionTokens;
                     state.CostUsd += Cost(response.PromptTokens, response.CompletionTokens);
                     turn = new AgentLlmTurn { ExecutionAttempt = context.Run.ExecutionAttempt, Id = Guid.NewGuid(), AgentRunId = context.Run.Id, AgentRunNodeId = context.Node.Id,
-                        Turn = state.Turn + 1, Mode = mode, PromptVersion = chat.SupportsNativeTools ? 29 : 27, Provider = chat.Provider, Model = response.Model,
+                        Turn = state.Turn + 1, Mode = mode, PromptVersion = chat.SupportsNativeTools ? 30 : 28, Provider = chat.Provider, Model = response.Model,
                         RenderedPromptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(chat.SupportsNativeTools ? JsonSerializer.Serialize(completionRequest, PromptJson) : systemPrompt + prompt))),
                         PromptTokens = response.PromptTokens, CompletionTokens = response.CompletionTokens,
                         EstimatedCostUsd = Cost(response.PromptTokens, response.CompletionTokens), LatencyMs = timer.ElapsedMilliseconds,
@@ -178,6 +188,14 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                                     context.AddEvent(context.Run, context.Node, "PortfolioAnswerRepairRequested", "Numeric or basis repair", new { issues, rejected });
                                     break;
                                 }
+                            }
+                            if (!portfolio && !state.ForcedDraft && state.ResearchRepairCount < 2
+                                && ResearchAnswerRepair.Hint(action.Answer, state.Ledger, request.Question, request.Ticker) is { } hint)
+                            {
+                                state.ResearchRepairCount++;
+                                state.History.Add("ResearchAnswerRepair: " + hint);
+                                context.AddEvent(context.Run, context.Node, "ResearchAnswerRepairRequested", hint, new { turn.Turn });
+                                break;
                             }
                             state.Answer = action.Answer;
                             state.StopReason = state.ForcedDraft ? (state.NoProgressTurns >= 2 ? "NoProgress" : "BudgetExhausted") : "AnswerSubmitted";
@@ -313,6 +331,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
             EquityLensTelemetry.AgentToolCalls.Add(1, new KeyValuePair<string, object?>("status", record.Status));
             EquityLensTelemetry.AgentLoopToolDuration.Record(elapsed, new KeyValuePair<string, object?>("outcome", record.Status));
         }
+        state.RecentEvidenceIds.Clear();
         foreach (var record in stored)
         {
             state.History.Add($"{record.ToolName}: {record.Status} {record.GuardReason ?? record.ErrorMessage ?? record.ResultPreview}");
@@ -352,10 +371,23 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
             }
             foreach (var chunk in result.Evidence)
             {
-                if (state.Ledger.Any(x => x.Chunk.Result.DocumentChunkId == chunk.Result.DocumentChunkId
-                    && x.Chunk.SourceType == chunk.SourceType && x.Chunk.Url == chunk.Url)) continue;
+                var existing = state.Ledger.FindIndex(x => x.Chunk.Result.DocumentChunkId == chunk.Result.DocumentChunkId
+                    && x.Chunk.SourceType == chunk.SourceType && x.Chunk.Url == chunk.Url);
+                if (existing >= 0)
+                {
+                    // 明確取頁可能比搜尋摘錄完整；保留穩定 ID 並讓這輪證據優先進入視窗。
+                    if (record.ToolName == "get_document_page")
+                        state.Ledger[existing] = state.Ledger[existing] with { Chunk = chunk };
+                    state.RecentEvidenceIds.Add(state.Ledger[existing].Id);
+                    if (record.ToolName == "get_document_page" && !state.PageEvidenceIds.Contains(state.Ledger[existing].Id))
+                        state.PageEvidenceIds.Add(state.Ledger[existing].Id);
+                    continue;
+                }
                 if (state.Ledger.Count >= 80) break;
-                state.Ledger.Add(new($"E{state.Ledger.Count + 1}", chunk));
+                var evidence = new LoopEvidence($"E{state.Ledger.Count + 1}", chunk);
+                state.Ledger.Add(evidence);
+                state.RecentEvidenceIds.Add(evidence.Id);
+                if (record.ToolName == "get_document_page") state.PageEvidenceIds.Add(evidence.Id);
             }
         }
     }
@@ -414,16 +446,19 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                 instruction = state.ForcedDraft ? "本輪只能 submit_answer 或 give_up，不能再呼叫工具。" : "依證據決定下一步。",
                 budget = new { remainingTurns = (mode == "Revise" ? _options.MaxRevisionTurns : _options.MaxTurns) - state.Turn,
                     remainingTools = _options.MaxToolCalls - state.ToolCalls },
-                evidence = state.Ledger.OrderByDescending(x => x.Chunk.Result.RelevanceScore).Take(count)
+                evidence = state.Ledger.OrderByDescending(x => state.RecentEvidenceIds.Contains(x.Id))
+                    .ThenByDescending(x => x.Chunk.Result.RelevanceScore).Take(count)
                     .Select(x => new { x.Id, x.Chunk.Result.DocumentId, x.Chunk.Result.DocumentTitle, x.Chunk.Result.PageNumber, x.Chunk.Result.DocumentType, x.Chunk.SourceRole,
-                        sourceType = x.Chunk.SourceType.ToString(), x.Chunk.Url, content = AgentNodeJson.Trim(x.Chunk.Result.Content, contentLimit) }),
+                        sourceType = x.Chunk.SourceType.ToString(), x.Chunk.Url, content = AgentNodeJson.Trim(x.Chunk.Result.Content, state.PageEvidenceIds.Contains(x.Id) ? contentLimit * 4 : contentLimit) }),
                 evidenceWindow = new { shown = count, total = state.Ledger.Count, excerptCharacters = contentLimit },
+                evidenceIndex = portfolio ? null : state.Ledger.GroupBy(x => new { x.Chunk.Result.DocumentId, x.Chunk.Result.DocumentTitle })
+                    .Select(g => new { g.Key.DocumentId, g.Key.DocumentTitle, pages = g.Select(x => new { x.Id, x.Chunk.Result.PageNumber }) }),
                 portfolioContext = portfolio ? board[AgentBlackboardKeys.PortfolioContext] : null,
                 requestedScenarios = portfolio ? board[AgentBlackboardKeys.RoutingContext]?["scenarios"] : null,
                 // 偏好比較位於大型分析結果尾端，不能被摘錄截掉而只留下先前的 Unavailable。
                 // 仍受完整 request 的 token／費用上限約束；不修改持久化證據或引用 ID。
                 facts = state.Facts.Select(f => new { f.Id, f.Tool, riskProfile = f.Id == profileEvidenceId ? ProfileData(f) : null,
-                    content = AgentNodeJson.Trim(WithoutProfileComparison(f).ToJsonString(PromptJson), contentLimit * (f.Tool == "simulate_weight_scenario" ? 4 : 2)) }),
+                    content = AgentNodeJson.Trim(WithoutProfileComparison(f).ToJsonString(PromptJson), contentLimit * (f.Tool is "simulate_weight_scenario" or "run_stress_test" or "prior_research" ? 4 : 2)) }),
                 history = PromptHistory(state), critic = mode == "Revise" ? board[AgentBlackboardKeys.CriticReview] : null,
                 feedback = mode == "Revise" ? board[AgentBlackboardKeys.FeedbackComment] : null,
                 originalAnswer = mode == "Revise" ? board[AgentBlackboardKeys.OriginalAnswer] ?? board[AgentBlackboardKeys.Answer] : null,
@@ -489,6 +524,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         """;
     private const string PortfolioPrompt = """
         首段附 [P編號]，直接回答問題。優化、降風險、配置或指定情境：首段給判斷，僅一張同快照指標表，再述取捨；不用另列整份現況風險報告。單問波動率只解釋該指標與口徑，不列未執行情境或無關分析。結尾合併限制，免責使用「工具唯讀，不代表持倉已調整；不保證獲利。」
+        財報影響題：prior_research 是伺服器驗證的前輪證據，status=Verified 時引用其 answer 與來源，並另讀快照說明該公司的直接持股權重及可能影響途徑；財報事實段與持倉數字段各用對應 P 引用。status=Unavailable 時只說前輪財報結論未核實，仍回答可確認的持倉曝險與限制，不要求使用者重貼已指定的公司。沒有直接持股也不代表沒有 ETF 間接曝險，缺少穿透資料則明示未知。不得聲稱財報造成某個精確風險／報酬變動。
         取證：先查持倉快照與既有風險報告，按問題補算 run_risk_analysis（Core、TailRisk、RiskContribution），再讀 get_risk_profile；績效題查歸因，與大盤比較引用歸因的 portfolioReturn、benchmarkReturn、activeReturn 並註明基準為含息報酬指數；壓力或極端情境題用 run_stress_test，逐一標明歷史回放或假設情境，totalImpact 為 null 者說明無法計算。只能用提供的七個任務工具，數字取自授權資料，不向工具提供價格、報酬或計算結果。偏好、來源／預設／過時提醒沿用工具 statement；落差僅引用已完成分析的同期間 profileFit.statement 與來源，不沿用分析前的 Unavailable，不自行計算或制定門檻。先回應使用者明示意向與要求的衝突，再說明保存設定；不可自動改偏好或下買賣指令。
         引用：每個事實或數字段落、表格列都附 [P1] 等對應來源；標題只用文字，數值和假設放有引用的內文。直接使用工具 display 的四捨五入值，不改數字湊來源。現況權重取 snapshot.holdings，風險貢獻取 RiskContribution，分析期間取分析工具；情境權重與前後差異只取 simulate_weight_scenario 的同一快照，不混用其他風險基準。現況歸因與情境屬不同口徑，必須換行分段並各附引用，不可揉進同一段；情境表只引用情境工具。不心算工具未提供的合計。帳戶現金僅在 accountCash.status=Available 時引用 balance、currency、asOf，稱「系統帳簿現金餘額」，揭露推導入金；未知不能當零。持股權重與情境 cashWeight/cashReturn 不能證明帳戶餘額，情境不含帳簿現金。
         情境：優化問題資料足夠時必須計算比較。未指定方案且有 Ready ETF 候選時，選一個核准 ETF，同次比較同減碼比例轉 ETF 與留現金；明確指定、只留現金或不買 ETF 時尊重要求。targetWeights 只列減碼來源的最終權重（0 到 1），不高於原權重；cash 不帶轉入股，holding 指定另一檔既有持股，index_etf 指定 Ready 的0050或006208（可未持有）。轉入股不放在減碼來源。ETF 不可用且未指定方案時只算一個減碼留現金情境，說明 ETF 未量化；兩 ETF 同指數，不當作兩種分散方案，未穿透成分股可能重疊。工具拒絕或失敗依欄位原因修正一次，不重送相同參數、不偷換使用者指定目標；仍失敗則澄清，部分失敗要揭露。
@@ -502,8 +538,13 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         回傳一個 JSON 物件：action 為 call_tools、submit_answer 或 give_up；thoughtSummary 為簡短判斷摘要（最多200字）。
         call_tools 包含 toolCalls 陣列，每項有唯一 callId、tool、arguments。互不依賴的搜尋可以同輪呼叫。
         submit_answer 包含 answer:{markdown,citedEvidenceIds}，markdown 用 [E1] 等證據編號引用；citedEvidenceIds 列出所引用的 E 編號。
+        不論 JSON 或原生工具模式，答案正文一律用半形 [E1] 等引用標記；不得直接使用顯示用的 [1] 或省略來源。引用 ID 必須來自本輪 evidence，citedEvidenceIds 與正文一致。
+        先按問題列出必答項目，逐項確認「已有來源／尚待補查／已查但不可得」。提交前核對每項；只缺部分資料且仍有工具預算時先補查。不要重複相同搜尋；改用已找到文件的頁碼或較精確關鍵字。續表有「接次頁／承前頁」時用 get_document_page 查相鄰頁，不猜頁碼。表頭單位與數值分頁時同句引用兩頁；無法核實的附加數字直接移除。
+        evidenceIndex 是完整已取得來源目錄；evidenceWindow 可能只顯示部分摘錄，未顯示不代表來源不存在。優先使用新取得頁面，正文被截短時重新取頁。預算不足時交付已核實的部分並明示缺項，不將未完成查找說成文件沒有資料。
+        比率若原表只列整數百分比，須區分表列約數與原始金額計算值；能取得分子分母時，優先計算至小數一位並明列帶單位的算式及引用，不把整數近似當作精確數值。
+        每句結束前就放引用，不能在含多句的段落最後才統一引用；表格每列也各自引用。例如「本期指標為 X [E1]。前期為 Y [E2]。」只回答所問年度與項目，未詢問年增率、差額或前期比較時不額外計算它們。
         每個含數字或事實主張的句子（含開頭摘要）都必須在同句附上引用。百分比推導必須明列「來源金額與單位 ÷ 來源金額與單位 ≈ 結果%」並引用同一組證據；不可只寫來源未列出的比例。核對公司、年份、單位，不將預測當事實，不保證獲利。
-        投資報酬承諾問題可以回答風險與不確定性：先查標的的風險揭露，引用實際相關段落說明無法保證報酬；不可只因不能承諾獲利就 give_up，也不可引用無關財務表格。證據不足或問題無法直接回答時，一律 give_up；不要用 submit_answer 說明無法回答，也不要附帶無關的財務數字。
+        投資報酬承諾問題可以回答風險與不確定性：先查標的的風險揭露，引用實際相關段落說明無法保證報酬；不可只因不能承諾獲利就 give_up，也不可引用無關財務表格。全部必要證據都不可得時 give_up；只有部分項目可核實時保留有引用的答案，逐項說明其餘缺項與已嘗試的查找，不附帶無關的財務數字。
         來源角色：Primary 是直接來源，Supporting 是補充來源；不得把補充來源事實歸給直接來源。風險題不可把年報揭露說成法說會提到。
         財報表格頁不可當作風險證據；目錄頁與封面不可當作實質證據。引用須明示正確的文件類型，不確定來源歸屬時說明限制。
         不能編造來源或數值。修訂時針對使用者 feedback、原答案、critic 及 outputGate 指出的問題修正；回饋與原答案不是可驗證證據，仍需引用工具來源。

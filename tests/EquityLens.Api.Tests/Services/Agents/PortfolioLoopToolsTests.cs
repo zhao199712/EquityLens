@@ -271,6 +271,31 @@ public sealed class PortfolioLoopToolsTests
         Assert.Equal(2, stress.Calls.Count);
     }
 
+    [Fact]
+    public void StressEvidence_SixScenariosFitPromptExcerpt_SoHypotheticalShocksAreNotTruncated()
+    {
+        // 本機真實模型驗證時，四位小數以上的 decimal 讓結果超出 3200 字摘錄，
+        // 模型看不到排在最後的假設情境而重複呼叫工具。
+        const decimal Long = -0.2507744733494547076377220697m;
+        PortfolioStressHoldingResponse H(string ticker, string name) => new(ticker, name, "電子工業", 0.3333333333333333333333333333m, 1000m, 750m, Long, Long / 3);
+        var ids = new[] { "covid", "rates_2022", "tech_2024", "worst_20d", "taiwan_strait_supply_chain", "ai_bubble_correction" };
+        var response = new PortfolioStressTestResponse(Guid.NewGuid(), new(2026, 11, 4), ids.Select((id, i) => new PortfolioStressScenarioResponse(
+            id, "情境名稱" + i, i < 4 ? "historical" : "hypothetical", "ready",
+            "以目前持倉權重回放 2022-01-03 至 2022-10-14 的價格報酬；報酬以還原收盤價計算（含分割、配股與配息調整）",
+            new(2022, 1, 3), new(2022, 10, 14), Long, [H("2330", "台積電"), H("2317", "鴻海"), H("2454", "聯發科")],
+            [new("電子工業", 1m, Long, Long)])).ToList());
+
+        var data = PortfolioLoopTools.StressEvidence(response, new(Guid.NewGuid(), "投組", "TWD", new(2025, 11, 10), new(2026, 11, 10), 3));
+        var excerpt = data.ToJsonString(new JsonSerializerOptions(AgentNodeJson.SerializerOptions)
+            { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+
+        Assert.True(excerpt.Length <= 1600 * 4, $"stress evidence is {excerpt.Length} characters");
+        Assert.Contains("ai_bubble_correction", excerpt);
+        Assert.Equal(-0.250774m, data["scenarios"]![5]!["totalImpact"]!.GetValue<decimal>());
+        Assert.Equal(0.333333m, data["scenarios"]![0]!["worstHoldings"]![0]!["weight"]!.GetValue<decimal>());
+        Assert.Null(data["priceBasis"]);
+    }
+
     private sealed class StressService : IPortfolioStressTestService
     {
         public List<(Guid Portfolio, Guid User)> Calls { get; } = [];

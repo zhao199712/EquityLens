@@ -28,7 +28,7 @@ public sealed partial class ConversationServiceTests
         await service.ProcessAsync(user, session.Id, new("請修正投組分析", Guid.NewGuid()));
         Assert.Equal(parentId, workflows.ParentId);
         Assert.Equal(1, workflows.Calls);
-        Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("lastResearchRunId"));
+        Assert.True(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("lastResearchRunId"));
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public sealed partial class ConversationServiceTests
     [Theory]
     [InlineData("那毛利率呢", "RouteWorkflow")]
     [InlineData("重置對話", "ResetContext")]
-    public async Task ExplicitFollowupAndReset_BypassModel(string message, string expected)
+    public async Task TypedFollowupIsClassified_OnlyResetBypassesModel(string message, string expected)
     {
         await using var db = CreateDb(); var user = Guid.NewGuid(); var parent = Guid.NewGuid();
         var session = new ChatSession { Id = Guid.NewGuid(), UserId = user, ContextJson = new JsonObject { ["lastAgentRunId"] = parent }.ToJsonString() };
@@ -201,7 +201,7 @@ public sealed partial class ConversationServiceTests
         var chat = new CountingChat(); var workflows = new FakeWorkflowQueries();
         var service = new ConversationService(db, new InvestmentResearchRouter(chat), workflows, new FakeAgentRuns(), new AgentWorkflowCatalog());
         var result = await service.ProcessAsync(user, session.Id, new(message, Guid.NewGuid()));
-        Assert.Equal(expected, result.Action); Assert.Equal(0, chat.Calls);
+        Assert.Equal(expected, result.Action); Assert.Equal(expected == "RouteWorkflow" ? 1 : 0, chat.Calls);
         if (expected == "RouteWorkflow") Assert.Equal(parent, workflows.ParentId);
     }
 
@@ -307,6 +307,9 @@ public sealed partial class ConversationServiceTests
         public int Calls { get; private set; }
         public string? Question { get; private set; }
         public Guid? ParentId { get; private set; }
+        public InvestmentResearchRouteDecision? Decision { get; private set; }
+        public Task<AgentWorkflowQueryCreatedResponse> CreateFromDecisionAsync(Guid userId, CreateAgentWorkflowQueryRequest request, InvestmentResearchRouteDecision decision, CancellationToken cancellationToken = default)
+        { Decision = decision; return CreateAsync(userId, request, cancellationToken); }
         public Task<AgentWorkflowQueryCreatedResponse> CreateAsync(Guid userId, CreateAgentWorkflowQueryRequest request, CancellationToken cancellationToken = default)
         {
             Calls++; Question = request.Question; ParentId = request.ParentAgentRunId;

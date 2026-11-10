@@ -58,6 +58,7 @@ public static class ResearchAiRegistration
                     $"Unsupported AI:ChatProvider '{chatProvider}'. Supported values: DeepSeek, Gemini, OpenAI.");
         }
         builder.Services.AddScoped<IConversationAgent>(sp => sp.GetRequiredService<InvestmentResearchRouter>());
+        builder.Services.AddScoped<ConversationSuggestedActionRanker>();
         builder.Services.AddScoped<ConversationSuggestedActionProvider>();
         builder.Services.AddScoped<IConversationService, ConversationService>();
         builder.Services.AddScoped<IResearchAnswerService, ResearchAnswerService>();
