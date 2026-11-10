@@ -1,0 +1,303 @@
+{
+  "version": 2,
+  "scope": "conversation_journey_v1 only; original single-turn research oracle unchanged",
+  "companies": {
+    "2330": [
+      "台積電",
+      "台灣積體電路",
+      "TSMC"
+    ],
+    "2317": [
+      "鴻海",
+      "Hon Hai",
+      "Foxconn"
+    ]
+  },
+  "cases": {
+    "2330-gross-margin-2025": {
+      "ticker": "2330",
+      "year": 2025,
+      "source": {
+        "document_type": "AnnualReport",
+        "title": "2330 Annual Report 2025",
+        "document_id": "bbefd357-8e17-4a8d-a3da-e9b85a6780bc",
+        "pdf_sha256": "68daa6d9ba02d71efe0838f2a9b0e135af26a2d1bddbaa62a06d3eb3501dacb2"
+      },
+      "metrics": [
+        {
+          "id": "gross_margin",
+          "label": "2025 毛利率",
+          "unit": "%",
+          "aliases": [
+            "毛利率"
+          ],
+          "pages": [
+            9
+          ],
+          "source_terms": [
+            [
+              "營業毛利"
+            ],
+            [
+              "2281293979",
+              "2,281,293,979"
+            ],
+            [
+              "營業收入"
+            ],
+            [
+              "3809054272",
+              "3,809,054,272"
+            ]
+          ],
+          "reported_integer": 60
+        }
+      ],
+      "oracle_hash": "59ac5dc6ee00f81f7c25b682781d0755ecbcfb775d60a8943cf9ed499f5af937"
+    },
+    "2330-eps-2025": {
+      "ticker": "2330",
+      "year": 2025,
+      "source": {
+        "document_type": "AnnualReport",
+        "title": "2330 Annual Report 2025",
+        "document_id": "bbefd357-8e17-4a8d-a3da-e9b85a6780bc",
+        "pdf_sha256": "68daa6d9ba02d71efe0838f2a9b0e135af26a2d1bddbaa62a06d3eb3501dacb2"
+      },
+      "metrics": [
+        {
+          "id": "basic_eps",
+          "label": "2025 基本 EPS",
+          "unit": "元",
+          "aliases": [
+            "基本\\s*(?:EPS|每股盈餘)",
+            "\\bEPS\\b"
+          ],
+          "pages": [
+            10,
+            58
+          ],
+          "source_terms": [
+            [
+              "114年度",
+              "2025"
+            ],
+            [
+              "基本每股盈餘",
+              "基本EPS"
+            ],
+            [
+              "66.26"
+            ]
+          ],
+          "source_patterns": [
+            "基本\\s*(?:每股盈餘|EPS)\\s*(?:[（(]元[）)])?\\s*[:：|]?\\s*\\$?\\s*66\\.26(?!\\d)"
+          ]
+        }
+      ],
+      "oracle_hash": "fb2026792285ee2ae14caa93d604f8491e29582ced704912234fb56625593897"
+    },
+    "2317-segment-mix": {
+      "ticker": "2317",
+      "year": 2025,
+      "source": {
+        "document_type": "AnnualReport",
+        "title": "2317 Annual Report 2025",
+        "document_id": "f6759e1c-7788-4603-a94e-05e1bc0c4a86",
+        "pdf_sha256": "e2c6a9e7b48014ab0139753e6e2f916c8f0129cf8b70c33fc1551d855154461d"
+      },
+      "metrics": [
+        {
+          "id": "segment_share",
+          "label": "消費智能產品營收占比",
+          "unit": "%",
+          "subject": [
+            "消費智能",
+            "智慧消費",
+            "消費智慧"
+          ],
+          "aliases": [
+            "占比",
+            "佔比",
+            "占合計營收",
+            "營收占比"
+          ],
+          "pages": [
+            112
+          ],
+          "source_terms": [
+            [
+              "消費智能",
+              "智慧消費",
+              "消費智慧"
+            ],
+            [
+              "3081686"
+            ],
+            [
+              "8103105"
+            ]
+          ]
+        },
+        {
+          "id": "segment_share",
+          "label": "雲端網路產品營收占比",
+          "unit": "%",
+          "subject": [
+            "雲端網路",
+            "雲端網絡",
+            "雲端與網路"
+          ],
+          "aliases": [
+            "占比",
+            "佔比",
+            "占合計營收",
+            "營收占比"
+          ],
+          "pages": [
+            112
+          ],
+          "source_terms": [
+            [
+              "雲端網路",
+              "雲端網絡",
+              "雲端與網路"
+            ],
+            [
+              "3255827"
+            ],
+            [
+              "8103105"
+            ]
+          ]
+        },
+        {
+          "id": "segment_share",
+          "label": "電腦終端產品營收占比",
+          "unit": "%",
+          "subject": [
+            "電腦終端",
+            "電腦及終端"
+          ],
+          "aliases": [
+            "占比",
+            "佔比",
+            "占合計營收",
+            "營收占比"
+          ],
+          "pages": [
+            112
+          ],
+          "source_terms": [
+            [
+              "電腦終端",
+              "電腦及終端"
+            ],
+            [
+              "1228391"
+            ],
+            [
+              "8103105"
+            ]
+          ]
+        },
+        {
+          "id": "segment_share",
+          "label": "元件及其他產品營收占比",
+          "unit": "%",
+          "subject": [
+            "元件及其他",
+            "元件與其他",
+            "零組件與其他"
+          ],
+          "aliases": [
+            "占比",
+            "佔比",
+            "占合計營收",
+            "營收占比"
+          ],
+          "pages": [
+            112
+          ],
+          "source_terms": [
+            [
+              "元件及其他",
+              "元件與其他",
+              "零組件與其他"
+            ],
+            [
+              "537201"
+            ],
+            [
+              "8103105"
+            ]
+          ]
+        },
+        {
+          "id": "segment_growth",
+          "label": "雲端網路產品營收年增率",
+          "unit": "%",
+          "subject": [
+            "雲端網路",
+            "雲端網絡",
+            "雲端與網路"
+          ],
+          "aliases": [
+            "年增率",
+            "年增",
+            "成長率"
+          ],
+          "pages": [
+            112
+          ],
+          "source_terms": [
+            [
+              "雲端網路",
+              "雲端網絡",
+              "雲端與網路"
+            ],
+            [
+              "3255827"
+            ],
+            [
+              "2001817"
+            ]
+          ]
+        }
+      ],
+      "oracle_hash": "3974be77ff672a14c64257f3e1c9bd107048d0f8d913c398ca1573b63a1d8248"
+    }
+  },
+  "source_verification": {
+    "existing": "docs/eval-verification/2026-10-01/verification.json",
+    "additional": {
+      "date": "2026-11-10",
+      "method": "Rendered original PDF page and visually checked annual columns and EPS rows; not inferred from model output",
+      "source": {
+        "document_type": "AnnualReport",
+        "title": "2330 Annual Report 2025",
+        "document_id": "bbefd357-8e17-4a8d-a3da-e9b85a6780bc",
+        "pdf_sha256": "68daa6d9ba02d71efe0838f2a9b0e135af26a2d1bddbaa62a06d3eb3501dacb2"
+      },
+      "pdf_page": 10,
+      "printed_page": 10,
+      "annual_column": "114年度 (2025)",
+      "basic_eps": "66.26",
+      "diluted_eps": "66.25",
+      "reviewer_kind": "agent_visual_review",
+      "human_calibration": false
+    }
+  },
+  "semantic_review": {
+    "status": "uncalibrated",
+    "automatic_judge_enabled": false,
+    "criteria": {
+      "no_unsupported_claims": "每個實質數字、方向與因果主張都須有對應證據；不得把歷史關聯寫成確定因果或未來保證。",
+      "research_to_exposure": "指出前輪已核實的公司、年度、財報事實與來源，結合本輪實際持股；前輪失敗則明示證據不足，不能補造。",
+      "impact_uncertainty": "分開財報事實、直接持股、未知ETF穿透與條件式推論；不捏造精確未來報酬。",
+      "objective_retained": "補參數、切換公司或投組後仍完成使用者當前目標；只記住ID不算完成；reset後不得承接舊任務。",
+      "tradeoffs": "比較同一快照下可行方案，說明現金、曝險與集中度取捨；沒有嚴格改善時應如實說明。",
+      "limitations_disclosed": "明示缺失資料及其影響，不偽造不可計算的指標；保留仍可支持的結論。"
+    }
+  }
+}

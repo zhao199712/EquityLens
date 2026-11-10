@@ -8,9 +8,10 @@ import os
 from pathlib import Path
 import subprocess
 
-from .conversation import CASE_PATH, FIXTURE_PATH, RESEARCH_PATH, read_jsonl, load_fixture, _research_index, validate_cases
+from .conversation import CHECKS, CASE_PATH, FIXTURE_PATH, RESEARCH_PATH, read_jsonl, load_fixture, _research_index, validate_cases
 from .conversation_seed import Database, corpus_state, digest, private_json, q, seed, utc_day
 from .conversation_scoring import VERSION, result, score_case, summarize
+from .conversation_research import load_rubric
 
 
 def parser():
@@ -29,6 +30,7 @@ def parser():
             c.add_argument('--as-of', default=utc_day())
         else:
             c.add_argument('--out', type=Path, required=True)
+            c.add_argument('--rubric', type=Path, help='Explicit journey scoring rubric; rescore otherwise reuses its saved rubric')
             if command == 'run':
                 c.add_argument('--manifest', type=Path, action='append', required=True)
                 c.add_argument('--case', action='append')
@@ -67,13 +69,21 @@ FROM market_price WHERE security_id={q(sid)}) x;""")
             raise ValueError('Fixture prices changed; use a fresh isolated profile database')
 
 
-def report(out, cases, responses, manifests, research):
+def report(out, cases, responses, manifests, research, rubric=None):
+    rubric = rubric or load_rubric()
+    private_json(out/'scoring_rubric.json', rubric)
+    if (out/'score_meta.json').exists():
+        scoring_meta = json.loads((out/'score_meta.json').read_text())
+        scoring_meta['rubric_hash'] = digest(rubric)
+        (out/'score_meta.json').write_text(json.dumps(scoring_meta, ensure_ascii=False, indent=2)+'\n')
+    else:
+        private_json(out/'score_meta.json', dict(scorer_version=VERSION, rubric_hash=digest(rubric)))
     index = {cid: m for m in manifests for cid in m['cases']}
     by_id = {r['case_id']: r for r in responses}
     if len(by_id) != len(responses):
         raise ValueError('Duplicate case response')
     results = [score_case(c, by_id[c['id']], index[c['id']]['cases'][c['id']],
-                          index[c['id']]['fixture'], research) for c in cases if c['id'] in by_id]
+                          index[c['id']]['fixture'], research, rubric) for c in cases if c['id'] in by_id]
     # Session uniqueness is a suite-level invariant, not just a per-case check.
     sessions = [r.get('session_id') for r in responses if r.get('session_id')]
     reused = {s for s in sessions if sessions.count(s) > 1}
@@ -91,11 +101,33 @@ def report(out, cases, responses, manifests, research):
              f"(eligible cases: {summary['conversation_denominator']}).", '',
              'Semantic checks require review. Draft cases never establish full conversation success.',
              'Total API cost: unknown; no judge was called.', '',
-             '| Case | Status | Failed checks | Unverifiable |', '|---|---|---|---|']
+             'Independent check counts: '+str(summary['independent_check_counts']),
+             'Product gate observations (separate, not independent correctness): '+str(summary['product_gate_counts']), '',
+             '| Case | Independent status | Failed checks | Unverifiable | Product gates rejected |', '|---|---|---|---|---|']
     for r in results:
         lines.append(f"| {r['case_id']} | {r['status']} | " +
                      ', '.join(c['check'] for c in r['checks'] if c['status'] == 'fail') + ' | ' +
-                     str(sum(c['status'] == 'unverifiable' for c in r['checks'])) + ' |')
+                     str(sum(c['status'] == 'unverifiable' for c in r['checks'])) + ' | ' +
+                     str(sum(g['status'] == 'rejected' for g in r.get('product_gates', []))) + ' |')
+    # Pending tasks are never interpreted as completed semantic judgments.
+    import hashlib
+    queue = []
+    for scored in results:
+        raw = by_id[scored['case_id']]
+        for check in scored['checks']:
+            if check['status'] == 'unverifiable' or check['check'] == 'research_grounded':
+                queue.append(dict(case_id=scored['case_id'], check=check['check'],
+                    evidence=check['evidence'], reason=check.get('reason'), status='unreviewed',
+                    response_sha256=hashlib.sha256(json.dumps(raw, sort_keys=True, ensure_ascii=False).encode()).hexdigest(),
+                    review_kind='semantic' if CHECKS.get(check['check'], {}).get('scorer') == 'semantic' else 'evidence',
+                    criterion=rubric['semantic_review']['criteria'].get(check['check']),
+                    reviewer=None, verdict=None, rationale=None))
+        for gate in scored.get('product_gates', []):
+            if gate['status'] == 'rejected':
+                queue.append(dict(case_id=scored['case_id'], turn=gate['turn'], check='product_gate_review',
+                    evidence=gate['evidence'], review_kind='product_gate_diagnostic', status='unreviewed', reviewer=None, verdict=None, rationale=None,
+                    response_sha256=hashlib.sha256(json.dumps(raw, sort_keys=True, ensure_ascii=False).encode()).hexdigest()))
+    private_json(out/'review_queue.json', queue)
     (out/'report.md').write_text('\n'.join(lines)+'\n', encoding='utf-8')
     return summary
 
@@ -122,6 +154,7 @@ def run(args, cases, spec, research):
     import httpx
     from .portfolio import provider_failures, require_local
     from .conversation_runner import AuthClient, Observer, run_case
+    rubric = load_rubric(getattr(args, 'rubric', None))
     if args.timeout <= 0 or not math.isfinite(args.timeout):
         raise ValueError('timeout must be positive and finite')
     if os.environ.get('CONVERSATION_EVAL_BUDGET_ENFORCED') != '1' or not args.usage_ledger.is_file():
@@ -213,7 +246,7 @@ def run(args, cases, spec, research):
             print(cid + ': evidence saved', flush=True)
             if errors or raw.get('fixture_error') or any(r.get('cancel_error') for r in raw.get('turns', [])):
                 break
-    return report(args.out, selected, responses, saved_manifests, research)
+    return report(args.out, selected, responses, saved_manifests, research, rubric)
 
 
 def rescore(args):
@@ -225,6 +258,15 @@ def rescore(args):
     if (digest(research) != meta['research_hash'] or digest(cases) != meta['cases_hash']
             or digest(manifests) != meta['fixtures_hash']):
         raise ValueError('Saved cases, research or fixture contract changed')
+    if getattr(args, 'rubric', None):
+        rubric = load_rubric(args.rubric)
+    elif (source/'scoring_rubric.json').exists():
+        rubric = load_rubric(source/'scoring_rubric.json')
+        old_score_meta = json.loads((source/'score_meta.json').read_text())
+        if digest(rubric) != old_score_meta.get('rubric_hash'):
+            raise ValueError('Saved scoring rubric changed')
+    else:
+        rubric = load_rubric()  # Version 1 artifacts did not save a rubric.
     responses = read_jsonl(args.responses)
     args.out.mkdir(parents=True, exist_ok=False, mode=0o700)
     # Preserve production provenance; scoring provenance is a separate artifact.
@@ -235,7 +277,7 @@ def rescore(args):
     private_json(args.out/'score_meta.json', dict(scorer_version=VERSION, scorer_commit=git_sha(),
                                                 scorer_source_hash=digest({p.name: p.read_text() for p in Path(__file__).parent.glob('*.py')}),
                                                 rescored_from=str(source.resolve())))
-    return report(args.out, cases, responses, manifests, research)
+    return report(args.out, cases, responses, manifests, research, rubric)
 
 
 def main(argv):

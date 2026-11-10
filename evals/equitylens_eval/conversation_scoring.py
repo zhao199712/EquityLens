@@ -6,8 +6,9 @@ import math
 from .conversation import CAPABILITY_GAPS, CHECKS, INTENTS
 from .portfolio import independent_metrics, obj
 from .conversation_seed import scenario_golden
+from .conversation_research import evaluate as evaluate_research, load_rubric
 
-VERSION = 1
+VERSION = 2
 WORKFLOWS = {'Research': 'ResearchAgent', 'Portfolio': 'PortfolioDiagnosis'}
 
 
@@ -124,24 +125,15 @@ def comparison_check(row, portfolio, constraints):
     return True, 'Frozen prices, NAV, weights, risk math and same-basis differences verified'
 
 
-def research_check(row, refs, research):
-    if not row.get('research'):
-        return None, 'Research answer/citations unavailable'
-    from .client import parse_investigation
-    from .schema import EvalCase
-    from .scorers import score_facts, score_source_hit, score_citation_integrity
-    items = []
-    for ref in refs:
-        case = EvalCase.from_dict(research[ref])
-        output = parse_investigation(ref, row.get('detail', {}).get('run', {}), row['research'])
-        items.extend(fn(case, output) for fn in (score_facts, score_source_hit, score_citation_integrity))
-    if not items or any(i.score is None for i in items):
-        return None, 'Required fact/source evidence unavailable'
-    return all(i.score == 1 for i in items), 'Verified numeric facts, expected source hit and citation indices only'
+def research_check(row, refs, research, rubric=None):
+    value, parts = evaluate_research(row, refs, research, rubric)
+    return value, '; '.join(sorted({p['reason'] for p in parts if p['status'] != 'pass'})) or 'Scoped facts and supporting citations verified'
 
 
-def score_case(case, raw, entry, frozen, research):
+def score_case(case, raw, entry, frozen, research, rubric=None):
+    rubric = rubric or load_rubric()
     checks = []
+    product_gates = []
     rows = {r['turn']: r for r in raw.get('turns', [])}
     owned = set(entry['owner_a']['portfolios'].values())
     uid = entry['owner_a']['id']
@@ -232,9 +224,12 @@ def score_case(case, raw, entry, frozen, research):
                          if observed else None)
                 add('insufficient_history', value, path + '/detail/blackboardJson/portfolioScenarioComparison',
                     'A complete scenario risk estimate requires 120 common returns')
-            if intent['workflow'] == 'Portfolio':
-                gate = board.get('portfolioQualityGate')
-                add('output_gate', None if gate is None else gate.get('passed') is True, path + '/detail/blackboardJson/portfolioQualityGate')
+            gate_key = 'portfolioQualityGate' if intent['workflow'] == 'Portfolio' else 'outputGate'
+            gate = board.get(gate_key)
+            product_gates.append(dict(turn=turn['turn'], workflow=actual,
+                status='accepted' if isinstance(gate, dict) and gate.get('passed') is True else
+                       'rejected' if isinstance(gate, dict) and gate.get('passed') is False else 'unavailable',
+                evidence=path+'/detail/blackboardJson/'+gate_key, gate=gate))
         else:
             wanted = {'clarify': {'AskClarification'}, 'reset': {'ResetContext'},
                       'list_portfolios': {'DirectResponse', 'AskClarification'},
@@ -243,6 +238,7 @@ def score_case(case, raw, entry, frozen, research):
                 'Observed conversation action and persisted run creation')
         for name in expected['checks']:
             value, reason = None, ''
+            subchecks = None
             if CHECKS[name]['scorer'] == 'semantic':
                 reason = 'Requires human review or a calibrated semantic judge'
             elif name == 'no_premature_execution':
@@ -266,7 +262,8 @@ def score_case(case, raw, entry, frozen, research):
                     value, reason = None, 'Malformed or incomplete comparison evidence'
             elif name == 'research_grounded':
                 try:
-                    value, reason = research_check(row, expected.get('research_case_refs', []), research)
+                    value, subchecks = evaluate_research(row, expected.get('research_case_refs', []), research, rubric)
+                    reason = 'Scoped fact, completeness and claim-source checks; inspect subchecks'
                 except (KeyError, TypeError, ValueError):
                     value, reason = None, 'Malformed or incomplete research evidence'
             elif name == 'reset_boundary':
@@ -279,10 +276,12 @@ def score_case(case, raw, entry, frozen, research):
             else:
                 reason = 'Required evidence unavailable'
             add(name, value, path, reason, 'capability_gap' if name in CAPABILITY_GAPS else 'bug')
+            if subchecks is not None:
+                checks[-1]['subchecks'] = subchecks
     statuses = [c['status'] for c in checks]
     failed = 'fail' in statuses
     completed = not failed and 'unverifiable' not in statuses
-    return dict(case_id=case['id'], review_status=case['review_status'], checks=checks,
+    return dict(case_id=case['id'], review_status=case['review_status'], checks=checks, product_gates=product_gates,
                 status='fail' if failed else 'pass' if completed else 'unverifiable',
                 conversation_success=(False if failed else True if completed else None)
                 if case['review_status'] == 'verified' else None)
@@ -297,6 +296,11 @@ def summarize(results):
     classified = {kind: sum(c['status'] == 'fail' and c['failure_class'] == kind for c in checks)
                   for kind in ('bug', 'capability_gap', 'dependency_failed')}
     return dict(suite='conversation_journey_v1', scorer_version=VERSION, results=results,
+                product_gate_counts={status: sum(g['status'] == status for r in results for g in r.get('product_gates', []))
+                                     for status in ('accepted', 'rejected', 'unavailable')},
+                independent_check_counts={status: sum(c['status'] == status for c in checks)
+                                          for status in ('pass', 'fail', 'unverifiable')},
+                semantic_evaluation='uncalibrated; pending human review',
                 attempted=len(results), failed=sum(r['status'] == 'fail' for r in results),
                 deterministic_pass_rate=sum(c['status'] == 'pass' for c in decisive)/len(decisive) if decisive else None,
                 deterministic_coverage=len(decisive)/len(deterministic) if deterministic else None,

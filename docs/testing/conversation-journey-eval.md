@@ -2,7 +2,7 @@
 
 這份評估集沿著「某家公司財報如何 → 對我的投組可能有什麼影響 → 如何降低波動」驗收連續任務，並以 journey-00 重現 2026-11-04 正式站回報的投組記憶問題。
 
-**目前狀態：** 已有題庫、validator、seed、runner、程式 scorer 與離線 rescore。本次實作只以假的 HTTP/SSE 和資料庫介面測試，尚未執行真實模型評估。所有案例仍為 `draft`；程式檢查結果與覆蓋率獨立呈現，不宣稱完整對話已通過。
+**目前狀態：** 已實際執行 GPT Luna 的 11 組、45 輪隔離測試。評分器 v2 將獨立事實／計算檢查、產品 Quality Gate 觀測及待覆核語義分開報告，詳見 [多輪評估器 v2](conversation-scoring-v2.md)。所有案例仍為 draft，尚無人工校準的語義評分器，不能宣稱完整對話通過。
 
 - 題庫：`evals/cases/conversation_journey_v1.jsonl`（11 組、45 輪）
 - Fixture 規格：`evals/cases/conversation_journey_v1.fixture.json`
@@ -72,7 +72,7 @@ python -m pytest tests/test_conversation.py
 
 每項斷言保存 `pass`／`fail`／`unverifiable` 與證據位置，失敗時另存失敗分類。必要證據缺失不得算 pass。完整對話通過需要所有必備條件與適用的語義條件成立；身分錯誤、越權或副作用任何一項發生即失敗，不能被答案品質平均掉。
 
-待審批的投組報告需保存 draft、Quality Gate 與審批後結果。runner 只在隔離合成帳號核准指定的唯讀 WorkflowGate，不能處理交易或 ToolCall 授權。
+目前 PortfolioDiagnosis v5 沒有人工審批節點；保存產品 Quality Gate 與最終回答，並分開報告。Runner 的舊唯讀 WorkflowGate 相容處理不能處理交易或 ToolCall 授權。
 
 ## 驗收檢查字典
 

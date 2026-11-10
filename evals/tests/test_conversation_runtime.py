@@ -174,7 +174,8 @@ def test_all_45_turns_execute_through_http_and_preserve_user_messages(case):
     assert checkpoints
     result = scoring.score_case(case, raw, system.entry, system.frozen, RESEARCH)
     assert result['conversation_success'] is None
-    assert not any(c['status'] == 'fail' for c in result['checks'])
+    # The fake emits only '測試回答': it verifies transport, not research quality.
+    assert not any(c['status'] == 'fail' for c in result['checks'] if c['check'] != 'research_grounded')
     assert all(c['status'] == 'unverifiable' for c in result['checks']
                if conv.CHECKS.get(c['check'], {}).get('scorer') == 'semantic')
 
@@ -617,8 +618,9 @@ def test_provider_error_and_wrong_session_owner_fail_independently():
 def test_research_check_uses_existing_numeric_and_source_oracles():
     refs = ['2330-gross-margin-2025', '2330-eps-2025']
     research = dict(answer='毛利率 59.9%[1]，EPS 66.26元[2]。', run={'status': 'Answered'}, citations=[
-        dict(citationIndex=1, documentType='AnnualReport', pageNumber=9, title='2330 Annual Report 2025'),
-        dict(citationIndex=2, documentType='AnnualReport', pageNumber=58, title='2330 Annual Report 2025')])
+        dict(citationIndex=1, documentType='AnnualReport', pageNumber=9, title='2330 Annual Report 2025',
+             quoteText='營業毛利 2,281,293,979；營業收入 3,809,054,272'),
+        dict(citationIndex=2, documentType='AnnualReport', pageNumber=58, title='2330 Annual Report 2025', quoteText='114年度 基本每股盈餘 66.26')])
     row = dict(research=research, detail={'run': {'status': 'Succeeded'}})
     assert scoring.research_check(row, refs, RESEARCH)[0] is True
     research['answer'] = research['answer'].replace('66.26', '66.25')

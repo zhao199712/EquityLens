@@ -176,7 +176,7 @@ export EVAL_JUDGE_MODEL=deepseek-flash
 python -m equitylens_eval.conversation validate
 ```
 
-每個檢查項目標明由程式（deterministic）或語義評審（semantic）判定；失敗分成 `bug`、`capability_gap`、`dependency_failed` 分開報告。完整契約與 11 組腳本見 [`docs/testing/conversation-journey-eval.md`](../docs/testing/conversation-journey-eval.md)。
+每個檢查項目標明由程式（deterministic）或語義評審（semantic）判定；失敗分成 `bug`、`capability_gap`、`dependency_failed` 分開報告。完整契約與 11 組腳本見 [`docs/testing/conversation-journey-eval.md`](../docs/testing/conversation-journey-eval.md)。 v2 的事實綁定、替代來源核實、產品閘門分開報告、人工覆核準則與離線重評規則見 [conversation-scoring-v2.md](../docs/testing/conversation-scoring-v2.md)。
 
 ---
 
