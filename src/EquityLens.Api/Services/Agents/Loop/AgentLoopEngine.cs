@@ -177,7 +177,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                             if (portfolio && !state.ForcedDraft && state.AnswerRepairCount < 2)
                             {
                                 var rejected = new List<string>();
-                                var issues = PortfolioQualityGateNodeHandler.Check(action.Answer, state.Facts, rejected);
+                                var issues = PortfolioQualityGateNodeHandler.Check(action.Answer, state.Facts, rejected, request.Question);
                                 if (issues.Any(i => i is "UntraceableNumbers" or "MixedRiskBasis" or "UnknownToolEvidence" or "ScenarioComparisonDirectionMismatch" or "UnverifiedScenarioComparison"
                                     or "StaleRiskProfileComparison" or "UnverifiedProfileFit" or "DefaultPreferenceMisrepresented"))
                                 {

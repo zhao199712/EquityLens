@@ -25,7 +25,7 @@ public sealed partial class ConversationService
         db.AgentRuns.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.UserId == userId
             && x.Status == AgentRunStatuses.Succeeded, ct);
 
-    private async Task EnrichContextAsync(Guid userId, Guid? portfolioId, string question, JsonObject context, CancellationToken ct)
+    private async Task EnrichContextAsync(Guid userId, Guid sessionId, int resetAfter, Guid? portfolioId, string question, JsonObject context, CancellationToken ct)
     {
         var last = await OwnedCompletedRunAsync(userId, ReadGuid(context, "lastAgentRunId"), ct);
         if (last?.WorkflowType == AgentWorkflowTypes.PortfolioDiagnosis)
@@ -41,6 +41,16 @@ public sealed partial class ConversationService
         var researchId = ReadGuid(context, "lastResearchAgentRunId")
             ?? (last?.WorkflowType == AgentWorkflowTypes.ResearchAgent ? last.Id : (Guid?)null);
         var research = await OwnedCompletedRunAsync(userId, researchId, ct);
+        // 最近一次研究失敗（如標的缺文件）時，不應讓同一段對話先前成功的研究證據消失。
+        if (research?.WorkflowType != AgentWorkflowTypes.ResearchAgent)
+        {
+            var fallbackId = await db.ChatMessages.AsNoTracking()
+                .Where(m => m.ChatSessionId == sessionId && m.ChatSession.UserId == userId && (m.SequenceNumber ?? -1) > resetAfter
+                    && m.AgentRunId != null && m.AgentRun!.UserId == userId
+                    && m.AgentRun.WorkflowType == AgentWorkflowTypes.ResearchAgent && m.AgentRun.Status == AgentRunStatuses.Succeeded)
+                .OrderByDescending(m => m.SequenceNumber).Select(m => m.AgentRunId).FirstOrDefaultAsync(ct);
+            research = await OwnedCompletedRunAsync(userId, fallbackId, ct);
+        }
         string? ticker = null;
         if (research?.WorkflowType == AgentWorkflowTypes.ResearchAgent && research.ResearchRunId is { } rid)
         {

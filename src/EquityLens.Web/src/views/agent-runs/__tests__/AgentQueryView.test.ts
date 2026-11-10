@@ -41,7 +41,8 @@ describe('AgentQueryView', () => {
       currentStageDisplayName: '規劃', finalAnswer: '暫存草稿',
     } }]
     const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
-    expect(wrapper.text()).toContain('AgentLoop')
+    expect(wrapper.text()).toContain('正在檢索文件並整理答案')
+    expect(wrapper.text()).not.toContain('8 / 16')
     expect(wrapper.find('.progress').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('暫存草稿')
     expect(wrapper.text()).not.toContain('目前階段：規劃')
@@ -244,5 +245,32 @@ describe('AgentQueryView', () => {
     expect(chat.sendMessage).not.toHaveBeenCalled()
     await composer.trigger('keydown', { key: 'Enter' })
     expect(chat.sendMessage).toHaveBeenCalledWith('台積電')
+  })
+
+  it('offers portfolio choices as buttons that send the chosen name', async () => {
+    chat.currentSessionId = 'session'
+    chat.messages = [{ id: 'ask', role: 'assistant', content: '請選擇投資組合', choices: ['穩健金融', '高波動科技'], runCard: null }]
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    const buttons = wrapper.findAll('.suggested-action-btn')
+    expect(buttons.map(b => b.text())).toEqual(['1. 穩健金融', '2. 高波動科技'])
+    await buttons[1]!.trigger('click')
+    expect(chat.sendMessage).toHaveBeenCalledWith('高波動科技')
+  })
+
+  it('shows quality limits and missing documents in plain language instead of internal codes', () => {
+    chat.messages = [
+      { id: 'a', role: 'assistant', content: '', runCard: { agentRunId: 'r1', workflowType: 'PortfolioDiagnosis', status: 'Succeeded',
+        completedNodes: 4, totalNodes: 4, finalAnswer: '| 指標 | 值 |\n|---|---:|\n| 波動 | 56.73% |', qualityIssues: ['UntraceableNumbers'] } },
+      { id: 'b', role: 'assistant', content: '', runCard: { agentRunId: 'r2', workflowType: 'ResearchAgent', status: 'Failed',
+        completedNodes: 1, totalNodes: 1, errorMessage: '此股票尚未匯入可供研究問答使用的年報或法說會文件。' } },
+    ]
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    const text = wrapper.text()
+    expect(text).toContain('投組診斷')
+    expect(text).toContain('部分數字無法對應工具資料')
+    expect(text).not.toContain('UntraceableNumbers')
+    expect(text).toContain('資料不足')
+    expect(text).not.toContain('FAILED')
+    expect(wrapper.find('table.md-table').exists()).toBe(true)
   })
 })
