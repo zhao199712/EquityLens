@@ -54,9 +54,9 @@ test('risk detail uses saved result and saves that exact run without recalculati
   api.hasPortfolio = api.hasHolding = true
   await login(page)
   await page.goto(`/risk-runs/${portfolioId}`)
-  await expect(page.locator('span').getByText('條件波動率（年化）', { exact: true })).toBeVisible()
+  await expect(page.locator('.overview-metrics').getByText('歷史年化波動率', { exact: true })).toBeVisible()
   await expect(page.getByText('30.00%', { exact: true }).first()).toBeVisible()
-  await page.getByRole('button', { name: '建立風險報告快照', exact: true }).click()
+  await page.getByRole('button', { name: '儲存風險報告', exact: true }).click()
   await expect(page.getByText(/快照已建立/)).toBeVisible()
   expect(api.snapshotSaved).toBe(true)
   expect(api.requests.filter(r => r.method === 'POST').map(r => r.path)).toContain(`/portfolios/${portfolioId}/risk/reports/from-calculation/${riskId}`)

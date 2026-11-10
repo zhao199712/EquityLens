@@ -26,9 +26,7 @@ import {
 } from '../../services/portfolioTransactions.ts'
 import {
   getDividendCashFlows,
-  getLatestDividends,
   type DividendCashFlow,
-  type LatestDividendResponse,
 } from '../../services/portfolioDividends.ts'
 import {
   createPortfolioCashFlow,
@@ -82,10 +80,7 @@ const loadingAllTransactions = ref(false)
 const transactionsError = ref('')
 const allTransactionsError = ref('')
 const deletingTransactionId = ref<string | null>(null)
-const latestDividends = ref<LatestDividendResponse[]>([])
 const dividendCashFlows = ref<DividendCashFlow[]>([])
-const loadingLatestDividends = ref(false)
-const latestDividendsError = ref('')
 const loadingDividendCashFlows = ref(false)
 const dividendCashFlowsError = ref('')
 const cashFlows = ref<PortfolioCashFlow[]>([])
@@ -479,12 +474,6 @@ function formatPercent(n: number | null) {
   return `${n >= 0 ? '+' : ''}${(n * 100).toFixed(2)}%`
 }
 
-function getEstimatedDividendAmount(dividend: LatestDividendResponse) {
-  const holding = valuation.value?.holdings.find((h) => h.securityId === dividend.securityId)
-  if (!holding) return '—'
-  return formatMoney(holding.quantity * dividend.cashAmountPerShare, dividend.currency)
-}
-
 function portfolioTrendTooltip(index: number): string[] {
   const data = valueTrendData.value
   if (!data) return []
@@ -540,7 +529,6 @@ async function loadPortfolioData(showPageLoading = true) {
 
     try {
       valuation.value = await getPortfolioValuation(portfolioId.value)
-      await loadLatestDividends()
       await loadDividendCashFlows()
       await loadCashFlows()
     } catch (e) {
@@ -812,19 +800,6 @@ async function loadAllTransactions() {
     allTransactionsError.value = '無法載入交易紀錄，請稍後再試。'
   } finally {
     loadingAllTransactions.value = false
-  }
-}
-
-async function loadLatestDividends() {
-  loadingLatestDividends.value = true
-  latestDividendsError.value = ''
-  try {
-    latestDividends.value = await getLatestDividends(portfolioId.value)
-  } catch (e) {
-    latestDividends.value = []
-    latestDividendsError.value = '無法載入股息資訊，請稍後再試。'
-  } finally {
-    loadingLatestDividends.value = false
   }
 }
 
@@ -1151,11 +1126,11 @@ onMounted(loadPortfolioData)
 
             <!-- Performance & Risk grid -->
             <div class="trend-perf-grid">
-              <!-- Cumulative Return -->
+              <!-- Time-weighted Return -->
               <div class="perf-card">
                 <div class="perf-card-header">
-                  <span class="perf-card-title">累積報酬率</span>
-                  <span class="caption">CUMULATIVE RETURN</span>
+                  <span class="perf-card-title">時間加權報酬率</span>
+                  <span class="caption">TIME-WEIGHTED RETURN (TWR)</span>
                 </div>
                 <div class="perf-chart-wrap">
                   <svg v-if="cumReturnPoints" width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="none">
@@ -1171,7 +1146,7 @@ onMounted(loadPortfolioData)
               <!-- EWMA Rolling Volatility -->
               <div class="perf-card">
                 <div class="perf-card-header">
-                  <span class="perf-card-title">滾動波動率 EWMA</span>
+                  <span class="perf-card-title">滾動波動率</span>
                   <span class="caption">ROLLING VOLATILITY</span>
                 </div>
                 <div class="perf-chart-wrap">
@@ -1577,7 +1552,7 @@ onMounted(loadPortfolioData)
               <div v-if="cashFlowsError" class="prestige-error">{{ cashFlowsError }}</div>
               <div v-else-if="!manualCashFlows.length" class="transaction-empty">尚無現金變動紀錄。</div>
               <div v-else style="overflow-x: auto"><table class="prestige-table transaction-table"><thead><tr><th>日期</th><th>現金變動</th><th aria-label="操作" /></tr></thead><tbody>
-                <tr v-for="flow in manualCashFlows" :key="flow.id"><td>{{ flow.effectiveDate }}</td><td :class="flow.flowType === 'Withdrawal' || flow.flowType === 'Fee' || flow.flowType === 'DividendTax' ? 'pnl-down' : 'pnl-up'">{{ flow.flowType === 'Withdrawal' || flow.flowType === 'Fee' || flow.flowType === 'DividendTax' ? '−' : '+' }}{{ formatMoney(flow.amount, flow.currency) }} <span v-if="flow.isSystemDerived" class="caption">系統推導</span></td><td style="white-space: nowrap"><template v-if="!flow.isSystemDerived"><button class="transaction-delete" @click="editCashFlow(flow)">修改</button><button class="transaction-delete" @click="removeCashFlow(flow)">刪除</button></template></td></tr>
+                <tr v-for="flow in manualCashFlows" :key="flow.id"><td>{{ flow.effectiveDate }}</td><td :class="flow.flowType === 'Withdrawal' || flow.flowType === 'Fee' || flow.flowType === 'DividendTax' ? 'pnl-down' : 'pnl-up'">{{ flow.flowType === 'Withdrawal' || flow.flowType === 'Fee' || flow.flowType === 'DividendTax' ? '−' : '+' }}{{ formatMoney(flow.amount, flow.currency) }}</td><td style="white-space: nowrap"><template v-if="!flow.isSystemDerived"><button class="transaction-delete" @click="editCashFlow(flow)">修改</button><button class="transaction-delete" @click="removeCashFlow(flow)">刪除</button></template></td></tr>
               </tbody></table></div>
             </div>
           </div>
@@ -1624,57 +1599,6 @@ onMounted(loadPortfolioData)
           </div>
         </ScrollReveal>
 
-        <!-- Latest dividend reference data -->
-        <ScrollReveal :delay="0.1" style="margin-top: 60px">
-          <div class="prestige-panel">
-            <div class="panel-head">
-              <h2 class="panel-title">市場最新股息</h2>
-              <span class="caption">LATEST DIVIDEND REFERENCE DATA</span>
-            </div>
-            <div class="panel-body">
-              <div
-                v-if="loadingLatestDividends"
-                class="transaction-empty">
-                載入中...
-              </div>
-              <div
-                v-else-if="latestDividendsError"
-                class="prestige-error">
-                {{ latestDividendsError }}
-              </div>
-              <div
-                v-else-if="!latestDividends.length"
-                class="transaction-empty">
-                目前沒有符合的股息資訊。
-              </div>
-              <div v-else style="overflow-x: auto">
-                <table class="prestige-table">
-                  <thead>
-                    <tr>
-                      <th>股票</th>
-                      <th>除息日</th>
-                      <th>發放日</th>
-                      <th>每股股利</th>
-                      <th>預估金額</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="dividend in latestDividends" :key="dividend.securityId">
-                      <td>
-                        <div class="cell-strong">{{ dividend.ticker }}</div>
-                        <div class="cell-sub">{{ dividend.securityName }}</div>
-                      </td>
-                      <td>{{ dividend.exDividendDate }}</td>
-                      <td>{{ dividend.paymentDate || '—' }}</td>
-                      <td>{{ formatMoney(dividend.cashAmountPerShare, dividend.currency) }}</td>
-                      <td>{{ getEstimatedDividendAmount(dividend) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
       </template>
     </div>
 

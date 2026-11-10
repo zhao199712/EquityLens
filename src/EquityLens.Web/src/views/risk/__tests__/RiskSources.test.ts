@@ -34,7 +34,7 @@ describe('conditional risk presentation', () => {
   })
   it('renders Python holdings and industries with signed contributions and percentage points', () => {
     const wrapper = render(sources)
-    expect(wrapper.findAll('table')).toHaveLength(2)
+    expect(wrapper.findAll('table')).toHaveLength(3)
     expect(wrapper.text()).toContain('快照名稱')
     expect(wrapper.text()).toContain('16.00%')
     expect(wrapper.text()).toContain('-3.20%')
@@ -43,7 +43,7 @@ describe('conditional risk presentation', () => {
     expect(wrapper.text()).toContain('-2.50 百分點')
     expect(wrapper.text()).toContain('原權重比例')
     expect(wrapper.text()).toContain('不是一年期預測')
-    expect(wrapper.findAll('.td-pos')).toHaveLength(2)
+    expect(wrapper.findAll('.td-pos')).toHaveLength(3)
     expect(wrapper.text()).not.toContain('回退資料')
   })
   it('renders null contributions as dashes and preserves an actual zero volatility', () => {
@@ -52,7 +52,7 @@ describe('conditional risk presentation', () => {
       industries: sources.industries.map(row => ({ ...row, componentVolatility: null, componentRiskShare: null, marginalVolatility: null })),
     }
     const wrapper = render(zero)
-    expect(wrapper.findAll('td').filter(cell => cell.text() === '—')).toHaveLength(6)
+    expect(wrapper.findAll('td').filter(cell => cell.text() === '—')).toHaveLength(7)
     expect(wrapper.text()).not.toMatch(/NaN|null|undefined/)
     expect(volatilityCard(true, vt(zero), null).value).toBe('0.00%')
   })
@@ -68,7 +68,7 @@ describe('conditional risk presentation', () => {
     expect(card.label).toBe('歷史年化波動率')
     expect(card.value).toBe('27.00%')
     const wrapper = render(undefined, fallback)
-    expect(wrapper.findAll('table')).toHaveLength(2)
+    expect(wrapper.findAll('table')).toHaveLength(3)
     expect(wrapper.text()).toContain('C# MVEWMA-FHS 回退資料')
     expect(wrapper.text()).toContain('28.00%')
     expect(wrapper.text()).toContain('每個持倉各增加')
@@ -76,4 +76,19 @@ describe('conditional risk presentation', () => {
   it('does not invent named rows for legacy worker inputs without metadata', () => {
     expect(render({ ...sources, holdings: [], industries: [] }).findAll('table')).toHaveLength(0)
   })
+})
+
+it('shows only the five largest risk sources with four columns and can switch to industries', async () => {
+  const wrapper = render({ ...sources, holdings: Array.from({ length: 7 }, (_, i) => ({ ...sources.holdings[0]!, securityId: String(i), ticker: String(i), componentRiskShare: i / 10 })) })
+  const table = () => wrapper.find('table[aria-label="主要風險來源"]')
+  expect(table().findAll('th')).toHaveLength(4)
+  expect(table().findAll('tbody tr')).toHaveLength(5)
+  expect(table().findAll('tbody tr')[0]!.text()).toContain('60.0%')
+  expect(table().findAll('tbody tr')[4]!.text()).toContain('20.0%')
+  expect(wrapper.find('details').attributes('open')).toBeUndefined()
+  await wrapper.find('.show-all').trigger('click')
+  expect(table().findAll('tbody tr')).toHaveLength(7)
+  await wrapper.findAll('.source-controls button')[1]!.trigger('click')
+  expect(table().findAll('tbody tr')).toHaveLength(1)
+  expect(table().text()).toContain('具分散效果')
 })

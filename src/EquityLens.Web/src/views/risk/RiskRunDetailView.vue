@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import RiskMeasurementBasis from '../../components/agents/RiskMeasurementBasis.vue'
-import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
+import { onBeforeUnmount, onMounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import RiskSources from './RiskSources.vue'
-import { volatilityCard, riskPercent } from './riskPresentation'
+import RiskQualitySummary from './RiskQualitySummary.vue'
+import RiskSnapshotReport from './RiskSnapshotReport.vue'
+import { riskPercent, qualityStatusLabel, qualityCodeLabel } from './riskPresentation'
 import Footer from '../../components/kimi/Footer.vue'
 import {
   getPortfolio,
@@ -13,9 +15,7 @@ import {
   getRiskCalculation,
   validateRiskCalculation,
   listRiskCalculations,
-  createPortfolioRiskBacktestRun,
   getPortfolioRiskBacktestRun,
-  getPortfolioRiskBacktestRuns,
   getPortfolioMonteCarlo,
   getPortfolioRiskGovernance,
   calculatePortfolioRiskScenario,
@@ -123,13 +123,13 @@ const calculationSimulations = computed(() =>
 const calculationLookback = computed(() =>
   vtGarchResult.value?.lookbackDays ?? fallbackResult.value?.alignedReturnCount ?? null)
 
-const normalizedHorizons = computed<NormalizedHorizon[]>(() => {
+const normalizedHorizons = computed<Array<Omit<NormalizedHorizon, 'var95' | 'es95'> & { var95: number | null; es95: number | null }>>(() => {
   const vt = vtGarchResult.value
   if (vt) {
     return vt.horizons.map(h => ({
       horizonDays: h.horizonDays,
-      var95: h.confidenceLevels.find(c => c.confidenceLevel === 0.95)?.var ?? 0,
-      es95: h.confidenceLevels.find(c => c.confidenceLevel === 0.95)?.expectedShortfall ?? 0,
+      var95: h.confidenceLevels.find(c => c.confidenceLevel === 0.95)?.var ?? null,
+      es95: h.confidenceLevels.find(c => c.confidenceLevel === 0.95)?.expectedShortfall ?? null,
       var99: h.confidenceLevels.find(c => c.confidenceLevel === 0.99)?.var ?? null,
       es99: h.confidenceLevels.find(c => c.confidenceLevel === 0.99)?.expectedShortfall ?? null,
       expectedReturn: h.expectedReturn,
@@ -137,15 +137,13 @@ const normalizedHorizons = computed<NormalizedHorizon[]>(() => {
   }
   const fb = fallbackResult.value
   if (fb) {
-    const at99 = risk99.value?.horizons ?? []
     return fb.horizons.map(h => {
-      const match99 = at99.find(x => x.horizonDays === h.horizonDays)
       return {
         horizonDays: h.horizonDays,
         var95: h.monteCarloVaR,
         es95: h.monteCarloES,
-        var99: match99?.monteCarloVaR ?? null,
-        es99: match99?.monteCarloES ?? null,
+        var99: null,
+        es99: null,
         expectedReturn: null,
       }
     })
@@ -166,7 +164,7 @@ const garchOneDayComparison = computed(() => {
   if (!hist || !g1) return []
   return [
     { method: '歷史模擬法', var95: hist.var95, var99: hist.var99, es95: hist.es95, es99: hist.es99 },
-    { method: 'VT-GARCH-t + Joint-Vector FHS', var95: g1.var95, var99: g1.var99 ?? 0, es95: g1.es95, es99: g1.es99 ?? 0 },
+    { method: 'VT-GARCH-t + Joint-Vector FHS', var95: g1.var95, var99: g1.var99, es95: g1.es95, es99: g1.es99 },
   ]
 })
 
@@ -179,11 +177,33 @@ const modelComparisonError = ref('')
 const stressTestError = ref('')
 const backtestError = ref('')
 const monteCarloError = ref('')
-const modelComparisonSentinel = ref<HTMLElement | null>(null)
-const stressTestSentinel = ref<HTMLElement | null>(null)
-const backtestSentinel = ref<HTMLElement | null>(null)
-const monteCarloSentinel = ref<HTMLElement | null>(null)
-let sectionObserver: IntersectionObserver | null = null
+type RiskTab = 'overview' | 'adjustments' | 'methods'
+const activeTab = ref<RiskTab>('overview')
+const tabs: Array<{ id: RiskTab; label: string }> = [
+  { id: 'overview', label: '風險總覽' }, { id: 'adjustments', label: '調整試算' }, { id: 'methods', label: '回測與方法' },
+]
+const showReports = ref(false)
+const selectedHorizon = ref(1)
+const selectedConfidence = ref<0.95 | 0.99>(0.95)
+const selectedRisk = computed(() => normalizedHorizons.value.find(h => h.horizonDays === selectedHorizon.value))
+const selectedVar = computed(() => selectedConfidence.value === .95 ? selectedRisk.value?.var95 : selectedRisk.value?.var99)
+const selectedEs = computed(() => selectedConfidence.value === .95 ? selectedRisk.value?.es95 : selectedRisk.value?.es99)
+async function selectTab(tab: RiskTab) {
+  activeTab.value = tab
+  if (tab === 'adjustments') await loadStressTest()
+  if (tab === 'methods') {
+    await readExistingBacktest()
+    if (!isVtGarch.value) await loadModelComparison()
+  }
+}
+function tabKeydown(event: KeyboardEvent, index: number) {
+  const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null
+  if (next == null) return
+  event.preventDefault()
+  const tab = tabs[next]!
+  void selectTab(tab.id)
+  document.getElementById(`risk-tab-${tab.id}`)?.focus()
+}
 let viewIsActive = true
 let backtestPollTimer: ReturnType<typeof setTimeout> | null = null
 let calculationPollTimer: ReturnType<typeof setTimeout> | null = null
@@ -212,7 +232,7 @@ async function runTargetWeightScenario() {
     scenarioResult.value = await calculatePortfolioRiskScenario(portfolioId.value, holdingsRisk.value.map(h => ({ securityId: h.securityId, targetWeight: (Number(targetWeights.value[h.securityId]) || 0) / 100 })))
   } catch (e) { scenarioMessage.value = riskErrorMessage(e) } finally { scenarioLoading.value = false }
 }
-const reportStatusLabel = (status: string) => ({ ready: '資料正常', warning: '資料需注意', critical: '資料嚴重不足' }[status] ?? status)
+const reportStatusLabel = qualityStatusLabel
 const reportCreatedAt = (value: string) => new Date(value).toLocaleString('zh-TW', { hour12: false })
 async function createReportSnapshot() {
   const run = calculationRun.value
@@ -233,7 +253,7 @@ async function createReportSnapshot() {
   finally { reportCreating.value = false }
 }
 async function openReportSnapshot(reportId: string) { try { selectedReportSnapshot.value = await getPortfolioRiskReportSnapshot(portfolioId.value, reportId) } catch (e) { reportActionMessage.value = riskErrorMessage(e) } }
-function printReportSnapshot() { window.print() }
+
 
 const selectedScenario = ref<string | null>(null)
 const formalStressScenarios = computed(() => (stressTest.value?.scenarios ?? []).slice().sort((a,b)=>a.totalImpact-b.totalImpact))
@@ -258,10 +278,6 @@ const backtestData = computed(() => {
     breached: point.breached,
     x: 55 + index * step,
   }))
-})
-const backtestVaRLine = computed(() => {
-  const points = backtestData.value
-  return points.length ? points.reduce((sum, point) => sum + point.var95, 0) / points.length : 0
 })
 const backtestChart = computed(() => {
   const values = [0, ...backtestData.value.flatMap(point => [point.actual, point.var95])]
@@ -298,100 +314,25 @@ const runInfo = computed(() => {
     model: run?.selectedModel ?? run?.requestedModel ?? 'VT-GARCH-t + Joint-Vector FHS',
     confidence: '95% / 99%',
     lookback: calculationLookback.value != null ? `${calculationLookback.value} 個日報酬` : '—',
-    date: calculationDataAsOf.value ?? new Date().toISOString().split('T')[0],
+    date: calculationDataAsOf.value ?? '未提供',
     duration: run?.completedAtUtc && run.startedAtUtc
       ? `${((new Date(run.completedAtUtc).getTime() - new Date(run.startedAtUtc).getTime()) / 1000).toFixed(1)}s`
       : '—',
   }
 })
 
-const metrics = computed(() => {
-  const h1 = normalizedHorizons.value.find(h => h.horizonDays === 1)
-  const items = [
-    {
-      label: 'VaR 95% (1日)',
-      value: h1 ? `${(h1.var95 * 100).toFixed(2)}%` : '—',
-      sub: runInfo.value.model,
-    },
-    {
-      label: 'ES 95% (1日)',
-      value: h1 ? `${(h1.es95 * 100).toFixed(2)}%` : '—',
-      sub: 'Expected Shortfall',
-    },
-    volatilityCard(isVtGarch.value, vtGarchResult.value, fallbackResult.value),
-    {
-      label: '最大回撤',
-      value: maxDrawdown.value != null ? `${(maxDrawdown.value * 100).toFixed(2)}%` : '—',
-      sub: 'Historical',
-    },
-  ]
-  return items
-})
-
-const riskKPIData = computed(() => {
-  const h1 = normalizedHorizons.value.find(h => h.horizonDays === 1)
-  const fb = fallbackResult.value
-  const total = totalMarketValue.value
-  const varAmount = h1 && total ? total * h1.var95 : 0
-  const esAmount = h1 && total ? total * h1.es95 : 0
-  const items = [
-    {
-      label: 'DAILY VaR (95%)',
-      value: h1 ? `${(h1.var95 * 100).toFixed(2)}%` : '—',
-      sub: varAmount ? `${formatMoney(varAmount)} ${baseCurrency.value}` : '—',
-      color: '#b05c5c',
-    },
-    {
-      label: 'DAILY ES (95%)',
-      value: h1 ? `${(h1.es95 * 100).toFixed(2)}%` : '—',
-      sub: esAmount ? `預期損失 ${formatMoney(esAmount)}` : '—',
-      color: '#b05c5c',
-    },
-  ]
-  if (h1?.var99 != null) {
-    items.push({
-      label: 'DAILY VaR (99%)',
-      value: `${(h1.var99 * 100).toFixed(2)}%`,
-      sub: h1.es99 != null ? `ES ${(h1.es99 * 100).toFixed(2)}%` : 'VT-GARCH-t',
-      color: '#b05c5c',
-    })
-  }
-  items.push({
-    label: 'MAX DRAWDOWN',
-    value: maxDrawdown.value != null ? `${(maxDrawdown.value * 100).toFixed(2)}%` : '—',
-    sub: '歷史最大回撤',
-    color: '#b05c5c',
-  })
-  if (fb) {
-    items.push(
-      { label: 'SHARPE RATIO', value: fb.sharpeRatio.toFixed(2), sub: '風險調整後報酬', color: '#7fa387' },
-      { label: 'CONCENTRATION HHI', value: fb.concentrationHhi.toFixed(4), sub: '持倉集中度', color: '#c9a86a' },
-      { label: 'LARGEST HOLDING', value: `${(fb.largestHoldingWeight * 100).toFixed(2)}%`, sub: '最大單一持倉', color: '#c9a86a' },
-    )
-  }
-  return items
-})
-
-const varTableRows = computed(() =>
-  normalizedHorizons.value
-    .filter(h => [1, 7, 30].includes(h.horizonDays))
-    .map(h => ({
-      method: `${h.horizonDays} 日`,
-      var95: h.var95,
-      var99: h.var99 ?? 0,
-      note: h.horizonDays === 1 ? runInfo.value.model : '',
-    })),
-)
-
-const esTableRows = computed(() =>
-  normalizedHorizons.value
-    .filter(h => [1, 7, 30].includes(h.horizonDays))
-    .map(h => ({
-      method: `${h.horizonDays} 日`,
-      es95: h.es95,
-      es99: h.es99 ?? 0,
-    })),
-)
+const sourceHoldings = computed(() => vtGarchResult.value?.conditionalRisk?.holdings ?? fallbackResult.value?.holdings ?? [])
+const largestRiskSource = computed(() => [...sourceHoldings.value].filter(h => h.componentRiskShare != null).sort((a, b) => b.componentRiskShare! - a.componentRiskShare!)[0])
+const historicalVolatility = computed(() => vtGarchResult.value?.historicalAnnualizedVolatility ?? fallbackResult.value?.historicalAnnualizedVolatility)
+const oneDayRisk = computed(() => normalizedHorizons.value.find(h => h.horizonDays === 1))
+function lossAmount(value: number | null | undefined) {
+  return value == null || !totalMarketValue.value ? '—' : `${formatMoney(-value * totalMarketValue.value)} ${baseCurrency.value}`
+}
+const overviewMetrics = computed(() => [
+  { label: '歷史年化波動率', value: riskPercent(historicalVolatility.value), sub: '依本次歷史資料估計' },
+  { label: '歷史最大回撤', value: riskPercent(maxDrawdown.value), sub: '目前持倉權重的歷史回放，非帳戶績效' },
+  { label: '95% 單日損失門檻（VaR）', value: lossAmount(oneDayRisk.value?.var95), sub: `${riskPercent(oneDayRisk.value?.var95)} · 依目前估值換算` },
+])
 
 function historicalPercent(value: number | null | undefined) {
   return value == null ? '資料不足／未提供' : `${(value * 100).toFixed(2)}%`
@@ -578,15 +519,21 @@ const loadModelComparison = () => loadDeferred(modelComparisonState, modelCompar
   risk99.value = at99; riskEwma.value = ewma95; riskEwma99.value = ewma99; riskCurve.value = curve
 })
 const loadStressTest = () => loadDeferred(stressTestState, stressTestError, async () => { stressTest.value = await getPortfolioStressTest(portfolioId.value) })
-const loadBacktest = () => loadDeferred(backtestState, backtestError, async () => {
-  if (calculationRun.value?.status === 'Completed') {
-    await runQualityValidation()
-    return
-  }
-  const runs = await getPortfolioRiskBacktestRuns(portfolioId.value)
-  const existing = runs.find(run => run.from === backtestFromDate.value && run.to === toDate.value && run.status !== 'Failed')
-  await waitForBacktestRun(existing ?? await createPortfolioRiskBacktestRun(portfolioId.value, backtestFromDate.value, toDate.value))
-})
+const loadBacktest = () => {
+  if (backtestState.value === 'loading') return
+  backtestState.value = 'idle'
+  return loadDeferred(backtestState, backtestError, runQualityValidation)
+}
+async function readExistingBacktest() {
+  const id = calculationRun.value?.qualityEvaluation?.riskBacktestRunId
+  if (!id || activeBacktestRun.value?.id === id || backtestState.value === 'loading') return
+  await loadDeferred(backtestState, backtestError, async () => {
+    await waitForBacktestRun(await getPortfolioRiskBacktestRun(portfolioId.value, id))
+    if (calculationRun.value?.qualityEvaluation?.status === 'Pending') {
+      calculationRun.value = await getRiskCalculation(portfolioId.value, calculationRun.value.id)
+    }
+  })
+}
 async function runQualityValidation() {
   const calculation = calculationRun.value
   if (!calculation || calculation.status !== 'Completed' || qualityValidationLoading.value) return
@@ -607,6 +554,8 @@ async function waitForBacktestRun(initialRun: PortfolioRiskBacktestRun) {
       if (!run.result) throw new Error('回測已完成，但找不到結果快照。')
       backtest.value = run.result
       activeBacktestRun.value = run
+      const qualityModel = calculationRun.value?.qualityEvaluation?.model
+      selectedBacktestModel.value = qualityModel ?? run.selectedModel ?? run.result.models[0]?.model ?? 'Historical'
       return
     }
     if (run.status === 'Failed') throw new Error(run.errorMessage || '回測失敗，請重新執行。')
@@ -633,13 +582,6 @@ const loadMonteCarlo = () => loadDeferred(monteCarloState, monteCarloError, asyn
     monteCarloBase.value = await getPortfolioMonteCarlo(portfolioId.value)
   }
 })
-
-function observeDeferredSections() {
-  const targets: Array<[HTMLElement | null, () => Promise<void>]> = [[modelComparisonSentinel.value, loadModelComparison], [stressTestSentinel.value, loadStressTest], [backtestSentinel.value, loadBacktest], [monteCarloSentinel.value, loadMonteCarlo]]
-  if (typeof IntersectionObserver === 'undefined') { targets.forEach(([, loader]) => void loader()); return }
-  sectionObserver = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { sectionObserver?.unobserve(entry.target); const target = targets.find(([element]) => element === entry.target); if (target) void target[1]() } }), { rootMargin: '300px 0px' })
-  targets.forEach(([element]) => { if (element) sectionObserver?.observe(element) })
-}
 
 async function waitForCalculationRun(initialRun: RiskCalculationRun) {
   let run = initialRun
@@ -726,30 +668,29 @@ onMounted(async () => {
     try {
       reportSnapshots.value = await getPortfolioRiskReportSnapshots(portfolioId.value)
     } catch {
-      reportActionMessage.value = '風險報告快照資料表尚未完成部署；請套用資料庫 migration 後再使用快照功能。'
+      reportActionMessage.value = '歷史報告暫時無法讀取，請稍後重試。'
     }
   } catch (e) {
     error.value = riskErrorMessage(e)
   } finally {
     loading.value = false
-    await nextTick()
-    if (viewIsActive && calculationRun.value?.status === 'Completed') observeDeferredSections()
+    if (viewIsActive && calculationRun.value?.qualityEvaluation) void readExistingBacktest()
   }
 })
 
-onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeout(backtestPollTimer); if (calculationPollTimer) clearTimeout(calculationPollTimer); if (monteCarloPollTimer) clearTimeout(monteCarloPollTimer); sectionObserver?.disconnect() })
+onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeout(backtestPollTimer); if (calculationPollTimer) clearTimeout(calculationPollTimer); if (monteCarloPollTimer) clearTimeout(monteCarloPollTimer) })
 </script>
 
 <template>
   <div class="prestige-page">
     <div class="prestige-section">
       <button class="prestige-btn back-btn" @click="router.push({ name: 'risk-runs' })">
-        ← BACK TO RISK RUNS
+        ← 返回風險分析
       </button>
 
       <div class="page-head">
         <div>
-          <span class="prestige-label">Risk Analysis Run — <span class="prestige-mono">{{ runInfo.id }}</span></span>
+          <span class="prestige-label">分析編號 — <span class="prestige-mono">{{ runInfo.id }}</span></span>
           <h1 class="page-title">{{ runInfo.portfolio }}</h1>
         </div>
         <span
@@ -757,7 +698,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
           :class="calculationRun?.status === 'Completed' ? 'tag-completed' : calculationRun?.status === 'Failed' ? 'tag-critical' : 'tag-warning'"
         >
           <span class="dot" :class="{ pulse: calculationRun?.status === 'Running' || calculationRun?.status === 'FallbackRunning' || calculationRun?.status === 'Queued' }" />
-          {{ calculationRun?.status === 'Completed' ? 'COMPLETED' : calculationRun?.status === 'Failed' ? 'FAILED' : calculationRun?.status === 'FallbackRunning' ? 'FALLBACK' : calculationRun?.status === 'Running' ? `RUNNING ${calculationRun.progressPercent}%` : 'QUEUED' }}
+          {{ calculationRun?.status === 'Completed' ? '計算完成' : calculationRun?.status === 'Failed' ? '計算失敗' : calculationRun?.status === 'FallbackRunning' ? '替代模型計算中' : calculationRun?.status === 'Running' ? `計算中 ${calculationRun.progressPercent}%` : '排隊中' }}
         </span>
       </div>
 
@@ -773,27 +714,36 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
       </ScrollReveal>
 
       <template v-if="!loading && calculationRun?.status === 'Completed'">
-        <section class="prestige-panel prestige-panel-pad">
-          <h2 class="panel-title">計算口徑</h2>
-          <p>請求期間 {{ calculationRun.inputSnapshot?.from ?? '未保存' }} ～ {{ calculationRun.inputSnapshot?.to ?? '未保存' }}；方法 {{ calculationRun.selectedModel ?? '未提供' }}；估計樣本 {{ calculationLookback ?? '未知' }}。</p>
-          <RiskMeasurementBasis :basis="fallbackResult?.measurementBasis" />
-          <p>情境比較只使用同一計算快照、方法與期間；歷史回撤、條件波動、模型路徑回撤和帳戶實際績效不可互換。</p>
-        </section>
+        <div class="report-toolbar">
+          <p class="muted-text">資料截止 {{ runInfo.date }} · 輸入期間 {{ calculationRun.inputSnapshot?.from ?? '未保存' }} ～ {{ calculationRun.inputSnapshot?.to ?? '未保存' }}</p>
+          <div class="btn-row">
+            <button class="prestige-btn" :disabled="reportCreating" @click="createReportSnapshot">{{ reportCreating ? '儲存中…' : '儲存風險報告' }}</button>
+            <button class="prestige-btn" :aria-expanded="showReports" @click="showReports = !showReports">歷史報告（{{ reportSnapshots.length }}）</button>
+          </div>
+          <p v-if="reportActionMessage" role="status">{{ reportActionMessage }}</p>
+          <div v-if="showReports" class="snap-list">
+            <p v-if="!reportSnapshots.length" class="muted-text">尚無已保存的報告。</p>
+            <button v-for="report in reportSnapshots" :key="report.id" class="prestige-btn" @click="openReportSnapshot(report.id)">{{ reportCreatedAt(report.createdAtUtc) }} · {{ reportStatusLabel(report.overallStatus) }}</button>
+          </div>
+        </div>
+        <RiskSnapshotReport v-if="selectedReportSnapshot" :report="selectedReportSnapshot" @close="selectedReportSnapshot = null" />
         <!-- Fallback banner -->
         <ScrollReveal v-if="isFallback" style="margin-bottom: 24px">
           <div class="warn-box">
             正式模型 VT-GARCH-t + Joint-Vector FHS 不可用，已回退至 {{ calculationRun.selectedModel }}。
-            原因：{{ calculationRun.fallbackReason }}（fallbackDepth={{ calculationRun.fallbackDepth }}）
+            原因：{{ calculationRun.fallbackReason }}
           </div>
         </ScrollReveal>
 
+
+        <p v-if="fitHealth && !fitHealth.healthy" class="warn-box" role="alert">本次模型擬合未通過健康檢查，請查看回測與方法。</p>
         <!-- Risk Governance -->
-        <ScrollReveal v-if="governance" style="margin-bottom: 24px">
+        <ScrollReveal v-if="governance && governanceAlerts.length" style="margin-bottom: 24px">
           <div class="prestige-panel prestige-panel-pad">
             <div class="panel-head">
               <div>
-                <h2 class="panel-title">風險治理摘要</h2>
-                <span class="prestige-label">Risk Governance · {{ governanceDataStatus(governance.dataStatus) }} · {{ governance.commonTradingDays }} 個共同交易日</span>
+                <h2 class="panel-title">重要提醒</h2>
+                <span class="prestige-label">{{ governanceDataStatus(governance.dataStatus) }} · {{ governance.commonTradingDays }} 個共同交易日</span>
               </div>
               <span
                 class="prestige-tag"
@@ -813,34 +763,42 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
               >
                 <div class="alert-line">
                   <strong class="alert-name">{{ governanceLabel(alert.code) }}</strong>
-                  <span class="alert-thresholds prestige-mono">目前 {{ alert.code.includes('age') ? `${alert.currentValue} 日` : `${(alert.currentValue * 100).toFixed(1)}%` }} · 注意 {{ alert.code.includes('age') ? `${alert.warningThreshold} 日` : `${(alert.warningThreshold * 100).toFixed(1)}%` }} · 嚴重 {{ alert.code.includes('age') ? `${alert.criticalThreshold} 日` : `${(alert.criticalThreshold * 100).toFixed(1)}%` }}</span>
+                  <span class="alert-thresholds prestige-mono">目前 {{ alert.code.includes('age') ? `${alert.currentValue} 日` : `${(alert.currentValue * 100).toFixed(1)}%` }}</span>
                 </div>
                 <div class="alert-msg">{{ alert.message }}</div>
               </div>
             </div>
             <p v-else class="muted-text">目前沒有觸發已設定的集中度與資料品質門檻；這不代表投組沒有風險。</p>
 
-            <!-- Report snapshots -->
-            <div class="sub-block">
-              <div class="btn-row">
-                <button class="prestige-btn" :disabled="reportCreating || calculationRun?.status !== 'Completed'" @click="createReportSnapshot">{{ reportCreating ? '建立中…' : '建立風險報告快照' }}</button>
-                <span v-if="reportActionMessage" class="muted-text snap-msg">{{ reportActionMessage }}</span>
-              </div>
-              <div v-if="reportSnapshots.length" class="snap-list">
-                <span class="prestige-label">歷史快照（最新在前）</span>
-                <button
-                  v-for="report in reportSnapshots"
-                  :key="report.id"
-                  class="prestige-btn snap-btn"
-                  @click="openReportSnapshot(report.id)"
-                >
-                  {{ reportCreatedAt(report.createdAtUtc) }} · {{ report.model }} · {{ reportStatusLabel(report.overallStatus) }}
-                </button>
-              </div>
-            </div>
+          </div>
+        </ScrollReveal>
 
+        <div v-if="calculationRun.qualityEvaluation && ['Failed', 'Error', 'InsufficientData'].includes(calculationRun.qualityEvaluation.status)" class="warn-box" role="alert">
+          {{ qualityStatusLabel(calculationRun.qualityEvaluation.status) }}
+          <span v-for="code in calculationRun.qualityEvaluation.failureCodes" :key="code"> · {{ qualityCodeLabel(code) }}</span>
+        </div>
+        <p v-for="code in calculationRun.qualityEvaluation?.warningCodes ?? []" :key="code" class="warn-box">{{ qualityCodeLabel(code) }}</p>
+        <nav class="risk-tabs" role="tablist" aria-label="風險分析分頁">
+          <button v-for="(tab, index) in tabs" :id="`risk-tab-${tab.id}`" :key="tab.id" role="tab" :aria-selected="activeTab === tab.id" :aria-controls="`risk-panel-${tab.id}`" :tabindex="activeTab === tab.id ? 0 : -1" @click="selectTab(tab.id)" @keydown="tabKeydown($event, index)">{{ tab.label }}</button>
+        </nav>
+        <section id="risk-panel-overview" v-show="activeTab === 'overview'" role="tabpanel" aria-labelledby="risk-tab-overview">
+          <div class="prestige-panel overview-metrics">
+            <div v-for="metric in overviewMetrics" :key="metric.label" class="kpi-cell">
+              <span class="prestige-label">{{ metric.label }}</span><strong class="kpi-value prestige-mono">{{ metric.value }}</strong><span class="kpi-sub">{{ metric.sub }}</span>
+            </div>
+          </div>
+          <div class="overview-secondary">
+            <div><span>超過門檻時的平均損失（ES 95%）</span><strong>{{ lossAmount(oneDayRisk?.es95) }}</strong><small>{{ riskPercent(oneDayRisk?.es95) }} · 依目前估值換算</small></div>
+            <div><span>最大風險來源</span><strong>{{ largestRiskSource ? `${largestRiskSource.ticker} · ${largestRiskSource.securityName}` : '未提供風險分解' }}</strong><small v-if="largestRiskSource">占模型波動風險 {{ riskPercent(largestRiskSource.componentRiskShare, 1) }}</small></div>
+          </div>
+          <p class="table-note">VaR 是模型估計的損失門檻，仍可能出現更大的損失。歷史指標依上方輸入期間計算，並非未來一年預測。</p>
+          <p v-if="governance && !governanceAlerts.length" class="table-note">目前未觸發集中度與資料品質警示。</p>
+          <RiskSources :conditional="vtGarchResult?.conditionalRisk" :fallback="fallbackResult" />
+        </section>
+        <RiskQualitySummary :evaluation="calculationRun.qualityEvaluation" :backtest="activeBacktestRun" :detailed="activeTab === 'methods'" :loading="backtestState === 'loading' || qualityValidationLoading" :error="backtestError" @view="selectTab('methods')" @run="loadBacktest" @retry="calculationRun.qualityEvaluation ? readExistingBacktest() : loadBacktest()" />
+        <section id="risk-panel-adjustments" v-if="activeTab === 'adjustments'" role="tabpanel" aria-labelledby="risk-tab-adjustments">
             <!-- What-if scenario -->
-            <div v-if="hasHoldingsData" class="sub-block">
+            <div v-if="hasHoldingsData" class="prestige-panel prestige-panel-pad">
               <h3 class="sub-title">調整試算</h3>
               <p class="muted-text">僅試算，不會修改真實投組；現金為負時代表融資，不含融資利率、保證金與追繳規則。</p>
               <div class="weight-grid">
@@ -872,7 +830,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                   class="mini-cell"
                 >
                   <span class="prestige-label">{{ metric.label }}</span>
-                  <strong class="mini-value prestige-mono">{{ ((metric.current ?? 0)*100).toFixed(1) }}% → {{ ((metric.scenario ?? 0)*100).toFixed(1) }}%</strong>
+                  <strong class="mini-value prestige-mono">{{ metric.label === 'HHI' ? metric.current?.toFixed(3) ?? '—' : riskPercent(metric.current, 1) }} → {{ metric.label === 'HHI' ? metric.scenario?.toFixed(3) ?? '—' : riskPercent(metric.scenario, 1) }}</strong>
                 </div>
               </div>
               <div v-if="scenarioResult" class="scenario-panels">
@@ -895,170 +853,179 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                 </div>
               </div>
             </div>
-          </div>
-        </ScrollReveal>
 
-        <!-- Report snapshot detail -->
-        <ScrollReveal v-if="selectedReportSnapshot" style="margin-bottom: 24px">
-          <section class="prestige-panel prestige-panel-pad">
-            <div class="panel-head">
-              <div>
-                <h2 class="panel-title">風險報告快照</h2>
-                <span class="prestige-label">{{ reportCreatedAt(selectedReportSnapshot.createdAtUtc) }} · 資料截止 {{ selectedReportSnapshot.dataAsOfDate ?? '—' }} · {{ selectedReportSnapshot.model }} · {{ selectedReportSnapshot.thresholdVersion }} · 品質 {{ selectedReportSnapshot.overallStatus }}</span>
-              </div>
-              <button class="prestige-btn" @click="printReportSnapshot">列印／另存 PDF</button>
-            </div>
-            <p class="muted-text" style="margin-bottom: 14px">此內容從建立當下的資料庫快照讀取，市場資料後續更新不會改寫它。</p>
-            <pre class="snapshot-pre">{{ JSON.stringify(selectedReportSnapshot.snapshot, null, 2) }}</pre>
-          </section>
-        </ScrollReveal>
-
-        <RiskSources :conditional="vtGarchResult?.conditionalRisk" :fallback="fallbackResult" />
-
-        <!-- Run Info -->
-        <ScrollReveal>
-          <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
-            <div class="info-grid info-grid-2">
-              <div
-                v-for="(item, i) in [
-                  { label: 'MODEL', value: runInfo.model },
-                  { label: 'CONFIDENCE', value: runInfo.confidence },
-                  { label: 'LOOKBACK', value: runInfo.lookback },
-                  { label: 'DATA AS OF', value: runInfo.date },
-                ]"
-                :key="i"
-                class="info-cell"
-              >
-                <span class="prestige-label cell-label">{{ item.label }}</span>
-                <span class="info-value prestige-mono">{{ item.value }}</span>
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <!-- Model Metadata -->
-        <ScrollReveal :delay="0.05">
-          <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
-            <h3 class="panel-sub-title">模型細節</h3>
-            <div class="info-grid info-grid-4">
-              <div
-                v-for="(item, i) in [
-                  { label: 'ALGORITHM VERSION', value: calculationRun?.algorithmVersion ?? '—' },
-                  { label: 'DATA FACTOR', value: calculationRun?.dataFactorVersion ?? '—' },
-                  { label: 'SIMULATIONS', value: calculationSimulations != null ? calculationSimulations.toLocaleString() : '—' },
-                  { label: 'INPUT HASH', value: calculationRun?.inputHash ? calculationRun.inputHash.slice(0, 12) + '…' : '—' },
-                ]"
-                :key="i"
-                class="info-cell"
-              >
-                <span class="prestige-label cell-label">{{ item.label }}</span>
-                <span class="info-value prestige-mono">{{ item.value }}</span>
-              </div>
-            </div>
-            <div v-if="fitHealth" class="info-grid info-grid-4" style="margin-top: 1px">
-              <div
-                v-for="(item, i) in [
-                  { label: 'FIT HEALTH', value: fitHealth.healthy ? 'Healthy' : 'Degraded' },
-                  { label: 'MAX PERSISTENCE', value: fitHealth.maxPersistence.toFixed(4) },
-                  { label: 'MIN STUDENT-ν', value: fitHealth.minNu.toFixed(2) },
-                  { label: 'NEAR-UNIT RATE', value: (fitHealth.nearUnitRate * 100).toFixed(1) + '%' },
-                ]"
-                :key="i"
-                class="info-cell"
-              >
-                <span class="prestige-label cell-label">{{ item.label }}</span>
-                <span class="info-value prestige-mono" :style="{ color: item.label === 'FIT HEALTH' ? (fitHealth.healthy ? '#7fa387' : '#b05c5c') : undefined }">{{ item.value }}</span>
-              </div>
-            </div>
-            <div v-else-if="fallbackResult" class="info-grid info-grid-4" style="margin-top: 1px">
-              <div
-                v-for="(item, i) in [
-                  { label: 'COVARIANCE METHOD', value: fallbackResult.covarianceMethod ?? '—' },
-                  { label: 'RESIDUAL SAMPLING', value: fallbackResult.residualSampling ?? '—' },
-                  { label: 'COMMON TRADING DAYS', value: fallbackResult.commonTradingDays ? `${fallbackResult.commonTradingDays} 天` : '—' },
-                  { label: 'SHRINKAGE ALPHA', value: fallbackResult.shrinkageAlpha != null ? `${(fallbackResult.shrinkageAlpha * 100).toFixed(2)}%` : '—' },
-                ]"
-                :key="i"
-                class="info-cell"
-              >
-                <span class="prestige-label cell-label">{{ item.label }}</span>
-                <span class="info-value prestige-mono">{{ item.value }}</span>
-              </div>
-            </div>
-            <div class="info-grid info-grid-4" style="margin-top: 1px">
-              <div class="info-cell"><span class="prestige-label cell-label">RISK QUALITY</span><span class="info-value prestige-mono">{{ calculationRun?.qualityEvaluation?.status ?? 'Unvalidated' }}</span></div>
-              <div class="info-cell"><span class="prestige-label cell-label">KUPIEC P</span><span class="info-value prestige-mono">{{ calculationRun?.qualityEvaluation?.kupiecPValue?.toFixed(4) ?? '—' }}</span></div>
-              <div class="info-cell"><span class="prestige-label cell-label">CHRISTOFFERSEN P</span><span class="info-value prestige-mono">{{ calculationRun?.qualityEvaluation?.christoffersenPValue?.toFixed(4) ?? '—' }}</span></div>
-              <div class="info-cell"><button class="prestige-btn" type="button" :disabled="qualityValidationLoading" @click="runQualityValidation">{{ qualityValidationLoading ? '驗證中…' : '驗證模型' }}</button></div>
-            </div>
-            <p v-if="calculationRun?.qualityEvaluation?.failureCodes.length || calculationRun?.qualityEvaluation?.warningCodes.length" class="table-note prestige-mono">
-              {{ [...(calculationRun.qualityEvaluation.failureCodes ?? []), ...(calculationRun.qualityEvaluation.warningCodes ?? [])].join(', ') }}
-            </p>
-          </div>
-        </ScrollReveal>
-
-        <!-- KPI Cards -->
-        <ScrollReveal :delay="0.1">
-          <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
-            <div class="kpi-grid kpi-grid-5">
-              <div v-for="(kpi, i) in riskKPIData" :key="i" class="kpi-cell">
-                <span class="prestige-label cell-label">{{ kpi.label }}</span>
-                <span class="kpi-value prestige-mono" :style="{ color: kpi.color }">{{ kpi.value }}</span>
-                <span class="kpi-sub">{{ kpi.sub }}</span>
-                <div class="accent-bar" :style="{ backgroundColor: kpi.color }" />
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <!-- Core Metrics -->
-        <ScrollReveal :delay="0.15">
-          <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
-            <div class="kpi-grid">
-              <div v-for="(m, i) in metrics" :key="i" class="kpi-cell">
-                <span class="prestige-label cell-label">{{ m.label }}</span>
-                <span class="kpi-value prestige-mono metric-value">{{ m.value }}</span>
-                <span class="kpi-sub">{{ m.sub }}</span>
-                <div class="accent-bar metric-accent" />
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <div ref="modelComparisonSentinel" class="deferred-sentinel" />
-        <!-- VaR Results Table -->
+          <div v-if="!hasHoldingsData" class="prestige-panel prestige-panel-pad"><h2 class="panel-title">權重調整試算</h2><p class="muted-text">此模型目前未提供同口徑的權重調整試算。可先查看下方壓力情境；它不會修改實際持倉。</p></div>
+        <!-- Stress Test Scenarios -->
         <ScrollReveal class="mt-20">
           <div class="prestige-panel">
             <div class="section-head">
-              <h2 class="panel-title">Value at Risk 分析</h2>
-              <span class="prestige-label">{{ runInfo.model }} — 多期限 95% & 99%</span>
+              <h2 class="panel-title">壓力測試情境</h2>
+              <span class="prestige-label">依目前持倉回放；與已保存的風險結果可能使用不同資料時點</span>
             </div>
             <div class="section-body">
-              <div class="stack">
+              <p v-if="stressTestState === 'loading'" role="status">載入壓力情境中…</p>
+              <p v-if="stressTestError" role="alert">{{ stressTestError }} <button class="prestige-btn" @click="loadStressTest">重試</button></p>
+              <p v-if="stressTestState === 'ready' && !formalStressScenarios.length">目前沒有可用的壓力情境。</p>
+              <div class="grid-3">
+                <div
+                  v-for="s in formalStressScenarios"
+                  :key="s.id"
+                  class="prestige-panel stress-card"
+                  role="button" tabindex="0" :aria-expanded="selectedScenario === s.id"
+                  @keydown.enter="selectedScenario = selectedScenario === s.id ? null : s.id"
+                  @keydown.space.prevent="selectedScenario = selectedScenario === s.id ? null : s.id"
+                  :class="{ selected: selectedScenario === s.id }"
+                  @click="selectedScenario = selectedScenario === s.id ? null : s.id"
+                >
+                  <div class="stress-top">
+                    <span class="stress-name">{{ s.name }}</span>
+                    <span class="prestige-tag" :class="s.type === 'historical' ? 'tag-historical' : 'tag-hypo'">{{ s.type === 'historical' ? '歷史回放' : '假設情境' }}</span>
+                  </div>
+
+                  <p class="stress-method">{{ s.methodology }}</p>
+
+                  <div class="stress-impact">
+                    <span class="impact-value prestige-mono">{{ (s.totalImpact * 100).toFixed(1) }}%</span>
+                    <span class="prestige-label">投組衝擊</span>
+                  </div>
+
+                  <div v-if="selectedScenario === s.id" class="stress-detail">
+                    <div v-for="h in s.holdings" :key="h.ticker" class="stress-holding">
+                      <span>{{ h.ticker }} · {{ h.industry }}</span>
+                      <span class="prestige-mono stress-holding-value">{{ (h.contribution * 100).toFixed(1) }}%</span>
+                    </div>
+                    <div class="stress-industries">
+                      <span v-for="industry in s.industries" :key="industry.industry" class="prestige-tag">{{ industry.industry }} <span class="prestige-mono">{{ (industry.contribution * 100).toFixed(1) }}%</span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="selectedStressScenario" class="mini-panel stress-detail-panel">
+                <h3 class="mini-title" style="font-size: 15px">持股壓力明細 — {{ selectedStressScenario.name }}</h3>
+                <p class="muted-text" style="margin-bottom: 14px">{{ selectedStressScenario.methodology }}</p>
                 <div class="table-wrap">
                   <table class="prestige-table">
                     <thead>
                       <tr>
-                        <th style="text-align: left">持有期間</th>
-                        <th style="text-align: right">VaR 95%</th>
-                        <th style="text-align: right">VaR 99%</th>
-                        <th style="text-align: left; padding-left: 16px">備註</th>
+                        <th>代號／名稱</th>
+                        <th>產業</th>
+                        <th style="text-align: right">當前權重</th>
+                        <th style="text-align: right">情境起始價</th>
+                        <th style="text-align: right">情境結束價</th>
+                        <th style="text-align: right">情境期間報酬</th>
+                        <th style="text-align: right">對投組衝擊貢獻</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(v, i) in varTableRows" :key="i">
-                        <td>{{ v.method }}</td>
-                        <td class="prestige-mono td-num" :class="{ 'td-warn': v.var95 < -0.048 }">{{ (v.var95 * 100).toFixed(2) }}%</td>
-                        <td class="prestige-mono td-num td-danger">{{ v.var99 ? `${(v.var99 * 100).toFixed(2)}%` : '—' }}</td>
-                        <td class="td-muted" style="padding-left: 16px">{{ v.note }}</td>
+                      <tr v-for="h in selectedStressScenario.holdings.slice().sort((a,b)=>a.contribution-b.contribution)" :key="h.ticker">
+                        <td>{{ h.ticker }} · {{ h.securityName }}</td>
+                        <td class="td-muted">{{ h.industry }}</td>
+                        <td class="prestige-mono td-num">{{ (h.weight*100).toFixed(1) }}%</td>
+                        <td class="prestige-mono td-num">{{ h.basePrice.toFixed(2) }}</td>
+                        <td class="prestige-mono td-num">{{ h.stressedPrice.toFixed(2) }}</td>
+                        <td class="prestige-mono td-num">{{ (h.shock*100).toFixed(1) }}%</td>
+                        <td class="prestige-mono td-num td-danger">{{ (h.contribution*100).toFixed(1) }}%</td>
                       </tr>
                     </tbody>
                   </table>
-                  <p class="table-note">
-                    正式結果取自非同步計算引擎（{{ calculationSimulations?.toLocaleString() ?? '—' }} 次模擬）。
+                </div>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+
+        </section>
+        <section id="risk-panel-methods" v-if="activeTab === 'methods'" role="tabpanel" aria-labelledby="risk-tab-methods">
+        <!-- Backtest Results -->
+        <ScrollReveal v-if="backtest" class="mt-20">
+          <div class="prestige-panel">
+            <div class="section-head">
+              <h2 class="panel-title">VaR 回測驗證</h2>
+              <span class="prestige-label">最近 {{ backtestData.length }} 個樣本外交易日 · 虛線為逐日 VaR，紅柱為超損日</span>
+            </div>
+            <div class="section-body">
+              <div class="btn-row" style="margin-bottom: 20px">
+                <button
+                  v-for="model in backtestModels"
+                  :key="model"
+                  class="prestige-btn chip-btn prestige-mono"
+                  :class="{ active: selectedBacktestModel === model }"
+                  @click="selectedBacktestModel = model"
+                >{{ model }}</button>
+                <button
+                  v-for="confidence in backtestConfidences"
+                  :key="confidence"
+                  class="prestige-btn chip-btn prestige-mono"
+                  :class="{ active: selectedBacktestConfidence === confidence }"
+                  @click="selectedBacktestConfidence = confidence"
+                >{{ (confidence * 100).toFixed(0) }}%</button>
+              </div>
+              <div class="grid-2">
+                <svg width="100%" height="280" viewBox="0 0 500 280">
+                  <line v-for="value in backtestChart.ticks" :key="'g-' + value" x1="50" :y1="backtestChart.y(value)" x2="480" :y2="backtestChart.y(value)" stroke="rgba(201,168,106,0.12)" stroke-width="1" stroke-dasharray="4 4" />
+                  <text v-for="value in backtestChart.ticks" :key="value" x="45" :y="backtestChart.y(value) + 4" text-anchor="end" fill="#9a917c" font-size="10">{{ value }}%</text>
+
+                  <line x1="50" :y1="backtestChart.y(0)" x2="480" :y2="backtestChart.y(0)" stroke="rgba(245,239,224,0.45)" stroke-width="1.5" />
+
+                  <polyline :points="backtestData.map(d => `${d.x},${backtestChart.y(d.var95)}`).join(' ')" fill="none" stroke="#b05c5c" stroke-width="1.5" stroke-dasharray="4 4" />
+                  <g v-for="(d, i) in backtestData" :key="i">
+                    <line
+                      :x1="d.x"
+                      :y1="backtestChart.y(0)"
+                      :x2="d.x"
+                      :y2="backtestChart.y(d.actual)"
+                      :stroke="d.breached ? '#b05c5c' : d.actual >= 0 ? '#c9a86a' : 'rgba(154,145,124,0.75)'"
+                      stroke-width="4"
+                    />
+                    <text v-if="d.breached" :x="d.x" :y="backtestChart.y(d.actual) - 6" text-anchor="middle" fill="#b05c5c" font-size="8">!</text>
+                  </g>
+
+                  <template v-for="(d, i) in backtestData" :key="'xl-' + i">
+                    <text v-if="i % 5 === 0 || i === backtestData.length - 1" :x="d.x" y="260" text-anchor="middle" fill="#9a917c" font-size="8">{{ d.date.slice(5) }}</text>
+                  </template>
+                </svg>
+
+                <div class="backtest-side">
+                  <div class="mini-panel" style="margin-bottom: 16px">
+                    <div class="stat-grid-2">
+                      <div v-for="stat in backtestStats" :key="stat.label">
+                        <span class="prestige-label cell-label">{{ stat.label }}</span>
+                        <span class="stat-value prestige-mono" :style="{ color: stat.color }">{{ stat.value }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p class="muted-text">
+                    輸入資料期間 {{ activeBacktestRun?.from }} ～ {{ activeBacktestRun?.to }}；此圖顯示所選模型與水準，品質摘要固定採用本次驗證的模型與水準。
+                    <template v-if="activeBacktestRun?.fallbackReason">目前結果已回退：{{ activeBacktestRun.selectedModel }}（{{ activeBacktestRun.fallbackReason }}）</template>
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
 
+
+          <section class="prestige-panel prestige-panel-pad risk-estimates">
+            <h2 class="panel-title">其他期間與信賴水準</h2>
+            <div class="estimate-controls"><label>持有期間 <select v-model.number="selectedHorizon" class="prestige-input"><option v-for="h in normalizedHorizons" :key="h.horizonDays" :value="h.horizonDays">{{ h.horizonDays }} 日</option></select></label><label>信賴水準 <select v-model.number="selectedConfidence" class="prestige-input"><option :value=".95">95%</option><option :value=".99">99%</option></select></label></div>
+            <div class="overview-secondary"><div><span>損失門檻 VaR</span><strong>{{ riskPercent(selectedVar) }}</strong></div><div><span>超過門檻時平均損失 ES</span><strong>{{ riskPercent(selectedEs) }}</strong></div></div>
+            <p class="muted-text">僅顯示本次保存結果；未提供的水準以「—」標示。</p>
+          </section>
+          <details class="advanced-section"><summary>圖表與模型比較</summary>
+            <p v-if="modelComparisonState === 'loading'" role="status">載入其他模型診斷中…</p>
+            <p v-if="modelComparisonError" role="alert">{{ modelComparisonError }} <button class="prestige-btn" @click="loadModelComparison">重試</button></p>
+        <!-- VaR Results Table -->
+        <ScrollReveal class="mt-20">
+          <div class="prestige-panel">
+            <div class="section-head">
+              <h2 class="panel-title">歷史報酬分布</h2>
+              <span class="prestige-label">{{ runInfo.model }} — 輸入資料參考</span>
+            </div>
+            <div class="section-body">
+              <div class="stack">
                 <div v-if="officialHistogram.length">
                   <h3 class="chart-title">歷史日報酬分布（輸入參考）</h3>
                   <svg width="100%" height="270" viewBox="0 0 400 270" style="display: block; width: min(100%, 760px)">
@@ -1096,39 +1063,11 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
         <ScrollReveal class="mt-20">
           <div class="prestige-panel">
             <div class="section-head">
-              <h2 class="panel-title">Expected Shortfall (ES) 分析</h2>
-              <span class="prestige-label">{{ runInfo.model }} — 多期限尾部損失期望值</span>
+              <h2 class="panel-title">VaR 與 ES 信心水準曲線</h2>
+              <span class="prestige-label">{{ runInfo.model }} — 1 日風險估計</span>
             </div>
             <div class="section-body">
               <div class="stack">
-                <div>
-                  <div class="table-wrap">
-                    <table class="prestige-table">
-                      <thead>
-                        <tr>
-                          <th style="text-align: left">持有期間</th>
-                          <th style="text-align: right">ES 95%</th>
-                          <th style="text-align: right">ES 99%</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="(e, i) in esTableRows" :key="i">
-                          <td>{{ e.method }}</td>
-                          <td class="prestige-mono td-num td-warn">{{ (e.es95 * 100).toFixed(2) }}%</td>
-                          <td class="prestige-mono td-num td-danger">{{ e.es99 ? `${(e.es99 * 100).toFixed(2)}%` : '—' }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <div class="note-panel">
-                    <p class="note-text">
-                      ES（Expected Shortfall）衡量當損失超過 VaR 閾值時的
-                      <strong class="note-strong">平均損失程度</strong>。
-                      相較於 VaR 僅反映單一分位數點，ES 更完整地捕捉尾部風險。
-                    </p>
-                  </div>
-                </div>
-
                 <div>
                   <h3 class="chart-title">{{ isVtGarch ? 'VaR vs ES 信心水準曲線（VT-GARCH-t 1 日）' : 'VaR vs ES 比較（歷史 EWMA 診斷，非正式風險引擎）' }}</h3>
                   <svg width="100%" height="340" viewBox="0 0 400 340" style="display: block; width: min(100%, 760px); overflow: hidden">
@@ -1159,7 +1098,7 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
           <div class="prestige-panel">
             <div class="section-head">
               <h2 class="panel-title">歷史 EWMA 波動率診斷</h2>
-              <span class="prestige-label">非正式風險引擎 — 僅供交叉比對</span>
+              <span class="prestige-label">非正式風險引擎 — 診斷期間 {{ fromDate }} ～ {{ toDate }}，僅供交叉比對</span>
             </div>
             <div class="section-body">
               <div class="stack">
@@ -1235,10 +1174,10 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                   <tbody>
                     <tr v-for="(row, i) in garchOneDayComparison" :key="i">
                       <td>{{ row.method }}</td>
-                      <td class="prestige-mono td-num td-warn">{{ (row.var95 * 100).toFixed(2) }}%</td>
-                      <td class="prestige-mono td-num td-danger">{{ (row.var99 * 100).toFixed(2) }}%</td>
-                      <td class="prestige-mono td-num td-warn">{{ (row.es95 * 100).toFixed(2) }}%</td>
-                      <td class="prestige-mono td-num td-danger">{{ (row.es99 * 100).toFixed(2) }}%</td>
+                      <td class="prestige-mono td-num td-warn">{{ riskPercent(row.var95) }}</td>
+                      <td class="prestige-mono td-num td-danger">{{ riskPercent(row.var99) }}</td>
+                      <td class="prestige-mono td-num td-warn">{{ riskPercent(row.es95) }}</td>
+                      <td class="prestige-mono td-num td-danger">{{ riskPercent(row.es99) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1248,154 +1187,8 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
           </div>
         </ScrollReveal>
 
-        <div ref="stressTestSentinel" class="deferred-sentinel" />
-        <!-- Stress Test Scenarios -->
-        <ScrollReveal class="mt-20">
-          <div class="prestige-panel">
-            <div class="section-head">
-              <h2 class="panel-title">壓力測試情境</h2>
-              <span class="prestige-label">Stress Testing — 六大極端情境模擬</span>
-            </div>
-            <div class="section-body">
-              <div class="grid-3">
-                <div
-                  v-for="s in formalStressScenarios"
-                  :key="s.id"
-                  class="prestige-panel stress-card"
-                  :class="{ selected: selectedScenario === s.id }"
-                  @click="selectedScenario = selectedScenario === s.id ? null : s.id"
-                >
-                  <div class="stress-top">
-                    <span class="stress-name">{{ s.name }}</span>
-                    <span class="prestige-tag" :class="s.type === 'historical' ? 'tag-historical' : 'tag-hypo'">{{ s.type === 'historical' ? '歷史回放' : '假設情境' }}</span>
-                  </div>
 
-                  <p class="stress-method">{{ s.methodology }}</p>
-
-                  <div class="stress-impact">
-                    <span class="impact-value prestige-mono">{{ (s.totalImpact * 100).toFixed(1) }}%</span>
-                    <span class="prestige-label">投組衝擊</span>
-                  </div>
-
-                  <div v-if="selectedScenario === s.id" class="stress-detail">
-                    <div v-for="h in s.holdings" :key="h.ticker" class="stress-holding">
-                      <span>{{ h.ticker }} · {{ h.industry }}</span>
-                      <span class="prestige-mono stress-holding-value">{{ (h.contribution * 100).toFixed(1) }}%</span>
-                    </div>
-                    <div class="stress-industries">
-                      <span v-for="industry in s.industries" :key="industry.industry" class="prestige-tag">{{ industry.industry }} <span class="prestige-mono">{{ (industry.contribution * 100).toFixed(1) }}%</span></span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="selectedStressScenario" class="mini-panel stress-detail-panel">
-                <h3 class="mini-title" style="font-size: 15px">持股壓力明細 — {{ selectedStressScenario.name }}</h3>
-                <p class="muted-text" style="margin-bottom: 14px">{{ selectedStressScenario.methodology }}</p>
-                <div class="table-wrap">
-                  <table class="prestige-table">
-                    <thead>
-                      <tr>
-                        <th>代號／名稱</th>
-                        <th>產業</th>
-                        <th style="text-align: right">當前權重</th>
-                        <th style="text-align: right">情境起始價</th>
-                        <th style="text-align: right">情境結束價</th>
-                        <th style="text-align: right">情境期間報酬</th>
-                        <th style="text-align: right">對投組衝擊貢獻</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="h in selectedStressScenario.holdings.slice().sort((a,b)=>a.contribution-b.contribution)" :key="h.ticker">
-                        <td>{{ h.ticker }} · {{ h.securityName }}</td>
-                        <td class="td-muted">{{ h.industry }}</td>
-                        <td class="prestige-mono td-num">{{ (h.weight*100).toFixed(1) }}%</td>
-                        <td class="prestige-mono td-num">{{ h.basePrice.toFixed(2) }}</td>
-                        <td class="prestige-mono td-num">{{ h.stressedPrice.toFixed(2) }}</td>
-                        <td class="prestige-mono td-num">{{ (h.shock*100).toFixed(1) }}%</td>
-                        <td class="prestige-mono td-num td-danger">{{ (h.contribution*100).toFixed(1) }}%</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <div ref="backtestSentinel" class="deferred-sentinel" />
-        <!-- Backtest Results -->
-        <ScrollReveal class="mt-20">
-          <div class="prestige-panel">
-            <div class="section-head">
-              <h2 class="panel-title">VaR 回測驗證</h2>
-              <span class="prestige-label">Backtesting — 252 日滾動 VaR / ES</span>
-            </div>
-            <div class="section-body">
-              <div class="btn-row" style="margin-bottom: 20px">
-                <button
-                  v-for="model in backtestModels"
-                  :key="model"
-                  class="prestige-btn chip-btn prestige-mono"
-                  :class="{ active: selectedBacktestModel === model }"
-                  @click="selectedBacktestModel = model"
-                >{{ model }}</button>
-                <button
-                  v-for="confidence in backtestConfidences"
-                  :key="confidence"
-                  class="prestige-btn chip-btn prestige-mono"
-                  :class="{ active: selectedBacktestConfidence === confidence }"
-                  @click="selectedBacktestConfidence = confidence"
-                >{{ (confidence * 100).toFixed(0) }}%</button>
-              </div>
-              <div class="grid-2">
-                <svg width="100%" height="280" viewBox="0 0 500 280">
-                  <line v-for="value in backtestChart.ticks" :key="'g-' + value" x1="50" :y1="backtestChart.y(value)" x2="480" :y2="backtestChart.y(value)" stroke="rgba(201,168,106,0.12)" stroke-width="1" stroke-dasharray="4 4" />
-                  <text v-for="value in backtestChart.ticks" :key="value" x="45" :y="backtestChart.y(value) + 4" text-anchor="end" fill="#9a917c" font-size="10">{{ value }}%</text>
-
-                  <line x1="50" :y1="backtestChart.y(0)" x2="480" :y2="backtestChart.y(0)" stroke="rgba(245,239,224,0.45)" stroke-width="1.5" />
-
-                  <line x1="50" :y1="backtestChart.y(backtestVaRLine)" x2="480" :y2="backtestChart.y(backtestVaRLine)" stroke="#b05c5c" stroke-width="1" stroke-dasharray="4 4" />
-                  <text x="485" :y="backtestChart.y(backtestVaRLine) + 3" fill="#b05c5c" font-size="9">VaR {{ (selectedBacktestConfidence * 100).toFixed(0) }}%</text>
-
-                  <g v-for="(d, i) in backtestData" :key="i">
-                    <line
-                      :x1="d.x"
-                      :y1="backtestChart.y(0)"
-                      :x2="d.x"
-                      :y2="backtestChart.y(d.actual)"
-                      :stroke="d.breached ? '#b05c5c' : d.actual >= 0 ? '#c9a86a' : 'rgba(154,145,124,0.75)'"
-                      stroke-width="4"
-                    />
-                    <text v-if="d.breached" :x="d.x" :y="backtestChart.y(d.actual) - 6" text-anchor="middle" fill="#b05c5c" font-size="8">!</text>
-                  </g>
-
-                  <template v-for="(d, i) in backtestData" :key="'xl-' + i">
-                    <text v-if="i % 5 === 0 || i === backtestData.length - 1" :x="d.x" y="260" text-anchor="middle" fill="#9a917c" font-size="8">{{ d.date.slice(5) }}</text>
-                  </template>
-                </svg>
-
-                <div class="backtest-side">
-                  <div class="mini-panel" style="margin-bottom: 16px">
-                    <div class="stat-grid-2">
-                      <div v-for="stat in backtestStats" :key="stat.label">
-                        <span class="prestige-label cell-label">{{ stat.label }}</span>
-                        <span class="stat-value prestige-mono" :style="{ color: stat.color }">{{ stat.value }}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p class="muted-text">
-                    使用目前持倉權重回放近三年共同日價格；正式模型為 VT-GARCH-t + Joint-Vector FHS。若 Python 不可用，系統會明確標示並回退 C# MVEWMA-FHS。
-                    <template v-if="activeBacktestRun?.fallbackReason">目前結果已回退：{{ activeBacktestRun.selectedModel }}（{{ activeBacktestRun.fallbackReason }}）</template>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <div ref="monteCarloSentinel" class="deferred-sentinel" />
+          </details>
         <!-- Monte Carlo Simulation -->
         <ScrollReveal class="mt-20" style="margin-bottom: 80px">
           <div class="prestige-panel">
@@ -1404,6 +1197,8 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
               <span class="prestige-label">{{ monteCarlo?.model ?? 'VT-GARCH-t + Joint-Vector FHS' }} — {{ monteCarlo?.simulations?.toLocaleString() ?? '10,000' }} 次、{{ monteCarlo?.horizonDays ?? 252 }} 個交易日路徑模擬</span>
             </div>
             <div class="section-body">
+              <button v-if="!monteCarlo" class="prestige-btn" :disabled="monteCarloState === 'loading'" @click="loadMonteCarlo">{{ monteCarloState === 'loading' ? '模擬處理中…' : monteCarloState === 'error' ? '重試路徑模擬' : '載入或執行路徑模擬' }}</button>
+              <p v-if="monteCarloError" role="alert">{{ monteCarloError }}</p>
               <template v-if="monteCarlo?.status === 'ready'">
                 <svg width="100%" height="400" viewBox="0 0 900 400" preserveAspectRatio="xMidYMid meet">
                   <line v-for="tick in monteCarloChart.ticks" :key="'g-' + tick" x1="70" :y1="monteCarloChart.y(tick)" x2="850" :y2="monteCarloChart.y(tick)" :stroke="tick === 0 ? 'rgba(245,239,224,0.55)' : 'rgba(201,168,106,0.12)'" :stroke-width="tick === 0 ? 1.5 : 1" :stroke-dasharray="tick === 0 ? 'none' : '4 4'" />
@@ -1469,11 +1264,73 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
                 <p class="table-note" style="margin-top: 16px">以目前持倉權重與共同日價格資料推演未來報酬分布；區間不代表發生機率保證。</p>
               </template>
               <div v-else class="prestige-empty">
-                {{ monteCarlo?.message ?? '蒙地卡羅路徑資料載入中。' }}
+                {{ monteCarlo?.message ?? '按下按鈕後讀取可用結果；沒有結果時才建立模擬工作。' }}
               </div>
             </div>
           </div>
         </ScrollReveal>
+
+          <details class="advanced-section"><summary>計算口徑與技術明細</summary>
+        <section class="prestige-panel prestige-panel-pad">
+          <h2 class="panel-title">計算口徑</h2>
+          <p>請求期間 {{ calculationRun.inputSnapshot?.from ?? '未保存' }} ～ {{ calculationRun.inputSnapshot?.to ?? '未保存' }}；方法 {{ calculationRun.selectedModel ?? '未提供' }}；估計樣本 {{ calculationLookback ?? '未知' }}。</p>
+          <RiskMeasurementBasis :basis="fallbackResult?.measurementBasis" />
+          <p>情境比較只使用同一計算快照、方法與期間；歷史回撤、條件波動、模型路徑回撤和帳戶實際績效不可互換。</p>
+        </section>
+        <!-- Model Metadata -->
+        <ScrollReveal :delay="0.05">
+          <div class="prestige-panel flush-panel" style="margin-bottom: 24px">
+            <h3 class="panel-sub-title">模型參數與識別</h3>
+            <div class="info-grid info-grid-4">
+              <div
+                v-for="(item, i) in [
+                  { label: 'ALGORITHM VERSION', value: calculationRun?.algorithmVersion ?? '—' },
+                  { label: 'DATA FACTOR', value: calculationRun?.dataFactorVersion ?? '—' },
+                  { label: 'SIMULATIONS', value: calculationSimulations != null ? calculationSimulations.toLocaleString() : '—' },
+                  { label: 'INPUT HASH', value: calculationRun?.inputHash ? calculationRun.inputHash.slice(0, 12) + '…' : '—' },
+                ]"
+                :key="i"
+                class="info-cell"
+              >
+                <span class="prestige-label cell-label">{{ item.label }}</span>
+                <span class="info-value prestige-mono">{{ item.value }}</span>
+              </div>
+            </div>
+            <div v-if="fitHealth" class="info-grid info-grid-4" style="margin-top: 1px">
+              <div
+                v-for="(item, i) in [
+                  { label: 'FIT HEALTH', value: fitHealth.healthy ? 'Healthy' : 'Degraded' },
+                  { label: 'MAX PERSISTENCE', value: fitHealth.maxPersistence.toFixed(4) },
+                  { label: 'MIN STUDENT-ν', value: fitHealth.minNu.toFixed(2) },
+                  { label: 'NEAR-UNIT RATE', value: (fitHealth.nearUnitRate * 100).toFixed(1) + '%' },
+                ]"
+                :key="i"
+                class="info-cell"
+              >
+                <span class="prestige-label cell-label">{{ item.label }}</span>
+                <span class="info-value prestige-mono" :style="{ color: item.label === 'FIT HEALTH' ? (fitHealth.healthy ? '#7fa387' : '#b05c5c') : undefined }">{{ item.value }}</span>
+              </div>
+            </div>
+            <div v-else-if="fallbackResult" class="info-grid info-grid-4" style="margin-top: 1px">
+              <div
+                v-for="(item, i) in [
+                  { label: 'COVARIANCE METHOD', value: fallbackResult.covarianceMethod ?? '—' },
+                  { label: 'RESIDUAL SAMPLING', value: fallbackResult.residualSampling ?? '—' },
+                  { label: 'COMMON TRADING DAYS', value: fallbackResult.commonTradingDays ? `${fallbackResult.commonTradingDays} 天` : '—' },
+                  { label: 'SHRINKAGE ALPHA', value: fallbackResult.shrinkageAlpha != null ? `${(fallbackResult.shrinkageAlpha * 100).toFixed(2)}%` : '—' },
+                ]"
+                :key="i"
+                class="info-cell"
+              >
+                <span class="prestige-label cell-label">{{ item.label }}</span>
+                <span class="info-value prestige-mono">{{ item.value }}</span>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+
+          </details>
+        </section>
       </template>
 
       <div style="height: 60px" />
@@ -1484,11 +1341,34 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
 </template>
 
 <style scoped>
+.report-toolbar { margin-bottom: 24px; }
+.risk-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--gold-border); margin: 24px 0; }
+.risk-tabs button { flex: 1; max-width: 220px; padding: 16px 12px; color: var(--muted); border: 0; border-bottom: 2px solid transparent; background: transparent; cursor: pointer; font-size: 15px; }
+.risk-tabs button[aria-selected="true"] { color: var(--gold); border-bottom-color: var(--gold); }
+.risk-tabs button:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.overview-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.overview-metrics strong { display: block; font-size: clamp(24px, 3vw, 36px); overflow-wrap: anywhere; }
+.overview-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 24px 0; }
+.overview-secondary span, .overview-secondary small { display: block; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.overview-secondary strong { display: block; font-size: 20px; margin: 8px 0; }
+.advanced-section { margin: 24px 0; }
+.advanced-section > summary { padding: 20px 0; color: var(--gold); cursor: pointer; font-size: 16px; }
+.estimate-controls { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 20px; }
+.estimate-controls label { color: var(--muted); font-size: 13px; }
+.estimate-controls select { margin-left: 8px; }
+@media (max-width: 640px) { .overview-metrics, .overview-secondary { grid-template-columns: 1fr; } .risk-tabs button { font-size: 14px; padding: 14px 8px; } }
+@media print {
+  .prestige-section > :not(.saved-risk-report) { display: none !important; }
+  .prestige-page { background: white !important; color: black; --ivory: #111; --muted: #444; --gold: #444; }
+  .prestige-section { width: 100%; padding: 0; margin: 0; }
+  :global(body:has(.saved-risk-report) .kimi-app-header), :global(body:has(.saved-risk-report) footer) { display: none !important; }
+  :global(body:has(.saved-risk-report) .kimi-app-shell), :global(body:has(.saved-risk-report) .kimi-app-content) { background: white; padding-top: 0 !important; }
+}
+
 .prestige-page {
   min-height: calc(100vh - 60px);
 }
 
-.deferred-sentinel { height: 1px; }
 
 .mt-20 {
   margin-top: 40px;
@@ -1797,20 +1677,6 @@ onBeforeUnmount(() => { viewIsActive = false; if (backtestPollTimer) clearTimeou
 
 .mini-line.warning {
   color: #d4a24e;
-}
-
-.snapshot-pre {
-  margin: 0;
-  padding: 14px;
-  overflow: auto;
-  max-height: 420px;
-  background: rgba(11, 18, 32, 0.85);
-  border: 1px solid var(--gold-border-soft);
-  border-radius: 6px;
-  color: var(--ivory);
-  font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 /* ---- Info grids (run info / metadata) ---- */
