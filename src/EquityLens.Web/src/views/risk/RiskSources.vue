@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import ScrollReveal from '../../components/kimi/ScrollReveal.vue'
 import type { ConditionalRisk, PortfolioRiskResponse } from '../../services/risk'
 import { riskPercent } from './riskPresentation'
@@ -8,9 +8,42 @@ const props = defineProps<{ conditional?: ConditionalRisk | null; fallback?: Por
 const holdingsRisk = computed(() => props.conditional?.holdings ?? props.fallback?.holdings ?? [])
 const industriesRisk = computed(() => props.conditional?.industries ?? props.fallback?.industries ?? [])
 const marginalPoints = (value: number | null) => value == null ? '—' : `${value.toFixed(2)} 百分點`
+const mode = ref<'holdings' | 'industries'>('holdings')
+const showAll = ref(false)
+const rows = computed(() => {
+  const source = mode.value === 'holdings'
+    ? holdingsRisk.value.map(h => ({ key: h.securityId, name: `${h.ticker} · ${h.securityName}`, weight: h.weight, share: h.componentRiskShare }))
+    : industriesRisk.value.map(i => ({ key: i.industry, name: i.industry, weight: i.weight, share: i.componentRiskShare }))
+  return source.sort((a, b) => (b.share ?? -Infinity) - (a.share ?? -Infinity))
+})
+const visibleRows = computed(() => showAll.value ? rows.value : rows.value.slice(0, 5))
+const note = (share: number | null, weight: number) => share == null ? '尚無風險分解' : share < 0 ? '具分散效果' : share === 0 ? '風險貢獻為零' : share > weight ? '風險占比高於持倉比重' : share < weight ? '風險占比低於持倉比重' : '風險占比與持倉比重相同'
 </script>
 
 <template>
+  <section v-if="holdingsRisk.length || industriesRisk.length" class="prestige-panel risk-sources">
+    <div class="section-head">
+      <h2 class="panel-title">主要風險來源</h2>
+      <div class="source-controls" aria-label="風險來源分類">
+        <button class="prestige-btn" :aria-pressed="mode === 'holdings'" @click="mode = 'holdings'; showAll = false">持股</button>
+        <button class="prestige-btn" :aria-pressed="mode === 'industries'" @click="mode = 'industries'; showAll = false">產業</button>
+      </div>
+      <p class="source-note">{{ conditional ? '依下一交易日條件波動率分解' : '依 C# MVEWMA-FHS 回退模型分解' }}；風險占比不等於持倉比重，負值代表分散效果。</p>
+    </div>
+    <div class="section-body table-wrap">
+      <table v-if="visibleRows.length" class="prestige-table" aria-label="主要風險來源">
+        <thead><tr><th>{{ mode === 'holdings' ? '持股' : '產業' }}</th><th>持倉比重</th><th>風險占比</th><th>說明</th></tr></thead>
+        <tbody><tr v-for="row in visibleRows" :key="row.key">
+          <td>{{ row.name }}</td><td>{{ riskPercent(row.weight, 1) }}</td>
+          <td :class="{ 'td-pos': (row.share ?? 0) < 0 }">{{ riskPercent(row.share, 1) }}</td><td class="td-muted">{{ note(row.share, row.weight) }}</td>
+        </tr></tbody>
+      </table>
+      <p v-else class="source-note">這筆結果尚無{{ mode === 'holdings' ? '持股' : '產業' }}風險分解。</p>
+      <button v-if="rows.length > 5" class="prestige-btn show-all" @click="showAll = !showAll">{{ showAll ? '只看前五大來源' : `查看全部 ${rows.length} 筆` }}</button>
+    </div>
+    <details class="source-details">
+      <summary>進階風險分解</summary>
+
   <p v-if="conditional" class="table-note conditional-note">
     下一交易日加權對數報酬的條件波動率，以 √252 換算年化尺度；不是一年期預測，亦不等同 FHS 簡單報酬模擬的標準差。
   </p>
@@ -98,9 +131,21 @@ const marginalPoints = (value: number | null) => value == null ? '—' : `${valu
     </div>
   </ScrollReveal>
 
+
+    </details>
+  </section>
 </template>
 
 <style scoped>
+.risk-sources { margin-top: 24px; }
+table[aria-label="主要風險來源"] td:first-child, table[aria-label="主要風險來源"] td:last-child { white-space: normal; min-width: 100px; }
+.source-controls { display: flex; gap: 8px; margin-top: 16px; }
+.source-controls [aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+.source-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 12px 0 0; }
+.source-details { padding: 0 24px 24px; }
+summary { cursor: pointer; color: var(--gold); padding: 12px 0; }
+.show-all { margin-top: 16px; }
+
 .conditional-note { padding: 0 24px 16px; }
 .mt-20 {
   margin-top: 40px;
