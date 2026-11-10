@@ -49,6 +49,8 @@ public static class PortfolioRegistration
         });
         builder.Services.AddScoped<IPortfolioDividendService, PortfolioDividendService>();
         builder.Services.AddScoped<IMarketPriceService, MarketPriceService>();
+        builder.Services.AddScoped<IOfficialAdjustedCloseRebuilder, OfficialAdjustedCloseRebuilder>();
+        builder.Services.AddScoped<IAdjustedCloseRebuildJob, AdjustedCloseRebuildJob>();
         builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
         builder.Services.AddScoped<IUploadedFileService, UploadedFileService>();
         builder.Services.AddScoped<IFinancialFilingService, FinancialFilingService>();

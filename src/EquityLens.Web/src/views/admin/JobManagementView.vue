@@ -73,6 +73,7 @@ const jobTypeOptions: JobTypeOption[] = [
   { label: 'TWSE 年報匯入', value: 'ImportTwseReportFiles' },
   { label: '股價匯入', value: 'ImportMarketPrices' },
   { label: '同步 0050 成分股價格', value: 'SyncTw0050Prices' },
+  { label: '重建全歷史還原價', value: 'RebuildAdjustedCloses' },
 ]
 
 const createJobTypeOptions = jobTypeOptions.filter((j) => j.value !== '')

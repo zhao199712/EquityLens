@@ -132,6 +132,16 @@ public sealed class AdminJobsController : ControllerBase
     }
 
     /// <summary>
+    /// 建立以官方公司行動（除權息、分割、減資）重建所有 FinMind 台股全歷史還原價的工作。
+    /// 安全檢查未通過的證券保留原值，結果摘要列出原因。
+    /// </summary>
+    [HttpPost("rebuild-adjusted-closes")]
+    public Task<ActionResult<JobRunSummaryResponse>> RebuildAdjustedCloses(CancellationToken cancellationToken)
+    {
+        return Create(new CreateImportJobRequest("RebuildAdjustedCloses"), cancellationToken);
+    }
+
+    /// <summary>
     /// 取消尚未執行或執行中的資料匯入工作。
     /// </summary>
     [HttpPost("{id:guid}/cancel")]
@@ -180,6 +190,7 @@ public sealed class AdminJobsController : ControllerBase
         "ImportTwseReportFiles" => true,
         "ImportMarketPrices" => true,
         "SyncTw0050Prices" => true,
+        "RebuildAdjustedCloses" => true,
         _ => false,
     };
 

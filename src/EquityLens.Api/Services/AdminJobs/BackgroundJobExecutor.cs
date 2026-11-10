@@ -126,6 +126,14 @@ public sealed class BackgroundJobExecutor : IBackgroundJobExecutor
                             }
                             : new Dictionary<string, object?>());
                 }
+            case "RebuildAdjustedCloses":
+                {
+                    var service = _serviceProvider.GetRequiredService<IAdjustedCloseRebuildJob>();
+                    var delaySeconds = payload.GetValueOrDefault("delaySeconds")?.ToString() is { } raw && int.TryParse(raw, out var parsed)
+                        ? Math.Clamp(parsed, 0, 60) : 3;
+                    var result = await service.RunAsync(jobRun.Id, TimeSpan.FromSeconds(delaySeconds), cancellationToken);
+                    return new JobResult(true, null, ToSummary(result));
+                }
             case "SyncTw0050Prices":
                 {
                     var service = _serviceProvider.GetRequiredService<ITw0050PriceSyncService>();
