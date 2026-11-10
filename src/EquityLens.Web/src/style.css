@@ -506,3 +506,13 @@ h3 {
     font-size: 24px;
   }
 }
+
+/* 對話與報告 markdown（v-html 內容，需全域樣式） */
+.md-table-wrap { overflow-x: auto; margin: 10px 0; }
+.md-table { border-collapse: collapse; width: 100%; font-size: .92em; font-variant-numeric: tabular-nums; }
+.md-table th, .md-table td { padding: 6px 10px; border-bottom: 1px solid rgba(201, 168, 106, .18); text-align: left; white-space: nowrap; }
+.md-table th { color: #c9a86a; font-weight: 600; background: rgba(201, 168, 106, .06); }
+.md-heading { margin: 12px 0 6px; font-size: 1em; color: #c9a86a; }
+.md-cite { margin-left: 2px; padding: 0 4px; border-radius: 3px; font-size: .7em; color: #c9a86a; background: rgba(201, 168, 106, .12); vertical-align: super; }
+.message-content p, .final-answer p { margin: 0 0 8px; }
+.message-content ul, .message-content ol, .final-answer ul, .final-answer ol { margin: 4px 0 8px; padding-left: 20px; }

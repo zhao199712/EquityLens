@@ -9,6 +9,7 @@ import DonutChart from '../../components/kimi/DonutChart.vue'
 import DataTable from '../../components/kimi/DataTable.vue'
 import {
   getPortfolio,
+  updatePortfolio,
   getPortfolioValuation,
   getPortfolioValuationHistory,
   getPortfolioRisk,
@@ -49,6 +50,34 @@ const route = useRoute()
 const portfolioId = computed(() => String(route.params.id))
 
 const portfolio = ref<PortfolioDetail | null>(null)
+const editingInfo = ref(false)
+const savingInfo = ref(false)
+const infoError = ref('')
+const infoForm = ref({ name: '', description: '' })
+
+function startEditInfo() {
+  if (!portfolio.value) return
+  infoForm.value = { name: portfolio.value.name, description: portfolio.value.description ?? '' }
+  infoError.value = ''
+  editingInfo.value = true
+}
+
+async function saveInfo() {
+  if (!portfolio.value || !infoForm.value.name.trim() || savingInfo.value) return
+  savingInfo.value = true
+  infoError.value = ''
+  try {
+    const name = infoForm.value.name.trim()
+    const description = infoForm.value.description.trim() || undefined
+    await updatePortfolio(portfolio.value.id, { name, description, baseCurrency: portfolio.value.baseCurrency })
+    portfolio.value = { ...portfolio.value, name, description: description ?? null }
+    editingInfo.value = false
+  } catch (e) {
+    infoError.value = getApiErrorMessage(e, '更新投資組合失敗，請稍後再試。')
+  } finally {
+    savingInfo.value = false
+  }
+}
 const valuation = ref<PortfolioValuationResponse | null>(null)
 const valuationHistory = ref<PortfolioValuationHistoryResponse | null>(null)
 const risk = ref<PortfolioRiskResponse | null>(null)
@@ -682,9 +711,13 @@ async function handleSearchSecurities() {
     const results = await searchSecurities(query)
     if (version !== securitySearchVersion) return
     securityResults.value = results
-    if (securityResults.value.length === 1) {
+    // 代號完全相符且沒有同字頭代號（如 2317／2317A）時直接選取，其他市場的不相干結果不再阻擋。
+    const upper = query.toUpperCase()
+    const exact = results.filter(result => result.ticker.toUpperCase() === upper)
+    const sameStem = results.filter(result => result.ticker.toUpperCase().startsWith(upper))
+    if (securityResults.value.length === 1 || (exact.length === 1 && sameStem.length === 1)) {
       searchingSecurities.value = false
-      selectSecurity(securityResults.value[0])
+      selectSecurity(exact.length === 1 ? exact[0]! : securityResults.value[0]!)
     } else if (securityResults.value.length === 0) {
       selectedSecurity.value = null
       addStockError.value = '找不到符合的股票，請確認代號或交易所。'
@@ -745,7 +778,8 @@ async function useClosingPrice() {
       ...security,
       securityId: resolved.securityId,
     }
-    addStockForm.value.price = closingPrice.close
+    // 資料源可能帶浮點雜訊（如 41.400002）；成交價以兩位小數呈現。
+    addStockForm.value.price = Math.round(closingPrice.close * 100) / 100
     closingPriceStatus.value = `已帶入 ${closingPrice.priceTime.slice(0, 10)} 收盤價。`
   } catch (e) {
     if (priceVersion === closePriceVersion && version === securitySearchVersion) addStockError.value = getApiErrorMessage(e, '無法取得收盤價，請改用自訂成交價或稍後再試。')
@@ -1035,11 +1069,21 @@ onMounted(loadPortfolioData)
 
       <template v-if="!loading && portfolio">
         <div class="detail-header prestige-fade">
-          <div>
+          <form v-if="editingInfo" class="edit-info" @submit.prevent="saveInfo">
+            <input v-model="infoForm.name" class="prestige-input" maxlength="100" placeholder="組合名稱" aria-label="組合名稱" required />
+            <input v-model="infoForm.description" class="prestige-input" maxlength="500" placeholder="描述(選填)" aria-label="描述" />
+            <div style="display: flex; gap: 8px">
+              <button type="submit" class="prestige-btn small" :disabled="savingInfo || !infoForm.name.trim()">{{ savingInfo ? '儲存中…' : '儲存' }}</button>
+              <button type="button" class="prestige-btn small" @click="editingInfo = false">取消</button>
+            </div>
+            <span v-if="infoError" class="prestige-error">{{ infoError }}</span>
+          </form>
+          <div v-else>
             <h1 class="detail-title">{{ portfolio.name }}</h1>
             <span class="caption" style="margin-top: 4px; display: block">{{ portfolio.description || portfolio.baseCurrency }} PORTFOLIO</span>
           </div>
           <div style="display: flex; gap: 8px">
+            <button v-if="!editingInfo" class="prestige-btn small" @click="startEditInfo">編輯</button>
             <button class="prestige-btn small" :disabled="creatingDiagnosis" @click="startPortfolioDiagnosis">
               {{ creatingDiagnosis ? '建立診斷中…' : 'AI 投組診斷' }}
             </button>
@@ -2201,4 +2245,5 @@ onMounted(loadPortfolioData)
     gap: 6px;
   }
 }
+.edit-info { display: flex; flex-direction: column; gap: 8px; min-width: min(420px, 100%); }
 </style>

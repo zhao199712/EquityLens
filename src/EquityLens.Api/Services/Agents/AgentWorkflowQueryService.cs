@@ -129,7 +129,8 @@ public sealed class AgentWorkflowQueryService(
     private static Guid ResolvePortfolio(IReadOnlyList<InvestmentResearchPortfolioOption> portfolios, string question, Guid? activePortfolioId)
     {
         if (portfolios.Count == 0) throw new AgentWorkflowQueryException("portfolio_required", "目前沒有可供診斷的投資組合。");
-        var named = PortfolioSelection.Named(question, portfolios.Select(p => (p.Id, p.Name))).ToArray();
+        var options = portfolios.Select(p => (p.Id, p.Name)).ToArray();
+        var named = PortfolioSelection.NamedOrPartial(question, options).ToArray();
         if (named.Length == 1) return named[0];
         if (named.Length == 0 && activePortfolioId is Guid active && portfolios.Any(p => p.Id == active)) return active;
         if (named.Length == 0 && portfolios.Count == 1) return portfolios[0].Id;

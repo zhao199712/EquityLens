@@ -3,12 +3,12 @@ import { computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { BarChart, LineChart, PieChart, RadarChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { GridComponent, LegendComponent, TitleComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { EChartsCoreOption } from 'echarts/core'
 
 // 全站唯一的 echarts 模組註冊點,首頁所有圖表共用此封裝
-use([LineChart, BarChart, PieChart, RadarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+use([LineChart, BarChart, PieChart, RadarChart, GridComponent, TitleComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const props = withDefaults(defineProps<{
   option: EChartsCoreOption

@@ -245,6 +245,67 @@ public sealed partial class ConversationServiceTests
         Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("activePortfolioId"));
     }
 
+    [Theory]
+    [InlineData("第一個")]
+    [InlineData("A")]
+    [InlineData("前者")]
+    [InlineData("1")]
+    public async Task PortfolioChoices_AreOfferedAndNaturalOrdinalsSelectTheListedOption(string choice)
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid();
+        var a = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "低波動" };
+        var b = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "高beta" };
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = user };
+        db.Portfolios.AddRange(a, b); db.ChatSessions.Add(session); await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns();
+        var service = new ConversationService(db, new PortfolioAgent(a.Id), new AgentWorkflowQueryService(db, new InvestmentResearchRouter(new CountingChat()), runs), runs, new AgentWorkflowCatalog());
+        var inventory = await service.ProcessAsync(user, session.Id, new("我有幾個投資組合", Guid.NewGuid()));
+        Assert.NotNull(inventory.Choices);
+        var first = inventory.Choices![0] == a.Name ? a : b;
+        await service.ProcessAsync(user, session.Id, new(choice, Guid.NewGuid()));
+        Assert.Equal(first.Id.ToString(), JsonNode.Parse(session.ContextJson)!["activePortfolioId"]!.ToString());
+        Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("pendingChoices"));
+    }
+
+    [Theory]
+    [InlineData("回到剛剛那個高波動的，如果遇到 2008 會跌多少？", "高波動科技")]
+    [InlineData("那個金融科技的呢", "金融科技投資組合")]
+    [InlineData("那穩健的呢", null)]
+    [InlineData("優化投資組合", null)]
+    [InlineData("科技股會怎樣", null)]
+    public void PartialPortfolioName_SelectsOnlyAUniqueFragment(string message, string? expected)
+    {
+        var options = new[] { (Guid.NewGuid(), "高波動科技"), (Guid.NewGuid(), "穩健金融"), (Guid.NewGuid(), "金融科技投資組合") };
+        var named = PortfolioSelection.NamedOrPartial(message, options).ToArray();
+        if (expected is null) Assert.Empty(named);
+        else Assert.Equal(options.Single(o => o.Item2 == expected).Item1, Assert.Single(named));
+    }
+
+    [Theory]
+    [InlineData("第二個", 2, 2)]
+    [InlineData("B", 2, 2)]
+    [InlineData("後者", 3, 3)]
+    [InlineData("第三個", 2, null)]
+    [InlineData("我想看第一個方案的風險", 2, null)]
+    public void ChoiceIndex_ParsesOnlyStandaloneOrdinals(string content, int count, int? expected) =>
+        Assert.Equal(expected, ConversationService.ChoiceIndex(content, count));
+
+    [Fact]
+    public async Task StaleProcessingTurn_DoesNotLockTheSessionForever()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid(); var session = new ChatSession { Id = Guid.NewGuid(), UserId = user };
+        db.ChatSessions.Add(session);
+        db.ConversationTurns.Add(new ConversationTurn { Id = Guid.NewGuid(), ChatSessionId = session.Id, RequestId = Guid.NewGuid(),
+            Status = "Processing", CreatedAtUtc = DateTime.UtcNow - ConversationService.StaleTurnTimeout - TimeSpan.FromMinutes(1) });
+        await db.SaveChangesAsync();
+        var service = new ConversationService(db, Agent(ConversationActions.DirectResponse, "你好", null, new()), new FakeWorkflowQueries(), new FakeAgentRuns(), new AgentWorkflowCatalog());
+        var result = await service.ProcessAsync(user, session.Id, new("你好", Guid.NewGuid()));
+        Assert.Equal(ConversationActions.DirectResponse, result.Action);
+        db.ConversationTurns.Add(new ConversationTurn { Id = Guid.NewGuid(), ChatSessionId = session.Id, RequestId = Guid.NewGuid(), Status = "Processing", CreatedAtUtc = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+        await Assert.ThrowsAsync<ConversationException>(() => service.ProcessAsync(user, session.Id, new("再一次", Guid.NewGuid())));
+    }
+
     [Fact]
     public async Task PreviouslySelectedPortfolio_IsRevalidatedAfterOwnershipChanges()
     {

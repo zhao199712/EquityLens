@@ -87,20 +87,26 @@ public sealed class FinMindMarketDataProvider : IMarketDataProvider
                 continue;
             }
 
+            var industry = ReadString(item, "industry_category");
             results.Add(new ExternalSecuritySearchResult(
                 ticker,
                 exchange,
                 name,
-                "Equity",
+                InferAssetType(ticker, industry),
                 "TWD",
                 null,
-                ReadString(item, "industry_category"),
+                industry,
                 null,
                 SourceName));
         }
 
         return results.Take(20).ToList();
     }
+
+    /// <summary>FinMind 以 industry_category「ETF」標示指數股票型基金；台股 ETF 代號亦以 00 開頭。</summary>
+    internal static string InferAssetType(string ticker, string? industry) =>
+        industry?.Contains("ETF", StringComparison.OrdinalIgnoreCase) == true
+        || System.Text.RegularExpressions.Regex.IsMatch(ticker, @"^00\d{2,4}[A-Z]?$") ? "ETF" : "Equity";
 
     /// <inheritdoc />
     public async Task<ExternalSecuritySearchResult?> ResolveSecurityAsync(

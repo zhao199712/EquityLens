@@ -29,7 +29,8 @@ public sealed record ChatMessageDto(
     DateTime CreatedAtUtc,
     string MessageType = "Text",
     Guid? AgentRunId = null,
-    ConversationRunCardDto? RunCard = null);
+    ConversationRunCardDto? RunCard = null,
+    IReadOnlyList<string>? Choices = null);
 
 public sealed record ConversationRunCardDto(
     Guid AgentRunId,

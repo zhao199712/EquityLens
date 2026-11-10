@@ -19,7 +19,8 @@ public sealed record ConversationOutcome(
     ConversationRunCardDto? RunCard,
     string Model,
     int PromptTokens,
-    int CompletionTokens);
+    int CompletionTokens,
+    IReadOnlyList<string>? Choices = null);
 
 public interface IConversationService
 {
@@ -36,6 +37,7 @@ public sealed partial class ConversationService(
     ConversationSuggestedActionProvider? suggestions = null) : IConversationService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    internal static readonly TimeSpan StaleTurnTimeout = TimeSpan.FromMinutes(5);
 
     public async Task<ConversationOutcome> ProcessAsync(
         Guid userId, Guid sessionId, SendMessageRequest request, CancellationToken cancellationToken = default)
@@ -63,7 +65,9 @@ public sealed partial class ConversationService(
         var session = await db.ChatSessions.Include(x => x.Messages)
             .FirstOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId, cancellationToken)
             ?? throw new ConversationException("session_not_found", "找不到對話。");
-        if (await db.ConversationTurns.AnyAsync(x => x.ChatSessionId == sessionId && x.Status == "Processing", cancellationToken))
+        // 中斷或並行請求可能留下永遠未完成的 turn；逾時後不再鎖住整段對話。
+        var staleBefore = DateTime.UtcNow - StaleTurnTimeout;
+        if (await db.ConversationTurns.AnyAsync(x => x.ChatSessionId == sessionId && x.Status == "Processing" && x.CreatedAtUtc > staleBefore, cancellationToken))
             throw new ConversationException("turn_in_progress", "請等待上一則訊息處理完成。");
 
         var nextSequence = session.Messages.Select(x => x.SequenceNumber ?? -1).DefaultIfEmpty(-1).Max() + 1;
@@ -94,12 +98,15 @@ public sealed partial class ConversationService(
                 .ToListAsync(cancellationToken);
             var priorActive = ReadGuid(context, "activePortfolioId");
             if (!portfolios.Any(p => p.Id == priorActive)) context.Remove("activePortfolioId");
-            var named = PortfolioSelection.Named(content, portfolios.Select(p => (p.Id, p.Name))).ToArray();
-            var choice = Regex.Match(content, @"^(?:第)?([1-9][0-9]*)(?:個|項)?[。！\s]*$");
-            if (named.Length == 0 && choice.Success && context["portfolioOptions"] is JsonArray options
-                && int.TryParse(choice.Groups[1].Value, out var index) && index <= options.Count
-                && Guid.TryParse(options[index - 1]?.ToString(), out var optionId) && portfolios.Any(p => p.Id == optionId))
+            var named = PortfolioSelection.NamedOrPartial(content, portfolios.Select(p => (p.Id, p.Name))).ToArray();
+            var optionList = context["portfolioOptions"] as JsonArray;
+            var choiceIndex = optionList is null ? null : ChoiceIndex(content, optionList.Count);
+            var choice = new { Success = choiceIndex is not null };
+            if (named.Length == 0 && choiceIndex is int index
+                && Guid.TryParse(optionList![index - 1]?.ToString(), out var optionId) && portfolios.Any(p => p.Id == optionId))
                 named = [optionId];
+            var priorPendingQuestion = context["pendingTask"]?["question"]?.GetValue<string>();
+            context.Remove("pendingChoices");
             if (named.Length == 1) context["activePortfolioId"] = named[0].ToString();
             else if (named.Length > 1) context.Remove("activePortfolioId");
             var activePortfolioId = ReadGuid(context, "activePortfolioId");
@@ -117,7 +124,7 @@ public sealed partial class ConversationService(
             { context.Remove("lastAgentRunId"); if (activePortfolioId != priorActive) context.Remove("lastTask"); }
             if (inventory) context["portfolioOptions"] = JsonSerializer.SerializeToNode(portfolios.Select(p => p.Id), Json);
             var inputContext = context.DeepClone().AsObject();
-            await EnrichContextAsync(userId, activePortfolioId, question, inputContext, cancellationToken);
+            await EnrichContextAsync(userId, sessionId, resetAfter, activePortfolioId, question, inputContext, cancellationToken);
             var decision = entry ?? await agent.DecideAsync(new(question, inputContext, history, portfolios), cancellationToken);
             if (decision.Action == ConversationActions.RouteWorkflow && decision.Route is { } classified)
             {
@@ -189,6 +196,17 @@ public sealed partial class ConversationService(
 
             var action = routingFailure is null ? decision.Action : routingRejected ? ConversationActions.RejectUnsafe : ConversationActions.AskClarification;
             var response = routingFailure ?? decision.Response;
+            // 反問投組時提供可點選項，並以同一順序記錄序號，讓「1」「第一個」「A」都能對應。
+            IReadOnlyList<string>? choices = null;
+            var asksPortfolio = portfolios.Count > 1 && (inventory || response.StartsWith("請選擇投資組合")
+                || action == ConversationActions.AskClarification && portfolios.Count(p => response.Contains(p.Name, StringComparison.OrdinalIgnoreCase)) >= 2);
+            if (asksPortfolio)
+            {
+                // 依回覆文字中出現的順序編號，使「第一個」指的就是使用者看到的第一個。
+                var ordered = portfolios.OrderBy(p => response.IndexOf(p.Name, StringComparison.OrdinalIgnoreCase) is var i and >= 0 ? i : int.MaxValue).ToArray();
+                context["portfolioOptions"] = JsonSerializer.SerializeToNode(ordered.Select(p => p.Id), Json);
+                choices = ordered.Select(p => p.Name).ToArray();
+            }
             turn.Action = action;
 
             var nextContext = decision.Action == ConversationActions.ResetContext
@@ -204,9 +222,15 @@ public sealed partial class ConversationService(
             if (action == ConversationActions.ResetContext)
                 nextContext["resetAfterSequence"] = nextSequence + 1;
             else if (action == ConversationActions.AskClarification)
+            {
                 nextContext["pendingTask"] = new JsonObject { ["question"] = decision.StandaloneQuery ?? question,
                     ["missing"] = decision.ContextPatch["pendingTask"]?["missing"]?.DeepClone(),
                     ["parameters"] = decision.ContextPatch["pendingTask"]?["parameters"]?.DeepClone() };
+                // 使用者補充條件但仍缺投組時，先確認已記下，避免看起來像沒有讀到補充內容。
+                if (!string.IsNullOrWhiteSpace(priorPendingQuestion) && !selectionOnly
+                    && (decision.StandaloneQuery ?? question) != priorPendingQuestion && !response.StartsWith("好的"))
+                    response = "好的，已記下這個條件。" + response;
+            }
             else if (turn.AgentRunId is not null)
             {
                 nextContext.Remove("pendingTask");
@@ -215,6 +239,8 @@ public sealed partial class ConversationService(
                     ["scenarios"] = JsonSerializer.SerializeToNode(decision.Route?.RoutingContext.Scenarios, Json) };
             }
 
+            if (choices is not null) nextContext["pendingChoices"] = JsonSerializer.SerializeToNode(choices, Json);
+            else nextContext.Remove("pendingChoices");
             session.ContextVersion++;
             session.ContextJson = nextContext.ToJsonString(Json);
             session.UpdatedAtUtc = DateTime.UtcNow;
@@ -235,7 +261,7 @@ public sealed partial class ConversationService(
             await db.SaveChangesAsync(cancellationToken);
             var card = turn.AgentRunId is { } id ? await GetRunCardAsync(userId, sessionId, id, cancellationToken) : null;
             return new(turn.Id, assistant.Id, action, response, card,
-                decision.Model, decision.PromptTokens, decision.CompletionTokens);
+                decision.Model, decision.PromptTokens, decision.CompletionTokens, choices);
         }
         catch (Exception exception)
         {
@@ -297,9 +323,24 @@ public sealed partial class ConversationService(
     {
         var result = current.DeepClone() as JsonObject ?? new JsonObject();
         foreach (var item in patch)
-            if (item.Key is not ("lastAgentRunId" or "lastResearchRunId" or "activePortfolioId" or "portfolioOptions" or "pendingTask" or "lastTask" or "lastResearchAgentRunId" or "resetAfterSequence" or "researchContextRunId"))
+            if (item.Key is not ("lastAgentRunId" or "lastResearchRunId" or "activePortfolioId" or "portfolioOptions" or "pendingTask" or "lastTask" or "lastResearchAgentRunId" or "resetAfterSequence" or "researchContextRunId" or "pendingChoices"))
                 result[item.Key] = item.Value?.DeepClone();
         return result;
+    }
+
+    /// <summary>解析「1」「第一個」「A」「前者／後者」等選項指稱；超出範圍回傳 null。</summary>
+    internal static int? ChoiceIndex(string content, int count)
+    {
+        var text = content.Trim().TrimEnd('。', '！', '!', '.', ' ');
+        if (count <= 0) return null;
+        if (Regex.IsMatch(text, @"^(?:選|我選|就)?前者$")) return 1;
+        if (Regex.IsMatch(text, @"^(?:選|我選|就)?後者$")) return count;
+        var match = Regex.Match(text, @"^(?:選|我選|就)?(?:第)?(?<n>[1-9][0-9]?|[一二三四五六七八九十]|[A-Ja-j])(?:個|項|號|組)?(?:投組|投資組合)?$");
+        if (!match.Success) return null;
+        var token = match.Groups["n"].Value;
+        var index = char.IsAsciiLetter(token[0]) ? char.ToUpperInvariant(token[0]) - 'A' + 1
+            : char.IsAsciiDigit(token[0]) ? int.Parse(token) : "一二三四五六七八九十".IndexOf(token[0]) + 1;
+        return index >= 1 && index <= count ? index : null;
     }
 
     private static Guid? ReadGuid(JsonObject context, string key) =>
@@ -313,7 +354,11 @@ public sealed partial class ConversationService(
             var node = JsonNode.Parse(outputJson);
             var summary = Find(node, ["finalAnswer", "answer", "revisedAnswer", "summary"]);
             var interpretation = node?["interpretation"]?.GetValue<string>();
-            return string.IsNullOrWhiteSpace(interpretation) || interpretation == summary ? summary : summary + "\n\n" + interpretation;
+            if (string.IsNullOrWhiteSpace(interpretation) || interpretation == summary) return summary;
+            // 摘要與解讀都會附上風險偏好等固定段落；合併時不重複顯示同一段。
+            var extra = interpretation.Split("\n\n").Where(part => summary is null || !summary.Contains(part.Trim(), StringComparison.Ordinal));
+            var rest = string.Join("\n\n", extra).Trim();
+            return string.IsNullOrWhiteSpace(rest) ? summary : summary + "\n\n" + rest;
         }
         catch (JsonException) { return null; }
     }

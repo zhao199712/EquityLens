@@ -18,6 +18,8 @@ export interface ChatMessage {
   messageType: 'Text' | 'AgentRun'
   agentRunId: string | null
   runCard: ConversationRunCard | null
+  /** 助理反問投組時的可點選項；只出現在最新一則訊息。 */
+  choices?: string[] | null
 }
 
 export interface ConversationSuggestedAction {
@@ -78,6 +80,7 @@ export function sendMessageStream(
   onRunCreated: (messageId: string, runCard: ConversationRunCard) => void,
   onDone: (model: string, promptTokens: number, completionTokens: number) => void,
   onError: (message: string) => void,
+  onChoices?: (messageId: string, choices: string[]) => void,
 ) {
   const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5034/api'
 
@@ -141,6 +144,9 @@ export function sendMessageStream(
               break
             case 'run_created':
               onRunCreated(evt.messageId, evt.runCard)
+              break
+            case 'choices':
+              onChoices?.(evt.messageId, evt.choices ?? [])
               break
             case 'clarification':
               onDelta(evt.content)
