@@ -30,27 +30,19 @@ public static class ResearchEntryNodeTypes
 
 public static class PortfolioDiagnosisWorkflow
 {
-    public const int Version = 4;
+    public const int Version = 5;
 }
 
 public static class PortfolioDiagnosisNodeKeys
 {
     public const string LoadContext = "loadPortfolioDiagnosisContext";
-    public const string ApproveDiagnosis = "approvePortfolioDiagnosis";
     public const string FinalizeDiagnosis = "finalizePortfolioDiagnosis";
-    public const string FinalizeRejectedDiagnosis = "finalizeRejectedPortfolioDiagnosis";
 }
 
 public static class PortfolioDiagnosisNodeTypes
 {
     public const string LoadContext = "LoadPortfolioDiagnosisContext";
     public const string FinalizeDiagnosis = "FinalizePortfolio";
-    public const string FinalizeRejectedDiagnosis = "FinalizeRejectedPortfolio";
-}
-
-public static class HumanApprovalNodeTypes
-{
-    public const string WaitForHumanApproval = "WaitForHumanApproval";
 }
 
 public static class HumanApprovalDecisions

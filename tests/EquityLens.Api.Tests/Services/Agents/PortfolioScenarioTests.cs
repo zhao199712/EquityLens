@@ -48,7 +48,8 @@ public sealed class PortfolioScenarioTests
         Assert.Equal(PortfolioDiagnosisNodeKeys.LoadContext, order[0]);
         Assert.Equal("portfolioAgent", order[1]);
         Assert.Equal("portfolioQualityGate", order[2]);
-        Assert.Equal(6, run.Nodes.Count);
+        Assert.Equal(PortfolioDiagnosisNodeKeys.FinalizeDiagnosis, order[3]);
+        Assert.Equal(4, run.Nodes.Count);
 
     }
 

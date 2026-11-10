@@ -59,7 +59,7 @@ AI 研究與證據驗證
 ### AI Research Workflow
 
 以自然語言詢問財報、法說會或投資組合問題，由 AI Agent 自主決定如何查資料、算風險、整理答案；
-工具權限、數字驗證、人工審批與結果提交則由程式保證。
+工具權限、數字驗證、副作用審批與結果提交則由程式保證。
 
 > **設計原則：控制邊界與結果，不控制路線。**
 > 失敗只會多花一點錢的決策（查什麼、查幾次、何時起草）交給 LLM；
@@ -80,14 +80,14 @@ ResearchAgent（研究問答、回饋修訂）     PortfolioDiagnosis（投組�
 validate → detectIntent                 loadContext
   → researchAgent 🔁                      → portfolioAgent 🔁
   → qualityGate                           → portfolioQualityGate
-  → [reviseAgent 🔁 → reviseQualityGate]?  → approve 🧑（人工審批，必經）
-  → finalizeResearch                      → finalize ／ finalizeRejected
+  → [reviseAgent 🔁 → reviseQualityGate]?  → finalize
+  → finalizeResearch
 
 CriticReview（Admin 用，只評分不修改）：loadResearchRun → qualityGate → finalizeCriticReport
 ```
 
 🔁 = 節點內的受控 Agent 迴圈。外框是固定 DAG（建立 run 時就決定，執行中不再長出節點），
-共 3 個工作流、13 種 node type。
+共 3 個工作流、11 種 node type。
 
 #### Agent 迴圈怎麼運作
 
@@ -112,10 +112,10 @@ CriticReview（Admin 用，只評分不修改）：loadResearchRun → qualityGa
 - **Skill 由 Agent 自行載入**：prompt 只列出 skill 目錄，Agent 需要時呼叫 `load_skill` 載入完整方法（目前有法說會要點、市場事件、投組降波動優化）。Skill 只能增加說明，不能擴大工具權限；每次載入都記錄 id、版本與內容雜湊。
 - **來源政策由結構保證**：例如 `LocalOnly` 時 `search_web` 不會出現在工具清單，就算被呼叫也會被拒絕並記錄。
 
-#### 品質關卡與人工審批
+#### 品質關卡與審批
 
 - **Quality Gate（確定性程式）**：檢查引用是否存在、答案中的數字能否追溯到引用來源（處理千分位、仟元／百萬／十億等單位；百分比算式會用來源數字重新計算）、來源角色是否正確（例如不可把年報揭露說成法說會內容）、是否違反來源政策；之後再交給 Critic 評論。不合格就修訂一次，仍不合格則改為標準拒答。
-- **投組結論必經人工審批**：審批期間 run 持久化暫停、不佔用 worker；核准才發布，拒絕需附理由。
+- **投組結論由確定性品質檢查把關**：數字必須能追溯到工具證據、優化建議必須有情境模擬，通過後直接發布。
 - **副作用工具審批機制**：審批綁定具體工具呼叫與參數雜湊，核准後重新驗證並以冪等鍵執行（目前正式工具皆為唯讀，此機制以測試工具驗證）。
 
 #### 可靠性與可觀測性

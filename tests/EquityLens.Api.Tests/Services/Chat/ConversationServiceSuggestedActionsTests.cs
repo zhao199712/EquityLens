@@ -125,7 +125,7 @@ public sealed partial class ConversationServiceTests
             case "missing-target": seed.Portfolio.IsActive = false; break;
             case "foreign-target": seed.Portfolio.OwnerUserId = Guid.NewGuid(); break;
             case "duplicate-name": db.Portfolios.Add(new Portfolio { Id = Guid.NewGuid(), OwnerUserId = seed.User, Name = seed.Portfolio.Name }); break;
-            case "old-version": seed.Run.WorkflowDefinitionJson = seed.Run.WorkflowDefinitionJson.Replace("\"version\":4", "\"version\":1"); break;
+            case "old-version": seed.Run.WorkflowDefinitionJson = seed.Run.WorkflowDefinitionJson.Replace($"\"version\":{PortfolioDiagnosisWorkflow.Version}", "\"version\":1"); break;
             case "old-node": seed.Run.Nodes.First().NodeType = "RetiredNode"; break;
             case "partial-scenario": ChangeBoard(seed.Run, b => { b[PortfolioScenarioCalculator.ResultKey] = Comparison(seed.Portfolio.Id); b[PortfolioScenarioCalculator.ResultKey]!["scenarioErrors"] = new JsonArray("unavailable"); }); break;
             case "wrong-scenario-target": ChangeBoard(seed.Run, b => b[PortfolioScenarioCalculator.ResultKey] = Comparison(Guid.NewGuid())); break;
@@ -202,7 +202,7 @@ public sealed partial class ConversationServiceTests
         var queued = Assert.Single(queue.Messages);
         var created = await db.AgentRuns.Include(x => x.Nodes).SingleAsync(x => x.Id == queued.RunId);
         Assert.Equal(switchPortfolio ? other.Id : seed.Portfolio.Id, PortfolioDiagnosisWorkflowDefinitionProvider.ParseInput(created.InputJson).PortfolioId);
-        Assert.Contains(created.Nodes, n => n.NodeType == HumanApprovalNodeTypes.WaitForHumanApproval);
+        Assert.Equal(PortfolioDiagnosisWorkflowDefinitionProvider.Steps.Select(s => s.Type).Order(), created.Nodes.Select(n => n.NodeType).Order());
         Assert.Equal(seed.User, created.UserId);
         var foreign = Guid.NewGuid();
         var rejected = await service.ProcessAsync(seed.User, seed.Session.Id, new($"分析投資組合 {foreign} 的波動率", Guid.NewGuid()));

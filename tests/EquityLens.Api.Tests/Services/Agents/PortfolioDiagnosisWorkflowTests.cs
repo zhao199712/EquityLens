@@ -11,54 +11,27 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EquityLens.Api.Tests.Services.Agents;
 
-public sealed class PortfolioDiagnosisApprovalWorkflowTests
+public sealed class PortfolioDiagnosisWorkflowTests
 {
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task FixedDiagnosis_PausesWithoutLease_ResumesToDecisionBranch(bool approve)
+    [Fact]
+    public async Task FixedDiagnosis_RunsToCompletionWithoutHumanApprovalGate()
     {
         await using var db = RefactorTestDbContext.Create();
         var run = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(Guid.NewGuid(), Guid.NewGuid());
+        Assert.Equal(5, JsonNode.Parse(run.WorkflowDefinitionJson)!["version"]!.GetValue<int>());
+        Assert.Equal(["LoadPortfolioDiagnosisContext", "PortfolioAgentLoop", "PortfolioQualityGate", PortfolioDiagnosisNodeTypes.FinalizeDiagnosis],
+            run.Nodes.Select(n => n.NodeType));
         db.Add(run); await db.SaveChangesAsync();
         var executor = AgentExecutorTestFactory.Create(db, new WorkflowGraphTopologyService(), new AgentRunGraphValidator(),
             new AgentRunStateMachine(), new AgentNodeStateMachine(),
             [new Fixture("LoadPortfolioDiagnosisContext"), new Fixture("PortfolioAgentLoop"), new PortfolioQualityGateNodeHandler(),
-             new WaitForHumanApprovalNodeHandler(), new FinalizePortfolioDiagnosisNodeHandler(), new FinalizeRejectedPortfolioDiagnosisNodeHandler()],
+             new FinalizePortfolioDiagnosisNodeHandler()],
             NullLogger<AgentRunExecutor>.Instance, catalog: new AgentWorkflowCatalog());
         await executor.ExecuteAsync(run.Id, run.UserId);
-        Assert.Equal(AgentRunStatuses.WaitingForFeedback, run.Status);
-        Assert.Null(run.LeaseOwner); Assert.Null(run.LeaseExpiresAtUtc); Assert.Null(run.OutputJson);
-        Assert.Empty(await db.AgentRunWakeOutbox.ToListAsync());
-        Assert.Equal(6, run.Nodes.Count);
-        var approval = await db.AgentApprovalRequests.SingleAsync();
-        Assert.Equal("WorkflowGate", approval.Scope);
-        var service = new AgentApprovalService(db, new AgentRunStateMachine(), new AgentNodeStateMachine());
-        Assert.Null(await service.ApproveAsync(run.Id, approval.Id, Guid.NewGuid(), false, new(Guid.NewGuid(), "test")));
-        await Assert.ThrowsAsync<AgentApprovalException>(() => service.RejectAsync(run.Id, approval.Id, run.UserId, false, new(Guid.NewGuid(), " ")));
-        var decision = new DecideAgentApprovalRequest(Guid.NewGuid(), approve ? "核准" : "證據不足");
-        if (approve) await service.ApproveAsync(run.Id, approval.Id, run.UserId, false, decision);
-        else await service.RejectAsync(run.Id, approval.Id, run.UserId, false, decision);
-        Assert.Single(await db.AgentRunWakeOutbox.ToListAsync());
-        // requestId 重送不新增 wake。
-        if (approve) await service.ApproveAsync(run.Id, approval.Id, run.UserId, false, decision);
-        else await service.RejectAsync(run.Id, approval.Id, run.UserId, false, decision);
-        Assert.Single(await db.AgentRunWakeOutbox.ToListAsync());
-        await executor.ExecuteAsync(run.Id, run.UserId);
-        Assert.Equal(approve ? AgentRunStatuses.Succeeded : AgentRunStatuses.Failed, run.Status);
-        Assert.Equal(AgentNodeStatuses.Succeeded, run.Nodes.Single(n => n.NodeType == "PortfolioAgentLoop").Status);
-        Assert.Equal(6, run.Nodes.Count);
-        if (approve)
-        {
-            Assert.Equal(AgentNodeStatuses.Skipped, run.Nodes.Single(n => n.NodeType == PortfolioDiagnosisNodeTypes.FinalizeRejectedDiagnosis).Status);
-            Assert.Contains("20%", run.OutputJson!);
-        }
-        else
-        {
-            Assert.Equal(AgentNodeStatuses.Skipped, run.Nodes.Single(n => n.NodeType == PortfolioDiagnosisNodeTypes.FinalizeDiagnosis).Status);
-            Assert.Contains("證據不足", run.ErrorMessage!);
-            Assert.True(JsonNode.Parse(run.OutputJson!)!["rejected"]!.GetValue<bool>());
-        }
+        Assert.Equal(AgentRunStatuses.Succeeded, run.Status);
+        Assert.All(run.Nodes, n => Assert.Equal(AgentNodeStatuses.Succeeded, n.Status));
+        Assert.Empty(await db.AgentApprovalRequests.ToListAsync());
+        Assert.Contains("20%", run.OutputJson!);
     }
 
     [Theory]
