@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # pip 連線層重試；整個安裝的重試由 scripts/ci/pip-install.sh 負責。
+  PIP_RETRIES: "10"
+  PIP_TIMEOUT: "60"
+
 concurrency:
   group: equitylens-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -60,7 +65,7 @@ jobs:
           cache: pip
           cache-dependency-path: src/EquityLens.Mathematics/pyproject.toml
       - name: Install production Python engine and worker
-        run: pip install -e src/EquityLens.Mathematics
+        run: scripts/ci/pip-install.sh -e src/EquityLens.Mathematics
       - name: Run contracts and real risk pipeline
         run: >-
           dotnet test tests/EquityLens.Risk.IntegrationTests/EquityLens.Risk.IntegrationTests.csproj
@@ -95,7 +100,7 @@ jobs:
           cache: pip
           cache-dependency-path: src/EquityLens.Mathematics/pyproject.toml
       - name: Install Mathematics
-        run: pip install -e 'src/EquityLens.Mathematics[test,research]'
+        run: scripts/ci/pip-install.sh -e 'src/EquityLens.Mathematics[test,research]'
       - name: Run Mathematics tests
         run: pytest src/EquityLens.Mathematics/tests -q
 
@@ -113,7 +118,7 @@ jobs:
           cache: pip
           cache-dependency-path: evals/pyproject.toml
       - name: Install eval harness
-        run: pip install -e 'evals[test]'
+        run: scripts/ci/pip-install.sh -e 'evals[test]'
       - name: Validate cases
         working-directory: evals
         run: python -m equitylens_eval validate --cases cases/research_v1.jsonl
