@@ -73,5 +73,6 @@ public static class ImportMarketDataRegistration
         builder.Services.AddTransient<IMarketDataProvider>(sp => sp.GetRequiredService<YahooFinanceMarketDataProvider>());
         builder.Services.AddTransient<IMarketDataProvider>(sp => sp.GetRequiredService<AlphaVantageMarketDataProvider>());
         builder.Services.AddTransient<IMarketDataProvider>(sp => sp.GetRequiredService<FinMindMarketDataProvider>());
+        builder.Services.AddTransient<ICorporateActionProvider>(sp => sp.GetRequiredService<FinMindMarketDataProvider>());
     }
 }

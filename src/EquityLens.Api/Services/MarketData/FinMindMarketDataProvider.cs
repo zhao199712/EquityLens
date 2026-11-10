@@ -9,7 +9,7 @@ namespace EquityLens.Api.Services.MarketData;
 /// <summary>
 /// FinMind 市場資料提供者，提供台股（TWSE/TPEX）證券搜尋、解析與每日價格查詢。
 /// </summary>
-public sealed class FinMindMarketDataProvider : IMarketDataProvider
+public sealed class FinMindMarketDataProvider : IMarketDataProvider, ICorporateActionProvider
 {
     private static readonly HashSet<string> SupportedExchanges = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -170,6 +170,50 @@ public sealed class FinMindMarketDataProvider : IMarketDataProvider
 
         return prices.OrderBy(x => x.Date).ToList();
     }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<CorporateAction>> GetCorporateActionsAsync(
+        string ticker, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        var actions = new List<CorporateAction>();
+        // 除權息：after_price 為除權息後理論價；少數「權」類事件的 reference_price 等於除權前價格，不能使用。
+        foreach (var item in await GetDatasetAsync("TaiwanStockDividendResult", ticker, from, to, cancellationToken))
+            actions.Add(new(ReadDate(item), "dividend:" + ReadString(item, "stock_or_cache_dividend"),
+                ReadDecimal(item, "after_price"), ReadDecimal(item, "before_price")));
+        foreach (var item in await GetDatasetAsync("TaiwanStockSplitPrice", ticker, from, to, cancellationToken))
+            actions.Add(new(ReadDate(item), "split:" + ReadString(item, "type"),
+                ReadDecimal(item, "after_price"), ReadDecimal(item, "before_price")));
+        foreach (var item in await GetDatasetAsync("TaiwanStockCapitalReductionReferencePrice", ticker, from, to, cancellationToken))
+            actions.Add(new(ReadDate(item), "capital_reduction",
+                ReadDecimal(item, "PostReductionReferencePrice"), ReadDecimal(item, "ClosingPriceonTheLastTradingDay")));
+        return actions.OrderBy(x => x.Date).ToList();
+    }
+
+    private async Task<IReadOnlyList<JsonElement>> GetDatasetAsync(
+        string dataset, string ticker, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        var queryParameters = new Dictionary<string, string?>
+        {
+            ["dataset"] = dataset,
+            ["data_id"] = ticker,
+            ["start_date"] = from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["end_date"] = to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+        };
+        if (!string.IsNullOrWhiteSpace(_options.Token)) queryParameters["token"] = _options.Token;
+        using var response = await _httpClient.GetAsync(QueryHelpers.AddQueryString("/api/v4/data", queryParameters), cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        // 非 200 狀態或缺少 data 陣列代表回應不可信（例如額度用盡），不能當作「沒有公司行動」。
+        if (document.RootElement.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.Number && status.GetInt32() != 200)
+            throw new InvalidOperationException($"FinMind {dataset} returned status {status.GetInt32()}.");
+        if (!document.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException($"FinMind {dataset} response has no data array.");
+        return data.EnumerateArray().Select(x => x.Clone()).ToList();
+    }
+
+    private static DateOnly ReadDate(JsonElement element) =>
+        DateOnly.Parse(element.GetProperty("date").GetString()!, CultureInfo.InvariantCulture);
 
     private static decimal ReadDecimal(JsonElement element, string propertyName)
     {

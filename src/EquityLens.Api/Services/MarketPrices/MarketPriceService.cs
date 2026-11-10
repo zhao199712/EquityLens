@@ -25,6 +25,7 @@ public sealed class MarketPriceService : IMarketPriceService
     private readonly IMarketPriceRepository _marketPriceRepository;
     private readonly IEnumerable<IMarketDataProvider> _marketDataProviders;
     private readonly ILogger<MarketPriceService> _logger;
+    private readonly IOfficialAdjustedCloseRebuilder? _adjustedCloseRebuilder;
 
     /// <summary>
     /// 初始化市場價格服務。
@@ -34,13 +35,16 @@ public sealed class MarketPriceService : IMarketPriceService
     /// <param name="marketPriceRepository">市場價格儲存庫。</param>
     /// <param name="marketDataProviders">市場資料提供者集合。</param>
     /// <param name="logger">日誌記錄器。</param>
+    /// <param name="adjustedCloseRebuilder">以官方公司行動重建全歷史還原價；未提供時僅使用 Yahoo 回補。</param>
     public MarketPriceService(
         EquityLensDbContext dbContext,
         ISecurityRepository securityRepository,
         IMarketPriceRepository marketPriceRepository,
         IEnumerable<IMarketDataProvider> marketDataProviders,
-        ILogger<MarketPriceService> logger)
+        ILogger<MarketPriceService> logger,
+        IOfficialAdjustedCloseRebuilder? adjustedCloseRebuilder = null)
     {
+        _adjustedCloseRebuilder = adjustedCloseRebuilder;
         _dbContext = dbContext;
         _securityRepository = securityRepository;
         _marketPriceRepository = marketPriceRepository;
@@ -323,7 +327,10 @@ public sealed class MarketPriceService : IMarketPriceService
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 
-            await TryBackfillAdjustedCloseAsync(security, from, to, cancellationToken);
+            if (!await TryRebuildOfficialAdjustedCloseAsync(security, provider.SourceName, cancellationToken))
+            {
+                await TryBackfillAdjustedCloseAsync(security, from, to, cancellationToken);
+            }
 
             return Result<ImportMarketPricesResponse>.Success(new ImportMarketPricesResponse(
                 security.Id,
@@ -337,6 +344,33 @@ public sealed class MarketPriceService : IMarketPriceService
         return Result<ImportMarketPricesResponse>.Failure(
             "market_price.provider_error",
             $"No price data returned from any provider. Details: {errorDetail}");
+    }
+
+    /// <summary>
+    /// FinMind 原始價格匯入後，以官方公司行動重建全歷史還原價。
+    /// 每次除權息都會改變所有過去日期的還原因子，因此必須重算全部歷史，而非只更新本次同步區間。
+    /// 安全檢查未通過或資料來源不可用時回傳 false，改用 Yahoo 回補；失敗不影響價格匯入。
+    /// </summary>
+    private async Task<bool> TryRebuildOfficialAdjustedCloseAsync(
+        Security security,
+        string providerName,
+        CancellationToken cancellationToken)
+    {
+        if (_adjustedCloseRebuilder is null || providerName != "FinMind")
+        {
+            return false;
+        }
+
+        try
+        {
+            var result = await _adjustedCloseRebuilder.RebuildAsync(security, cancellationToken);
+            return result.Applied;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Official adjusted-close rebuild failed for {Ticker}; falling back to Yahoo backfill.", security.Ticker);
+            return false;
+        }
     }
 
     /// <summary>
