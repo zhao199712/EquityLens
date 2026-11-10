@@ -70,13 +70,13 @@ ConnectionStrings__PostgreSQL="Host=localhost:5432;Database=equitylens;Username=
 - Preflight checks are skipped for `WebOnly` and `LocalThenWeb` source policies.
 
 ## Fixed Workflow Runtime
-- Persisted DAG runtime with exactly three workflows and 13 node types; node-level research and portfolio loops share `Loop/AgentLoopEngine.cs`. This is not Microsoft Agent Framework runtime.
+- Persisted DAG runtime with exactly three workflows and 11 node types; node-level research and portfolio loops share `Loop/AgentLoopEngine.cs`. This is not Microsoft Agent Framework runtime.
 - `AgentWorkflowPlanner` topologically sorts fixed nodes/edges; `AgentRunGraphValidator` checks persisted nodes. No runtime graph expansion, capability registry, or supporting-skill catalog remains.
 - Definitions are persisted in `AgentRun.WorkflowDefinitionJson`. `WorkflowExecutionCompatibility` checks workflow, version and both definition/persisted node shapes. Retired runs remain readable; retry/resume/approval return 409 after ownership validation. Workers acquire fenced leases before safely failing retired graphs.
 - Current workflow definitions:
 ```text
 ResearchAgent v2: validate -> detectIntent -> researchAgent -> qualityGate -> [reviseAgent -> reviseQualityGate] -> finalize
-PortfolioDiagnosis v4: loadContext -> portfolioAgent -> portfolioQualityGate -> approve -> finalize / finalizeRejected
+PortfolioDiagnosis v5: loadContext -> portfolioAgent -> portfolioQualityGate -> finalize
 CriticReview v2: loadResearchRun -> qualityGate (score only) -> finalizeReport
 ```
 - Research and revision share a loop type; both gates share QualityGate. Research revises at most once. Feedback creates a ResearchAgent child beginning at revision, preserving request deduplication and parent links.
@@ -84,8 +84,8 @@ CriticReview v2: loadResearchRun -> qualityGate (score only) -> finalizeReport
 - Node registration lives in Bootstrap wiring and `AgentWorkflowCatalog.cs`; maintain their exact correspondence. Current catalog counts have regression tests.
 - Use `AgentStateMachine.Transition(...)` / `ResetForRetry(...)`, not direct status assignments. Handler business logic writes input/output, blackboard, tool calls and events; executor owns transitions and leases.
 - Telemetry uses `agent.run.execute` / `agent.node.execute` and `equitylens.agent.*.status.transitions`; persisted events/nodes/toolCalls remain the source of truth.
-- `WaitForHumanApproval` is always on for portfolio output. It durably suspends, releases the lease and writes no wake outbox. External approval restores the gate and follows conditional edges. Rejection requires a reason and ends Failed; no holdings are modified.
-- Conditional edges resolve dotted blackboard paths. Approval uses the existing ownership, orchestration concurrency and requestId guards.
+- PortfolioDiagnosis has no human approval gate since v5 (`WaitForHumanApproval` / `FinalizeRejectedPortfolio` were removed); PortfolioQualityGate is the only gate before finalize. v4 runs are retired: readable, but approve/retry/resume return 409. The approvals API remains for tool-call approvals.
+- Conditional edges resolve dotted blackboard paths. Tool-call approval uses the existing ownership, orchestration concurrency and requestId guards.
 - Ask Agent uses one unified conversation router: action, workflow, params, missing, confidence. Explicit entry points and owned-run follow-ups bypass classification. All paths validate ownership, ambiguity, source policy and supported scenarios. Invalid routing JSON retries once, then clarifies with sanitized diagnostics.
 - Router never selects a method. Role-scoped method files under `AgentSkills/` are loaded by audited read-only `load_skill` (default maximum three). They can narrow tools but cannot expand authorization or source policy.
 

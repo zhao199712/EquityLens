@@ -60,10 +60,8 @@ public static class AgentRuntimeRegistration
         builder.Services.AddScoped<IAgentNodeHandler, FinalizeCriticReportNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, LoadPortfolioDiagnosisContextNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, FinalizePortfolioDiagnosisNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, FinalizeRejectedPortfolioDiagnosisNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, ValidateResearchRequestNodeHandler>();
         builder.Services.AddScoped<IAgentNodeHandler, DetectResearchIntentNodeHandler>();
-        builder.Services.AddScoped<IAgentNodeHandler, WaitForHumanApprovalNodeHandler>();
         if (e2eTestMode) builder.Services.AddScoped<IAgentNodeHandler, E2EApprovalGateNodeHandler>();
         builder.Services.AddScoped<AgentWorkflowPolicyReader>();
         builder.Services.AddScoped<IAgentNodeRunner, AgentNodeRunner>();

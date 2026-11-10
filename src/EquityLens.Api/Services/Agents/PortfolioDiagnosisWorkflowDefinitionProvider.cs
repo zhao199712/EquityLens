@@ -61,25 +61,16 @@ public sealed class PortfolioDiagnosisWorkflowDefinitionProvider : IAgentWorkflo
     public static readonly (string Key, string Type)[] Steps = [
         (PortfolioDiagnosisNodeKeys.LoadContext, PortfolioDiagnosisNodeTypes.LoadContext),
         ("portfolioAgent", "PortfolioAgentLoop"), ("portfolioQualityGate", "PortfolioQualityGate"),
-        (PortfolioDiagnosisNodeKeys.ApproveDiagnosis, HumanApprovalNodeTypes.WaitForHumanApproval),
-        (PortfolioDiagnosisNodeKeys.FinalizeDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeDiagnosis),
-        (PortfolioDiagnosisNodeKeys.FinalizeRejectedDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeRejectedDiagnosis)];
+        (PortfolioDiagnosisNodeKeys.FinalizeDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeDiagnosis)];
 
     private static JsonObject Definition()
     {
         var nodes = new JsonArray(Steps.Select(x => (JsonNode)N(x.Key, x.Type)).ToArray());
-        nodes[3]!["config"] = new JsonObject { ["approvalType"] = "ApproveReject", ["prompt"] = "請審閱投組診斷後核准或拒絕。", ["subjectKey"] = AgentBlackboardKeys.PortfolioDiagnosisDraft };
-        nodes[4]!["condition"] = new JsonObject { ["path"] = "humanApproval.decision", ["equals"] = "Approved" };
-        nodes[5]!["condition"] = new JsonObject { ["path"] = "humanApproval.decision", ["equals"] = "Rejected" };
         return new() { ["workflowType"] = AgentWorkflowTypes.PortfolioDiagnosis, ["version"] = PortfolioDiagnosisWorkflow.Version,
             ["orchestrationMode"] = "Static", ["nodes"] = nodes,
-            ["edges"] = new JsonArray(E(Steps[0].Key, Steps[1].Key), E(Steps[1].Key, Steps[2].Key), E(Steps[2].Key, Steps[3].Key), E(Steps[3].Key, Steps[4].Key), E(Steps[3].Key, Steps[5].Key)) };
+            ["edges"] = new JsonArray(Steps.Zip(Steps.Skip(1), (from, to) => (JsonNode)E(from.Key, to.Key)).ToArray()) };
     }
 
-    private static JsonObject N(string id, string type, string? conditionPath = null, string? expected = null) => new()
-    {
-        ["id"] = id, ["type"] = type, ["required"] = true,
-        ["condition"] = conditionPath is null ? null : new JsonObject { ["path"] = conditionPath, ["equals"] = expected }
-    };
+    private static JsonObject N(string id, string type) => new() { ["id"] = id, ["type"] = type, ["required"] = true, ["condition"] = null };
     private static JsonObject E(string from, string to) => new() { ["from"] = from, ["to"] = to };
 }

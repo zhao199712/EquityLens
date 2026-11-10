@@ -59,10 +59,8 @@ public sealed class AgentWorkflowCatalog : IAgentWorkflowCatalog
         N(CriticReviewNodeTypes.FinalizeCriticReport, "完成評論報告", "輸出評分，不修改來源答案。", "Finalization", "WritesAgentTrace", [AgentBlackboardKeys.CriticReview], [AgentBlackboardKeys.FinalOutput], []),
         N(PortfolioDiagnosisNodeTypes.LoadContext, "載入投組內容", "驗證投組權限與期間。", "Input", "ReadOnly", [AgentBlackboardKeys.PortfolioId], [AgentBlackboardKeys.PortfolioContext], ["PortfolioAgentLoop"]),
         N("PortfolioAgentLoop", "投組迴圈", "以唯讀工具分析授權投組。", "Analyze", "ExternalLlmRead", [AgentBlackboardKeys.PortfolioContext], ["portfolioLoopAnswer", "agentLoopFacts"], ["PortfolioQualityGate"], supportsLoop: true),
-        N("PortfolioQualityGate", "投組品質檢查", "驗證數字與情境證據。", "Validation", "ReadOnly", [AgentBlackboardKeys.PortfolioContext, "portfolioLoopAnswer"], [AgentBlackboardKeys.PortfolioDiagnosisDraft], [HumanApprovalNodeTypes.WaitForHumanApproval]),
-        N(HumanApprovalNodeTypes.WaitForHumanApproval, "等待人工審批", "持久化暫停，釋放 worker。", "Approval", "ExternalHumanInteraction", [], [AgentBlackboardKeys.HumanApproval], [PortfolioDiagnosisNodeTypes.FinalizeDiagnosis, PortfolioDiagnosisNodeTypes.FinalizeRejectedDiagnosis]),
-        N(PortfolioDiagnosisNodeTypes.FinalizeDiagnosis, "提交投組診斷", "提交已核准診斷。", "Finalization", "WritesAgentTrace", [AgentBlackboardKeys.PortfolioDiagnosisDraft], [AgentBlackboardKeys.FinalOutput], []),
-        N(PortfolioDiagnosisNodeTypes.FinalizeRejectedDiagnosis, "記錄拒絕診斷", "保留拒絕理由並結束。", "Finalization", "WritesAgentTrace", [AgentBlackboardKeys.HumanApproval], [AgentBlackboardKeys.FinalOutput], [])
+        N("PortfolioQualityGate", "投組品質檢查", "驗證數字與情境證據。", "Validation", "ReadOnly", [AgentBlackboardKeys.PortfolioContext, "portfolioLoopAnswer"], [AgentBlackboardKeys.PortfolioDiagnosisDraft], [PortfolioDiagnosisNodeTypes.FinalizeDiagnosis]),
+        N(PortfolioDiagnosisNodeTypes.FinalizeDiagnosis, "提交投組診斷", "提交通過品質檢查的診斷。", "Finalization", "WritesAgentTrace", [AgentBlackboardKeys.PortfolioDiagnosisDraft], [AgentBlackboardKeys.FinalOutput], [])
     ];
     public IReadOnlyList<AgentWorkflowCatalogEntry> Workflows { get; } =
     [
