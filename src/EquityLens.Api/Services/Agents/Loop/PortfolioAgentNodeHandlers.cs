@@ -42,7 +42,8 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         if (RequiresScenario(board) && comparison?.Status != "Calculated")
             issues.Add((board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>() ?? 0) >= 120 ? "OptimizationScenarioRequired" : "OptimizationDataUnavailable");
         if (comparison?.ScenarioErrors is { Count: > 0 }) issues.Add("PartialScenarioFailure");
-        var limited = issues.Count > 0 || attribution?.CoverageStatus != "complete";
+        // 未執行歸因不代表其他工具證據不完整；已取得的歸因仍須檢查涵蓋率。
+        var limited = issues.Count > 0 || (attribution is not null && attribution.CoverageStatus != "complete");
         var summary = issues.Count > 0 ? "模型答案未通過品質檢查；以下僅列出已保存的工具資料，請確認資料限制。" : answer!.Markdown;
         if (issues.Contains("OptimizationScenarioRequired")) summary = "優化問題尚未取得同一快照的完整情境比較，無法提供改善幅度。";
         if (issues.Contains("OptimizationDataUnavailable")) summary = "共同歷史資料不足，無法比較優化前後的波動、VaR、ES 與最大回撤；請補足資料。";
@@ -168,6 +169,22 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
                     foreach (var key in new[] { "name", "index" })
                         if (candidate[key]?.ToString() is { Length: > 0 } name)
                             text = Regex.Replace(text, Regex.Escape(name) + @"(?![\d.%％])", "指數標的");
+            // 壓力情境名稱（如「2022 升息熊市」「資料期間最差 20 日」）是識別名稱；僅接受本句引用的工具情境。
+            foreach (var name in cited.Where(f => f.Tool == "run_stress_test")
+                         .SelectMany(f => (f.Data["scenarios"] as JsonArray)?.OfType<JsonObject>() ?? [])
+                         .Select(x => x["name"]?.ToString()).OfType<string>().Where(x => x.Length > 0).OrderByDescending(x => x.Length))
+                text = Regex.Replace(text, Regex.Escape(name) + @"(?![\d.%％])", "壓力情境");
+            // 「2022 情境」等簡稱：年份必須是本句引用情境的起訖年份，不放行其他年份數字。
+            var stressYears = cited.Where(f => f.Tool == "run_stress_test")
+                .SelectMany(f => (f.Data["scenarios"] as JsonArray)?.OfType<JsonObject>() ?? [])
+                .SelectMany(x => new[] { x["from"]?.ToString(), x["to"]?.ToString() })
+                .Where(x => x is { Length: >= 4 }).Select(x => x![..4]).ToHashSet(StringComparer.Ordinal);
+            text = Regex.Replace(text, @"(?<![\d.\-])(?:19|20)\d{2}(?=\s*(?:年)?\s*(?:情境|升息|熊市|科技股|修正|急跌))", m => stressYears.Contains(m.Value) ? "情境年份" : m.Value);
+            // 前輪研究問題的年份是已知主題，即使該研究未通過品質關卡也可說明其限制。
+            // 僅限明確的「年」標記及同句引用，不放行同值金額、百分比或新年份。
+            var researchYears = cited.Where(f => f.Tool == "prior_research")
+                .SelectMany(f => Regex.Matches(f.Data["question"]?.ToString() ?? "", @"(?<![\d.])(?:19|20)\d{2}(?=\s*年)").Select(m => m.Value)).ToHashSet();
+            text = Regex.Replace(text, @"(?<![\d.])(?:19|20)\d{2}(?=\s*年(?!化))", m => researchYears.Contains(m.Value) ? "研究年度" : m.Value);
             var tickers = facts.SelectMany(f => Tickers(f.Data)).ToHashSet(StringComparer.Ordinal);
             text = Regex.Replace(text, @"(?<![\d.])\d{4,6}(?![\d.]|\s*(?:%|％|元|股|百分點))", m => tickers.Contains(m.Value) ? "標的" : m.Value);
             // 「1.47 與 0.90 個百分點」共用尾端單位；僅限相鄰數字串列，不跨指標文字借用單位。
@@ -194,7 +211,10 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
                 var percent = number.Groups["unit"].Success;
                 var precision = token.Contains('.') ? token.Length - token.IndexOf('.') - 1 : 0;
                 // 依顯示的小數位四捨五入，沒有任意相對誤差；整數主張仍須精確。
-                if (!citations.Any(v => Matches(v, value, percent, precision)))
+                // 「虧 25.08%」以損失幅度表達負值；只接受正數且證據確實為負，不放寬一般數字。
+                var lossMagnitude = value > 0 && !token.StartsWith('+')
+                    && Regex.IsMatch(text[..number.Index], @"(?:虧損?|損失|下跌|跌幅|跌|負貢獻)\s*(?:約|為|達|了)?\s*$");
+                if (!citations.Any(v => Matches(v, value, percent, precision) || (lossMagnitude && v < 0 && Matches(-v, value, percent, precision))))
                 { issues.Add("UntraceableNumbers"); rejectedNumbers?.Add(number.Value); }
             }
         }

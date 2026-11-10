@@ -56,7 +56,8 @@ def binding(row, pid):
     board_ids = portfolio_ids(data['board'])
     scoped_tools = [c for c in data['tools'] if c.get('status') == 'Succeeded'
                     and c.get('toolName') in ('get_portfolio_snapshot', 'get_risk_report', 'run_risk_analysis',
-                                             'get_performance_attribution', 'simulate_weight_scenario')]
+                                             'get_performance_attribution', 'simulate_weight_scenario',
+                                             'run_stress_test')]
     if not run_ids or not board_ids or not scoped_tools:
         return None
     # At least snapshot/risk evidence must reveal effective scope; no arguments is not proof.

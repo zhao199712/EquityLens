@@ -1,3 +1,4 @@
+using EquityLens.Api.Services.Chat;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -24,7 +25,7 @@ internal static partial class ResearchAgentOutput
     public static async Task WriteAsync(AgentNodeExecutionContext context, ResearchLoopState state, bool revise, CancellationToken ct)
     {
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
-        var proposed = state.Answer!;
+        var proposed = state.Answer! with { Markdown = ResearchCitationSyntax.Normalize(state.Answer!.Markdown) };
         var references = EvidenceReference().Matches(proposed.Markdown).Select(x => x.Groups[1].Value).Distinct().ToList();
         var selected = references.Select(id => state.Ledger.SingleOrDefault(x => x.Id == id)).Where(x => x is not null).Cast<LoopEvidence>().ToList();
         var indexes = selected.Select((x, i) => (x.Id, Index: i + 1)).ToDictionary(x => x.Id, x => x.Index);
@@ -137,7 +138,7 @@ public sealed class ResearchQualityDecision : IQualityCheckStage
     }
 }
 
-public sealed class FinalizeResearchAgentNodeHandler : IAgentNodeHandler
+public sealed class FinalizeResearchAgentNodeHandler(ConversationSuggestedActionProvider? suggestions = null) : IAgentNodeHandler
 {
     public string NodeType => ResearchAgentNodes.Finalize;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
@@ -179,6 +180,7 @@ public sealed class FinalizeResearchAgentNodeHandler : IAgentNodeHandler
         context.Run.BlackboardJson = board.ToJsonString(AgentNodeJson.SerializerOptions);
         context.Run.OutputJson = board[AgentBlackboardKeys.FinalOutput]!.ToJsonString();
         context.Node.OutputJson = context.Run.OutputJson;
+        if (suggestions is not null) await suggestions.PrepareAsync(context, answer, cancellationToken);
     }
     internal static string? GuaranteedReturnResponse(string question)
     {

@@ -8,8 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EquityLens.Api.Services.Chat;
 
-/// <summary>依授權標的、已保存的工具結果及品質狀態挑選追問；不呼叫模型或執行工具。</summary>
-public sealed class ConversationSuggestedActionProvider(EquityLensDbContext db, WorkflowExecutionCompatibility compatibility)
+/// <summary>依授權標的、已保存的工具結果及品質狀態篩選追問；讀取時只套用已保存的模型排序，不呼叫模型或執行工具。</summary>
+public sealed partial class ConversationSuggestedActionProvider(EquityLensDbContext db, WorkflowExecutionCompatibility compatibility,
+    ConversationSuggestedActionRanker? ranker = null)
 {
     public async Task<IReadOnlyList<ConversationSuggestedActionDto>> ForRunAsync(
         Guid userId, Guid sessionId, AgentRun run, string? answer, CancellationToken ct = default)
@@ -28,12 +29,8 @@ public sealed class ConversationSuggestedActionProvider(EquityLensDbContext db, 
             var board = JsonNode.Parse(run.BlackboardJson) as JsonObject;
             var output = JsonNode.Parse(run.OutputJson ?? "{}") as JsonObject;
             if (board is null || output is null || output["errorCode"] is not null) return [];
-            return run.WorkflowType switch
-            {
-                AgentWorkflowTypes.PortfolioDiagnosis => await PortfolioAsync(userId, run, board, output, ct),
-                AgentWorkflowTypes.ResearchAgent => await ResearchAsync(userId, run, output, ct),
-                _ => []
-            };
+            var candidates = await CandidatesAsync(run, board, output, ct);
+            return ApplySavedRanking(candidates, board[RankingKey]);
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)
         {
@@ -60,6 +57,11 @@ public sealed class ConversationSuggestedActionProvider(EquityLensDbContext db, 
         ConversationSuggestedActionDto Action(string id, string label, string prompt, string labelEn, string promptEn) =>
             new(id, label, prefix + prompt, labelEn, prefixEn + promptEn);
 
+        var facts = board["agentLoopFacts"] as JsonArray ?? [];
+        bool UsedTool(string tool) => facts.OfType<JsonObject>().Any(f => f["tool"]?.GetValue<string>() == tool);
+        var profileAction = Action("portfolio-profile-fit", "符合我的風險偏好嗎？", "目前的風險水準是否符合我的風險偏好？請引用偏好來源並說明差距。",
+            "Does this fit my risk preference?", "does the current risk level fit my risk preference? Cite the preference source and explain any gap.");
+
         IReadOnlyList<ConversationSuggestedActionDto> actions;
         if (board[PortfolioScenarioCalculator.ResultKey] is JsonNode comparisonNode)
         {
@@ -72,7 +74,10 @@ public sealed class ConversationSuggestedActionProvider(EquityLensDbContext db, 
                 Action("scenario-remaining-risks", "調整後還有哪些風險？", "請根據已完成的情境比較，說明調整後仍存在的風險與限制。",
                     "What risks remain after the adjustment?", "explain the remaining risks and limitations using the completed scenario comparison."),
                 Action("scenario-metrics", "這些指標代表什麼？", "請解釋已完成情境比較中的波動率、VaR、ES 與最大回撤，以及各指標的適用限制。",
-                    "What do these metrics mean?", "explain volatility, VaR, ES and maximum drawdown in the completed scenario comparison, including their limitations.")
+                    "What do these metrics mean?", "explain volatility, VaR, ES and maximum drawdown in the completed scenario comparison, including their limitations."),
+                .. UsedTool("get_risk_profile") ? Array.Empty<ConversationSuggestedActionDto>() : [Action("scenario-profile-fit", "哪個方案較符合我的風險偏好？",
+                    "請根據已完成的情境比較與我的風險偏好，說明各方案與偏好的差距。",
+                    "Which option better fits my risk preference?", "compare each option in the completed scenario comparison with my risk preference and explain the gaps.")]
             ];
         }
         else
@@ -86,35 +91,59 @@ public sealed class ConversationSuggestedActionProvider(EquityLensDbContext db, 
             }
             AddResults(board[AgentBlackboardKeys.MathResults]);
             var hasContributions = false;
-            if (board["agentLoopFacts"] is JsonArray facts)
-                foreach (var fact in facts.OfType<JsonObject>())
-                {
-                    if (fact["tool"]?.GetValue<string>() is not ("run_risk_analysis" or "get_risk_report")) continue;
-                    AddResults(fact["data"]?["results"]);
-                    hasContributions |= fact["data"]?["metrics"]?["contributions"] is JsonArray { Count: > 0 };
-                }
-            var metrics = PortfolioRiskMetricsReader.FromMathResults(results);
-            if (metrics.AnnualizedVolatility is null && metrics.PortfolioVolatility is null) return [];
-            hasContributions |= metrics.Contributions is { Count: > 0 };
-            var selected = new List<ConversationSuggestedActionDto>
+            var hasTailRisk = false;
+            foreach (var fact in facts.OfType<JsonObject>())
             {
-                Action("portfolio-reduce-volatility", "如何降低波動率？", "如何降低波動率？請依可用資料比較可行方向並說明取捨。",
-                    "How can I reduce volatility?", "how could volatility be reduced? Compare feasible approaches using available data and explain the trade-offs.")
-            };
+                if (fact["tool"]?.GetValue<string>() is not ("run_risk_analysis" or "get_risk_report")) continue;
+                AddResults(fact["data"]?["results"]);
+                var reported = fact["data"]?["metrics"];
+                hasContributions |= reported?["contributions"] is JsonArray { Count: > 0 };
+                hasTailRisk |= reported?["historicalVaR"] is JsonValue || reported?["expectedShortfall"] is JsonValue;
+            }
+            var metrics = PortfolioRiskMetricsReader.FromMathResults(results);
+            var hasVolatility = metrics.AnnualizedVolatility is not null || metrics.PortfolioVolatility is not null;
+            // 只回答壓力測試或績效歸因時沒有波動率；仍須有計算成功的工具結果才提供追問。
+            var calculatedOtherBasis = facts.OfType<JsonObject>().Any(f => f["tool"]?.GetValue<string>() switch
+            {
+                "run_stress_test" => f["data"]?["status"]?.GetValue<string>() == "Calculated",
+                "get_performance_attribution" => f["data"]?["attribution"]?["portfolioReturn"] is JsonValue,
+                _ => false
+            });
+            hasContributions |= metrics.Contributions is { Count: > 0 };
+            hasTailRisk |= metrics.HistoricalVaR is not null || metrics.ExpectedShortfall is not null;
+            if (!hasVolatility && !hasContributions && !hasTailRisk && !calculatedOtherBasis) return [];
+            var selected = new List<ConversationSuggestedActionDto>();
+            if (hasVolatility)
+                selected.Add(Action("portfolio-reduce-volatility", "如何降低波動率？", "如何降低波動率？請依可用資料比較可行方向並說明取捨。",
+                    "How can I reduce volatility?", "how could volatility be reduced? Compare feasible approaches using available data and explain the trade-offs."));
             if (!hasContributions)
                 selected.Add(Action("portfolio-risk-contributors", "哪些持股貢獻最多風險？", "哪些持股對風險的貢獻最大？請根據資料分析並說明原因。",
                     "Which holdings contribute the most risk?", "which holdings contribute the most risk? Analyze the data and explain the reasons."));
+            if (!UsedTool("run_stress_test"))
+                selected.Add(Action("portfolio-stress-test", "遇到股災會跌多少？", "如果遇到股災、升息熊市或科技股修正等壓力情境，可能會跌多少？請依壓力測試說明主要虧損來源，並區分歷史回放與假設情境。",
+                    "How much could a market crash cost?", "how much could the portfolio fall in stress scenarios such as a market crash, a rate-hike bear market or a tech correction? Explain the main loss sources and separate historical replays from hypothetical shocks."));
+            if (!UsedTool("get_performance_attribution"))
+                selected.Add(Action("portfolio-benchmark", "跟大盤比表現如何？", "同期間的報酬跟台股加權含息報酬指數相比如何？請說明超額報酬與主要原因。",
+                    "How did it do versus the market?", "how did the return compare with the TAIEX total return index over the same period? Explain the excess return and main drivers."));
+            if (!hasTailRisk)
+                selected.Add(Action("portfolio-tail-risk", "極端情況下可能虧多少？", "在極端市況下可能虧損多少？請沿用本次分析期間的歷史資料，以 1 日持有期、95% 信心水準的 VaR 與 ES 說明，並註明計算期間與限制。",
+                    "How much could I lose in extreme markets?", "how much could be lost in extreme markets? Use historical data from the current analysis period and explain 1-day VaR and ES at 95% confidence, including the calculation period and limitations."));
+            if (!UsedTool("get_performance_attribution"))
+                selected.Add(Action("portfolio-attribution", "哪些持股拖累或貢獻報酬？", "哪些持股與產業對報酬的正負貢獻最大？請根據績效歸因說明。",
+                    "Which holdings drove or dragged returns?", "which holdings and sectors contributed most positively and negatively to returns? Explain using performance attribution."));
+            if (!UsedTool("get_risk_profile")) selected.Add(profileAction);
             actions = selected;
         }
         // 同名或文字歧義時，不提供無法由既有選擇器唯一辨識的提問。
         return actions.Where(a => a.Prompt.Length <= 2000 && a.PromptEn!.Length <= 2000
             && PortfolioSelection.Named(a.Prompt, portfolios.Select(x => (x.Id, x.Name))).SequenceEqual([portfolio.Id])
-            && PortfolioSelection.Named(a.PromptEn!, portfolios.Select(x => (x.Id, x.Name))).SequenceEqual([portfolio.Id])).Take(3).ToArray();
+            && PortfolioSelection.Named(a.PromptEn!, portfolios.Select(x => (x.Id, x.Name))).SequenceEqual([portfolio.Id])).ToArray();
     }
 
     private async Task<IReadOnlyList<ConversationSuggestedActionDto>> ResearchAsync(Guid userId, AgentRun run, JsonObject output, CancellationToken ct)
     {
-        var research = run.ResearchRun;
+        var research = run.ResearchRun ?? await db.ResearchRuns.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == run.ResearchRunId && x.UserId == userId, ct);
         if (research is null || research.UserId != userId || !string.IsNullOrWhiteSpace(research.ErrorMessage)
             || research.CitationCount < 1 || string.IsNullOrWhiteSpace(research.Ticker)
             || output["status"]?.GetValue<string>() != "Answered" || output["outputGate"]?["passed"]?.GetValue<bool>() != true

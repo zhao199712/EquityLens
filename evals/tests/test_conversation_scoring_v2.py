@@ -208,6 +208,10 @@ def test_source_number_must_support_basic_eps_not_diluted_eps():
     assert value('台積電2025年基本EPS66.26元。[1]', [c]) is False
 
 
+def test_supported_evidence_transfer_is_not_a_missing_product_capability():
+    assert 'research_to_exposure' not in conv.CAPABILITY_GAPS
+
+
 @pytest.mark.parametrize('quote', [
     '114年度、113年度\n| 基本每股盈餘 | $ 66.26 | | $ 45.25 | |',
     '114年度113年度基本每股盈餘$66.26$45.25稀釋每股盈餘$66.25$45.25',

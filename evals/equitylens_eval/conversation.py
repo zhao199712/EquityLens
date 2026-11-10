@@ -44,9 +44,8 @@ CHECKS: dict[str, dict[str, str]] = {
 }
 
 # Checks whose failure reflects a feature that does not exist yet rather than a regression.
-CAPABILITY_GAPS = {
-    'research_to_exposure': '產品尚未支援把研究 run 的結論作為證據傳入投組 run；在支援前失敗記為 capability_gap。',
-}
+CAPABILITY_GAPS: dict[str, str] = {}  # Research evidence transfer is implemented; semantic verification remains pending.
+
 
 FAILURE_CLASSES = ('bug', 'capability_gap', 'dependency_failed')
 

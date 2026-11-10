@@ -38,7 +38,7 @@ python -m pytest tests/test_conversation.py
 | 類別 | 意義 |
 | --- | --- |
 | `bug` | 產品宣稱支援、應該要會的行為失敗。 |
-| `capability_gap` | 產品尚未支援的能力。目前只有 `research_to_exposure`：研究 run 的結論還無法作為證據傳入投組 run。在產品支援並另有規格之前，這項失敗不計入回歸。 |
+| `capability_gap` | 產品尚未支援的能力。目前沒有列入此類的項目；研究證據傳遞已實作，`research_to_exposure` 留待語義驗證。 |
 | `dependency_failed` | 前一輪（通常是研究）失敗，導致下游證據斷言無法成立。根因記在前一輪；後輪不得用標準答案補洞，整段不通過。 |
 
 ## Fixture 與資料就緒狀態
@@ -92,7 +92,7 @@ python -m pytest tests/test_conversation.py
 | `computed_comparison` | deterministic | 基準與方案共用快照、期間與數學定義；獨立重算權重、NAV 與風險並檢查差異。未指定權重時不固定唯一答案；建議維持需有比較與理由。 |
 | `research_grounded` | deterministic | 依 research_case_refs 的已核實事實與來源檢查財報答案；不把其 request 欄位偷偷注入 Chat。 |
 | `no_unsupported_claims` | semantic | 不把財報當成未來報酬或波動的保證，不捏造數字與未取得的資料。 |
-| `research_to_exposure` | semantic（capability_gap） | 前輪有來源的財報事實與本輪讀取的持倉形成可追蹤的影響說明，不能只檢查公司關鍵字。 |
+| `research_to_exposure` | semantic | 前輪有來源的財報事實與本輪讀取的持倉形成可追蹤的影響說明，不能只檢查公司關鍵字。 |
 | `impact_uncertainty` | semantic | 區分已知財報、直接與未知間接曝險、條件性推論與歷史風險；不把因果或預測當事實。 |
 | `objective_retained` | semantic | 降低波動的目標在補參數或切換後沒有遺失。 |
 | `tradeoffs` | semantic | 說明現金、集中度、曝險變動與改善限制，不要求未驗證的未來報酬數字。 |
