@@ -64,13 +64,15 @@ public sealed class MarketTickerController : ApiControllerBase
                 .Where(x => x.SecurityId == security.Id && x.Interval == "1d")
                 .OrderByDescending(x => x.PriceTime)
                 .Take(2)
-                .Select(x => new { x.Close })
+                .Select(x => new { x.Close, x.AdjustedClose })
                 .ToListAsync(cancellationToken);
 
             if (lastTwo.Count == 0 || lastTwo[0].Close <= 0) continue;
-            decimal? changePct = lastTwo.Count == 2 && lastTwo[1].Close > 0
-                ? Math.Round((lastTwo[0].Close / lastTwo[1].Close - 1m) * 100m, 2)
-                : null;
+            // 價格顯示實際收盤價；漲跌幅兩日都有還原價時才用還原價，避免分割或除權息日顯示假漲跌。
+            decimal? changePct = lastTwo.Count != 2 || lastTwo[1].Close <= 0 ? null
+                : lastTwo[0].AdjustedClose is > 0 && lastTwo[1].AdjustedClose is > 0
+                    ? Math.Round((lastTwo[0].AdjustedClose!.Value / lastTwo[1].AdjustedClose!.Value - 1m) * 100m, 2)
+                    : Math.Round((lastTwo[0].Close / lastTwo[1].Close - 1m) * 100m, 2);
             entries.Add(new MarketTickerEntry(security.Ticker, security.Name, lastTwo[0].Close, changePct));
         }
 
