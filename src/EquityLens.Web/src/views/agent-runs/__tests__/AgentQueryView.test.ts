@@ -273,4 +273,15 @@ describe('AgentQueryView', () => {
     expect(text).not.toContain('FAILED')
     expect(wrapper.find('table.md-table').exists()).toBe(true)
   })
+
+  it('folds method notes and fixed notices out of portfolio answers', () => {
+    chat.messages = [{ id: 'p', role: 'assistant', content: '', runCard: { agentRunId: 'r', workflowType: 'PortfolioDiagnosis', status: 'Succeeded',
+      completedNodes: 4, totalNodes: 4, qualityIssues: [],
+      finalAnswer: '年化波動 53.39% [P3]。\n\n波動採樣本標準差年化；高於產品參考上限 18.00% [P3]。\n\n工具唯讀，不代表持倉已調整；不保證獲利。' } }]
+    const wrapper = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } })
+    expect(wrapper.find('.final-answer').text()).toContain('53.39%')
+    expect(wrapper.find('.final-answer').text()).not.toContain('參考上限')
+    expect(wrapper.find('details.answer-notes summary').text()).toBe('計算方式與限制')
+    expect(wrapper.find('.answer-footer').text()).toBe('工具唯讀，不代表持倉已調整；不保證獲利。')
+  })
 })

@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { useChatStore } from '../../stores/chat'
 import { renderMarkdown } from '../../utils/markdown'
+import { splitAnswerSections, type AnswerSections } from '../../utils/answerSections'
 import { isSubmitEnter } from '../../utils/keyboard'
 import i18n from '../../locales'
 
@@ -70,6 +71,17 @@ const workflowLabelsEn: Record<string, string> = {
   PortfolioDiagnosis: 'Portfolio diagnosis',
   CriticReview: 'Quality review',
 }
+// 同一答案在模板中多處使用；快取拆段結果，避免每次渲染重算。
+const sectionCache = new Map<string, AnswerSections>()
+function answerSections(text: string): AnswerSections {
+  let cached = sectionCache.get(text)
+  if (!cached) { cached = splitAnswerSections(text); sectionCache.set(text, cached) }
+  return cached
+}
+const footerHtml = (lines: string[]) => lines.map(line => renderMarkdown(line).replace(/^<p>|<\/p>$/g, '')).join('<br>')
+
+// 完成後進度條沒有資訊量，只在執行中顯示。
+const isFinished = (status: string) => ['Succeeded', 'Failed', 'Cancelled'].includes(status)
 const workflowLabel = (type: string) => (english.value ? workflowLabelsEn : workflowLabels)[type] ?? type
 // 英文介面沿用原始狀態字樣；中文介面顯示中文。
 const statusLabel = (status: string) => english.value ? status : statusLabels[status] ?? status
@@ -198,12 +210,23 @@ function formatTime(updatedAtUtc: string) {
                 </span>
               </div>
               <p v-if="message.runCard.workflowType !== 'ResearchAgent' && message.runCard.currentStageDisplayName">目前階段：{{ message.runCard.currentStageDisplayName }}</p>
-              <div v-if="message.runCard.workflowType !== 'ResearchAgent'" class="progress">
+              <div v-if="message.runCard.workflowType !== 'ResearchAgent' && !isFinished(message.runCard.status)" class="progress">
                 <span :style="{ width: `${message.runCard.totalNodes ? message.runCard.completedNodes / message.runCard.totalNodes * 100 : 0}%` }"></span>
               </div>
-              <small v-if="message.runCard.workflowType !== 'ResearchAgent'">步驟 {{ message.runCard.completedNodes }} / {{ message.runCard.totalNodes }}</small>
+              <small v-if="message.runCard.workflowType !== 'ResearchAgent' && !isFinished(message.runCard.status)">步驟 {{ message.runCard.completedNodes }} / {{ message.runCard.totalNodes }}</small>
               <small v-else-if="!['Succeeded', 'Failed', 'Cancelled'].includes(message.runCard.status)">正在檢索文件並整理答案…</small>
-              <div v-if="message.runCard.status === 'Succeeded' && message.runCard.finalAnswer" class="final-answer" v-html="renderMarkdown(message.runCard.finalAnswer)"></div>
+              <template v-if="message.runCard.status === 'Succeeded' && message.runCard.finalAnswer">
+                <div v-if="message.runCard.workflowType !== 'PortfolioDiagnosis'" class="final-answer" v-html="renderMarkdown(message.runCard.finalAnswer)"></div>
+                <template v-else>
+                  <div class="final-answer" v-html="renderMarkdown(answerSections(message.runCard.finalAnswer).main)"></div>
+                  <details v-if="answerSections(message.runCard.finalAnswer).notes.length" class="answer-notes">
+                    <summary>{{ english ? 'Method and limitations' : '計算方式與限制' }}</summary>
+                    <div v-html="renderMarkdown(answerSections(message.runCard.finalAnswer).notes.join('\n\n'))"></div>
+                  </details>
+                  <p v-if="answerSections(message.runCard.finalAnswer).footer.length" class="answer-footer"
+                    v-html="footerHtml(answerSections(message.runCard.finalAnswer).footer)"></p>
+                </template>
+              </template>
               <p v-if="message.runCard.qualityIssues?.length" class="quality-note">
                 已隱藏未通過驗證的內容（{{ qualityText(message.runCard.qualityIssues) }}），以上只保留可對應工具資料的部分。可以換個問法，或開啟分析詳情查看原因。
               </p>
@@ -350,6 +373,10 @@ function formatTime(updatedAtUtc: string) {
 .progress { height: 5px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
 .progress span { display: block; height: 100%; background: var(--gold); transition: width .25s ease; }
 .final-answer { padding-top: 10px; border-top: 1px solid var(--gold-border-soft); color: var(--ivory); line-height: 1.65; }
+.answer-notes { margin-top: 10px; border-top: 1px dashed var(--gold-border-soft); padding-top: 8px; color: var(--ivory); font-size: .9em; line-height: 1.6; }
+.answer-notes summary { cursor: pointer; color: var(--gold); font-size: .92em; list-style-position: inside; }
+.answer-notes > div { margin-top: 6px; opacity: .85; }
+.answer-footer { margin: 10px 0 0; font-size: .78em; line-height: 1.5; color: var(--ivory); opacity: .55; }
 .final-answer :deep(code) { background: rgba(201,168,106,.14); padding: 2px 6px; border-radius: 4px; font-size: .92em; }
 .run-card a { color: var(--gold); }
 
