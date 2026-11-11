@@ -25,6 +25,37 @@ public sealed partial class ConversationServiceTests
         }
     }
 
+    private sealed class BenchmarkValuations : EquityLens.Api.Services.PortfolioValuations.IPortfolioValuationService
+    {
+        public Task<EquityLens.Api.Common.Result<EquityLens.Api.Contracts.Portfolios.PortfolioValuationResponse>> GetValuationAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+        public Task<EquityLens.Api.Common.Result<EquityLens.Api.Contracts.Portfolios.PortfolioValuationHistoryResponse>> GetValuationHistoryAsync(Guid id, DateOnly from, DateOnly to, CancellationToken ct) => throw new NotSupportedException();
+        public Task<EquityLens.Api.Common.Result<EquityLens.Api.Contracts.Portfolios.PortfolioValuationHistoryResponse>> GetValuationHistoryForUserAsync(Guid id, Guid user, DateOnly from, DateOnly to, CancellationToken ct)
+            => Task.FromResult(EquityLens.Api.Common.Result<EquityLens.Api.Contracts.Portfolios.PortfolioValuationHistoryResponse>.Success(new(id, from, to, "TWD", [], .1m, BenchmarkReturn: .08m, ExcessReturn: .02m)));
+    }
+
+    [Fact]
+    public async Task Finalize_AddsBenchmarkComparisonForTheReport_WithoutChangingTheGatedAnswer()
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        ChangeBoard(seed.Run, b => {
+            b["portfolioLoopAnswer"] = JsonSerializer.SerializeToNode(new LoopAnswer("波動 30% [P1]。", ["P1"]), SuggestionJson);
+            b["agentLoopFacts"] = JsonNode.Parse("""[{"id":"P1","key":"risk","tool":"run_risk_analysis","data":{"volatility":0.3}}]""");
+        });
+        await new PortfolioQualityGateNodeHandler().ExecuteAsync(new(db, seed.Run, seed.Run.Nodes.First(), (_, _, _, _, _) => {}));
+        var draft = JsonNode.Parse(seed.Run.BlackboardJson)![AgentBlackboardKeys.PortfolioDiagnosisDraft]!;
+        Assert.Null(draft["portfolioReturn"]?.GetValue<decimal?>());
+        var node = seed.Run.Nodes.Single(x => x.NodeType == PortfolioDiagnosisNodeTypes.FinalizeDiagnosis);
+        await new FinalizePortfolioDiagnosisNodeHandler(valuations: new BenchmarkValuations()).ExecuteAsync(new AgentNodeExecutionContext(db, seed.Run, node, (_, _, _, _, _) => {}));
+        var output = JsonNode.Parse(seed.Run.OutputJson!)!;
+        Assert.Equal(.1m, output["portfolioReturn"]!.GetValue<decimal>());
+        Assert.Equal(.08m, output["benchmarkReturn"]!.GetValue<decimal>());
+        Assert.Equal(.02m, output["activeReturn"]!.GetValue<decimal>());
+        Assert.NotNull(output["attributionCoverage"]);
+        Assert.Equal(draft["summary"]!.ToString(), output["summary"]!.ToString());
+        Assert.Equal(draft["evidenceStatus"]!.ToString(), output["evidenceStatus"]!.ToString());
+        Assert.Equal(draft["interpretation"]?.ToString(), output["interpretation"]?.ToString());
+    }
+
     [Fact]
     public async Task HybridSuggestions_FinalizeRanksAllEligibleCandidates_AndReadsReuseSavedSelection()
     {
