@@ -59,6 +59,20 @@ public sealed partial class ConversationServiceTests
     }
 
     [Fact]
+    public async Task PortfolioRunCard_CarriesKeyMetricsFromToolOutput()
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        seed.Run.OutputJson = """{"summary":"x","riskMetrics":{"annualizedVolatility":0.5339,"maxDrawdown":-0.3166,"historicalVaR":null,"largestWeight":0.7692,"concentrationHhi":0.645},"portfolioReturn":1.1823,"benchmarkReturn":0.6211}""";
+        await db.SaveChangesAsync();
+        var card = await SuggestionService(db).GetRunCardAsync(seed.User, seed.Session.Id, seed.Run.Id);
+        var metrics = card!.KeyMetrics!;
+        Assert.Equal(.5339m, metrics.AnnualizedVolatility);
+        Assert.Equal(-.3166m, metrics.MaxDrawdown);
+        Assert.Null(metrics.HistoricalVaR);
+        Assert.Equal(.6211m, metrics.BenchmarkReturn);
+    }
+
+    [Fact]
     public async Task SuggestedActions_RiskOverviewUsesVerifiedNameAndNoModelCallsOrWrites()
     {
         await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);

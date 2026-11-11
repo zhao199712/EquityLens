@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import { useChatStore } from '../../stores/chat'
 import { renderMarkdown } from '../../utils/markdown'
 import { splitAnswerSections, type AnswerSections } from '../../utils/answerSections'
+import type { ConversationKeyMetrics } from '../../services/chat'
 import { isSubmitEnter } from '../../utils/keyboard'
 import i18n from '../../locales'
 
@@ -82,6 +83,26 @@ const footerHtml = (lines: string[]) => lines.map(line => renderMarkdown(line).r
 
 // 完成後進度條沒有資訊量，只在執行中顯示。
 const isFinished = (status: string) => ['Succeeded', 'Failed', 'Cancelled'].includes(status)
+// 重點指標固定由工具數字組成，不受模型是否畫表影響。
+type KeyMetricCell = { label: string; value: string; note?: string }
+const pct = (value: number | null | undefined) => value == null ? null : `${(value * 100).toFixed(2)}%`
+function keyMetricCells(metrics: ConversationKeyMetrics | null | undefined): KeyMetricCell[] {
+  if (!metrics) return []
+  const en = english.value
+  const cell = (label: string, value: string | null, note?: string): KeyMetricCell | null => value == null ? null : { label, value, note }
+  const tail = en ? '95%, 1 day' : '95%、1 日'
+  const benchmark = pct(metrics.benchmarkReturn)
+  return [
+    cell(en ? 'Annualized volatility' : '年化波動', pct(metrics.annualizedVolatility)),
+    cell(en ? 'Max drawdown' : '最大回撤', pct(metrics.maxDrawdown)),
+    cell(en ? 'Largest holding' : '最大持倉權重', pct(metrics.largestWeight)),
+    cell(en ? 'HHI' : '集中度 HHI', metrics.concentrationHhi == null ? null : metrics.concentrationHhi.toFixed(3)),
+    cell('VaR', pct(metrics.historicalVaR), tail),
+    cell('ES', pct(metrics.expectedShortfall), tail),
+    cell(en ? 'Return' : '期間報酬', pct(metrics.portfolioReturn), benchmark ? `${en ? 'TAIEX' : '大盤'} ${benchmark}` : undefined),
+  ].filter((item): item is KeyMetricCell => item !== null)
+}
+
 const workflowLabel = (type: string) => (english.value ? workflowLabelsEn : workflowLabels)[type] ?? type
 // 英文介面沿用原始狀態字樣；中文介面顯示中文。
 const statusLabel = (status: string) => english.value ? status : statusLabels[status] ?? status
@@ -218,6 +239,11 @@ function formatTime(updatedAtUtc: string) {
               <template v-if="message.runCard.status === 'Succeeded' && message.runCard.finalAnswer">
                 <div v-if="message.runCard.workflowType !== 'PortfolioDiagnosis'" class="final-answer" v-html="renderMarkdown(message.runCard.finalAnswer)"></div>
                 <template v-else>
+                  <dl v-if="keyMetricCells(message.runCard.keyMetrics).length" class="key-metrics" :aria-label="english ? 'Key metrics' : '重點指標'">
+                    <div v-for="cell in keyMetricCells(message.runCard.keyMetrics)" :key="cell.label">
+                      <dt>{{ cell.label }}</dt><dd>{{ cell.value }}</dd><small v-if="cell.note">{{ cell.note }}</small>
+                    </div>
+                  </dl>
                   <div class="final-answer" v-html="renderMarkdown(answerSections(message.runCard.finalAnswer).main)"></div>
                   <details v-if="answerSections(message.runCard.finalAnswer).notes.length" class="answer-notes">
                     <summary>{{ english ? 'Method and limitations' : '計算方式與限制' }}</summary>
@@ -373,6 +399,11 @@ function formatTime(updatedAtUtc: string) {
 .progress { height: 5px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
 .progress span { display: block; height: 100%; background: var(--gold); transition: width .25s ease; }
 .final-answer { padding-top: 10px; border-top: 1px solid var(--gold-border-soft); color: var(--ivory); line-height: 1.65; }
+.key-metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin: 4px 0 0; }
+.key-metrics > div { padding: 8px 10px; border: 1px solid var(--gold-border-soft); border-radius: 6px; background: rgba(201,168,106,.05); }
+.key-metrics dt { font-size: .74em; color: var(--muted); }
+.key-metrics dd { margin: 2px 0 0; font-size: 1.05em; font-weight: 600; color: var(--ivory); font-variant-numeric: tabular-nums; }
+.key-metrics small { display: block; font-size: .7em; color: var(--muted); }
 .answer-notes { margin-top: 10px; border-top: 1px dashed var(--gold-border-soft); padding-top: 8px; color: var(--ivory); font-size: .9em; line-height: 1.6; }
 .answer-notes summary { cursor: pointer; color: var(--gold); font-size: .92em; list-style-position: inside; }
 .answer-notes > div { margin-top: 6px; opacity: .85; }

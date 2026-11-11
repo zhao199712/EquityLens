@@ -303,7 +303,8 @@ public sealed partial class ConversationService(
         return new(run.Id, run.ResearchRunId, run.WorkflowType, run.Status, waiting ? "Approval" : currentContract?.Stage, waiting ? "等待人工審閱" : currentContract?.DisplayName,
             run.Nodes.Count(x => x.Status is AgentNodeStatuses.Succeeded or AgentNodeStatuses.Skipped),
             run.Nodes.Count, finalAnswer, run.ErrorMessage, issues,
-            suggestions is null ? [] : await suggestions.ForRunAsync(userId, sessionId, run, finalAnswer, cancellationToken));
+            suggestions is null ? [] : await suggestions.ForRunAsync(userId, sessionId, run, finalAnswer, cancellationToken),
+            KeyMetrics(run));
     }
 
     private async Task<ConversationAgentDecision?> EntryDecisionAsync(Guid userId, string content, JsonObject context, CancellationToken ct)
@@ -353,6 +354,22 @@ public sealed partial class ConversationService(
 
     private static Guid? ReadGuid(JsonObject context, string key) =>
         Guid.TryParse(context[key]?.GetValue<string>(), out var value) ? value : null;
+
+    private static ConversationKeyMetricsDto? KeyMetrics(AgentRun run)
+    {
+        if (run.WorkflowType != AgentWorkflowTypes.PortfolioDiagnosis || run.Status != AgentRunStatuses.Succeeded || string.IsNullOrWhiteSpace(run.OutputJson)) return null;
+        try
+        {
+            var output = JsonNode.Parse(run.OutputJson);
+            var metrics = output?["riskMetrics"];
+            static decimal? Number(JsonNode? node) => node is JsonValue value && value.TryGetValue<decimal>(out var number) ? number : null;
+            var result = new ConversationKeyMetricsDto(Number(metrics?["annualizedVolatility"]), Number(metrics?["maxDrawdown"]),
+                Number(metrics?["historicalVaR"]), Number(metrics?["expectedShortfall"]), Number(metrics?["largestWeight"]),
+                Number(metrics?["concentrationHhi"]), Number(output?["portfolioReturn"]), Number(output?["benchmarkReturn"]));
+            return result.AnnualizedVolatility is null && result.MaxDrawdown is null && result.LargestWeight is null ? null : result;
+        }
+        catch (JsonException) { return null; }
+    }
 
     private static string? ExtractFinalAnswer(string? outputJson)
     {

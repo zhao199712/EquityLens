@@ -158,7 +158,7 @@ internal sealed class PortfolioAttributionReader
 }
 
 public sealed class FinalizePortfolioDiagnosisNodeHandler(ConversationSuggestedActionProvider? suggestions = null,
-    IPortfolioValuationService? valuations = null) : IAgentNodeHandler
+    IPortfolioValuationService? valuations = null, IPortfolioRiskMathExecutor? riskMath = null) : IAgentNodeHandler
 {
     public string NodeType => PortfolioDiagnosisNodeTypes.FinalizeDiagnosis;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
@@ -166,6 +166,7 @@ public sealed class FinalizePortfolioDiagnosisNodeHandler(ConversationSuggestedA
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
         var output = PortfolioDiagnosisBlackboard.Required<PortfolioDiagnosisOutput>(board, AgentBlackboardKeys.PortfolioDiagnosisDraft);
         output = await WithReportAttributionAsync(context, output, cancellationToken);
+        output = WithReportTailRisk(context, board, output);
         context.Node.InputJson = AgentNodeJson.Serialize(new { evidenceStatus = output.EvidenceStatus, priorityCount = output.RecommendedAnalyses.Count });
         context.Node.OutputJson = AgentNodeJson.Serialize(output);
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.FinalOutput, output);
@@ -173,6 +174,38 @@ public sealed class FinalizePortfolioDiagnosisNodeHandler(ConversationSuggestedA
         context.Run.OutputJson = context.Node.OutputJson;
         context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Final portfolio diagnosis written.", new { output.EvidenceStatus });
         if (suggestions is not null) await suggestions.PrepareAsync(context, output.Interpretation ?? output.Summary, cancellationToken);
+    }
+
+    /// <summary>
+    /// 問題沒有問到尾端風險時，模型不會計算 VaR／ES；報告仍以同一份凍結輸入補算，讓風險指標完整。
+    /// 只寫入報告，不改答案或品質判定；樣本不足或計算失敗時維持原報告。
+    /// </summary>
+    private PortfolioDiagnosisOutput WithReportTailRisk(AgentNodeExecutionContext context, JsonObject board, PortfolioDiagnosisOutput output)
+    {
+        if (riskMath is null || output.RiskMetrics is not { HistoricalVaR: null, ExpectedShortfall: null } metrics) return output;
+        var inputs = board[AgentBlackboardKeys.MathInputs]?.Deserialize<PortfolioRiskMathInputs>(AgentNodeJson.SerializerOptions);
+        if (inputs is null || inputs.Assets.Count == 0 || inputs.CommonTradingDays < 120) return output;
+        try
+        {
+            var results = new[] { "calculate-historical-var", "calculate-expected-shortfall" }
+                .Select(operation => riskMath.Execute(operation, inputs, new JsonObject(), context.Run.Id)).ToList();
+            var node = JsonSerializer.SerializeToNode(results, AgentNodeJson.SerializerOptions);
+            var tail = PortfolioRiskMetricsReader.FromMathResults(node);
+            var bases = (node as JsonArray)!.OfType<JsonObject>()
+                .Select(x => new PortfolioMetricBasis(x["operation"]?.ToString() ?? "unknown", x["provenance"]?["measurementBasis"]?.DeepClone()));
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Report tail risk added after the quality gate.",
+                new { tail.HistoricalVaR, tail.ExpectedShortfall });
+            return output with
+            {
+                RiskMetrics = metrics with { HistoricalVaR = tail.HistoricalVaR, ExpectedShortfall = tail.ExpectedShortfall },
+                MetricBases = (output.MetricBases ?? []).Concat(bases).ToList(),
+            };
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or AgentNodeException)
+        {
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Report tail risk unavailable.", new { reason = exception.Message });
+            return output;
+        }
     }
 
     /// <summary>

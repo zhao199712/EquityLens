@@ -84,3 +84,27 @@ public sealed class FinMindAssetTypeTests
     public void Etf_metadata_is_not_imported_as_equity(string ticker, string? industry, string expected) =>
         Assert.Equal(expected, EquityLens.Api.Services.MarketData.FinMindMarketDataProvider.InferAssetType(ticker, industry));
 }
+
+public sealed class PortfolioGateNameTests
+{
+    private static LoopDataFact Snapshot(string name) => new("P1", "snapshot", "get_portfolio_snapshot", new JsonObject
+    {
+        ["diagnosis"] = new JsonObject { ["portfolioName"] = name }, ["weight"] = .2308m,
+    });
+
+    [Theory]
+    [InlineData("測試1")]
+    [InlineData("2025 成長組合")]
+    public void Portfolio_names_with_digits_are_not_numeric_claims(string name)
+    {
+        var answer = new LoopAnswer($"「{name}」直接持有台積電，權重 23.08%。[P1]", ["P1"]);
+        Assert.DoesNotContain("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(answer, [Snapshot(name)]));
+    }
+
+    [Fact]
+    public void Masking_names_does_not_hide_other_numbers()
+    {
+        var answer = new LoopAnswer("「測試1」權重 99%。[P1]", ["P1"]);
+        Assert.Contains("UntraceableNumbers", PortfolioQualityGateNodeHandler.Check(answer, [Snapshot("測試1")]));
+    }
+}

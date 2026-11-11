@@ -134,6 +134,9 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         var userYears = Regex.Matches(userQuestion ?? "", @"(?<![\d.])(?:19|20)\d{2}(?![\d.])").Select(m => m.Value).ToHashSet(StringComparer.Ordinal);
         if (answer is null || string.IsNullOrWhiteSpace(answer.Markdown) || answer.Markdown == AgentLoopEngine.Refusal) return ["InsufficientEvidence"];
         var byId = facts.ToDictionary(x => x.Id, StringComparer.Ordinal);
+        // 投組名稱（如「測試1」「2025 成長」）是識別名稱，不是需追溯的數字；只遮蔽工具資料中出現的名稱。
+        var portfolioNames = facts.Select(f => f.Data["diagnosis"]?["portfolioName"]?.ToString())
+            .Where(n => !string.IsNullOrWhiteSpace(n) && Regex.IsMatch(n!, @"\d")).Distinct().OrderByDescending(n => n!.Length).ToArray();
         if (facts.Count == 0) issues.Add("MissingToolEvidence");
         var availableProfileFits = facts.Select(f => f.Tool == "get_risk_profile" ? f.Data : f.Data["riskProfile"] as JsonObject)
             .OfType<JsonObject>().SelectMany(p => (p["profileFit"] as JsonArray)?.OfType<JsonObject>() ?? [])
@@ -146,6 +149,7 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
             var ids = Regex.Matches(sentence, @"\[(P\d+)\]").Select(x => x.Groups[1].Value).ToArray();
             if (ids.Any(x => !byId.ContainsKey(x))) issues.Add("UnknownToolEvidence");
             var text = Regex.Replace(sentence, @"\[P\d+\]", "");
+            foreach (var name in portfolioNames) text = text.Replace(name!, "投組", StringComparison.Ordinal);
             // Markdown 編號不是數據；標題裡真正的指標數字仍須引用。
             text = Regex.Replace(text, @"^\s*(?:#{1,6}\s*)?\d+[.)、]\s+", "");
             var cited = ids.Where(byId.ContainsKey).Select(id => byId[id]).ToArray();

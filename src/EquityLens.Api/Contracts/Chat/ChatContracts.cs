@@ -44,7 +44,13 @@ public sealed record ConversationRunCardDto(
     string? FinalAnswer,
     string? ErrorMessage,
     IReadOnlyList<string>? QualityIssues = null,
-    IReadOnlyList<ConversationSuggestedActionDto>? SuggestedActions = null);
+    IReadOnlyList<ConversationSuggestedActionDto>? SuggestedActions = null,
+    ConversationKeyMetricsDto? KeyMetrics = null);
+
+/// <summary>投組診斷卡片的重點指標；全部取自工具計算結果，不由模型產生。</summary>
+public sealed record ConversationKeyMetricsDto(
+    decimal? AnnualizedVolatility, decimal? MaxDrawdown, decimal? HistoricalVaR, decimal? ExpectedShortfall,
+    decimal? LargestWeight, decimal? ConcentrationHhi, decimal? PortfolioReturn, decimal? BenchmarkReturn);
 
 public sealed record ConversationSuggestedActionDto(
     string Id, string Label, string Prompt, string? LabelEn = null, string? PromptEn = null);
