@@ -69,15 +69,18 @@ public sealed class AgentWorkflowQueryService(
             {
                 var research = await db.ResearchRuns.AsNoTracking().SingleOrDefaultAsync(x => x.Id == parent.ResearchRunId && x.UserId == userId, cancellationToken)
                     ?? throw new AgentWorkflowQueryException("previous_run_not_ready", "無法存取原研究。");
-                parentResearchTicker = research.Ticker;
-                question = $"原研究問題：{research.Question}。追問：{question}";
+                if (selected is null)
+                {
+                    parentResearchTicker = research.Ticker;
+                    question = $"原研究問題：{research.Question}。追問：{question}";
+                }
             }
         }
         var securities = await db.Securities.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.Ticker, x.Name }).ToListAsync(cancellationToken);
         var candidates = securities.Where(x => !string.IsNullOrWhiteSpace(x.Name) && request.Question!.Contains(x.Name, StringComparison.OrdinalIgnoreCase)
             || Regex.IsMatch(request.Question!, $@"(?<![A-Za-z0-9]){Regex.Escape(x.Ticker)}(?![A-Za-z0-9])", RegexOptions.IgnoreCase)).Take(10).ToArray();
         if (parentResearchTicker is not null && candidates.Length == 1) parentResearchTicker = candidates[0].Ticker;
-        var decision = parentWorkflow is not null
+        var decision = parentWorkflow is not null && selected is null
             ? InvestmentResearchRouter.Fixed(parentWorkflow, question, parentInput?.PortfolioId, parentResearchTicker)
             : selected ?? await router.RouteWithCandidatesAsync(question, portfolios, JsonSerializer.SerializeToNode(candidates, AgentNodeJson.SerializerOptions)!.AsArray(), cancellationToken);
         if (decision.RoutingContext.Confidence == "low" || decision.RoutingContext.ClarifyingQuestions.Count > 0)
@@ -97,7 +100,7 @@ public sealed class AgentWorkflowQueryService(
             PortfolioScenarioCalculator.ValidateRequests(decision.RoutingContext.Scenarios);
             await ValidateScenarioIntentAsync(portfolioId, question, decision.RoutingContext.Scenarios, cancellationToken);
             var (from, to) = ResolveDiagnosisWindow(decision.RoutingContext.ContextEnvelope.Horizon, question);
-            if (parentInput is not null) { from = parentInput.From; to = parentInput.To; }
+            if (parentInput is not null && ParseHorizonMonths(decision.RoutingContext.ContextEnvelope.Horizon) is null && ParseQuestionHorizonMonths(question) is null) { from = parentInput.From; to = parentInput.To; }
             var routing = decision.RoutingContext with { ParentAgentRunId = request.ParentAgentRunId };
             var created = await agentRuns.CreatePortfolioDiagnosisAsync(userId, portfolioId, from, to, routing, cancellationToken);
             return Response(created.Id, null, created.WorkflowType, created.Status, decision.RoutingContext);
@@ -126,7 +129,8 @@ public sealed class AgentWorkflowQueryService(
     private static Guid ResolvePortfolio(IReadOnlyList<InvestmentResearchPortfolioOption> portfolios, string question, Guid? activePortfolioId)
     {
         if (portfolios.Count == 0) throw new AgentWorkflowQueryException("portfolio_required", "目前沒有可供診斷的投資組合。");
-        var named = PortfolioSelection.Named(question, portfolios.Select(p => (p.Id, p.Name))).ToArray();
+        var options = portfolios.Select(p => (p.Id, p.Name)).ToArray();
+        var named = PortfolioSelection.NamedOrPartial(question, options).ToArray();
         if (named.Length == 1) return named[0];
         if (named.Length == 0 && activePortfolioId is Guid active && portfolios.Any(p => p.Id == active)) return active;
         if (named.Length == 0 && portfolios.Count == 1) return portfolios[0].Id;
@@ -170,14 +174,18 @@ public sealed class AgentWorkflowQueryService(
         if (string.IsNullOrWhiteSpace(horizon)) return null;
         var match = Regex.Match(horizon.Trim(), @"^(\d+(?:\.\d+)?)\s*(y|year|years|m|month|months|d|day|days|年|月|天|日)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (!match.Success) return null;
-        var amount = decimal.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-        var months = match.Groups[2].Value.ToLowerInvariant() switch
+        if (!decimal.TryParse(match.Groups[1].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) || amount <= 0) return null;
+        var unit = match.Groups[2].Value.ToLowerInvariant();
+        // 財報西元／民國年度不能被解讀成數百年的滾動期間，再截成十年。
+        if (unit is "y" or "year" or "years" or "年" && amount >= 100) return null;
+        // 先限制 decimal 範圍再轉 int，避免不可信的路由參數造成溢位。
+        var months = unit switch
         {
-            "y" or "year" or "years" or "年" => (int)(amount * 12m),
-            "m" or "month" or "months" or "月" => (int)amount,
-            _ => (int)(amount / 30m)
+            "y" or "year" or "years" or "年" => Math.Min(amount, 10m) * 12m,
+            "m" or "month" or "months" or "月" => Math.Min(amount, 120m),
+            _ => Math.Min(amount, 3600m) / 30m
         };
-        return Math.Clamp(months, 1, 120);
+        return Math.Clamp((int)months, 1, 120);
     }
 
     private static readonly Regex QuestionHorizonRegex = new(

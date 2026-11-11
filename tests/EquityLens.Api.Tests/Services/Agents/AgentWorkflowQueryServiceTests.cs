@@ -13,6 +13,36 @@ namespace EquityLens.Api.Tests.Services.Agents;
 public sealed class AgentWorkflowQueryServiceTests
 {
     [Fact]
+    public async Task FinancialYear_DoesNotReplaceInheritedPortfolioWindow()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid(); var portfolioId = Guid.NewGuid();
+        db.Add(new Portfolio { Id = portfolioId, OwnerUserId = user, Name = "組合甲" });
+        var parent = new PortfolioDiagnosisWorkflowDefinitionProvider().CreateRun(user, portfolioId, new(2025, 6, 1), new(2026, 6, 1));
+        parent.Status = AgentRunStatuses.Succeeded; db.Add(parent); await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns(); var service = new AgentWorkflowQueryService(db, Router(new FakeChat("must not call")), runs);
+        var route = InvestmentResearchRouter.Fixed(AgentWorkflowTypes.PortfolioDiagnosis, "2025年財報對組合甲的影響", period: "2025 年");
+        await service.CreateFromDecisionAsync(user, new(route.RoutingContext.Objective, parent.Id), route);
+        Assert.Equal(new DateOnly(2025, 6, 1), runs.From); Assert.Equal(new DateOnly(2026, 6, 1), runs.To);
+        var updated = InvestmentResearchRouter.Fixed(AgentWorkflowTypes.PortfolioDiagnosis, "最近半年的風險", period: "6m");
+        await service.CreateFromDecisionAsync(user, new(updated.RoutingContext.Objective, parent.Id), updated);
+        Assert.Equal(DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(-6), runs.From);
+    }
+
+    [Fact]
+    public async Task ClassifiedResearchFollowup_UsesNewCompanyAndCompleteObjective()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid(); var researchId = Guid.NewGuid();
+        var parent = new AgentRun { Id = Guid.NewGuid(), UserId = user, ResearchRunId = researchId, WorkflowType = AgentWorkflowTypes.ResearchAgent, Status = AgentRunStatuses.Succeeded };
+        db.AddRange(parent, new ResearchRun { Id = researchId, UserId = user, Ticker = "2330", Question = "台積電毛利率", Answer = "", TraceId = "t", RetrievalMode = "Auto", SourcePolicy = "Auto" },
+            new Security { Id = Guid.NewGuid(), Ticker = "2317", Name = "鴻海", IsActive = true }); await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns(); var service = new AgentWorkflowQueryService(db, Router(new FakeChat("must not call")), runs);
+        var route = InvestmentResearchRouter.Fixed(AgentWorkflowTypes.ResearchAgent, "鴻海2025年營收組合", ticker: "2317");
+        await service.CreateFromDecisionAsync(user, new(route.RoutingContext.Objective, parent.Id), route);
+        Assert.Equal("2317", runs.ResearchRequest!.Ticker);
+        Assert.Equal("鴻海2025年營收組合", runs.ResearchRequest.Question);
+    }
+
+    [Fact]
     public async Task PortfolioFollowup_PreservesParentPeriodAndRejectsOtherUsersParent()
     {
         await using var db = CreateDb(); var user = Guid.NewGuid(); var portfolioId = Guid.NewGuid();
@@ -97,6 +127,12 @@ public sealed class AgentWorkflowQueryServiceTests
     [InlineData("90d", 3)]
     [InlineData("1年", 12)]
     [InlineData("10y", 120)]
+    [InlineData("2025 年", null)]
+    [InlineData("114年", null)]
+    [InlineData("2025 years", null)]
+    [InlineData("0m", null)]
+    [InlineData("99999999999999999999999999999999999m", null)]
+    [InlineData("999999999999999999999m", 120)]
     [InlineData("最近一年", null)]
     [InlineData("", null)]
     [InlineData(null, null)]

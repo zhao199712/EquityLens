@@ -20,7 +20,7 @@ public sealed class ResearchLoopTools(IServiceScopeFactory scopes, IOptions<Rese
             (scope.Request.SourcePolicy != SourcePolicy.LocalThenWeb || scope.LocalSearchCompleted))
             tools.Add(new("search_web", "搜尋公開網頁，query 必填；請含公司與年份。", Schema("query", ("query", "string")), options.Value.ToolCostReserveUsd));
         if (scope.Ledger.Any(x => x.Chunk.SourceType == CitationSourceType.LocalDocument))
-            tools.Add(new("get_document_page", "讀取已找到的本地文件頁面，documentId 與 pageNumber 必填。",
+            tools.Add(new("get_document_page", "讀取已找到的本地文件完整頁面；明示續表時一併提供相鄰頁，各自保留來源頁碼。documentId 與 pageNumber 必填。",
                 new JsonObject { ["type"] = "object", ["additionalProperties"] = false,
                     ["required"] = new JsonArray("documentId", "pageNumber"),
                     ["properties"] = new JsonObject { ["documentId"] = new JsonObject { ["type"] = "string" }, ["pageNumber"] = new JsonObject { ["type"] = "integer" } } }));
@@ -93,6 +93,12 @@ public sealed class ResearchLoopTools(IServiceScopeFactory scopes, IOptions<Rese
             var db = services.GetRequiredService<EquityLensDbContext>();
             var chunks = await db.DocumentChunks.AsNoTracking().Where(x => x.DocumentId == id && x.PageNumber == page)
                 .OrderBy(x => x.ChunkIndex).Take(10).ToListAsync(ct);
+            var adjacent = new List<int>();
+            if (chunks.Any(x => x.Content.Contains("承前頁")) && page > 1) adjacent.Add(page - 1);
+            if (chunks.Any(x => x.Content.Contains("接次頁"))) adjacent.Add(page + 1);
+            if (adjacent.Count > 0)
+                chunks.AddRange(await db.DocumentChunks.AsNoTracking().Where(x => x.DocumentId == id
+                    && adjacent.Contains(x.PageNumber ?? 0)).OrderBy(x => x.ChunkIndex).Take(10).ToListAsync(ct));
             results = chunks.Select(x => source with { Result = source.Result with { DocumentChunkId = x.Id, ChunkIndex = x.ChunkIndex,
                 Content = x.Content, PageNumber = x.PageNumber, SectionTitle = x.SectionTitle } }).ToList();
         }

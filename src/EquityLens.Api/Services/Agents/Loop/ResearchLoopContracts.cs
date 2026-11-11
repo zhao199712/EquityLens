@@ -70,4 +70,7 @@ public sealed class ResearchLoopState
     public LoopAnswer? Answer { get; set; }
     public List<Guid> ResumedApprovalIds { get; set; } = [];
     public bool ForcedDraft { get; set; }
+    public int ResearchRepairCount { get; set; }
+    public List<string> RecentEvidenceIds { get; set; } = [];
+    public List<string> PageEvidenceIds { get; set; } = [];
 }

@@ -151,6 +151,26 @@ public sealed class ConversationAgentTests
         Assert.Equal(ConversationActions.RouteWorkflow, decision.Action); Assert.Equal(1, chat.CallCount);
     }
 
+    [Fact]
+    public async Task Clarification_PreservesObjectiveAndResolvedParameters()
+    {
+        var chat = new FakeChat("""{"action":"clarify","workflow":"Portfolio","params":{"objective":"台積電降至40%的風險比較","ticker":"2330","period":"1y"},"missing":["portfolioId"],"confidence":"high","response":"請選投組"}""");
+        var decision = await new InvestmentResearchRouter(chat).DecideAsync(new("那就40%", new(), [], [new(Guid.NewGuid(), "甲"), new(Guid.NewGuid(), "乙")]));
+        Assert.Equal(ConversationActions.AskClarification, decision.Action);
+        Assert.Equal("台積電降至40%的風險比較", decision.StandaloneQuery);
+        Assert.Equal("2330", decision.ContextPatch["pendingTask"]!["parameters"]!["ticker"]!.GetValue<string>());
+        Assert.Equal("portfolioId", decision.ContextPatch["pendingTask"]!["missing"]![0]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task CompletedRoute_UsesStandaloneObjective()
+    {
+        var decision = await new InvestmentResearchRouter(new FakeChat("""{"action":"route","workflow":"Research","params":{"objective":"鴻海2025年營收組合","ticker":"2317"},"missing":[],"confidence":"high"}"""))
+            .DecideAsync(new("那鴻海呢", new(), [], []));
+        Assert.Equal("鴻海2025年營收組合", decision.StandaloneQuery);
+        Assert.Equal(decision.StandaloneQuery, decision.Route!.RoutingContext.Objective);
+    }
+
     private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger<InvestmentResearchRouter>
     {
         public List<string> Messages { get; } = [];

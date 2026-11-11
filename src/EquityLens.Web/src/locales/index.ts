@@ -3,7 +3,8 @@ import en from './en'
 import zhTW from './zh-TW'
 
 const STORAGE_KEY = 'equitylens-locale'
-const savedLocale = localStorage.getItem(STORAGE_KEY) || 'en'
+// 介面主要文案為繁體中文；未選擇語系的新訪客預設中文，避免建議追問與送出的問題混用英文。
+const savedLocale = localStorage.getItem(STORAGE_KEY) || 'zh-TW'
 
 const i18n = createI18n({
   legacy: false,

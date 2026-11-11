@@ -17,7 +17,7 @@ using Microsoft.Extensions.Options;
 
 namespace EquityLens.Api.Tests.Services.Agents;
 
-public sealed class ResearchAgentLoopTests
+public sealed partial class ResearchAgentLoopTests
 {
     private const string Search = """{"action":"call_tools","thoughtSummary":"先找證據","toolCalls":[{"callId":"c1","tool":"search_local","arguments":{"query":"營收"}}]}""";
     private const string Submit = """{"action":"submit_answer","thoughtSummary":"已有資料","answer":{"markdown":"營收 100 元 [E1]。","citedEvidenceIds":["E1"]}}""";
@@ -111,7 +111,7 @@ public sealed class ResearchAgentLoopTests
         var lowRanked = Enumerable.Range(0, 24).Select(_ => Evidence() with { Result = Evidence().Result with {
             DocumentChunkId = Guid.NewGuid(), Content = new string('其', 1000), RelevanceScore = 0 } });
         var tools = new FakeTools { Results = lowRanked.Append(table).ToArray() };
-        var chat = new FakeChat(Search, Submit);
+        var chat = new FakeChat(Search, """{"action":"submit_answer","answer":{"markdown":"已取得來源 [E25]。","citedEvidenceIds":["E25"]}}""");
         await Loop(chat, tools).RunAsync(await Context(db), "Research", default);
         var shown = JsonNode.Parse(chat.Prompts[1])!["evidence"]!.AsArray();
         var item = Assert.Single(shown, x => x!["documentTitle"]!.GetValue<string>() == "Example Annual Report")!;

@@ -1,0 +1,11 @@
+# Research answer reliability
+
+The research loop now checks explicit ratio, growth and difference expressions at the precision actually displayed by the answer, using decimal rounding away from zero. Growth checks include both verbal old/new expressions and explicit `(new - old) / old` formulas; the denominator must equal the cited old value. It still requires exact cited operands; printed integer percentages may differ from calculations shown to one decimal place. This change does not make the numeric gate a semantic financial metric validator.
+
+Before submission, research answers may receive at most two repair requests per node attempt for blocking numeric checks or explicit statements of missing information. The counter is checkpointed. Unknown citation IDs remain subject to the final source gate. Forced drafts do not extend the budget; the final quality gate remains authoritative. Partial answers may retain supported facts and disclose unavailable items. The missing-information detector is a bounded textual heuristic, not a complete semantic coverage judge.
+
+Explicit document page reads include adjacent pages only when the requested page marks a continuation. Every page retains its original document/chunk identity and content. Unit inheritance requires both pages to be cited in the same sentence, the same document, adjacent pages, forward/backward continuation markers, and an explicit preceding unit header. It never guesses units for unrelated notes or tables.
+
+Newly returned evidence is prioritized when the prompt shrinks. Explicitly fetched pages replace older search excerpts without changing evidence IDs and have a larger, still bounded excerpt window. The compact source index exposes document/page identities even when body excerpts are omitted. ResearchEvidenceWindow events record the visible evidence IDs and character counts, not API credentials or full provider prompts.
+
+Regression coverage includes independent numbers, display precision, money-unit boundaries, wrong-document/nonadjacent/missing-header cases, bounded repairs across recovery, continuation page reads and shrinking prompt windows. Existing conversation cases and scorer-v2 rules remain frozen during the live comparison. Those reused cases measure regression, not held-out generalization; semantic checks remain uncalibrated.

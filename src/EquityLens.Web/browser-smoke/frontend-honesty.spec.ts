@@ -2,6 +2,8 @@ import { test, expect, login, researchRun, agentId } from './fixtures'
 
 test('Settings persists language and the real risk preference', async ({ page, api }, testInfo) => {
   await login(page)
+  // 新訪客預設 zh-TW；此測試從已選英文的使用者開始，驗證切換與保存。
+  await page.evaluate(() => localStorage.setItem('equitylens-locale', 'en'))
   await page.goto('/settings')
   await expect(page.locator('#display-language')).toBeVisible()
   await expect(page.locator('main.settings-view')).not.toContainText(/GPT|Temperature|Critic|Yahoo|Save Settings|Reset Defaults/)

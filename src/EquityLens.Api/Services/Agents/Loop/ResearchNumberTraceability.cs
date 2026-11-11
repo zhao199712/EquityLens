@@ -11,8 +11,13 @@ internal static partial class ResearchNumberTraceability
     internal sealed record Result(bool Blocking, IReadOnlyList<string> Warnings);
     private sealed record Number(decimal Value, string Kind, bool AllowUnitlessMoney = true, int Offset = -1);
 
+    // 僅供已通過完整研究品質檢查的答案建立投組證據快照；不是用來繞過來源核對。
+    internal static IReadOnlyList<decimal> VerifiedValues(string answer) =>
+        Extract(Regex.Replace(answer, @"\[\d+\]", "")).Select(n => n.Kind == "percent" ? n.Value / 100m : n.Value).Distinct().ToArray();
+
     internal static Result Check(string answer, IReadOnlyList<JsonObject> citations, string? question = null, string? ticker = null)
     {
+        answer = PlainEmphasis(answer).Replace('−', '-');
         var questionNumbers = Extract(question ?? "");
         var total = 0; var missing = 0; var missingMoney = false; var invalidRatio = false;
         var warnings = new HashSet<string>();
@@ -38,8 +43,9 @@ internal static partial class ResearchNumberTraceability
                 warnings.Add("UncitedNumber");
                 warnings.Add("AddCitationToSentence: " + sentence.Trim()[..Math.Min(160, sentence.Trim().Length)]);
             }
-            var quotes = citations.Where(x => ids.Contains(x["citationIndex"]?.GetValue<int>() ?? -1))
-                .SelectMany(x => ExtractQuote(x["quoteText"]?.GetValue<string>() ?? "")
+            var cited = citations.Where(x => ids.Contains(x["citationIndex"]?.GetValue<int>() ?? -1)).ToArray();
+            var quotes = cited
+                .SelectMany(x => ExtractQuote(WithContinuationUnit(x, cited))
                     .Concat(Extract(x["title"]?.GetValue<string>() ?? "").Select(n => n with { AllowUnitlessMoney = false }))).ToList();
             // 已驗證的結果只可在再次引用相同來源的句子重用，不能跨來源替模型背書。
             quotes.AddRange(derived.Where(x => x.Sources.IsSubsetOf(ids)).Select(x => x.Value));
@@ -64,7 +70,7 @@ internal static partial class ResearchNumberTraceability
                 {
                     var calculated = left.Value / right.Value * 100m;
                     var claimed = Extract(expression.Groups["result"].Value).Single();
-                    verified = Math.Abs(calculated - claimed.Value) <= Math.Abs(calculated) * .005m;
+                    verified = MatchesDisplayedPrecision(calculated, expression.Groups["result"].Value, claimed);
                     if (verified)
                     {
                         Record(new(claimed.Value, "percent"));
@@ -79,8 +85,12 @@ internal static partial class ResearchNumberTraceability
             {
                 var oldValue = Extract(expression.Groups["old"].Value).SingleOrDefault();
                 var newValue = Extract(expression.Groups["new"].Value).SingleOrDefault();
+                var denominator = expression.Groups["denominator"].Success
+                    ? Extract(expression.Groups["denominator"].Value).SingleOrDefault() : oldValue;
                 var verified = false;
-                if (oldValue is not null && newValue is not null && oldValue.Value > 0 && oldValue.Kind == newValue.Kind
+                if (oldValue is not null && newValue is not null && denominator is not null
+                    && denominator.Value == oldValue.Value && denominator.Kind == oldValue.Kind
+                    && oldValue.Value > 0 && oldValue.Kind == newValue.Kind
                     && quotes.Any(q => q.Kind == oldValue.Kind && q.Value == oldValue.Value)
                     && quotes.Any(q => q.Kind == newValue.Kind && q.Value == newValue.Value))
                 {
@@ -88,7 +98,7 @@ internal static partial class ResearchNumberTraceability
                     {
                         var calculated = (newValue.Value / oldValue.Value - 1m) * 100m;
                         var claimed = Extract(expression.Groups["result"].Value).Single();
-                        verified = Math.Abs(calculated - claimed.Value) <= Math.Abs(calculated) * .005m;
+                        verified = MatchesDisplayedPrecision(calculated, expression.Groups["result"].Value, claimed);
                         if (verified) { Record(new(claimed.Value, "percent")); warnings.Add("VerifiedGrowthExpression"); }
                     }
                     catch (OverflowException) { }
@@ -111,7 +121,7 @@ internal static partial class ResearchNumberTraceability
                     try
                     {
                         var calculated = left.Value - right.Value;
-                        verified = Math.Abs(calculated - claimed.Value) <= Math.Abs(calculated) * .005m;
+                        verified = MatchesDisplayedPrecision(calculated, expression.Groups["result"].Value, claimed);
                         if (verified) { Record(claimed); warnings.Add("VerifiedDifferenceExpression"); }
                     }
                     catch (OverflowException) { }
@@ -134,9 +144,42 @@ internal static partial class ResearchNumberTraceability
         return new(invalidRatio || missingMoney || (total > 0 && missing * 2 > total), warnings.ToArray());
     }
 
+    // 計算值按答案實際顯示位數四捨五入，不使用固定相對誤差放過錯誤小數。
+    private static bool MatchesDisplayedPrecision(decimal calculated, string literal, Number claimed)
+    {
+        var match = Numeric().Match(literal);
+        var raw = match.Groups[1].Value.Replace(",", "");
+        var decimals = raw.Contains('.') ? raw.Length - raw.IndexOf('.') - 1 : 0;
+        var scale = match.Groups[2].Value switch { "兆" => 1_000_000_000_000m, "十億" => 1_000_000_000m,
+            "百萬" => 1_000_000m, "億" => 100_000_000m, "萬" => 10_000m, "千" or "仟" => 1000m, _ => 1m };
+        return decimal.Round(calculated / scale, Math.Min(28, decimals), MidpointRounding.AwayFromZero) * scale == claimed.Value;
+    }
+
+    // 只繼承同句引用、同文件相鄰且明示續表的單位；不從別張表或未引用頁猜測。
+    internal static string WithContinuationUnit(JsonObject citation, IReadOnlyList<JsonObject> cited)
+    {
+        var text = citation["quoteText"]?.GetValue<string>() ?? "";
+        if (!text.Contains("承前頁") || UnitHeader(text) is not null) return text;
+        var doc = citation["documentId"]?.ToString();
+        var page = citation["pageNumber"]?.GetValue<int>();
+        if (string.IsNullOrEmpty(doc) || page is null) return text;
+        var previous = cited.Where(x => x["documentId"]?.ToString() == doc
+            && x["pageNumber"]?.GetValue<int>() == page - 1)
+            .Select(x => x["quoteText"]?.GetValue<string>() ?? "")
+            .FirstOrDefault(x => x.Contains("接次頁") && UnitHeader(x) is not null);
+        return previous is null ? text : UnitHeader(previous) + "\n" + text;
+    }
+
+    internal static string? UnitHeader(string text)
+    {
+        var compact = Regex.Replace(text.Normalize(NormalizationForm.FormKC), @"\s+", "");
+        var match = Regex.Match(compact[..Math.Min(compact.Length, 800)], @"(?:新台幣|新臺幣|(?:收入|金額|單位[:：]?)\(?)(十億|百萬|仟|千|億|萬)元");
+        return match.Success ? match.Value : null;
+    }
+
     private static IReadOnlyList<Number> ExtractQuote(string text)
     {
-        text = Reference().Replace(text.Normalize(NormalizationForm.FormKC).Replace('−', '-'), "");
+        text = Reference().Replace(PlainEmphasis(text).Normalize(NormalizationForm.FormKC).Replace('−', '-'), "");
         // 僅修復 EPS 標籤後連續的兩位小數表格欄位；不對一般數字猜測切割。
         // 完整匹配至少兩欄，保留兩位精度，移除原先貪婪解析出的假小數。
         text = Regex.Replace(text, @"(?<label>EPS\s*\(NT Dollar\)\s*)(?<cells>(?:\d+\.\d{2}){2,})(?![\d.])", m =>
@@ -178,9 +221,12 @@ internal static partial class ResearchNumberTraceability
         return expanded;
     }
 
+    // Markdown 強調不改變數值或算式；只移除成對標記，保留乘號與其他運算子。
+    private static string PlainEmphasis(string text) => Regex.Replace(text, @"\*\*(?<content>[^*\r\n]+)\*\*|__(?<content>[^_\r\n]+)__", "${content}");
+
     private static List<Number> Extract(string text)
     {
-        text = Reference().Replace(text.Normalize(NormalizationForm.FormKC).Replace('−', '-'), "");
+        text = Reference().Replace(PlainEmphasis(text).Normalize(NormalizationForm.FormKC).Replace('−', '-'), "");
         var result = new List<Number>();
         foreach (Match m in Numeric().Matches(text))
         {
@@ -200,7 +246,7 @@ internal static partial class ResearchNumberTraceability
     [GeneratedRegex(@"(?<left>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:÷|除以|/)\s*[^\d\r\n=≈]{0,40}?(?<right>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:(?:×|\*)\s*100\s*)?(?:=|≈|約為|等於)\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)")]
     private static partial Regex RatioExpression();
 
-    [GeneratedRegex(@"由\s*(?<old>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:增至|降至|成長至|下降至|至)\s*(?<new>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*[，,]?\s*年增率\s*(?:約為|約|為|=|≈)?\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)")]
+    [GeneratedRegex(@"由\s*(?<old>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:增至|降至|成長至|下降至|至)\s*(?<new>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*[，,]?\s*年增率\s*(?:約為|約|為|=|≈)?\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)|\(\s*(?<new>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:−|-)\s*(?<old>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*\)\s*(?:÷|除以|/)\s*(?<denominator>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股)?)\s*(?:(?:×|\*)\s*100\s*)?(?:=|≈|約為|等於)\s*(?<result>[-+]?\d+(?:\.\d+)?\s*%)")]
     private static partial Regex GrowthExpression();
 
     [GeneratedRegex(@"(?<left>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股|%))\s*(?:−|-|減去)\s*(?<right>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:美元|元|股|%))\s*(?:=|≈|約為|等於)\s*(?<result>[-+]?\d[\d,]*(?:\.\d+)?\s*(?:十億|百萬|兆|億|萬|千|仟)?\s*(?:個百分點|百分點|美元|元|股|%))")]
