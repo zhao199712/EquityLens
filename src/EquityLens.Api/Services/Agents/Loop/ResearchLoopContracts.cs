@@ -16,9 +16,10 @@ public sealed class ResearchAgentLoopOptions
     public int MaxToolCallsPerTurn { get; set; } = 4;
     public int MaxSkills { get; set; } = 3;
     public int MaxWebCalls { get; set; } = 1;
-    public int MaxPromptTokens { get; set; } = 60000;
-    public int MaxOutputTokens { get; set; } = 2500;
-    public decimal MaxCostUsd { get; set; } = .10m;
+    // 累計上限以 UTF-8 位元組保守估計下一輪；中文與 JSON 混合時估值約為實際 token 的 2～3 倍，6 萬會在修正答案前就中止。
+    public int MaxPromptTokens { get; set; } = 150000;
+    public int MaxOutputTokens { get; set; } = 5000;
+    public decimal MaxCostUsd { get; set; } = .30m;
     // 保守估價，部署時依供應商費率設定；不綁定特定模型。
     public decimal InputUsdPerMillion { get; set; } = 1m;
     public decimal OutputUsdPerMillion { get; set; } = 4m;
