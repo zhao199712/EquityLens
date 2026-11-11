@@ -170,6 +170,29 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
     expect(wrapper.get('.interpretation').html()).toContain('<strong>高度集中</strong>')
   })
 
+  it('does not report benchmark data as missing when attribution was not part of the question', () => {
+    const run = diagnosisRun({ annualizedVolatility: 0.53, maxDrawdown: -0.31, historicalVaR: null, expectedShortfall: null, portfolioVolatility: null, concentrationHhi: 0.64, largestWeight: 0.77, volatilityRiskShare: null }, null)
+    Object.assign(run.outputJson as Record<string, unknown>, { portfolioReturn: null, benchmarkReturn: null, activeReturn: null, attributionCoverage: null })
+    state.agentRun.value = run
+    const text = mount(AgentRunDetailView, { global: { stubs } }).text()
+    expect(text).not.toContain('大盤報酬')
+    expect(text).not.toContain('主要拖累')
+    expect(text).toContain('本次問題未做績效歸因')
+    expect(text).not.toContain('建議補做的風險分析')
+  })
+
+  it('shows a summary that repeats the interpretation only once, rendered as markdown', () => {
+    const run = diagnosisRun({ annualizedVolatility: 0.53, maxDrawdown: null, historicalVaR: null, expectedShortfall: null, portfolioVolatility: null, concentrationHhi: null, largestWeight: null, volatilityRiskShare: null },
+      '年化波動 **53.39%**。\n\n| 指標 | 結果 |\n|---|---|\n| 年化波動 | 53.39% |')
+    ;(run.outputJson as Record<string, unknown>).summary = '年化波動 **53.39%**。\n\n| 指標 | 結果 |\n|---|---|\n| 年化波動 | 53.39% |\n\n依預設的風險偏好『穩健』。'
+    state.agentRun.value = run
+    const wrapper = mount(AgentRunDetailView, { global: { stubs } })
+    expect(wrapper.text()).not.toContain('摘要')
+    expect(wrapper.text()).toContain('分析結果')
+    expect(wrapper.findAll('table.md-table')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('|---|')
+  })
+
   it('hides the interpretation section when absent', () => {
     state.agentRun.value = diagnosisRun({ annualizedVolatility: 0.36, maxDrawdown: null, historicalVaR: null, expectedShortfall: null, portfolioVolatility: null, concentrationHhi: null, largestWeight: null, volatilityRiskShare: null }, null)
     const wrapper = mount(AgentRunDetailView, { global: { stubs } })

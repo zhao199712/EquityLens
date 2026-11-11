@@ -17,6 +17,15 @@ describe('PortfolioScenarioComparison', () => {
     expect(wrapper.text()).toContain('-8.00 個百分點'); expect(wrapper.text()).toContain('252 筆共同日報酬')
     expect(wrapper.text()).toContain('尚未回測驗證'); expect(wrapper.text()).toContain('假設報酬序列回撤')
   })
+  it('marks the baseline column as the reference instead of missing differences', () => {
+    const rows = mount(PortfolioScenarioComparison, { props: { comparison: fixture() } }).findAll('tr').filter(r => r.text().includes('差異'))
+    expect(rows).toHaveLength(4)
+    for (const row of rows) {
+      const cells = row.findAll('td').map(c => c.text())
+      expect(cells[0]).toBe('—（基準）')
+      expect(cells[1]).not.toBe('未提供')
+    }
+  })
   it('does not fill missing scenario metrics with baseline numbers', () => {
     const data = fixture(); data.scenarios[0].metrics = null; data.scenarios[0].differenceFromBaseline = null; data.scenarios[0].status = 'InsufficientHistory'
     const wrapper = mount(PortfolioScenarioComparison, { props: { comparison: data } })

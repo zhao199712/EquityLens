@@ -8,6 +8,9 @@ const props = defineProps<{ comparison: ScenarioComparison }>()
 const columns = computed(() => [props.comparison.baseline, ...props.comparison.scenarios].filter((v): v is ScenarioResult => v !== null))
 const percent = (n: number | null | undefined) => n == null ? '未提供' : `${(n * 100).toFixed(2)}%`
 const delta = (n: number | null | undefined) => n == null ? '未提供' : `${n > 0 ? '+' : ''}${(n * 100).toFixed(2)} 個百分點`
+// 原組合是差異的比較基準，本身沒有「與自己的差異」；不應顯示成缺資料。
+const isBaseline = (column: ScenarioResult) => column === props.comparison.baseline
+const deltaFor = (column: ScenarioResult, n: number | null | undefined) => isBaseline(column) ? '—（基準）' : delta(n)
 </script>
 <template>
   <section class="scenario" aria-label="假設配置比較">
@@ -28,10 +31,10 @@ const delta = (n: number | null | undefined) => n == null ? '未提供' : `${n >
         <tr><th>歷史 VaR</th><td v-for="column in columns" :key="column.name">{{ percent(column.metrics?.historicalVaR) }}</td></tr>
         <tr><th>歷史 ES</th><td v-for="column in columns" :key="column.name">{{ percent(column.metrics?.expectedShortfall) }}</td></tr>
         <tr><th>假設報酬序列回撤</th><td v-for="column in columns" :key="column.name">{{ percent(column.metrics?.hypotheticalMaxDrawdown) }}</td></tr>
-        <tr><th>波動率差異（情境 − 原組合）</th><td v-for="column in columns" :key="column.name">{{ delta(column.differenceFromBaseline?.annualizedVolatility) }}</td></tr>
-        <tr><th>VaR 差異</th><td v-for="column in columns" :key="column.name">{{ delta(column.differenceFromBaseline?.historicalVaR) }}</td></tr>
-        <tr><th>ES 差異</th><td v-for="column in columns" :key="column.name">{{ delta(column.differenceFromBaseline?.expectedShortfall) }}</td></tr>
-        <tr><th>回撤差異</th><td v-for="column in columns" :key="column.name">{{ delta(column.differenceFromBaseline?.hypotheticalMaxDrawdown) }}</td></tr>
+        <tr><th>波動率差異（情境 − 原組合）</th><td v-for="column in columns" :key="column.name">{{ deltaFor(column, column.differenceFromBaseline?.annualizedVolatility) }}</td></tr>
+        <tr><th>VaR 差異</th><td v-for="column in columns" :key="column.name">{{ deltaFor(column, column.differenceFromBaseline?.historicalVaR) }}</td></tr>
+        <tr><th>ES 差異</th><td v-for="column in columns" :key="column.name">{{ deltaFor(column, column.differenceFromBaseline?.expectedShortfall) }}</td></tr>
+        <tr><th>回撤差異</th><td v-for="column in columns" :key="column.name">{{ deltaFor(column, column.differenceFromBaseline?.hypotheticalMaxDrawdown) }}</td></tr>
       </tbody>
     </table></div>
     <details v-for="column in columns" :key="column.name"><summary>{{ column.name }} · 逐股風險貢獻</summary>
