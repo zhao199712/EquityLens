@@ -12,7 +12,7 @@ function inline(text: string): string {
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, '$1<em>$2</em>')
-    .replace(/\[(P?\d+)\]/g, '<sup class="md-cite">$1</sup>')
+    .replace(/\[(P?\d+)\]/g, '<sup class="md-cite">[$1]</sup>')
 }
 
 const tableRow = /^\s*\|.*\|\s*$/

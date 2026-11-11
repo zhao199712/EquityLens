@@ -7,7 +7,7 @@ describe('renderMarkdown', () => {
     expect(html).toContain('<table class="md-table">')
     expect(html).toContain('<th style="text-align:right">權重</th>')
     expect(html).toContain('<td>台光電（2383）</td>')
-    expect(html).toContain('<sup class="md-cite">P3</sup>')
+    expect(html).toContain('<sup class="md-cite">[P3]</sup>')
     expect(html).not.toContain('|---')
   })
 

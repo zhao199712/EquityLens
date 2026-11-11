@@ -65,8 +65,14 @@ const qualityIssueLabels: Record<string, string> = {
   DefaultPreferenceMisrepresented: '預設風險偏好描述不正確',
   GuaranteedProfitClaim: '含保證獲利敘述',
 }
-const workflowLabel = (type: string) => workflowLabels[type] ?? type
-const statusLabel = (status: string) => statusLabels[status] ?? status
+const workflowLabelsEn: Record<string, string> = {
+  ResearchAgent: 'Company research',
+  PortfolioDiagnosis: 'Portfolio diagnosis',
+  CriticReview: 'Quality review',
+}
+const workflowLabel = (type: string) => (english.value ? workflowLabelsEn : workflowLabels)[type] ?? type
+// 英文介面沿用原始狀態字樣；中文介面顯示中文。
+const statusLabel = (status: string) => english.value ? status : statusLabels[status] ?? status
 const qualityText = (issues: string[]) => [...new Set(issues.map(issue => qualityIssueLabels[issue] ?? '答案品質未通過檢查'))].join('、')
 // 缺文件屬資料範圍限制，不是系統錯誤；以提示色呈現。
 const isDataGap = (message?: string | null) => !!message && /尚未匯入|資料不足|沒有可用|找不到.*文件/.test(message)
@@ -188,7 +194,7 @@ function formatTime(updatedAtUtc: string) {
               <div class="run-card-head">
                 <strong>{{ workflowLabel(message.runCard.workflowType) }}</strong>
                 <span :class="['run-status', `run-status--${isDataGap(message.runCard.errorMessage) ? 'datagap' : message.runCard.status.toLowerCase()}`]">
-                  {{ isDataGap(message.runCard.errorMessage) ? '資料不足' : statusLabel(message.runCard.status) }}
+                  {{ isDataGap(message.runCard.errorMessage) ? (english ? 'Data unavailable' : '資料不足') : statusLabel(message.runCard.status) }}
                 </span>
               </div>
               <p v-if="message.runCard.workflowType !== 'ResearchAgent' && message.runCard.currentStageDisplayName">目前階段：{{ message.runCard.currentStageDisplayName }}</p>
