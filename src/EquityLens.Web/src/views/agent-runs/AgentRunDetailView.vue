@@ -250,6 +250,14 @@ const summaryRepeatsInterpretation = computed(() => {
   return summary === interpretation || interpretation.includes(summary) || summary.includes(interpretation)
 })
 
+// 分析只執行問題需要的計算；沒有執行的指標顯示「本次未計算」，真的算不出來才是「資料不足」。
+// 舊報告沒有 metricBases 時無法區分，維持原本顯示。
+const computedOperations = computed(() => new Set((portfolioDiagnosisOutput.value?.metricBases ?? []).map(item => item.operation)))
+function wasComputed(operation: string) { return computedOperations.value.size === 0 || computedOperations.value.has(operation) }
+function metricText(value: number | null | undefined, operation: string) {
+  return value == null && !wasComputed(operation) ? '本次未計算' : formatPercent(value)
+}
+
 const riskMetrics = computed((): PortfolioRiskMetrics | null => {
   const metrics = portfolioDiagnosisOutput.value?.riskMetrics
   if (!metrics) return null
@@ -512,13 +520,13 @@ const nextActionLabel = computed(() => {
             <div v-if="riskMetrics" class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">風險指標</div>
               <div class="stat-grid">
-                <div><div class="prestige-label stat-caption">年化波動率</div><div class="stat-value">{{ formatPercent(riskMetrics.annualizedVolatility) }}</div></div>
-                <div><div class="prestige-label stat-caption">最大回撤</div><div class="stat-value" :style="{ color: (riskMetrics.maxDrawdown ?? 0) < 0 ? '#b05c5c' : undefined }">{{ formatPercent(riskMetrics.maxDrawdown) }}</div></div>
-                <div><div class="prestige-label stat-caption">歷史 VaR</div><div class="stat-value">{{ formatPercent(riskMetrics.historicalVaR) }}</div></div>
-                <div><div class="prestige-label stat-caption">預期缺口 ES</div><div class="stat-value">{{ formatPercent(riskMetrics.expectedShortfall) }}</div></div>
-                <div><div class="prestige-label stat-caption">投組波動率</div><div class="stat-value">{{ formatPercent(riskMetrics.portfolioVolatility) }}</div></div>
-                <div><div class="prestige-label stat-caption">集中度 HHI</div><div class="stat-value">{{ formatHhi(riskMetrics.concentrationHhi) }}</div></div>
-                <div><div class="prestige-label stat-caption">最大持倉權重</div><div class="stat-value">{{ formatPercent(riskMetrics.largestWeight) }}</div></div>
+                <div><div class="prestige-label stat-caption">年化波動率</div><div class="stat-value">{{ metricText(riskMetrics.annualizedVolatility, 'calculate-annualized-volatility') }}</div></div>
+                <div><div class="prestige-label stat-caption">最大回撤</div><div class="stat-value" :style="{ color: (riskMetrics.maxDrawdown ?? 0) < 0 ? '#b05c5c' : undefined }">{{ metricText(riskMetrics.maxDrawdown, 'calculate-max-drawdown') }}</div></div>
+                <div><div class="prestige-label stat-caption">歷史 VaR</div><div class="stat-value">{{ metricText(riskMetrics.historicalVaR, 'calculate-historical-var') }}</div></div>
+                <div><div class="prestige-label stat-caption">預期缺口 ES</div><div class="stat-value">{{ metricText(riskMetrics.expectedShortfall, 'calculate-expected-shortfall') }}</div></div>
+                <div><div class="prestige-label stat-caption">投組波動率</div><div class="stat-value">{{ metricText(riskMetrics.portfolioVolatility, 'calculate-portfolio-volatility') }}</div></div>
+                <div><div class="prestige-label stat-caption">集中度 HHI</div><div class="stat-value">{{ riskMetrics.concentrationHhi == null && !wasComputed('calculate-concentration') ? '本次未計算' : formatHhi(riskMetrics.concentrationHhi) }}</div></div>
+                <div><div class="prestige-label stat-caption">最大持倉權重</div><div class="stat-value">{{ metricText(riskMetrics.largestWeight, 'calculate-concentration') }}</div></div>
 
               </div>
             </div>

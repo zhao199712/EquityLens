@@ -193,6 +193,17 @@ describe('AgentRunDetailView portfolio risk metrics', () => {
     expect(wrapper.text()).not.toContain('|---|')
   })
 
+  it('labels metrics that this run did not compute instead of calling them missing data', () => {
+    const run = diagnosisRun({ annualizedVolatility: 0.53, maxDrawdown: -0.31, historicalVaR: null, expectedShortfall: null, portfolioVolatility: 0.03, concentrationHhi: 0.64, largestWeight: 0.77, volatilityRiskShare: null }, null)
+    ;(run.outputJson as Record<string, unknown>).metricBases = ['calculate-concentration', 'calculate-annualized-volatility', 'calculate-max-drawdown', 'calculate-portfolio-volatility']
+      .map(operation => ({ operation, basis: null }))
+    state.agentRun.value = run
+    const grid = mount(AgentRunDetailView, { global: { stubs } }).findAll('.stat-grid').at(-1)!.text()
+    expect(grid).toContain('歷史 VaR本次未計算')
+    expect(grid).toContain('預期缺口 ES本次未計算')
+    expect(grid).not.toContain('資料不足')
+  })
+
   it('hides the interpretation section when absent', () => {
     state.agentRun.value = diagnosisRun({ annualizedVolatility: 0.36, maxDrawdown: null, historicalVaR: null, expectedShortfall: null, portfolioVolatility: null, concentrationHhi: null, largestWeight: null, volatilityRiskShare: null }, null)
     const wrapper = mount(AgentRunDetailView, { global: { stubs } })
