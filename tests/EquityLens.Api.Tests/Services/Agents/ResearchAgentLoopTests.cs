@@ -418,9 +418,13 @@ public sealed partial class ResearchAgentLoopTests
     {
         await using var db = RefactorTestDbContext.Create();
         var chat = new FakeChat();
-        var state = await Loop(chat, new FakeTools(), new() { MaxPromptTokens = 1 }).RunAsync(await Context(db), "Research", default);
+        var context = await Context(db);
+        var state = await Loop(chat, new FakeTools(), new() { MaxPromptTokens = 1 }).RunAsync(context, "Research", default);
         Assert.Equal("BudgetExhausted", state.StopReason);
         Assert.Empty(chat.Prompts);
+        // 停止原因必須可追查，而不是只留下 BudgetExhausted。
+        var stop = Assert.Single(context.Run.Events, e => e.EventType == "AgentLoopBudgetExceeded");
+        Assert.Contains(stop.Message, new[] { "PromptDoesNotFit", "PromptTokens" });
     }
 
     [Fact]

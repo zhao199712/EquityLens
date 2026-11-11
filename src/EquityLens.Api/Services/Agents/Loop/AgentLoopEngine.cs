@@ -58,6 +58,15 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
         }
         if (resumed.Count > 0) await SaveAsync();
         var maxTurns = mode == "Revise" ? _options.MaxRevisionTurns : _options.MaxTurns;
+        // 預算停止時保存是哪個條件與當時用量，避免只看到 BudgetExhausted 而無法判斷原因。
+        void BudgetStop(string limit, int? nextInputEstimate)
+        {
+            state.StopReason = "BudgetExhausted";
+            context.AddEvent(context.Run, context.Node, "AgentLoopBudgetExceeded", limit, new {
+                limit, turn = state.Turn, state.PromptTokens, nextInputEstimate, state.CostUsd, state.ToolCalls,
+                elapsedSeconds = (int)(clock.GetUtcNow().UtcDateTime - state.StartedAtUtc).TotalSeconds,
+                maxPromptTokens = _options.MaxPromptTokens, maxCostUsd = _options.MaxCostUsd, maxWallClockSeconds = _options.MaxWallClockSeconds });
+        }
         using var duration = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1,
             _options.MaxWallClockSeconds - (clock.GetUtcNow().UtcDateTime - state.StartedAtUtc).TotalSeconds)));
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct, duration.Token);
@@ -82,7 +91,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                 {
                     var wallExhausted = (clock.GetUtcNow().UtcDateTime - state.StartedAtUtc).TotalSeconds >= _options.MaxWallClockSeconds;
                     var limited = state.Turn >= maxTurns - 1 || state.ToolCalls >= _options.MaxToolCalls || state.NoProgressTurns >= 2;
-                    if (wallExhausted) { state.StopReason = "BudgetExhausted"; break; }
+                    if (wallExhausted) { BudgetStop("WallClock", null); break; }
                     if (limited)
                     {
                         if (state.Ledger.Count + state.Facts.Count == 0 || state.ForcedDraft || state.Turn >= maxTurns)
@@ -90,7 +99,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                         state.ForcedDraft = true;
                     }
                     var prompt = BoundedPrompt(request, scope, state, board, mode);
-                    if (prompt is null) { state.StopReason = "BudgetExhausted"; break; }
+                    if (prompt is null) { BudgetStop("PromptDoesNotFit", null); break; }
                     // UTF-8 bytes 是保守 token 上界；完整 request 與最大輸出預留成本。
                     if (!portfolio)
                     {
@@ -104,7 +113,7 @@ public sealed class AgentLoopEngine(IChatCompletionService chat, IAgentLoopTools
                     var inputReserve = chat.EstimateInputBytes(completionRequest);
                     var costReserve = Cost(inputReserve, _options.MaxOutputTokens);
                     if (state.PromptTokens + inputReserve > _options.MaxPromptTokens || state.CostUsd + costReserve > _options.MaxCostUsd)
-                    { state.StopReason = "BudgetExhausted"; break; }
+                    { BudgetStop(state.PromptTokens + inputReserve > _options.MaxPromptTokens ? "PromptTokens" : "Cost", inputReserve); break; }
                     var timer = Stopwatch.StartNew();
                     using var activity = EquityLensTelemetry.ActivitySource.StartActivity("gen_ai.chat");
                     activity?.SetTag("gen_ai.request.model", chat.Model);

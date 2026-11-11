@@ -418,7 +418,7 @@ ResearchAgentLoop.RunAsync(context, mode):
 
 - **平行**：同一輪的 allowed tool calls 以 `Task.WhenAll` 執行；每個呼叫獨立 timeout（預設 30 秒）與例外處理，單一工具失敗不影響同輪其他工具，失敗結果回饋給下一輪。
 - **注意 DbContext 非執行緒安全**：工具若需要 DB，必須用 `IServiceScopeFactory` 建立各自 scope / DbContext，或在平行段之前/之後循序存取；`AgentToolCall` 紀錄在平行段結束後於主執行緒統一寫入。
-- **預設預算**（`ResearchAgentLoopOptions`，Options pattern，section `AgentRuntime:ResearchAgentLoop`）：`MaxTurns = 6`、`MaxToolCalls = 16`、`MaxToolCallsPerTurn = 4`、`MaxWebCalls = 1`、`MaxPromptTokens = 60000`（累計）、`MaxCostUsd = 0.10`、`MaxWallClockSeconds = 240`；Revise 模式 `MaxTurns = 3`。
+- **預設預算**（`ResearchAgentLoopOptions`，Options pattern，section `AgentRuntime:ResearchAgentLoop`）：`MaxTurns = 6`、`MaxToolCalls = 16`、`MaxToolCallsPerTurn = 4`、`MaxWebCalls = 1`、`MaxPromptTokens = 150000`（累計；下一輪以 UTF-8 位元組保守估計）、`MaxOutputTokens = 5000`、`MaxCostUsd = 0.30`、`MaxWallClockSeconds = 240`；Revise 模式 `MaxTurns = 3`。預算停止時寫入 `AgentLoopBudgetExceeded` 事件，記錄觸發條件（WallClock／PromptDoesNotFit／PromptTokens／Cost）、當時用量與上限。
 - **停止原因**（`ResearchAgentStopReasons`）：`AnswerSubmitted`、`BudgetExhausted`、`NoProgress`、`AgentGaveUp`、`ProtocolFailure`、`LeaseLost`、`Cancelled`。
 - `BudgetExhausted` / `NoProgress` 時若 Ledger 有證據 → 再做**一次**「強制起草」LLM 呼叫（只允許 `submit_answer` / `give_up`），避免白跑；否則拒答。
 
