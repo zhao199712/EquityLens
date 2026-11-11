@@ -234,6 +234,22 @@ const portfolioDiagnosisOutput = computed((): PortfolioDiagnosisOutput | null =>
   return output
 })
 
+// 績效歸因只在績效／大盤比較題才執行；未執行時不應顯示成「資料不足」。
+const attributionRan = computed(() => {
+  const output = portfolioDiagnosisOutput.value
+  return !!output && (output.attributionCoverage != null || output.portfolioReturn != null || output.benchmarkReturn != null
+    || output.mainDrags.length > 0 || output.mainContributors.length > 0)
+})
+// 摘要與解讀常為同一段文字（僅差風險偏好附註）；重複時只顯示一次。
+const summaryRepeatsInterpretation = computed(() => {
+  const output = portfolioDiagnosisOutput.value
+  if (!output?.interpretation) return false
+  const normalize = (text: string) => text.replace(/\s+/g, '').replace(/\*\*/g, '')
+  const summary = normalize(output.summary)
+  const interpretation = normalize(output.interpretation)
+  return summary === interpretation || interpretation.includes(summary) || summary.includes(interpretation)
+})
+
 const riskMetrics = computed((): PortfolioRiskMetrics | null => {
   const metrics = portfolioDiagnosisOutput.value?.riskMetrics
   if (!metrics) return null
@@ -480,14 +496,17 @@ const nextActionLabel = computed(() => {
             <p v-if="portfolioDiagnosisOutput.scenarioComparison" class="body-text">情境前後採固定權重與同一份歷史快照；一般風險分析可能採固定股數，兩者數字不可直接相減。</p>
             <PortfolioScenarioComparison v-if="portfolioDiagnosisOutput.scenarioComparison" :comparison="portfolioDiagnosisOutput.scenarioComparison" />
             <div class="stat-grid">
+              <template v-if="attributionRan">
               <div><div class="prestige-label stat-caption">投組報酬</div><div class="stat-value">{{ formatPercent(portfolioDiagnosisOutput.portfolioReturn) }}</div></div>
               <div><div class="prestige-label stat-caption">大盤報酬</div><div class="stat-value">{{ formatPercent(portfolioDiagnosisOutput.benchmarkReturn) }}</div></div>
               <div><div class="prestige-label stat-caption">相對報酬</div><div class="stat-value" :style="{ color: (portfolioDiagnosisOutput.activeReturn ?? 0) >= 0 ? '#7fa387' : '#b05c5c' }">{{ formatPercent(portfolioDiagnosisOutput.activeReturn) }}</div></div>
+              </template>
+              <div v-else><div class="prestige-label stat-caption">與大盤比較</div><div class="body-text">本次問題未做績效歸因。可在 Ask Agent 問「最近一年和大盤比表現如何？」</div></div>
               <div><div class="prestige-label stat-caption">證據覆蓋</div><div class="stat-value">{{ portfolioDiagnosisOutput.evidenceStatus === 'complete' ? '必要欄位齊全' : '部分資料不足' }}</div></div>
             </div>
-            <div class="summary-block"><div class="prestige-label stat-caption">摘要</div><div class="body-text">{{ portfolioDiagnosisOutput.summary }}</div></div>
+            <div v-if="!summaryRepeatsInterpretation" class="summary-block"><div class="prestige-label stat-caption">摘要</div><div class="body-text summary-markdown" v-html="renderMarkdown(portfolioDiagnosisOutput.summary)"></div></div>
             <div v-if="portfolioDiagnosisOutput.interpretation" class="summary-block" style="margin-top: 18px">
-              <div class="prestige-label stat-caption">分析解讀</div>
+              <div class="prestige-label stat-caption">{{ summaryRepeatsInterpretation ? '分析結果' : '分析解讀' }}</div>
               <div class="body-text interpretation" v-html="renderMarkdown(portfolioDiagnosisOutput.interpretation)"></div>
             </div>
             <div v-if="riskMetrics" class="finding-list" style="margin-top: 18px">
@@ -508,17 +527,17 @@ const nextActionLabel = computed(() => {
               <p v-if="!riskMetrics.contributions?.length" class="body-text">未提供逐股明細；全體合計份額不能代表單一股票風險。</p>
               <div v-for="item in riskMetrics.contributions ?? []" :key="item.ticker" class="body-text">{{ item.ticker }} · 權重 {{ formatPercent(item.weight) }} · 年化波動貢獻 {{ formatPercent(item.componentVolatility) }} · 風險占比 {{ formatPercent(item.componentRiskShare) }}</div>
             </div>
-            <div class="finding-list" style="margin-top: 18px">
+            <div v-if="attributionRan" class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">主要拖累</div>
               <div v-if="portfolioDiagnosisOutput.mainDrags.length === 0" class="body-text">{{ portfolioDiagnosisOutput.attributionCoverage === 'complete' ? '本期沒有負貢獻持股。' : '資料涵蓋不足，已取得資料未列出負貢獻來源。' }}</div>
               <div v-for="item in portfolioDiagnosisOutput.mainDrags" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.name }}</div><div class="finding-rec">貢獻：{{ formatPercent(item.contribution) }} · 報酬：{{ formatPercent(item.return) }} · 權重：{{ formatPercent(item.weight) }}</div></div>
             </div>
-            <div class="finding-list" style="margin-top: 18px">
+            <div v-if="attributionRan" class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">主要貢獻</div>
               <div v-if="portfolioDiagnosisOutput.mainContributors.length === 0" class="body-text">{{ portfolioDiagnosisOutput.attributionCoverage === 'complete' ? '本期沒有正貢獻持股。' : '資料涵蓋不足，已取得資料未列出正貢獻來源。' }}</div>
               <div v-for="item in portfolioDiagnosisOutput.mainContributors" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.name }}</div><div class="finding-rec">貢獻：{{ formatPercent(item.contribution) }} · 報酬：{{ formatPercent(item.return) }} · 權重：{{ formatPercent(item.weight) }}</div></div>
             </div>
-            <div class="finding-list" style="margin-top: 18px">
+            <div v-if="portfolioDiagnosisOutput.recommendedAnalyses?.length" class="finding-list" style="margin-top: 18px">
               <div class="prestige-label stat-caption">建議補做的風險分析</div>
               <div v-for="item in portfolioDiagnosisOutput.recommendedAnalyses" :key="item.evidenceId" class="finding-item"><div class="finding-msg">{{ item.priority }}. {{ item.analysis }}</div><div class="finding-rec">{{ item.reason }}</div></div>
             </div>
