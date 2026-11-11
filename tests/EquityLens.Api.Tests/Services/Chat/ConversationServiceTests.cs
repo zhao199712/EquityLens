@@ -291,6 +291,39 @@ public sealed partial class ConversationServiceTests
         Assert.Equal(expected, ConversationService.ChoiceIndex(content, count));
 
     [Fact]
+    public async Task PortfolioQuestionAskedAsDirectResponse_KeepsTheOriginalQuestionAfterSelection()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid();
+        var a = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "測試" };
+        var b = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "測試1" };
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = user };
+        db.Portfolios.AddRange(a, b); db.ChatSessions.Add(session); await db.SaveChangesAsync();
+        var agent = new AskThenRouteAgent("您有兩個投組：「測試」與「測試1」，請指定要看哪一個的波動、最大回撤與集中風險。");
+        var service = new ConversationService(db, agent, new FakeWorkflowQueries(), new FakeAgentRuns(), new AgentWorkflowCatalog());
+        const string question = "我的投資組合最近一年的波動、最大回撤與集中風險如何？";
+        var ask = await service.ProcessAsync(user, session.Id, new(question, Guid.NewGuid()));
+        Assert.Equal(ConversationActions.AskClarification, ask.Action);
+        Assert.Equal(["測試", "測試1"], ask.Choices);
+        await service.ProcessAsync(user, session.Id, new("測試1", Guid.NewGuid()));
+        Assert.Equal(b.Id.ToString(), JsonNode.Parse(session.ContextJson)!["activePortfolioId"]!.ToString());
+        Assert.Contains(question, agent.LastMessage);
+        Assert.Contains("測試1", agent.LastMessage);
+    }
+
+    private sealed class AskThenRouteAgent(string ask) : IConversationAgent
+    {
+        public string LastMessage = "";
+        private int calls;
+        public Task<ConversationAgentDecision> DecideAsync(ConversationAgentInput input, CancellationToken cancellationToken = default)
+        {
+            LastMessage = input.Message;
+            return Task.FromResult(calls++ == 0
+                ? new ConversationAgentDecision(ConversationActions.DirectResponse, ask, null, "test", "high", new JsonObject(), "", "test", "test", 0, 0, 0)
+                : new ConversationAgentDecision(ConversationActions.DirectResponse, "分析", input.Message, "test", "high", new JsonObject(), "", "test", "test", 0, 0, 0));
+        }
+    }
+
+    [Fact]
     public async Task StaleProcessingTurn_DoesNotLockTheSessionForever()
     {
         await using var db = CreateDb(); var user = Guid.NewGuid(); var session = new ChatSession { Id = Guid.NewGuid(), UserId = user };

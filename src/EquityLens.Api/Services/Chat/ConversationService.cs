@@ -196,6 +196,14 @@ public sealed partial class ConversationService(
 
             var action = routingFailure is null ? decision.Action : routingRejected ? ConversationActions.RejectUnsafe : ConversationActions.AskClarification;
             var response = routingFailure ?? decision.Response;
+            // 模型有時以一般回覆反問「要看哪一個投組」；視同釐清，才能保存原問題，使用者選定後接續執行。
+            if (!inventory && action == ConversationActions.DirectResponse && portfolios.Count > 1
+                && portfolios.Count(p => response.Contains(p.Name, StringComparison.OrdinalIgnoreCase)) >= 2
+                && Regex.IsMatch(response, @"[？?]|請(?:選擇|指定|問|告訴)|哪一個|哪個"))
+            {
+                action = ConversationActions.AskClarification;
+                turn.Action = action;
+            }
             // 反問投組時提供可點選項，並以同一順序記錄序號，讓「1」「第一個」「A」都能對應。
             IReadOnlyList<string>? choices = null;
             var asksPortfolio = portfolios.Count > 1 && (inventory || response.StartsWith("請選擇投資組合")
