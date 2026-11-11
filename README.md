@@ -240,31 +240,6 @@ EquityLens/
 
 ---
 
-## 快速開始
-
-啟動基礎服務：
-
-```bash
-docker compose up -d
-```
-
-啟動 API：
-
-```bash
-AgentRuntime__ResearchEngine=AgentLoop dotnet run --project src/EquityLens.Api/EquityLens.Api.csproj
-```
-
-執行測試：
-
-```bash
-dotnet test tests/EquityLens.Api.Tests/EquityLens.Api.Tests.csproj
-python -m pytest evals/tests -q
-```
-
-實際執行還需要設定 PostgreSQL、Redis、S3、OAuth 與 AI provider 等環境變數。
-
----
-
 ## Roadmap
 
 - VaR Backtesting 與 Kupiec / Christoffersen 檢定
