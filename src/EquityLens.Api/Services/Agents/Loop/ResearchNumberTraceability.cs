@@ -33,6 +33,8 @@ internal static partial class ResearchNumberTraceability
                 return DateOnly.TryParse(date, CultureInfo.InvariantCulture, DateTimeStyles.None, out _) ? "日期" : m.Value;
             });
             contextual = Regex.Replace(contextual, @"(?<!\d)(?:19|20)\d{2}\s*年", "年度");
+            // 「1Q26」「Q2 2026」「2026Q1」「第2季」是期間名稱，不是需追溯的數值。
+            contextual = PeriodToken().Replace(contextual, "期間");
             var numbers = Extract(contextual).Where(n =>
                 !(n.Kind == "plain" && decimal.TryParse(ticker, out var code) && n.Value == code)
                 && !questionNumbers.Any(q => q.Value == n.Value && q.Kind == n.Kind)).ToList();
@@ -184,6 +186,8 @@ internal static partial class ResearchNumberTraceability
         // 完整匹配至少兩欄，保留兩位精度，移除原先貪婪解析出的假小數。
         text = Regex.Replace(text, @"(?<label>EPS\s*\(NT Dollar\)\s*)(?<cells>(?:\d+\.\d{2}){2,})(?![\d.])", m =>
             m.Groups["label"].Value + Regex.Replace(m.Groups["cells"].Value, @"\d+?\.\d{2}", "$0 "), RegexOptions.IgnoreCase);
+        // PDF 表格常把同列的兩位小數欄位黏成「1,134.101,046.09839.25」；僅在整串都能切成兩欄以上的兩位小數時切開。
+        text = GluedTwoDecimalCells().Replace(text, m => string.Join(" ", TwoDecimalCell().Matches(m.Value).Select(c => c.Value)) + " ");
         var numbers = Extract(text);
         // 匯率報價的分母明確是每一美元，不能把其他語境中的 1 一概忽略。
         if (Regex.IsMatch(text, @"(?:NT\$|NTD|新[臺台]幣)\s*/\s*(?:US\$|USD|美元)|(?:US\$|USD)\s*/\s*(?:NT\$|NTD)", RegexOptions.IgnoreCase))
@@ -210,7 +214,7 @@ internal static partial class ResearchNumberTraceability
             "萬" => 10_000m, _ => 1000m
         };
         // 表頭常明確排除 EPS；每股盈餘區段不繼承仟元／十億元。
-        var perShareSection = Regex.Match(text, @"(?:基\s*本|稀\s*釋)\s*每\s*股\s*盈\s*餘");
+        var perShareSection = Regex.Match(text, @"(?:基\s*本|稀\s*釋)\s*每\s*股\s*盈\s*餘|每\s*股\s*盈\s*餘\s*[（(]\s*新\s*[台臺]\s*幣\s*元\s*[)）]");
         var tableAmounts = perShareSection.Success ? Extract(text[..perShareSection.Index]) : numbers;
         var expanded = numbers.Select((n, i) => i < tableAmounts.Count ? n with { AllowUnitlessMoney = false } : n).ToList();
         foreach (var number in tableAmounts.Where(x => x.Kind == "plain" && !shareOffsets.Contains(x.Offset)))
@@ -258,4 +262,13 @@ internal static partial class ResearchNumberTraceability
     private static partial Regex ShareHeaderValues();
     [GeneratedRegex(@"([-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[-+]?\d+(?:\.\d+)?)\s*(十億|百萬|兆|億|萬|千|仟)?\s*(%|個百分點|百分點|美元|元(?!件)|倍|股(?!數|東|份))?")]
     private static partial Regex Numeric();
+
+    [GeneratedRegex(@"(?<![\d.,])(?:\d{1,3}(?:,\d{3})*\.\d{2}){2,}(?![\d.,])")]
+    private static partial Regex GluedTwoDecimalCells();
+
+    [GeneratedRegex(@"\d{1,3}(?:,\d{3})*\.\d{2}")]
+    private static partial Regex TwoDecimalCell();
+
+    [GeneratedRegex(@"(?<![\dA-Za-z])(?:[1-4]Q(?:19|20)?\d{2}|Q[1-4]\s*'?(?:(?:19|20)\d{2}|\d{2})|(?:19|20)\d{2}\s*Q[1-4]|[1-4]H(?:19|20)?\d{2}|第\s*[1-4一二三四]\s*季)(?![\dA-Za-z])", RegexOptions.IgnoreCase)]
+    private static partial Regex PeriodToken();
 }
