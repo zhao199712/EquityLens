@@ -157,13 +157,15 @@ internal sealed class PortfolioAttributionReader
     }
 }
 
-public sealed class FinalizePortfolioDiagnosisNodeHandler(ConversationSuggestedActionProvider? suggestions = null) : IAgentNodeHandler
+public sealed class FinalizePortfolioDiagnosisNodeHandler(ConversationSuggestedActionProvider? suggestions = null,
+    IPortfolioValuationService? valuations = null) : IAgentNodeHandler
 {
     public string NodeType => PortfolioDiagnosisNodeTypes.FinalizeDiagnosis;
     public async Task ExecuteAsync(AgentNodeExecutionContext context, CancellationToken cancellationToken = default)
     {
         var board = AgentNodeJson.ParseBlackboard(context.Run.BlackboardJson);
         var output = PortfolioDiagnosisBlackboard.Required<PortfolioDiagnosisOutput>(board, AgentBlackboardKeys.PortfolioDiagnosisDraft);
+        output = await WithReportAttributionAsync(context, output, cancellationToken);
         context.Node.InputJson = AgentNodeJson.Serialize(new { evidenceStatus = output.EvidenceStatus, priorityCount = output.RecommendedAnalyses.Count });
         context.Node.OutputJson = AgentNodeJson.Serialize(output);
         PortfolioDiagnosisBlackboard.Set(board, AgentBlackboardKeys.FinalOutput, output);
@@ -171,5 +173,32 @@ public sealed class FinalizePortfolioDiagnosisNodeHandler(ConversationSuggestedA
         context.Run.OutputJson = context.Node.OutputJson;
         context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Final portfolio diagnosis written.", new { output.EvidenceStatus });
         if (suggestions is not null) await suggestions.PrepareAsync(context, output.Interpretation ?? output.Summary, cancellationToken);
+    }
+
+    /// <summary>
+    /// 模型未呼叫歸因工具時，於品質關卡之後補算與大盤的比較，只供報告顯示；
+    /// 不改變答案、品質判定或證據狀態，計算失敗時維持原報告。
+    /// </summary>
+    private async Task<PortfolioDiagnosisOutput> WithReportAttributionAsync(AgentNodeExecutionContext context, PortfolioDiagnosisOutput output, CancellationToken ct)
+    {
+        if (valuations is null || output.AttributionCoverage is not null || output.PortfolioReturn is not null || output.BenchmarkReturn is not null) return output;
+        try
+        {
+            var attribution = await new PortfolioAttributionReader(valuations).ReadAsync(context, ct);
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Report attribution added after the quality gate.",
+                new { attribution.CoverageStatus, attribution.PortfolioReturn, attribution.BenchmarkReturn });
+            return output with
+            {
+                PortfolioReturn = attribution.PortfolioReturn, BenchmarkReturn = attribution.BenchmarkReturn, ActiveReturn = attribution.ActiveReturn,
+                MainDrags = attribution.Holdings.Where(x => x.Contribution < 0).OrderBy(x => x.Contribution).Take(3).ToArray(),
+                MainContributors = attribution.Holdings.Where(x => x.Contribution > 0).OrderByDescending(x => x.Contribution).Take(3).ToArray(),
+                AttributionCoverage = attribution.CoverageStatus,
+            };
+        }
+        catch (Exception exception) when (exception is AgentNodeException or InvalidOperationException)
+        {
+            context.AddEvent(context.Run, context.Node, AgentEventTypes.BlackboardUpdated, "Report attribution unavailable.", new { reason = exception.Message });
+            return output;
+        }
     }
 }
