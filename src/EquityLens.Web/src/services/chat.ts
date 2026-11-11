@@ -30,6 +30,18 @@ export interface ConversationSuggestedAction {
   promptEn?: string | null
 }
 
+/** 投組診斷卡片的重點指標，全部來自工具計算。 */
+export interface ConversationKeyMetrics {
+  annualizedVolatility: number | null
+  maxDrawdown: number | null
+  historicalVaR: number | null
+  expectedShortfall: number | null
+  largestWeight: number | null
+  concentrationHhi: number | null
+  portfolioReturn: number | null
+  benchmarkReturn: number | null
+}
+
 export interface ConversationRunCard {
   suggestedActions?: ConversationSuggestedAction[] | null
   qualityIssues?: string[] | null
@@ -43,6 +55,7 @@ export interface ConversationRunCard {
   totalNodes: number
   finalAnswer: string | null
   errorMessage: string | null
+  keyMetrics?: ConversationKeyMetrics | null
 }
 
 export async function createSession(title?: string): Promise<ChatSession> {

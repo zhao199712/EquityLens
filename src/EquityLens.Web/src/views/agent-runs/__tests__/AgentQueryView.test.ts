@@ -284,4 +284,16 @@ describe('AgentQueryView', () => {
     expect(wrapper.find('details.answer-notes summary').text()).toBe('計算方式與限制')
     expect(wrapper.find('.answer-footer').text()).toBe('工具唯讀，不代表持倉已調整；不保證獲利。')
   })
+
+  it('shows key metrics from tool output even when the answer has no table', () => {
+    chat.messages = [{ id: 'k', role: 'assistant', content: '', runCard: { agentRunId: 'r', workflowType: 'PortfolioDiagnosis', status: 'Succeeded',
+      completedNodes: 4, totalNodes: 4, qualityIssues: [], finalAnswer: '集中風險明顯 [P1]。',
+      keyMetrics: { annualizedVolatility: .5339, maxDrawdown: -.3166, historicalVaR: null, expectedShortfall: null, largestWeight: .7692,
+        concentrationHhi: .645, portfolioReturn: 1.1823, benchmarkReturn: .6211 } } }]
+    const text = mount(AgentQueryView, { global: { stubs: { RouterLink: true } } }).find('.key-metrics').text()
+    expect(text).toContain('年化波動53.39%')
+    expect(text).toContain('最大回撤-31.66%')
+    expect(text).toContain('大盤 62.11%')
+    expect(text).not.toContain('VaR')
+  })
 })

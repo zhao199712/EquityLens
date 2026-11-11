@@ -56,6 +56,40 @@ public sealed partial class ConversationServiceTests
         Assert.Equal(draft["interpretation"]?.ToString(), output["interpretation"]?.ToString());
     }
 
+    private sealed class TailRiskMath : IPortfolioRiskMathExecutor
+    {
+        public List<string> Operations = [];
+        public PortfolioRiskMathResult Execute(string operation, PortfolioRiskMathInputs input, JsonObject arguments, Guid runId)
+        {
+            Operations.Add(operation);
+            return new(operation, operation == "calculate-historical-var" ? -.0467m : -.0615m, "ratio", new { }, new { }, [], null);
+        }
+    }
+
+    [Theory]
+    [InlineData(130, true)]
+    [InlineData(60, false)]
+    public async Task Finalize_AddsTailRiskForTheReport_OnlyWithEnoughHistory(int days, bool expected)
+    {
+        await using var db = CreateDb(); var seed = await SeedSuggestionsAsync(db);
+        var asset = new MathAssetInput("2330", "TWD", 1, 1, [], [], []);
+        var inputs = new PortfolioRiskMathInputs("Portfolio", Guid.NewGuid(), null, new(2025, 1, 1), new(2025, 12, 31), [asset], [1m], [], [], [], [], [], [], days, "test", []);
+        ChangeBoard(seed.Run, b => {
+            b["portfolioLoopAnswer"] = JsonSerializer.SerializeToNode(new LoopAnswer("波動 30% [P1]。", ["P1"]), SuggestionJson);
+            b["agentLoopFacts"] = JsonNode.Parse("""[{"id":"P1","key":"risk","tool":"run_risk_analysis","data":{"volatility":0.3}}]""");
+            b[AgentBlackboardKeys.MathInputs] = JsonSerializer.SerializeToNode(inputs, AgentNodeJson.SerializerOptions);
+        });
+        await new PortfolioQualityGateNodeHandler().ExecuteAsync(new(db, seed.Run, seed.Run.Nodes.First(), (_, _, _, _, _) => {}));
+        var math = new TailRiskMath();
+        var node = seed.Run.Nodes.Single(x => x.NodeType == PortfolioDiagnosisNodeTypes.FinalizeDiagnosis);
+        await new FinalizePortfolioDiagnosisNodeHandler(riskMath: math).ExecuteAsync(new AgentNodeExecutionContext(db, seed.Run, node, (_, _, _, _, _) => {}));
+        var output = JsonNode.Parse(seed.Run.OutputJson!)!;
+        if (!expected) { Assert.Empty(math.Operations); Assert.Null(output["riskMetrics"]?["historicalVaR"]?.GetValue<decimal?>()); return; }
+        Assert.Equal(-.0467m, output["riskMetrics"]!["historicalVaR"]!.GetValue<decimal>());
+        Assert.Equal(-.0615m, output["riskMetrics"]!["expectedShortfall"]!.GetValue<decimal>());
+        Assert.Contains(output["metricBases"]!.AsArray(), b => b!["operation"]!.ToString() == "calculate-historical-var");
+    }
+
     [Fact]
     public async Task HybridSuggestions_FinalizeRanksAllEligibleCandidates_AndReadsReuseSavedSelection()
     {
