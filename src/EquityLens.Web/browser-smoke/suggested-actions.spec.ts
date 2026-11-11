@@ -50,7 +50,7 @@ for (const locale of ['zh-TW', 'en']) {
     })
     await page.goto('/ask-agent')
     await page.locator('.session-row').click()
-    await expect(page.locator('.run-status')).toHaveText('Running')
+    await expect(page.locator('.run-status')).toHaveText(locale === 'en' ? 'Running' : '分析中')
     await expect(page.locator('.suggested-action-btn').first()).toBeVisible()
     const button = page.getByRole('button', { name: locale === 'en' ? volatility.labelEn : volatility.label, exact: true })
     const composer = page.locator('textarea')

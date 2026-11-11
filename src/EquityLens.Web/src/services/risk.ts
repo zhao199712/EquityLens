@@ -395,6 +395,10 @@ export async function createPortfolio(request: CreatePortfolioRequest): Promise<
   return response.data
 }
 
+export async function updatePortfolio(id: string, request: Required<Pick<CreatePortfolioRequest, 'name'>> & CreatePortfolioRequest): Promise<void> {
+  await http.put(`/portfolios/${id}`, request)
+}
+
 export async function deletePortfolio(id: string): Promise<void> {
   await http.delete(`/portfolios/${id}`)
 }

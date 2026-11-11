@@ -28,7 +28,8 @@ public sealed record InvestmentResearchRoutingContext(
     int CompletionTokens,
     long DurationMs,
     IReadOnlyList<PortfolioScenarioRequest>? Scenarios = null,
-    Guid? ParentAgentRunId = null);
+    Guid? ParentAgentRunId = null,
+    Guid? ResearchContextRunId = null);
 
 public sealed record AgentWorkflowQueryCreatedResponse(
     Guid AgentRunId,

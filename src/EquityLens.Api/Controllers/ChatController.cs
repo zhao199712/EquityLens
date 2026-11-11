@@ -88,13 +88,18 @@ public sealed class ChatController : ControllerBase
             .OrderBy(m => m.SequenceNumber)
             .ToListAsync(ct);
         var response = new List<ChatMessageDto>();
+        // 只有最新一則助理訊息帶出待選投組，舊訊息的選項已失效。
+        var lastAssistantId = messages.LastOrDefault()?.Role == "assistant" ? messages[^1].Id : (Guid?)null;
+        var pendingChoices = System.Text.Json.Nodes.JsonNode.Parse(session.ContextJson ?? "{}")?["pendingChoices"]?
+            .AsArray().Select(x => x?.ToString()).OfType<string>().ToArray();
         foreach (var message in messages)
         {
             var card = message.AgentRunId is { } runId
                 ? await _conversation.GetRunCardAsync(userId, sessionId, runId, ct)
                 : null;
             response.Add(new(message.Id, message.Role, message.Content, message.ToolName,
-                message.SequenceNumber, message.CreatedAtUtc, message.MessageType, message.AgentRunId, card));
+                message.SequenceNumber, message.CreatedAtUtc, message.MessageType, message.AgentRunId, card,
+                message.Id == lastAssistantId && pendingChoices is { Length: > 0 } ? pendingChoices : null));
         }
         return Ok(response);
     }
@@ -120,6 +125,8 @@ public sealed class ChatController : ControllerBase
                 await WriteEventAsync(new { type = "delta", content = outcome.Content }, ct);
             if (outcome.RunCard is not null)
                 await WriteEventAsync(new { type = "run_created", messageId = outcome.AssistantMessageId, runCard = outcome.RunCard }, ct);
+            if (outcome.Choices is { Count: > 0 })
+                await WriteEventAsync(new { type = "choices", messageId = outcome.AssistantMessageId, choices = outcome.Choices }, ct);
             await WriteEventAsync(new { type = "done", outcome.Model, outcome.PromptTokens, outcome.CompletionTokens }, ct);
             await Response.Body.FlushAsync(ct);
         }

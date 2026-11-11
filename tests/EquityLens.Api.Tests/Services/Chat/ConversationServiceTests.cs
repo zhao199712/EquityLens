@@ -28,7 +28,7 @@ public sealed partial class ConversationServiceTests
         await service.ProcessAsync(user, session.Id, new("請修正投組分析", Guid.NewGuid()));
         Assert.Equal(parentId, workflows.ParentId);
         Assert.Equal(1, workflows.Calls);
-        Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("lastResearchRunId"));
+        Assert.True(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("lastResearchRunId"));
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public sealed partial class ConversationServiceTests
     [Theory]
     [InlineData("那毛利率呢", "RouteWorkflow")]
     [InlineData("重置對話", "ResetContext")]
-    public async Task ExplicitFollowupAndReset_BypassModel(string message, string expected)
+    public async Task TypedFollowupIsClassified_OnlyResetBypassesModel(string message, string expected)
     {
         await using var db = CreateDb(); var user = Guid.NewGuid(); var parent = Guid.NewGuid();
         var session = new ChatSession { Id = Guid.NewGuid(), UserId = user, ContextJson = new JsonObject { ["lastAgentRunId"] = parent }.ToJsonString() };
@@ -201,7 +201,7 @@ public sealed partial class ConversationServiceTests
         var chat = new CountingChat(); var workflows = new FakeWorkflowQueries();
         var service = new ConversationService(db, new InvestmentResearchRouter(chat), workflows, new FakeAgentRuns(), new AgentWorkflowCatalog());
         var result = await service.ProcessAsync(user, session.Id, new(message, Guid.NewGuid()));
-        Assert.Equal(expected, result.Action); Assert.Equal(0, chat.Calls);
+        Assert.Equal(expected, result.Action); Assert.Equal(expected == "RouteWorkflow" ? 1 : 0, chat.Calls);
         if (expected == "RouteWorkflow") Assert.Equal(parent, workflows.ParentId);
     }
 
@@ -243,6 +243,100 @@ public sealed partial class ConversationServiceTests
         Assert.Contains("高beta", ambiguous.Content);
         Assert.DoesNotContain("建立投資組合", ambiguous.Content);
         Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("activePortfolioId"));
+    }
+
+    [Theory]
+    [InlineData("第一個")]
+    [InlineData("A")]
+    [InlineData("前者")]
+    [InlineData("1")]
+    public async Task PortfolioChoices_AreOfferedAndNaturalOrdinalsSelectTheListedOption(string choice)
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid();
+        var a = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "低波動" };
+        var b = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "高beta" };
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = user };
+        db.Portfolios.AddRange(a, b); db.ChatSessions.Add(session); await db.SaveChangesAsync();
+        var runs = new FakeAgentRuns();
+        var service = new ConversationService(db, new PortfolioAgent(a.Id), new AgentWorkflowQueryService(db, new InvestmentResearchRouter(new CountingChat()), runs), runs, new AgentWorkflowCatalog());
+        var inventory = await service.ProcessAsync(user, session.Id, new("我有幾個投資組合", Guid.NewGuid()));
+        Assert.NotNull(inventory.Choices);
+        var first = inventory.Choices![0] == a.Name ? a : b;
+        await service.ProcessAsync(user, session.Id, new(choice, Guid.NewGuid()));
+        Assert.Equal(first.Id.ToString(), JsonNode.Parse(session.ContextJson)!["activePortfolioId"]!.ToString());
+        Assert.False(JsonNode.Parse(session.ContextJson)!.AsObject().ContainsKey("pendingChoices"));
+    }
+
+    [Theory]
+    [InlineData("回到剛剛那個高波動的，如果遇到 2008 會跌多少？", "高波動科技")]
+    [InlineData("那個金融科技的呢", "金融科技投資組合")]
+    [InlineData("那穩健的呢", null)]
+    [InlineData("優化投資組合", null)]
+    [InlineData("科技股會怎樣", null)]
+    public void PartialPortfolioName_SelectsOnlyAUniqueFragment(string message, string? expected)
+    {
+        var options = new[] { (Guid.NewGuid(), "高波動科技"), (Guid.NewGuid(), "穩健金融"), (Guid.NewGuid(), "金融科技投資組合") };
+        var named = PortfolioSelection.NamedOrPartial(message, options).ToArray();
+        if (expected is null) Assert.Empty(named);
+        else Assert.Equal(options.Single(o => o.Item2 == expected).Item1, Assert.Single(named));
+    }
+
+    [Theory]
+    [InlineData("第二個", 2, 2)]
+    [InlineData("B", 2, 2)]
+    [InlineData("後者", 3, 3)]
+    [InlineData("第三個", 2, null)]
+    [InlineData("我想看第一個方案的風險", 2, null)]
+    public void ChoiceIndex_ParsesOnlyStandaloneOrdinals(string content, int count, int? expected) =>
+        Assert.Equal(expected, ConversationService.ChoiceIndex(content, count));
+
+    [Fact]
+    public async Task PortfolioQuestionAskedAsDirectResponse_KeepsTheOriginalQuestionAfterSelection()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid();
+        var a = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "測試" };
+        var b = new Portfolio { Id = Guid.NewGuid(), OwnerUserId = user, Name = "測試1" };
+        var session = new ChatSession { Id = Guid.NewGuid(), UserId = user };
+        db.Portfolios.AddRange(a, b); db.ChatSessions.Add(session); await db.SaveChangesAsync();
+        var agent = new AskThenRouteAgent("您有兩個投組：「測試」與「測試1」，請指定要看哪一個的波動、最大回撤與集中風險。");
+        var service = new ConversationService(db, agent, new FakeWorkflowQueries(), new FakeAgentRuns(), new AgentWorkflowCatalog());
+        const string question = "我的投資組合最近一年的波動、最大回撤與集中風險如何？";
+        var ask = await service.ProcessAsync(user, session.Id, new(question, Guid.NewGuid()));
+        Assert.Equal(ConversationActions.AskClarification, ask.Action);
+        Assert.Equal(["測試", "測試1"], ask.Choices);
+        await service.ProcessAsync(user, session.Id, new("測試1", Guid.NewGuid()));
+        Assert.Equal(b.Id.ToString(), JsonNode.Parse(session.ContextJson)!["activePortfolioId"]!.ToString());
+        Assert.Contains(question, agent.LastMessage);
+        Assert.Contains("測試1", agent.LastMessage);
+    }
+
+    private sealed class AskThenRouteAgent(string ask) : IConversationAgent
+    {
+        public string LastMessage = "";
+        private int calls;
+        public Task<ConversationAgentDecision> DecideAsync(ConversationAgentInput input, CancellationToken cancellationToken = default)
+        {
+            LastMessage = input.Message;
+            return Task.FromResult(calls++ == 0
+                ? new ConversationAgentDecision(ConversationActions.DirectResponse, ask, null, "test", "high", new JsonObject(), "", "test", "test", 0, 0, 0)
+                : new ConversationAgentDecision(ConversationActions.DirectResponse, "分析", input.Message, "test", "high", new JsonObject(), "", "test", "test", 0, 0, 0));
+        }
+    }
+
+    [Fact]
+    public async Task StaleProcessingTurn_DoesNotLockTheSessionForever()
+    {
+        await using var db = CreateDb(); var user = Guid.NewGuid(); var session = new ChatSession { Id = Guid.NewGuid(), UserId = user };
+        db.ChatSessions.Add(session);
+        db.ConversationTurns.Add(new ConversationTurn { Id = Guid.NewGuid(), ChatSessionId = session.Id, RequestId = Guid.NewGuid(),
+            Status = "Processing", CreatedAtUtc = DateTime.UtcNow - ConversationService.StaleTurnTimeout - TimeSpan.FromMinutes(1) });
+        await db.SaveChangesAsync();
+        var service = new ConversationService(db, Agent(ConversationActions.DirectResponse, "你好", null, new()), new FakeWorkflowQueries(), new FakeAgentRuns(), new AgentWorkflowCatalog());
+        var result = await service.ProcessAsync(user, session.Id, new("你好", Guid.NewGuid()));
+        Assert.Equal(ConversationActions.DirectResponse, result.Action);
+        db.ConversationTurns.Add(new ConversationTurn { Id = Guid.NewGuid(), ChatSessionId = session.Id, RequestId = Guid.NewGuid(), Status = "Processing", CreatedAtUtc = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+        await Assert.ThrowsAsync<ConversationException>(() => service.ProcessAsync(user, session.Id, new("再一次", Guid.NewGuid())));
     }
 
     [Fact]
@@ -307,6 +401,9 @@ public sealed partial class ConversationServiceTests
         public int Calls { get; private set; }
         public string? Question { get; private set; }
         public Guid? ParentId { get; private set; }
+        public InvestmentResearchRouteDecision? Decision { get; private set; }
+        public Task<AgentWorkflowQueryCreatedResponse> CreateFromDecisionAsync(Guid userId, CreateAgentWorkflowQueryRequest request, InvestmentResearchRouteDecision decision, CancellationToken cancellationToken = default)
+        { Decision = decision; return CreateAsync(userId, request, cancellationToken); }
         public Task<AgentWorkflowQueryCreatedResponse> CreateAsync(Guid userId, CreateAgentWorkflowQueryRequest request, CancellationToken cancellationToken = default)
         {
             Calls++; Question = request.Question; ParentId = request.ParentAgentRunId;

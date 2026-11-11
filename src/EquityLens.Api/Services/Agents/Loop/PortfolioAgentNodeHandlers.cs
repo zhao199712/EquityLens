@@ -35,21 +35,25 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
         var answer = board["portfolioLoopAnswer"]?.Deserialize<LoopAnswer>(AgentNodeJson.SerializerOptions);
         var facts = board["agentLoopFacts"]?.Deserialize<List<LoopDataFact>>(AgentNodeJson.SerializerOptions) ?? [];
         var rejectedNumbers = new List<string>();
-        var issues = Check(answer, facts, rejectedNumbers);
+        var issues = Check(answer, facts, rejectedNumbers, board[AgentBlackboardKeys.RoutingContext]?["objective"]?.ToString());
         var attribution = board[AgentBlackboardKeys.PerformanceAttribution]?.Deserialize<PortfolioPerformanceAttribution>(AgentNodeJson.SerializerOptions);
         var metrics = PortfolioRiskMetricsReader.FromMathResults(board[AgentBlackboardKeys.MathResults]);
         var comparison = board[PortfolioScenarioCalculator.ResultKey]?.Deserialize<PortfolioScenarioComparison>(AgentNodeJson.SerializerOptions);
         if (RequiresScenario(board) && comparison?.Status != "Calculated")
             issues.Add((board[AgentBlackboardKeys.MathInputs]?["commonTradingDays"]?.GetValue<int>() ?? 0) >= 120 ? "OptimizationScenarioRequired" : "OptimizationDataUnavailable");
         if (comparison?.ScenarioErrors is { Count: > 0 }) issues.Add("PartialScenarioFailure");
-        var limited = issues.Count > 0 || attribution?.CoverageStatus != "complete";
+        // 未執行歸因不代表其他工具證據不完整；已取得的歸因仍須檢查涵蓋率。
+        var limited = issues.Count > 0 || (attribution is not null && attribution.CoverageStatus != "complete");
         var summary = issues.Count > 0 ? "模型答案未通過品質檢查；以下僅列出已保存的工具資料，請確認資料限制。" : answer!.Markdown;
         if (issues.Contains("OptimizationScenarioRequired")) summary = "優化問題尚未取得同一快照的完整情境比較，無法提供改善幅度。";
         if (issues.Contains("OptimizationDataUnavailable")) summary = "共同歷史資料不足，無法比較優化前後的波動、VaR、ES 與最大回撤；請補足資料。";
         if (comparison is not null) summary = ScenarioSummary(comparison);
         var interpretation = issues.Count == 0 ? answer?.Markdown
-            : comparison?.Status == "Calculated" && issues.All(i => i is "UntraceableNumbers" or "MixedRiskBasis" or "ScenarioComparisonDirectionMismatch" or "UnverifiedScenarioComparison")
+            : issues.All(i => i is "UntraceableNumbers" or "MixedRiskBasis" or "ScenarioComparisonDirectionMismatch" or "UnverifiedScenarioComparison")
+                && (comparison?.Status == "Calculated" || !issues.Contains("MixedRiskBasis"))
                 ? VerifiedParagraphs(answer, facts) : null;
+        // 只保留逐段重新通過檢查的內容；沒有任何段落通過時仍不顯示模型草稿。
+        if (string.IsNullOrWhiteSpace(interpretation)) interpretation = null;
         // 偏好是已保存的工具事實，正常與降級報告皆揭露；不依賴模型記得重述。
         summary = WithRiskPreference(summary, facts)!;
         interpretation = WithRiskPreference(interpretation, facts);
@@ -86,22 +90,48 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
 
     internal static string ScenarioSummary(PortfolioScenarioComparison comparison)
     {
-        static string Metrics(ScenarioMetrics m) => $"年化波動 {m.AnnualizedVolatility:P2}、VaR {m.HistoricalVaR:P2}、ES {m.ExpectedShortfall:P2}、最大回撤 {m.HypotheticalMaxDrawdown:P2}";
-        var baseline = comparison.Baseline?.Metrics is { } b ? "同一快照原組合：" + Metrics(b) + "。" : "";
-        return "以下為唯讀情境，未變更實際持倉。" + baseline + string.Join("；", comparison.Scenarios.Select(s =>
-            $"{s.Name}：減碼資金{(s.RemainderPolicy != "cash" ? "轉入 " + s.TransferToTicker : "留作現金")}；" +
-            string.Join("、", s.Weights.Select(w => $"{w.Key} 權重 {w.Value:P2}")) + $"；現金 {s.CashWeight:P2}" +
-            (s.Metrics is { } m ? "；調整後：" + Metrics(m) : "") +
-            (PortfolioComparisonClaims.Changes(comparison, s) is { Count: > 0 } changes
-                ? "；相較原組合差異：" + string.Join("、", changes.Select(c => c.Description)) : ""))) +
-            (comparison.Status == "Calculated" ? "。情境不代表未來績效或保證改善。" : "。資料不足，風險指標無法計算。") +
-            $"方法：{comparison.Method}；有效日報酬 {comparison.ObservationCount} 筆、VaR 信心水準 {comparison.ConfidenceLevel:P0}、期間 {comparison.HorizonDays} 日。" +
-            string.Join("", PortfolioComparisonClaims.Statements(comparison));
+        // 以表格呈現同一快照的前後比較；文字仍保留每個數字的來源口徑。
+        var calculated = comparison.Scenarios.Where(s => s.Metrics is not null).ToArray();
+        var lines = new List<string> { "**以下為唯讀情境，未變更實際持倉。**", "" };
+        if (comparison.Baseline?.Metrics is { } b)
+        {
+            lines.Add("| 指標 | 同一快照原組合 | " + string.Join(" | ", calculated.Select(s => s.Name)) + " |");
+            lines.Add("|---|---:|" + string.Concat(calculated.Select(_ => "---:|")));
+            foreach (var (label, value) in new (string, Func<ScenarioMetrics, decimal>)[] {
+                         ("年化波動", m => m.AnnualizedVolatility), ($"VaR（{comparison.ConfidenceLevel:P0}、{comparison.HorizonDays} 日）", m => m.HistoricalVaR),
+                         ($"ES（{comparison.ConfidenceLevel:P0}、{comparison.HorizonDays} 日）", m => m.ExpectedShortfall), ("最大回撤", m => m.HypotheticalMaxDrawdown) })
+                lines.Add($"| {label} | {value(b):P2} | " + string.Join(" | ", calculated.Select(s => value(s.Metrics!).ToString("P2"))) + " |");
+            lines.Add("");
+        }
+        foreach (var s in comparison.Scenarios)
+        {
+            var detail = $"- **{s.Name}**：減碼資金{(s.RemainderPolicy != "cash" ? "轉入 " + s.TransferToTicker : "留作現金")}；調整後 " +
+                string.Join("、", s.Weights.Select(w => $"{w.Key} 權重 {w.Value:P2}")) + $"；現金 {s.CashWeight:P2}";
+            if (PortfolioComparisonClaims.Changes(comparison, s) is { Count: > 0 } changes)
+                detail += "。相較原組合差異：" + string.Join("、", changes.Select(c => c.Description));
+            lines.Add(detail + "。");
+        }
+        lines.Add("");
+        lines.Add(comparison.Status == "Calculated" ? "情境不代表未來績效或保證改善。" : "資料不足，風險指標無法計算。");
+        lines.AddRange(PortfolioComparisonClaims.Statements(comparison));
+        lines.Add($"*方法：{ReadableMethod(comparison.Method)}；有效日報酬 {comparison.ObservationCount} 筆。*");
+        return string.Join("\n", lines);
     }
 
-    internal static List<string> Check(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts, List<string>? rejectedNumbers = null)
+    private static string ReadableMethod(string? method) => (method ?? "")
+        .Replace("FixedWeightHistoricalSimpleReturns", "固定權重歷史簡單報酬")
+        .Replace("cashReturn=0", "現金報酬假設為 0")
+        .Replace("annualization=252", "年化 252 日")
+        .Replace("equityHhi excludes cash", "集中度不含現金");
+
+    internal static List<string> Check(LoopAnswer? answer, IReadOnlyList<LoopDataFact> facts, List<string>? rejectedNumbers = null, string? userQuestion = null)
     {
         var issues = new List<string>();
+        // 使用者自己提出的目標值（如「降到 40% 以下」）可被複述，但只限明確歸屬於使用者的語句。
+        var userPercents = Regex.Matches((userQuestion ?? "").Normalize(System.Text.NormalizationForm.FormKC), @"(?<![\d.])(\d+(?:\.\d+)?)\s*%")
+            .Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        // 使用者問題中的年份只是主題（如「2008 金融海嘯」）；說明該年份資料不可用時不應被當成無來源數字。
+        var userYears = Regex.Matches(userQuestion ?? "", @"(?<![\d.])(?:19|20)\d{2}(?![\d.])").Select(m => m.Value).ToHashSet(StringComparer.Ordinal);
         if (answer is null || string.IsNullOrWhiteSpace(answer.Markdown) || answer.Markdown == AgentLoopEngine.Refusal) return ["InsufficientEvidence"];
         var byId = facts.ToDictionary(x => x.Id, StringComparer.Ordinal);
         if (facts.Count == 0) issues.Add("MissingToolEvidence");
@@ -168,6 +198,22 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
                     foreach (var key in new[] { "name", "index" })
                         if (candidate[key]?.ToString() is { Length: > 0 } name)
                             text = Regex.Replace(text, Regex.Escape(name) + @"(?![\d.%％])", "指數標的");
+            // 壓力情境名稱（如「2022 升息熊市」「資料期間最差 20 日」）是識別名稱；僅接受本句引用的工具情境。
+            foreach (var name in cited.Where(f => f.Tool == "run_stress_test")
+                         .SelectMany(f => (f.Data["scenarios"] as JsonArray)?.OfType<JsonObject>() ?? [])
+                         .Select(x => x["name"]?.ToString()).OfType<string>().Where(x => x.Length > 0).OrderByDescending(x => x.Length))
+                text = Regex.Replace(text, Regex.Escape(name) + @"(?![\d.%％])", "壓力情境");
+            // 「2022 情境」等簡稱：年份必須是本句引用情境的起訖年份，不放行其他年份數字。
+            var stressYears = cited.Where(f => f.Tool == "run_stress_test")
+                .SelectMany(f => (f.Data["scenarios"] as JsonArray)?.OfType<JsonObject>() ?? [])
+                .SelectMany(x => new[] { x["from"]?.ToString(), x["to"]?.ToString() })
+                .Where(x => x is { Length: >= 4 }).Select(x => x![..4]).ToHashSet(StringComparer.Ordinal);
+            text = Regex.Replace(text, @"(?<![\d.\-])(?:19|20)\d{2}(?=\s*(?:年)?\s*(?:情境|升息|熊市|科技股|修正|急跌))", m => stressYears.Contains(m.Value) ? "情境年份" : m.Value);
+            // 前輪研究問題的年份是已知主題，即使該研究未通過品質關卡也可說明其限制。
+            // 僅限明確的「年」標記及同句引用，不放行同值金額、百分比或新年份。
+            var researchYears = cited.Where(f => f.Tool == "prior_research")
+                .SelectMany(f => Regex.Matches(f.Data["question"]?.ToString() ?? "", @"(?<![\d.])(?:19|20)\d{2}(?=\s*年)").Select(m => m.Value)).ToHashSet();
+            text = Regex.Replace(text, @"(?<![\d.])(?:19|20)\d{2}(?=\s*年(?!化))", m => researchYears.Contains(m.Value) ? "研究年度" : m.Value);
             var tickers = facts.SelectMany(f => Tickers(f.Data)).ToHashSet(StringComparer.Ordinal);
             text = Regex.Replace(text, @"(?<![\d.])\d{4,6}(?![\d.]|\s*(?:%|％|元|股|百分點))", m => tickers.Contains(m.Value) ? "標的" : m.Value);
             // 「1.47 與 0.90 個百分點」共用尾端單位；僅限相鄰數字串列，不跨指標文字借用單位。
@@ -194,7 +240,22 @@ public sealed class PortfolioQualityGateNodeHandler : IAgentNodeHandler
                 var percent = number.Groups["unit"].Success;
                 var precision = token.Contains('.') ? token.Length - token.IndexOf('.') - 1 : 0;
                 // 依顯示的小數位四捨五入，沒有任意相對誤差；整數主張仍須精確。
-                if (!citations.Any(v => Matches(v, value, percent, precision)))
+                // 「虧 25.08%」以損失幅度表達負值；只接受正數且證據確實為負，不放寬一般數字。
+                var lossMagnitude = value > 0 && !token.StartsWith('+')
+                    && Regex.IsMatch(text[..number.Index], @"(?:虧損?|損失|下跌|跌幅|跌|負貢獻)\s*(?:約|為|達|了)?\s*$");
+                var after = text[(number.Index + number.Length)..];
+                // 方法參數（年化天數、觀測筆數、回放天數、情境年份）必須出現在本句引用的工具資料中才可放行。
+                var methodParameter = !percent && precision == 0
+                    && cited.Any(f => Regex.IsMatch(f.Data.ToJsonString(), @"(?<![\d.])" + Regex.Escape(token) + @"(?![\d.])"))
+                    && (Regex.IsMatch(after, @"^\s*(?:個)?(?:共同)?(?:交易)?(?:日|筆|天|年(?!化))")
+                        || Regex.IsMatch(text[..number.Index], @"(?:年化|annualization)\s*[（(]?\s*$", RegexOptions.IgnoreCase));
+                var attribution = @"目標|你提出|您提出|你設定|您設定|你要求|您要求|所訂|先前提到|你提到|您提到";
+                var userTarget = percent && number.Groups["unit"].Value is "%" or "％" && userPercents.Contains(token)
+                    && (Regex.IsMatch(text[Math.Max(0, number.Index - 16)..number.Index], attribution)
+                        || Regex.IsMatch(after[..Math.Min(after.Length, 10)], @"^\s*(?:的|之)?\s*(?:目標|上限|要求)"));
+                var userYear = !percent && precision == 0 && userYears.Contains(token) && Regex.IsMatch(after, @"^\s*年(?!化|度?(?:報酬|獲利|營收))");
+                if (methodParameter || userTarget || userYear) continue;
+                if (!citations.Any(v => Matches(v, value, percent, precision) || (lossMagnitude && v < 0 && Matches(-v, value, percent, precision))))
                 { issues.Add("UntraceableNumbers"); rejectedNumbers?.Add(number.Value); }
             }
         }

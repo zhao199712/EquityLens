@@ -78,6 +78,8 @@ async function handleCreatePortfolio() {
     })
     newPortfolio.value = { name: '', description: '', baseCurrency: 'TWD' }
     showCreate.value = false
+    // 新組合沒有持倉，直接進入詳情頁新增股票。
+    await router.push({ name: 'portfolio-detail', params: { id: created.id } })
   } catch (e) {
     error.value = '建立投資組合失敗,請稍後再試。'
   } finally {
@@ -213,7 +215,7 @@ function pnlClass(n: number | null | undefined) {
       </div>
 
       <div v-if="!loading && filteredPortfolios.length === 0" class="prestige-empty">
-        沒有符合條件的投資組合
+        {{ portfolios.length === 0 ? '還沒有投資組合。點右上角「+ 建立組合」開始，建立後即可新增持股。' : '沒有符合條件的投資組合' }}
       </div>
     </div>
   </div>

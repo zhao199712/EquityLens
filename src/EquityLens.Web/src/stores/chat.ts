@@ -155,6 +155,7 @@ export const useChatStore = defineStore('chat', {
       }
       for (const message of this.messages) {
         if (message.runCard) message.runCard.suggestedActions = []
+        message.choices = null
       }
       this.messages.push(userMsg)
 
@@ -165,6 +166,7 @@ export const useChatStore = defineStore('chat', {
       this.conversationAction = null
       let createdMessageId: string | null = null
       let createdRunCard: ConversationRunCard | null = null
+      let createdChoices: string[] | null = null
 
       sendMessageStream(
         sessionId,
@@ -207,6 +209,7 @@ export const useChatStore = defineStore('chat', {
             messageType: createdRunCard ? 'AgentRun' : 'Text',
             agentRunId: createdRunCard?.agentRunId ?? null,
             runCard: createdRunCard,
+            choices: createdChoices,
           }
           this.messages.push(assistantMsg)
           this.isStreaming = false
@@ -231,6 +234,10 @@ export const useChatStore = defineStore('chat', {
           finished = true
           this.error = message
           this.isStreaming = false
+        },
+        (_messageId, choices) => {
+          if (!isCurrent()) return
+          createdChoices = choices.length ? choices : null
         },
       )
     },

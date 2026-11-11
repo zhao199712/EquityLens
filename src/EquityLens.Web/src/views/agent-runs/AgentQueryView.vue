@@ -34,10 +34,52 @@ async function fillSuggestion(id: string) {
   composer.value?.focus()
 }
 
+const choiceMessageId = computed(() => {
+  if (chat.isStreaming || chat.isLoadingMessages || chat.error) return null
+  const message = chat.messages.at(-1)
+  return message?.role === 'assistant' && message.choices?.length ? message.id : null
+})
+
+const workflowLabels: Record<string, string> = {
+  ResearchAgent: '公司研究',
+  PortfolioDiagnosis: '投組診斷',
+  CriticReview: '品質審查',
+}
+const statusLabels: Record<string, string> = {
+  Succeeded: '完成', Failed: '未完成', Cancelled: '已取消', Running: '分析中', Queued: '排隊中',
+  Pending: '準備中', Ready: '準備中', Created: '準備中', WaitingForFeedback: '等待回饋', WaitingForApproval: '等待確認',
+}
+const qualityIssueLabels: Record<string, string> = {
+  InsufficientEvidence: '資料不足以回答',
+  UntraceableNumbers: '部分數字無法對應工具資料',
+  MixedRiskBasis: '混用不同風險口徑',
+  UnverifiedScenarioComparison: '情境比較未完整驗證',
+  ScenarioComparisonDirectionMismatch: '情境改善方向不一致',
+  PartialScenarioFailure: '部分情境無法計算',
+  OptimizationScenarioRequired: '缺少優化前後比較',
+  OptimizationDataUnavailable: '歷史資料不足以比較',
+  UnknownToolEvidence: '引用了不存在的資料',
+  MissingToolEvidence: '沒有取得工具資料',
+  StaleRiskProfileComparison: '風險偏好比較過期',
+  UnverifiedProfileFit: '風險偏好比較未驗證',
+  DefaultPreferenceMisrepresented: '預設風險偏好描述不正確',
+  GuaranteedProfitClaim: '含保證獲利敘述',
+}
+const workflowLabelsEn: Record<string, string> = {
+  ResearchAgent: 'Company research',
+  PortfolioDiagnosis: 'Portfolio diagnosis',
+  CriticReview: 'Quality review',
+}
+const workflowLabel = (type: string) => (english.value ? workflowLabelsEn : workflowLabels)[type] ?? type
+// 英文介面沿用原始狀態字樣；中文介面顯示中文。
+const statusLabel = (status: string) => english.value ? status : statusLabels[status] ?? status
+const qualityText = (issues: string[]) => [...new Set(issues.map(issue => qualityIssueLabels[issue] ?? '答案品質未通過檢查'))].join('、')
+// 缺文件屬資料範圍限制，不是系統錯誤；以提示色呈現。
+const isDataGap = (message?: string | null) => !!message && /尚未匯入|資料不足|沒有可用|找不到.*文件/.test(message)
+
 const examples = [
   { label: '投組風險範例', question: '我的投資組合最近一年的波動、最大回撤與集中風險如何？' },
   { label: '公司研究範例', question: '台積電最近一季的營運表現與主要風險是什麼？' },
-  { label: '法說會要點範例', question: '聯發科法說會相較上季的指引與管理層語氣改變了什麼？' },
 ]
 
 onMounted(async () => {
@@ -130,7 +172,7 @@ function formatTime(updatedAtUtc: string) {
       <div ref="messageList" class="prestige-panel message-list">
         <div v-if="!chat.messages.length && !chat.isStreaming" class="welcome">
           <strong>可以直接打招呼，也可以延續追問。</strong>
-          <span>例如先問「分析聯發科下一季指引」，再追問「那台積電呢？」</span>
+          <span>例如先問「鴻海最近一季的營運表現如何？」，再追問「那台積電呢？」</span>
           <div class="examples">
             <button
               v-for="example in examples"
@@ -150,22 +192,37 @@ function formatTime(updatedAtUtc: string) {
             <div class="message-content" v-html="renderMarkdown(message.content || '')"></div>
             <section v-if="message.runCard" class="run-card">
               <div class="run-card-head">
-                <strong>{{ message.runCard.workflowType }}</strong>
-                <span :class="['run-status', `run-status--${message.runCard.status.toLowerCase()}`]">
-                  {{ message.runCard.status }}
+                <strong>{{ workflowLabel(message.runCard.workflowType) }}</strong>
+                <span :class="['run-status', `run-status--${isDataGap(message.runCard.errorMessage) ? 'datagap' : message.runCard.status.toLowerCase()}`]">
+                  {{ isDataGap(message.runCard.errorMessage) ? (english ? 'Data unavailable' : '資料不足') : statusLabel(message.runCard.status) }}
                 </span>
               </div>
               <p v-if="message.runCard.workflowType !== 'ResearchAgent' && message.runCard.currentStageDisplayName">目前階段：{{ message.runCard.currentStageDisplayName }}</p>
               <div v-if="message.runCard.workflowType !== 'ResearchAgent'" class="progress">
                 <span :style="{ width: `${message.runCard.totalNodes ? message.runCard.completedNodes / message.runCard.totalNodes * 100 : 0}%` }"></span>
               </div>
-              <small v-if="message.runCard.workflowType !== 'ResearchAgent'">{{ message.runCard.completedNodes }} / {{ message.runCard.totalNodes }} nodes</small>
-              <small v-else>AgentLoop · 研究進度與耗時請見執行詳情</small>
+              <small v-if="message.runCard.workflowType !== 'ResearchAgent'">步驟 {{ message.runCard.completedNodes }} / {{ message.runCard.totalNodes }}</small>
+              <small v-else-if="!['Succeeded', 'Failed', 'Cancelled'].includes(message.runCard.status)">正在檢索文件並整理答案…</small>
               <div v-if="message.runCard.status === 'Succeeded' && message.runCard.finalAnswer" class="final-answer" v-html="renderMarkdown(message.runCard.finalAnswer)"></div>
-              <p v-if="message.runCard.qualityIssues?.length" class="prestige-error">答案品質受限：{{ message.runCard.qualityIssues.join('、') }}。目前顯示已驗證的工具摘要，詳細原因請見 Agent Run。</p>
+              <p v-if="message.runCard.qualityIssues?.length" class="quality-note">
+                已隱藏未通過驗證的內容（{{ qualityText(message.runCard.qualityIssues) }}），以上只保留可對應工具資料的部分。可以換個問法，或開啟分析詳情查看原因。
+              </p>
               <p v-if="['WaitingForFeedback', 'WaitingForApproval'].includes(message.runCard.status)">已暫停，請開啟 Agent Run 審閱草稿。</p>
-              <p v-if="message.runCard.errorMessage" class="prestige-error">{{ message.runCard.errorMessage }}</p>
-              <RouterLink :to="{ name: 'agent-run-detail', params: { id: message.runCard.agentRunId } }">查看 Agent Run →</RouterLink>
+              <p v-if="message.runCard.errorMessage" :class="isDataGap(message.runCard.errorMessage) ? 'quality-note' : 'prestige-error'">{{ message.runCard.errorMessage }}</p>
+              <RouterLink :to="{ name: 'agent-run-detail', params: { id: message.runCard.agentRunId } }">查看分析詳情 →</RouterLink>
+            </section>
+            <section v-if="choiceMessageId === message.id" class="suggested-actions" aria-label="選擇投資組合">
+              <div class="suggested-action-options">
+                <button
+                  v-for="(choice, index) in message.choices"
+                  :key="choice"
+                  type="button"
+                  class="suggested-action-btn"
+                  :disabled="chat.isStreaming || chat.isLoadingMessages"
+                  @click="send(choice)"
+                >{{ index + 1 }}. {{ choice }}</button>
+              </div>
+              <small>點選投組，或直接輸入名稱、序號。</small>
             </section>
             <section v-if="suggestedMessage?.id === message.id" class="suggested-actions" :aria-label="english ? 'Suggested follow-ups' : '建議追問'">
               <p>{{ english ? 'You can ask next' : '你也可以接著問' }}</p>
@@ -287,10 +344,12 @@ function formatTime(updatedAtUtc: string) {
 .run-status--running, .run-status--pending { color: var(--gold); }
 .run-status--succeeded { color: #4ade80; }
 .run-status--failed, .run-status--cancelled { color: #f87171; }
+.run-status--datagap { color: #e8c07d; }
+.quality-note { margin: 10px 0 0; padding: 10px 12px; border-left: 3px solid #e8c07d; background: rgba(232, 192, 125, .08); color: var(--ivory); font-size: .9em; line-height: 1.6; }
 .run-card p, .run-card small { margin: 0; color: var(--muted); }
 .progress { height: 5px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
 .progress span { display: block; height: 100%; background: var(--gold); transition: width .25s ease; }
-.final-answer { max-height: 340px; overflow-y: auto; padding-top: 10px; border-top: 1px solid var(--gold-border-soft); color: var(--ivory); line-height: 1.65; }
+.final-answer { padding-top: 10px; border-top: 1px solid var(--gold-border-soft); color: var(--ivory); line-height: 1.65; }
 .final-answer :deep(code) { background: rgba(201,168,106,.14); padding: 2px 6px; border-radius: 4px; font-size: .92em; }
 .run-card a { color: var(--gold); }
 

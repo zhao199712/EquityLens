@@ -1,6 +1,7 @@
 import { test, expect, login, portfolioId, riskId, agentId, question, answer } from './fixtures'
 
 test('public mobile navigation and production 404', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('equitylens-locale', 'en'))
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/home/lab')
   await expect(page.getByText('404', { exact: true })).toBeVisible()
